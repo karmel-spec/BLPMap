@@ -40,6 +40,9 @@ _CFG = _load_config()
 MOVING_ICS = _CFG.get('moving_ics_url', os.environ.get('BLP_MOVING_ICS', ''))
 REPORT_TO = _CFG.get('report_to', 'info@brighamlarsonpianos.com')
 REPORT_ACCOUNT = _CFG.get('gog_account', 'info@brighamlarsonpianos.com')
+# set "daily_email": false in config.json once the Apps Script sender
+# (apps-script/DailyReport.gs) is live, so mornings don't get two reports
+DAILY_EMAIL = _CFG.get('daily_email', True)
 CACHE_SECS = 120
 
 SLOT_RE = re.compile(r'^\d+[a-zA-Z]?$')
@@ -410,7 +413,7 @@ def _geometry_scheduler():
         if now.weekday() < 5 and now.hour >= 6:
             if last_geo != now.date() and refresh_geometry():
                 last_geo = now.date()
-            if last_mail != now.date() and send_daily_report():
+            if DAILY_EMAIL and last_mail != now.date() and send_daily_report():
                 last_mail = now.date()
         time.sleep(600)
 
