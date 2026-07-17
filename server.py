@@ -344,7 +344,7 @@ def report_html(r):
   <h3 style="color:#9e2020;letter-spacing:1.5px;font-size:13px;margin:18px 0 6px">⚠️ UNPLACED PIANOS ({len(r['unplaced'])})</h3>
   <div style="font-size:12px;color:#8a929a;margin-bottom:6px">Column U is blank or doesn't match a Store Map slot or known area — give these a number.</div>
   <table style="width:100%;border-collapse:collapse"><tr>{th}PIANO</th>{th}SERIAL</th>{th}LOG SECTION</th>{th}COL U SAYS</th></tr>{un_rows}</table>
-  <h3 style="color:#9e2020;letter-spacing:1.5px;font-size:13px;margin:18px 0 6px">🔁 DUPLICATE SLOT NUMBERS ({len(r['dups'])})</h3>
+  <h3 style="color:#9e2020;letter-spacing:1.5px;font-size:13px;margin:18px 0 6px">🔁 DUPLICATE SPOT NUMBERS ({len(r['dups'])})</h3>
   <table style="width:100%;border-collapse:collapse"><tr>{th}SLOT</th>{th}PIANOS CLAIMING IT</th></tr>{dup_rows}</table>
   <p style="font-size:12px;color:#8a929a;margin-top:16px">Fix rows in the
   <a href="{log_url}" style="color:#9e2020">Piano Log</a> (column U) — the map updates within 2 minutes.
@@ -360,7 +360,7 @@ def send_daily_report():
         r = build_report(payload)
         html = report_html(r)
         subject = (f"Store Map Daily Report — {len(r['unplaced'])} unplaced, "
-                   f"{len(r['dups'])} duplicate slots, {len(r['moves'])} moves today")
+                   f"{len(r['dups'])} duplicate spots, {len(r['moves'])} moves today")
         text = (f"Total pianos: {r['total']} (1st: {r['floor1']}, 2nd: {r['floor2']})\n"
                 f"Moves today: {len(r['moves'])}\nUnplaced: {len(r['unplaced'])}\n"
                 f"Duplicate slots: {len(r['dups'])}\n\nOpen the Store Map app for details.")

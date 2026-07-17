@@ -12,7 +12,7 @@
 <header class="bar">
   <img class="logo" src="assets/blp-logo.png" alt="Brigham Larson Pianos">
   <div class="tabs" id="floorTabs"></div>
-  <input class="search" id="search" placeholder="🔍 piano, serial, or slot">
+  <input class="search" id="search" placeholder="🔍 piano, serial, or spot">
   <button class="iconbtn drawerbtn" id="movesBtn">🚚 <b id="movesBadge">0</b></button>
   <button class="iconbtn" id="menuBtn" aria-label="Menu">☰</button>
 </header>
@@ -69,12 +69,12 @@
   <div class="view panelview" id="view-report" hidden>
     <div class="panel">
       <h2 class="ph">⚠️ UNPLACED PIANOS <span class="pc" id="unplacedCount"></span></h2>
-      <p class="pd">Active pianos whose Piano Log “Location / Status” (column U) is empty or doesn’t match any slot on the Store Map or a known named area. Hunt them down and give them a number.</p>
+      <p class="pd">Active pianos whose Piano Log “Location / Status” (column U) is empty or doesn’t match any spot on the Store Map or a known named area. Hunt them down and give them a number.</p>
       <div class="tscroll"><table id="unplacedTable"></table></div>
     </div>
     <div class="panel">
-      <h2 class="ph">🔁 DUPLICATE SLOT NUMBERS <span class="pc" id="dupCount"></span></h2>
-      <p class="pd">Two or more active pianos claim the same map slot — one of them is wrong.</p>
+      <h2 class="ph">🔁 DUPLICATE SPOT NUMBERS <span class="pc" id="dupCount"></span></h2>
+      <p class="pd">Two or more active pianos claim the same map spot — one of them is wrong.</p>
       <div class="tscroll"><table id="dupTable"></table></div>
     </div>
   </div>
@@ -93,7 +93,7 @@
   <div class="view panelview" id="view-board" hidden>
     <div class="panel">
       <h2 class="ph">🚚 MOVE BOARD <span class="pc" id="boardCount"></span></h2>
-      <p class="pd">Every move on the pianomoving.blp calendar — yesterday through the next two weeks. “✓” means marked done (x) in the calendar.</p>
+      <p class="pd">Every move on the pianomoving.blp calendar — yesterday through the next two weeks. The “x” prefix some events carry is admin bookkeeping in the calendar (reminder calls), so it isn’t shown here.</p>
       <div id="board"></div>
     </div>
   </div>

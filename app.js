@@ -11,8 +11,9 @@ const KNOWN_AREAS = ['showroom', 'pre-sale showroom', 'third floor', 'storage',
 const S = {
   map: null, data: null, floor: 0, search: '', view: 'map',
   bySlot: new Map(), slotFloor: new Map(),
-  zoom: 1,   // 1 = map fills the card width; scroll down to explore
-  feedOpen: window.innerWidth >= 1200,
+  zoom: 1,        // 1 = map fills the card width; scroll down to explore
+  feedOpen: false, // map opens full width; the truck button opens the feed
+  focusRow: null, // piano row highlighted by search / NEW-chip focus
 };
 
 const $ = s => document.querySelector(s);
@@ -91,8 +92,10 @@ function todaysMoves() {
 function pianoStatus(p) {
   const today = localDay();
   if (p.serial && p.serial.length > 4) {
+    // note: the calendar's "x " prefix is admin bookkeeping (reminder
+    // calls), NOT completion — so any mention today counts as in transit
     const ev = S.data.events.find(e => (e.summary + e.description).includes(p.serial));
-    if (ev && !ev.done) return ev.date === today ? 'move' : 'sched';
+    if (ev) return ev.date === today ? 'move' : 'sched';
   }
   if (p.isNew) return 'new';
   return 'in';
@@ -140,13 +143,64 @@ function renderKpis() {
   $('#movesBadge').textContent = tm;
   $('#kpis').innerHTML = `
     <div class="kpi"><span class="n">${total}</span><span class="l">TOTAL PIANOS</span></div>
-    <div class="kpi"><span class="n">${placed(0)}</span><span class="l">1ST FLOOR</span></div>
-    <div class="kpi"><span class="n">${placed(1)}</span><span class="l">2ND FLOOR</span></div>
+    <div class="kpi click" id="kpiF1"><span class="n">${placed(0)}</span><span class="l">1ST FLOOR →</span></div>
+    <div class="kpi click" id="kpiF2"><span class="n">${placed(1)}</span><span class="l">2ND FLOOR →</span></div>
     <div class="kpi"><span class="n">${own.blp}<small> / ${own.csgn} / ${own.client}</small></span><span class="l">BLP / CONSIGN / CLIENT</span></div>
     <div class="kpi"><span class="n">${tm}</span><span class="l">MOVES TODAY</span></div>
-    <div class="kpi"><span class="n">${newWeek}</span><span class="l">NEW THIS WEEK</span></div>
+    <div class="kpi click" id="kpiNew"><span class="n">${newWeek}</span><span class="l">NEW THIS WEEK →</span></div>
     <div class="kpi red" id="kpiReport"><span class="n">${un} <small>+ ${du} dup</small></span><span class="l">UNPLACED / ERRORS →</span></div>`;
   $('#kpiReport').onclick = () => switchView('report');
+  $('#kpiF1').onclick = () => gotoFloor(0);
+  $('#kpiF2').onclick = () => gotoFloor(1);
+  $('#kpiNew').onclick = () => {
+    const news = S.data.pianos.filter(p => p.active && p.isNew);
+    if (!news.length) return;
+    focusPiano(news[S.newIdx = ((S.newIdx || 0) + 1) % news.length]);
+  };
+}
+
+function gotoFloor(fi) {
+  S.floor = fi;
+  if (S.view !== 'map') switchView('map');
+  renderTabs(); renderMap();
+  $('#mapscroll').scrollTop = 0;
+}
+
+// zoom the map onto a piano, highlight it, and open its card
+function focusPiano(p) {
+  if (S.view !== 'map') switchView('map');
+  S.focusRow = p.row;
+  const fi = p.isSlot ? S.slotFloor.get(p.location.toLowerCase()) : undefined;
+  if (fi !== undefined && fi !== S.floor) { S.floor = fi; renderTabs(); }
+  renderMap();
+  const f = S.map.floors[S.floor];
+  const sl = fi !== undefined
+    ? f.slots.find(x => x.id.toLowerCase() === p.location.toLowerCase()) : null;
+  if (sl) {
+    S.zoom = Math.max(S.zoom, 2.4); sizePlan();
+    const sc = $('#mapscroll');
+    const k = sc.querySelector('svg').clientWidth / f.width;
+    sc.scrollLeft = (sl.x + sl.w / 2) * k - sc.clientWidth / 2;
+    sc.scrollTop = (sl.y + sl.h / 2) * k - sc.clientHeight / 2;
+  }
+  const el = document.querySelector(`.piano[data-row="${p.row}"]`);
+  openPop(p.row, el, true);
+}
+
+function focusSpot(id) {
+  if (S.view !== 'map') switchView('map');
+  const fi = S.slotFloor.get(id.toLowerCase());
+  if (fi === undefined) return;
+  if (fi !== S.floor) { S.floor = fi; renderTabs(); renderMap(); }
+  const f = S.map.floors[S.floor];
+  const sl = f.slots.find(x => x.id.toLowerCase() === id.toLowerCase());
+  if (!sl) return;
+  S.zoom = Math.max(S.zoom, 2.4); sizePlan();
+  const sc = $('#mapscroll');
+  const k = sc.querySelector('svg').clientWidth / f.width;
+  sc.scrollLeft = (sl.x + sl.w / 2) * k - sc.clientWidth / 2;
+  sc.scrollTop = (sl.y + sl.h / 2) * k - sc.clientHeight / 2;
+  openSlotPop(sl.id);
 }
 
 function renderCrew() {
@@ -162,8 +216,8 @@ const CAL_EMBED = 'https://calendar.google.com/calendar/embed?src=pianomoving.bl
 function renderCal() {
   const evs = todaysMoves();
   $('#calToday').innerHTML = evs.length
-    ? evs.map(e => `<div class="tmv ${e.done ? 'done' : ''}">
-        <span>${e.done ? '✓ DONE · ' : 'TODAY · '}${e.time || 'ALL DAY'}</span>
+    ? evs.map(e => `<div class="tmv">
+        <span>TODAY · ${e.time || 'ALL DAY'}</span>
         <b>${esc(e.summary)}</b></div>`).join('')
     : '<div class="tmv none">No moves on today’s calendar.</div>';
   const fr = $('#calFrame');
@@ -173,8 +227,8 @@ function renderCal() {
 function renderMoves() {
   const evs = todaysMoves();
   $('#moves').innerHTML = evs.length ? evs.map(e => `
-    <div class="mv ${e.done ? 'done' : ''}">
-      <b>${e.done ? '<span class="ck">✓</span> ' : ''}${esc(e.summary)}</b>
+    <div class="mv">
+      <b>${esc(e.summary)}</b>
       <span>${e.time || 'all day'}</span>
     </div>`).join('') : '<div class="empty">No moves on today’s calendar.</div>';
 }
@@ -213,6 +267,40 @@ function sizePlan() {
 }
 window.addEventListener('resize', sizePlan);
 
+// wrap a zone label into up to 3 lines that fit its box
+function wrapWords(text, w, fs) {
+  const maxc = Math.max(4, Math.floor((w - 8) / (fs * 0.58 + 1.4)));
+  const lines = [];
+  let cur = '';
+  for (const wd of text.split(/\s+/)) {
+    if (!cur) cur = wd;
+    else if ((cur + ' ' + wd).length <= maxc) cur += ' ' + wd;
+    else { lines.push(cur); cur = wd; }
+  }
+  if (cur) lines.push(cur);
+  return lines;
+}
+function zoneLabelSVG(z, cls) {
+  let fs = Math.min(13, Math.max(9, z.h * 0.5));
+  const cx = z.x + (z.w || 0) / 2;
+  const fits = t => t.length * (fs * 0.58 + 1.4) + 8 <= z.w;
+  if (!z.w || fits(z.text)) {
+    return `<text x="${cx}" y="${z.y + (z.h ? z.h / 2 + fs * 0.35 : 0)}" text-anchor="middle"
+            class="zlabel ${cls}" font-size="${fs}">${esc(z.text)}</text>`;
+  }
+  let lines = wrapWords(z.text, z.w, fs);
+  while ((lines.length > 3 || lines.length * fs * 1.2 > z.h + 6) && fs > 7.5) {
+    fs -= 0.75;
+    lines = wrapWords(z.text, z.w, fs);
+  }
+  lines = lines.slice(0, 3);
+  const lh = fs * 1.2;
+  const y0 = z.y + z.h / 2 - ((lines.length - 1) / 2) * lh + fs * 0.35;
+  return `<text x="${cx}" y="${y0}" text-anchor="middle" class="zlabel ${cls}" font-size="${fs}">`
+    + lines.map((L, i) => `<tspan x="${cx}" dy="${i ? lh : 0}">${esc(L)}</tspan>`).join('')
+    + '</text>';
+}
+
 function renderMap() {
   const f = S.map.floors[S.floor];
   const q = S.search.trim().toLowerCase();
@@ -221,8 +309,7 @@ function renderMap() {
     const cls = fillClass(z.fill);
     if (z.w > 4 && z.h > 4)
       s += `<rect x="${z.x}" y="${z.y}" width="${z.w}" height="${z.h}" class="zonebox ${cls}"/>`;
-    s += `<text x="${z.x + z.w / 2}" y="${z.y + z.h / 2 + 4}" text-anchor="middle"
-          class="zlabel ${cls}" font-size="${Math.min(13, Math.max(9, z.h * 0.5))}">${esc(z.text)}</text>`;
+    s += zoneLabelSVG(z, cls);
   }
   for (const w of f.walls)
     s += `<line x1="${w.x1}" y1="${w.y1}" x2="${w.x2}" y2="${w.y2}" class="wall"/>`;
@@ -244,12 +331,15 @@ function renderMap() {
       if (n) {
         const numH = fs + 8;
         const availH = sl.h - numH - 10;
-        const sc = Math.max(0.75, Math.min((sl.w - 6) / 21, availH / (n * per), 4.5));
+        // rotated 90°, the glyph's long side (21u) runs vertically, its
+        // depth (~17u) horizontally — so width caps the depth, not length
+        const sc = Math.max(0.75, Math.min((sl.w - 8) / 17, availH / (n * per), 4.5));
         const y0 = sl.y + numH + (availH - n * per * sc) / 2 + (per * sc) / 2;
         ps.forEach((p, i) => {
           const st = pianoStatus(p);
           const cx = sl.x + sl.w / 2, cy = y0 + i * per * sc;
-          s += `<g class="piano ${st} ${q && !matches(p, q) ? 'dim' : ''} ${q && matches(p, q) ? 'hl' : ''}"
+          const hl = S.focusRow === p.row || (q && matches(p, q));
+          s += `<g class="piano ${st} ${q && !matches(p, q) ? 'dim' : ''} ${hl ? 'hl' : ''}"
                 data-slot="${esc(sl.id)}" data-row="${p.row}">
                 <g transform="rotate(90 ${cx} ${cy})">${glyph(p.type, cx, cy, sc)}</g></g>`;
         });
@@ -268,7 +358,8 @@ function renderMap() {
           const st = pianoStatus(p);
           const cx = x0 + i * per * sc;
           const cy = sl.y + sl.h / 2;
-          s += `<g class="piano ${st} ${q && !matches(p, q) ? 'dim' : ''} ${q && matches(p, q) ? 'hl' : ''}"
+          const hl = S.focusRow === p.row || (q && matches(p, q));
+          s += `<g class="piano ${st} ${q && !matches(p, q) ? 'dim' : ''} ${hl ? 'hl' : ''}"
                 data-slot="${esc(sl.id)}" data-row="${p.row}">${glyph(p.type, cx, cy, sc)}</g>`;
         });
       }
@@ -302,12 +393,12 @@ function popHTML(p) {
   const makeModel = [p.make, p.model].filter(Boolean).join(' ') || p.summary;
   const mover = p.serial
     ? `<div class="movebox">
-         <input class="mvin" placeholder="new slot #" maxlength="12">
+         <input class="mvin" placeholder="new spot #" maxlength="12">
          <button class="mvgo">Move</button>
        </div><div class="mvmsg"></div>`
     : `<div class="mvmsg">No serial # — change location in the Piano Log.</div>`;
   return `<span class="x">✕</span>
-    <span class="tag ${st}">${tags[st]} · SLOT ${esc(p.location)}</span>
+    <span class="tag ${st}">${tags[st]} · SPOT ${esc(p.location)}</span>
     <h3>${esc(makeModel)}</h3>
     <div class="row">Serial # <b>${esc(p.serial || '—')}</b></div>
     <div class="row">Status <b>${esc(p.status || '—')}</b></div>
@@ -333,7 +424,7 @@ function wirePop(p) {
 
 async function movePiano(p, dest, pop) {
   const msg = pop.querySelector('.mvmsg');
-  if (!dest) { msg.textContent = 'Type a slot number or area name first.'; return; }
+  if (!dest) { msg.textContent = 'Type a spot number or area name first.'; return; }
   const known = S.slotFloor.has(dest.toLowerCase());
   msg.textContent = 'Updating Piano Log…';
   popPinned = true;
@@ -345,7 +436,7 @@ async function movePiano(p, dest, pop) {
     const j = await r.json();
     if (j.moved) {
       msg.textContent = `✓ Moved from ${j.previous || '—'} to ${j.location}`
-        + (known ? '' : ' (not a numbered map slot — it will show in reports)');
+        + (known ? '' : ' (not a numbered map spot — it will show in reports)');
       p.location = j.location;
       p.isSlot = SLOT_RE.test(j.location);
       index(); renderKpis(); renderMap(); renderReport();
@@ -373,14 +464,14 @@ function openSlotPop(id) {
   if (ps.length === 1) { pop.innerHTML = popHTML(ps[0]); wirePop(ps[0]); }
   else if (ps.length) {
     pop.innerHTML = `<span class="x">✕</span>
-      <span class="tag">SLOT ${esc(id)} · ${ps.length} PIANOS</span>` +
+      <span class="tag">SPOT ${esc(id)} · ${ps.length} PIANOS</span>` +
       ps.map(p => `<div class="row">• ${esc(p.summary)}</div>`).join('') +
-      `<div class="row" style="color:#9e2020;font-weight:700">Multiple pianos on one slot — see Reports.</div>`;
+      `<div class="row" style="color:#9e2020;font-weight:700">Multiple pianos on one spot — see Reports.</div>`;
     pop.onclick = ev => {
       if (ev.target.classList.contains('x')) { pop.hidden = true; popPinned = false; } };
   } else {
     pop.innerHTML = `<span class="x">✕</span>
-      <span class="tag">SLOT ${esc(id)}</span><h3>Empty</h3>
+      <span class="tag">SPOT ${esc(id)}</span><h3>Empty</h3>
       <div class="row">No piano assigned in the Piano Log.</div>`;
     pop.onclick = ev => {
       if (ev.target.classList.contains('x')) { pop.hidden = true; popPinned = false; } };
@@ -429,8 +520,8 @@ function renderBoard() {
     const label = new Date(d + 'T12:00').toLocaleDateString('en-US',
       {weekday: 'long', month: 'short', day: 'numeric'});
     return `<div class="boardday ${d === today ? 'today' : ''}">${d === today ? 'TODAY — ' : ''}${label}</div>` +
-      byDay[d].map(e => `<div class="bev ${e.done ? 'done' : ''}">
-        <span class="t">${e.time || '—'}</span><span>${esc(e.summary)}${e.done ? '<span class="ck"> ✓</span>' : ''}</span>
+      byDay[d].map(e => `<div class="bev">
+        <span class="t">${e.time || '—'}</span><span>${esc(e.summary)}</span>
       </div>`).join('');
   }).join('');
 }
@@ -451,16 +542,29 @@ $('#menuBtn').onclick = () =>
   $('#side').classList.contains('open') ? closeNav() : openNav();
 $('#scrim').onclick = closeNav;
 
-function syncFeed() { $('#view-map').classList.toggle('nofeed', !S.feedOpen); }
+function syncFeed() {
+  $('#view-map').classList.toggle('nofeed', !S.feedOpen);
+  sizePlan();   // map immediately claims the freed space
+}
 $('#movesBtn').onclick = () => { S.feedOpen = !S.feedOpen; if (S.view !== 'map') switchView('map'); syncFeed(); };
 $('#movesClose').onclick = () => { S.feedOpen = false; syncFeed(); };
 
 $('#legendBtn').onclick = () => { const p = $('#legendPanel'); p.hidden = !p.hidden; };
 
+let searchTimer = null;
 $('#search').addEventListener('input', e => {
   S.search = e.target.value;
+  S.focusRow = null;
   if (S.view !== 'map') switchView('map');
   renderMap();
+  clearTimeout(searchTimer);
+  const q = S.search.trim().toLowerCase();
+  if (q.length < 2) return;
+  searchTimer = setTimeout(() => {
+    if (S.slotFloor.has(q)) { focusSpot(q); return; }      // exact spot #
+    const hits = S.data.pianos.filter(p => p.active && matches(p, q));
+    if (hits.length === 1) focusPiano(hits[0]);            // unique piano
+  }, 450);
 });
 
 /* ---------- document-style zoom (scroll is native) ---------- */

@@ -40,7 +40,7 @@ function sendDailyReport() {
   var slotsDoc = JSON.parse(UrlFetchApp.fetch(APP_URL + '/data/slots.json').getContentText());
   var r = buildReport_(data, slotsDoc);
   var subject = 'Store Map Daily Report — ' + r.unplaced.length + ' unplaced, '
-    + r.dups.length + ' duplicate slots, ' + r.moves.length + ' moves today';
+    + r.dups.length + ' duplicate spots, ' + r.moves.length + ' moves today';
   MailApp.sendEmail({
     to: REPORT_TO,
     subject: subject,
@@ -198,7 +198,7 @@ function reportHtml_(r) {
     + r.unplaced.length + ')</h3>'
     + '<table style="width:100%;border-collapse:collapse"><tr>' + th + 'PIANO</th>' + th
     + 'SERIAL</th>' + th + 'LOG SECTION</th>' + th + 'COL U SAYS</th></tr>' + un + '</table>'
-    + '<h3 style="color:#9e2020;letter-spacing:1.5px;font-size:13px;margin:18px 0 6px">🔁 DUPLICATE SLOT NUMBERS ('
+    + '<h3 style="color:#9e2020;letter-spacing:1.5px;font-size:13px;margin:18px 0 6px">🔁 DUPLICATE SPOT NUMBERS ('
     + r.dups.length + ')</h3>'
     + '<table style="width:100%;border-collapse:collapse"><tr>' + th + 'SLOT</th>' + th
     + 'PIANOS CLAIMING IT</th></tr>' + du + '</table>'
