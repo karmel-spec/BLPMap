@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Store Map — Brigham Larson Pianos</title>
+<link rel="icon" href="assets/blp-logo.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="bar">
+  <img class="logo" src="assets/blp-logo.png" alt="Brigham Larson Pianos">
+  <div class="tabs" id="floorTabs"></div>
+  <input class="search" id="search" placeholder="🔍 piano, serial, or slot">
+  <button class="iconbtn drawerbtn" id="movesBtn">🚚 <b id="movesBadge">0</b></button>
+  <button class="iconbtn" id="menuBtn" aria-label="Menu">☰</button>
+</header>
+
+<div class="kpistrip" id="kpis"></div>
+
+<div class="stage">
+  <!-- collapsible nav -->
+  <nav class="side" id="side">
+    <div class="navitem on" data-view="map"><span class="ic">🗺</span>Store Map</div>
+    <a class="navitem" href="https://pianologapp.netlify.app/" target="_blank" rel="noopener"><span class="ic">🎹</span>Pianos<span class="ext">log ↗</span></a>
+    <div class="navitem" data-view="board"><span class="ic">🚚</span>Move Board</div>
+    <div class="navitem" data-view="cal"><span class="ic">📅</span>Calendar</div>
+    <div class="navitem" data-view="report"><span class="ic">⚠️</span>Reports</div>
+    <div class="crew">
+      <b>Move Crew Today</b><span id="crew">—</span>
+      <span id="crewMoves" class="crewmoves">— Moves Today</span>
+      <b style="margin-top:10px">Synced</b><span id="synced">loading…</span>
+    </div>
+  </nav>
+  <div class="scrim" id="scrim"></div>
+
+  <div class="view" id="view-map">
+    <div class="mapcard">
+      <div class="gridbg"></div>
+      <svg id="plan"></svg>
+      <div class="pop" id="pop" hidden></div>
+      <button class="lgbtn" id="legendBtn">Legend</button>
+      <div class="lgpanel" id="legendPanel" hidden>
+        <div class="shape-row">
+          <span><svg viewBox="0 0 26 22" width="24" height="20"><path d="M4 2 h9 c6 0 9 3.5 9 8.5 C22 17 17.5 20 11 20 H4 Z" fill="#2b2f33"/><rect x="1.5" y="2" width="3" height="18" rx="1" fill="#8f979e"/></svg> Grand</span>
+          <span><svg viewBox="0 0 26 22" width="24" height="20"><rect x="2" y="6" width="21" height="8" rx="1.5" fill="#2b2f33"/><rect x="3.5" y="14" width="18" height="3.5" rx="1" fill="#8f979e"/></svg> Upright</span>
+          <span><svg viewBox="0 0 26 22" width="24" height="20"><rect x="3" y="7" width="19" height="6" rx="3" fill="#2b2f33"/><rect x="5" y="13" width="15" height="3" rx="1" fill="#8f979e"/></svg> Digital</span>
+        </div>
+        <div class="legend">
+          <span><i class="dot" style="background:#2b2f33"></i>In place</span>
+          <span><i class="dot" style="background:#c9942e"></i>Scheduled</span>
+          <span><i class="dot" style="background:#c03636"></i>In transit</span>
+          <span><i class="dot" style="background:#2e7d4f"></i>NEW · 7 days</span>
+        </div>
+      </div>
+    </div>
+    <aside class="feed" id="feed">
+      <h2>TODAY'S MOVES <span class="x" id="movesClose">✕</span></h2>
+      <div class="src">as entered in the Moving Calendar</div>
+      <div id="moves"></div>
+    </aside>
+  </div>
+
+  <div class="view panelview" id="view-report" hidden>
+    <div class="panel">
+      <h2 class="ph">⚠️ UNPLACED PIANOS <span class="pc" id="unplacedCount"></span></h2>
+      <p class="pd">Active pianos whose Piano Log “Location / Status” (column U) is empty or doesn’t match any slot on the Store Map or a known named area. Hunt them down and give them a number.</p>
+      <div class="tscroll"><table id="unplacedTable"></table></div>
+    </div>
+    <div class="panel">
+      <h2 class="ph">🔁 DUPLICATE SLOT NUMBERS <span class="pc" id="dupCount"></span></h2>
+      <p class="pd">Two or more active pianos claim the same map slot — one of them is wrong.</p>
+      <div class="tscroll"><table id="dupTable"></table></div>
+    </div>
+  </div>
+
+  <div class="view panelview" id="view-cal" hidden>
+    <div class="panel calpanel">
+      <h2 class="ph">📅 PIANO MOVING CALENDAR
+        <a class="calext" href="https://calendar.google.com/calendar/embed?src=pianomoving.blp%40gmail.com&ctz=America%2FDenver" target="_blank" rel="noopener">open in Google ↗</a></h2>
+      <div class="todaybar" id="calToday"></div>
+      <div class="calframe">
+        <iframe id="calFrame" title="Piano Moving Calendar" loading="lazy"></iframe>
+      </div>
+    </div>
+  </div>
+
+  <div class="view panelview" id="view-board" hidden>
+    <div class="panel">
+      <h2 class="ph">🚚 MOVE BOARD <span class="pc" id="boardCount"></span></h2>
+      <p class="pd">Every move on the pianomoving.blp calendar — yesterday through the next two weeks. “✓” means marked done (x) in the calendar.</p>
+      <div id="board"></div>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
