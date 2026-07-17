@@ -18,7 +18,9 @@
 var APP_URL = 'https://blpstoremap.netlify.app';
 var REPORT_TO = 'info@brighamlarsonpianos.com';
 var PIANO_LOG_ID = '1ZunbPKygpQlcXfTyPowDHdUE9spJ3uV1XA4iX1eoKRc';
-var BRIDGE_SECRET = 'PASTE_SECRET_HERE';  // same value as Netlify BLP_BRIDGE_SECRET
+var BRIDGE_SECRET = 'PASTE_SECRET_HERE';   // server-to-server auth (optional)
+var TEAM_PIN = 'PASTE_PIN_HERE';           // what BLP team members type to move pianos
+var MOVING_ICS = 'PASTE_ICS_URL_HERE';     // the moving calendar's SECRET iCal address
 var KNOWN_AREAS = ['showroom', 'pre-sale showroom', 'third floor', 'storage',
   'shop', 'vestibule', 'wing room', 'holding room', 'attic', 'sold floor',
   'rebuilding line', 'refinishing', 'back shop', 'middle shop', 'basement',
@@ -59,10 +61,76 @@ function sendDailyReport() {
  *
  * POST JSON: {secret, serial, action: 'lookup'|'move', newLocation?, row?}
  */
+/**
+ * Public read endpoint: GET ?fn=events returns the next two weeks of
+ * moving-calendar events as JSON. The SECRET iCal address never leaves
+ * this script — Netlify's /api/data fetches events from here, so no
+ * env vars or credentials are needed anywhere else.
+ */
+function doGet(e) {
+  if (e && e.parameter && e.parameter.fn === 'events') {
+    try { return json_({events: fetchEvents_()}); }
+    catch (err) { return json_({error: String(err), events: []}); }
+  }
+  return json_({ok: true, service: 'BLP Store Map bridge'});
+}
+
+function fetchEvents_() {
+  var tz = 'America/Denver';
+  var text = UrlFetchApp.fetch(MOVING_ICS).getContentText().replace(/\r?\n[ \t]/g, '');
+  var todayStr = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
+  var today = new Date(todayStr + 'T12:00:00Z');
+  var lo = new Date(today.getTime() - 86400000);
+  var hi = new Date(today.getTime() + 14 * 86400000);
+  var events = [];
+  var blocks = text.split('BEGIN:VEVENT').slice(1);
+  for (var b = 0; b < blocks.length; b++) {
+    var body = blocks[b].split('END:VEVENT')[0];
+    var props = {};
+    var lines = body.split('\n');
+    for (var i = 0; i < lines.length; i++) {
+      var idx = lines[i].indexOf(':');
+      if (idx < 0) continue;
+      props[lines[i].slice(0, idx).split(';')[0].toUpperCase()] =
+        lines[i].slice(idx + 1).replace(/\s+$/, '');
+    }
+    var m = /^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})?(Z)?)?/.exec(props.DTSTART || '');
+    if (!m) continue;
+    var day, hhmm = m[4] ? m[4] + ':' + m[5] : null;
+    if (hhmm && m[7] === 'Z') {
+      var utc = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]));
+      day = Utilities.formatDate(utc, tz, 'yyyy-MM-dd');
+      hhmm = Utilities.formatDate(utc, tz, 'HH:mm');
+    } else {
+      day = m[1] + '-' + m[2] + '-' + m[3];
+    }
+    var dd = new Date(day + 'T12:00:00Z');
+    if (dd < lo || dd > hi) continue;
+    var raw = (props.SUMMARY || '').replace(/\\,/g, ',');
+    var clean = raw.replace(/^\s*x\s+/i, '').replace(/^\s+|\s+$/g, '');
+    var up = clean.toUpperCase();
+    if (up === 'OFF' || up === 'NO MOVES' || up === '') continue;
+    events.push({
+      date: day, time: hhmm, summary: clean,
+      done: /^\s*x\s/i.test(raw),
+      description: (props.DESCRIPTION || '').replace(/\\n/g, ' ')
+        .replace(/\\,/g, ',').slice(0, 400),
+    });
+  }
+  events.sort(function (a, b) {
+    return (a.date + (a.time || '99')) < (b.date + (b.time || '99')) ? -1 : 1;
+  });
+  return events;
+}
+
 function doPost(e) {
   try {
     var req = JSON.parse(e.postData.contents);
-    if (req.secret !== BRIDGE_SECRET) return json_({error: 'unauthorized'});
+    // team members authenticate with the PIN (typed once in the map app);
+    // BRIDGE_SECRET remains for optional server-to-server use
+    if (req.secret !== BRIDGE_SECRET && req.pin !== TEAM_PIN) {
+      return json_({error: 'unauthorized'});
+    }
     var sh = SpreadsheetApp.openById(PIANO_LOG_ID).getSheets()[0];
     var last = sh.getLastRow();
     var serials = sh.getRange(1, 3, last, 1).getValues();  // col C

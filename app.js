@@ -1,5 +1,9 @@
 /* BLP Store Map — front-end */
 const PIANOLOG_URL = 'https://pianologapp.netlify.app/';
+// Apps Script bridge for piano moves. The URL is public; writes require
+// the team PIN (asked once, remembered on this device).
+const BRIDGE_URL =
+  'https://script.google.com/macros/s/AKfycbxY4BKnr_Tr0iCTc9itCWhNYLvgszmkI1IoYSkbBWpyAqRtWI-yaUkJQjcVdgG58KXt/exec';
 const SLOT_RE = /^\d+[a-zA-Z]?$/;
 // named areas in col U that are legitimate (not "unplaced") even though
 // they aren't numbered slots on the map
@@ -430,18 +434,36 @@ function wirePop(p) {
   };
 }
 
+function teamPin(forceAsk) {
+  let pin = localStorage.getItem('blpPin') || '';
+  if (!pin || forceAsk) {
+    pin = (prompt('BLP team PIN (needed once on this device to move pianos):') || '').trim();
+    if (pin) localStorage.setItem('blpPin', pin);
+  }
+  return pin;
+}
+
 async function movePiano(p, dest, pop) {
   const msg = pop.querySelector('.mvmsg');
   if (!dest) { msg.textContent = 'Type a spot number or area name first.'; return; }
   const known = S.slotFloor.has(dest.toLowerCase());
-  msg.textContent = 'Updating Piano Log…';
   popPinned = true;
+  const pin = teamPin(false);
+  if (!pin) { msg.textContent = 'A team PIN is required to move pianos.'; return; }
+  msg.textContent = 'Updating Piano Log…';
   try {
-    const r = await fetch('/api/move', {
-      method: 'POST', headers: {'content-type': 'application/json'},
-      body: JSON.stringify({serial: p.serial, newLocation: dest}),
+    // straight to the Apps Script bridge; text/plain avoids CORS preflight
+    const r = await fetch(BRIDGE_URL, {
+      method: 'POST', redirect: 'follow',
+      headers: {'content-type': 'text/plain;charset=utf-8'},
+      body: JSON.stringify({pin, serial: p.serial, action: 'move', newLocation: dest}),
     });
     const j = await r.json();
+    if (j.error === 'unauthorized') {
+      localStorage.removeItem('blpPin');
+      msg.textContent = '✗ Wrong PIN — click Move to try again.';
+      return;
+    }
     if (j.moved) {
       msg.textContent = `✓ Moved from ${j.previous || '—'} to ${j.location}`
         + (known ? '' : ' (not a numbered map spot — it will show in reports)');

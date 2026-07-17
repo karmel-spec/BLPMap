@@ -5,6 +5,11 @@
 
 const PIANO_LOG_CSV =
   'https://docs.google.com/spreadsheets/d/1ZunbPKygpQlcXfTyPowDHdUE9spJ3uV1XA4iX1eoKRc/export?format=csv';
+// Apps Script bridge: serves calendar events via public GET (the secret
+// iCal address lives inside the script, not here) and takes PIN-gated
+// move requests. URL is not sensitive — writes require the PIN.
+const BRIDGE_URL =
+  'https://script.google.com/macros/s/AKfycbxY4BKnr_Tr0iCTc9itCWhNYLvgszmkI1IoYSkbBWpyAqRtWI-yaUkJQjcVdgG58KXt/exec';
 const TZ = 'America/Denver';
 const CACHE_MS = 120000;
 
@@ -161,14 +166,18 @@ export default async () => {
     const pianos = parsePianos(csv);
     let events = [];
     const icsUrl = process.env.BLP_MOVING_ICS;
-    if (icsUrl) {
-      try { events = parseEvents(await (await fetch(icsUrl)).text()); }
-      catch { /* calendar down: pianos still ship */ }
-    }
+    try {
+      if (icsUrl) {
+        events = parseEvents(await (await fetch(icsUrl)).text());
+      } else {
+        const j = await (await fetch(BRIDGE_URL + '?fn=events', { redirect: 'follow' })).json();
+        events = j.events || [];
+      }
+    } catch { /* calendar down: pianos still ship */ }
     const payload = {
       pianos, events, crew: crewToday(events),
       fetchedAt: new Date().toLocaleString('sv-SE', { timeZone: TZ }).replace(' ', 'T'),
-      stale: false, calendarConfigured: !!icsUrl,
+      stale: false, calendarConfigured: events.length > 0 || !!icsUrl,
     };
     cache = { at: now, payload };
     return Response.json(payload);
