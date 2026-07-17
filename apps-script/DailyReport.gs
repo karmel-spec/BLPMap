@@ -131,7 +131,7 @@ function doPost(e) {
     if (req.secret !== BRIDGE_SECRET && req.pin !== TEAM_PIN) {
       return json_({error: 'unauthorized'});
     }
-    var sh = SpreadsheetApp.openById(PIANO_LOG_ID).getSheets()[0];
+    var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
     var last = sh.getLastRow();
     var serials = sh.getRange(1, 3, last, 1).getValues();  // col C
     var owners = sh.getRange(1, 2, last, 1).getValues();   // col B (SOLD divider)
@@ -162,6 +162,17 @@ function doPost(e) {
   } catch (err) {
     return json_({error: String(err)});
   }
+}
+
+function pianoSheet_(ss) {
+  // the Piano Log tab isn't necessarily the leftmost sheet: pick the one
+  // whose C2 header mentions SERIAL, falling back by name
+  var sheets = ss.getSheets();
+  for (var i = 0; i < sheets.length; i++) {
+    var v = String(sheets[i].getRange(2, 3).getValue() || '').toUpperCase();
+    if (v.indexOf('SERIAL') >= 0) return sheets[i];
+  }
+  return ss.getSheetByName('Piano Log') || sheets[0];
 }
 
 function json_(o) {
