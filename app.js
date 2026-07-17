@@ -26,8 +26,14 @@ async function boot() {
   S.map = map; S.data = data;
   index(); renderAll();
   setInterval(async () => {
-    try { S.data = await fetch('/api/data').then(r => r.json()); index(); renderAll(); }
-    catch (e) { /* keep last */ }
+    try {
+      const [m, d2] = await Promise.all([
+        fetch('data/slots.json', {cache: 'no-cache'}).then(r => r.json()),
+        fetch('/api/data').then(r => r.json()),
+      ]);
+      S.map = m; S.data = d2;
+      index(); renderAll();
+    } catch (e) { /* keep last */ }
   }, 150000);
 }
 

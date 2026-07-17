@@ -25,8 +25,9 @@ never be committed. Without it the app still runs (map + pianos, no moves).
 - `scripts/extract_map.py` converts a fresh xlsx export of the Store Map sheet
   into `data/slots.json` — slots (merged cells with ids like `61`, `86a`),
   zone labels, and wall segments (medium/thick cell borders), for both floors.
-  Re-run it whenever the floor plan sheet changes:
-  `curl -sL "<sheet url>/export?format=xlsx" -o data/storemap.xlsx && python3 scripts/extract_map.py`
+  The server re-runs this automatically **weekdays at 6:00 AM** (and at
+  startup if slots.json is over a day old), so floor-plan edits in the sheet
+  appear on their own. Open tabs pick up new geometry within ~2.5 minutes.
 - `server.py` serves the static app plus `/api/data`: Piano Log CSV export +
   moving-calendar iCal feed, parsed, merged, cached 2 minutes. Falls back to
   the last good payload if Google is unreachable.

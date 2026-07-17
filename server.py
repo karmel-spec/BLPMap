@@ -12,11 +12,15 @@ import io
 import json
 import os
 import re
+import subprocess
+import sys
 import threading
 import time
 import urllib.request
 from datetime import date, datetime, timedelta
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+
+BASE = os.path.dirname(os.path.abspath(__file__))
 
 PORT = 8641
 PIANO_LOG_CSV = ('https://docs.google.com/spreadsheets/d/'
@@ -229,6 +233,45 @@ def get_data():
         return {'error': str(exc), 'pianos': [], 'events': [], 'crew': []}
 
 
+STORE_MAP_XLSX = ('https://docs.google.com/spreadsheets/d/'
+                  '12qMhAHxkRlacel5Q7qxCOwYShgDRD3O46D1cYCrlfwA/export?format=xlsx')
+
+def refresh_geometry():
+    """Re-download the Store Map sheet and regenerate data/slots.json."""
+    try:
+        blob = _fetch(STORE_MAP_XLSX)
+        with open(os.path.join(BASE, 'data', 'storemap.xlsx'), 'wb') as fh:
+            fh.write(blob)
+        subprocess.run([sys.executable, os.path.join(BASE, 'scripts', 'extract_map.py')],
+                       check=True, cwd=BASE, capture_output=True, timeout=120)
+        print(f'[{datetime.now():%m-%d %H:%M}] map geometry refreshed from Store Map sheet')
+        return True
+    except Exception as exc:
+        print(f'[{datetime.now():%m-%d %H:%M}] geometry refresh FAILED: {exc}')
+        return False
+
+
+def _geometry_scheduler():
+    """Refresh weekdays at 6:00 AM local. Checked every 10 min so a sleeping
+    Mac simply catches up on wake instead of missing the slot."""
+    last_run = None
+    slots = os.path.join(BASE, 'data', 'slots.json')
+    try:  # also refresh at startup if the file is over a day old
+        age = time.time() - os.path.getmtime(slots)
+        if age > 86400:
+            refresh_geometry()
+            last_run = date.today()
+    except OSError:
+        refresh_geometry()
+        last_run = date.today()
+    while True:
+        now = datetime.now()
+        if now.weekday() < 5 and now.hour >= 6 and last_run != now.date():
+            if refresh_geometry():
+                last_run = now.date()
+        time.sleep(600)
+
+
 class Handler(SimpleHTTPRequestHandler):
     def do_GET(self):
         if self.path.split('?')[0] == '/api/data':
@@ -247,7 +290,8 @@ class Handler(SimpleHTTPRequestHandler):
 
 
 if __name__ == '__main__':
-    import os
-    os.chdir(os.path.dirname(os.path.abspath(__file__)))
-    print(f'BLP Store Map on http://localhost:{PORT}')
+    os.chdir(BASE)
+    threading.Thread(target=_geometry_scheduler, daemon=True).start()
+    print(f'BLP Store Map on http://localhost:{PORT} '
+          f'(geometry auto-refresh weekdays 6:00 AM)')
     ThreadingHTTPServer(('127.0.0.1', PORT), Handler).serve_forever()
