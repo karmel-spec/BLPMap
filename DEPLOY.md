@@ -19,16 +19,13 @@ sheet on demand (cached 6 hours), so floor-plan edits appear the same day.
 
 ## One-time setup
 
-### 1. Netlify environment variables
-Netlify → blpstoremap → **Site configuration → Environment variables**,
-then **Deploys → Trigger deploy**. All three values are in the local
-`config.json` (never commit them):
-
-| Variable | Value | Powers |
-|---|---|---|
-| `BLP_MOVING_ICS` | the moving calendar's secret iCal address | moves / crew / calendar |
-| `BLP_BRIDGE_URL` | the Apps Script web-app `/exec` URL (`bridge_url`) | move-a-piano updates |
-| `BLP_BRIDGE_SECRET` | shared secret (`bridge_secret`) | move-a-piano auth |
+### 1. Netlify environment variables — NONE REQUIRED
+The live site needs no env vars: calendar events are served by the Apps
+Script bridge (`GET <bridge>/exec?fn=events` — the secret iCal address
+lives only inside the deployed script), and piano moves go browser →
+bridge, authenticated by the team PIN (`TEAM_PIN` constant in the
+deployed script; change it there any time). `BLP_MOVING_ICS` is honored
+as an optional override if ever set.
 
 ### 2. Daily email + sheet bridge (Apps Script) — DONE July 17 2026
 The "Store Map Daily Report" project lives in **brigham@**'s Apps Script
