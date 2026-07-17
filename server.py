@@ -95,9 +95,13 @@ def parse_pianos(raw):
         entered = max((d for d in dates if d <= today), default=None)
         is_new = bool(entered and (today - entered).days <= 7)
         sl = status.lower()
+        ol = col(1).lower()
         # a piano is "on the floor" unless its status says Sold; pianos whose
-        # status is blank but that have a location are treated as active too
-        active = 'sold' not in sl and (bool(status) or bool(loc))
+        # status is blank but that have a location are treated as active too.
+        # "NEVER RECEIVED" and "(DUPLICATE)" rows are bookkeeping, not pianos.
+        active = ('sold' not in sl and (bool(status) or bool(loc))
+                  and 'never received' not in ol and 'never received' not in sl
+                  and 'duplicate' not in ol)
         pianos.append({
             'row': i,
             'owner': col(1),

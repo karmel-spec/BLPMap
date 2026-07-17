@@ -57,7 +57,7 @@ body{background:#f7f8f9;color:#121212;display:flex;flex-direction:column;overflo
 .slot.hit{cursor:pointer}
 .slot.dim{opacity:.25}
 .slot.hl{stroke:#9e2020;stroke-width:2;fill:#fdf3f3}
-.snum{font-size:9.5px;fill:#7d8b99;font-family:'SF Mono',Menlo,monospace;pointer-events:none}
+.snum{fill:#8d9aa7;font-family:'SF Mono',Menlo,monospace;font-weight:500;pointer-events:none}
 .zonebox{fill:rgba(125,145,165,.07);stroke:#b7c2cc;stroke-dasharray:4 4}
 .zonebox.filled{fill:rgba(125,145,165,.16);stroke:none}
 .zlabel{font-size:10.5px;fill:#93a0ac;letter-spacing:1.6px;font-weight:600;pointer-events:none}

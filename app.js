@@ -107,13 +107,17 @@ function renderTabs() {
 function renderKpis() {
   const un = unplaced().length, du = duplicates().length;
   const act = S.data.pianos.filter(p => p.active);
+  // total counts each physical piano once: unique serials + serial-less rows
+  const seen = new Set();
+  const total = act.filter(p =>
+    !p.serial || (!seen.has(p.serial) && seen.add(p.serial))).length;
   const newWeek = act.filter(p => p.isNew).length;
   const tm = todaysMoves().length;
   const own = {blp: 0, csgn: 0, client: 0};
   act.forEach(p => own[ownerClass(p)]++);
   $('#movesBadge').textContent = tm;
   $('#kpis').innerHTML = `
-    <div class="kpi"><span class="n">${act.length}</span><span class="l">TOTAL PIANOS</span></div>
+    <div class="kpi"><span class="n">${total}</span><span class="l">TOTAL PIANOS</span></div>
     <div class="kpi"><span class="n">${placed(0)}</span><span class="l">1ST FLOOR</span></div>
     <div class="kpi"><span class="n">${placed(1)}</span><span class="l">2ND FLOOR</span></div>
     <div class="kpi"><span class="n">${own.blp}<small> / ${own.csgn} / ${own.client}</small></span><span class="l">BLP / CONSIGN / CLIENT</span></div>
@@ -154,12 +158,11 @@ function renderMoves() {
 }
 
 function glyph(type, cx, cy, sc) {
-  if (type === 'upright') return `<g transform="translate(${cx - 10 * sc},${cy - 9 * sc}) scale(${sc})">
+  // digitals render as uprights on the map
+  if (type === 'upright' || type === 'digital')
+    return `<g transform="translate(${cx - 10 * sc},${cy - 9 * sc}) scale(${sc})">
     <rect x="0" y="3" width="20" height="8" rx="1.5" class="pbody"/>
     <rect x="1.5" y="11" width="17" height="3.5" rx="1" class="pk"/></g>`;
-  if (type === 'digital') return `<g transform="translate(${cx - 10 * sc},${cy - 9 * sc}) scale(${sc})">
-    <rect x="1" y="4" width="18" height="6" rx="3" class="pbody"/>
-    <rect x="3" y="10" width="14" height="3" rx="1" class="pk"/></g>`;
   return `<g transform="translate(${cx - 10 * sc},${cy - 10 * sc}) scale(${sc})">
     <path d="M2 1 h9 c6 0 9 3.5 9 8.5 C20 16 15.5 19 9 19 H2 Z" class="pbody"/>
     <rect x="0" y="1" width="3" height="18" rx="1" class="pk"/></g>`;
@@ -185,15 +188,26 @@ function renderMap() {
     const dim = q && !hit;
     s += `<rect x="${sl.x}" y="${sl.y}" width="${sl.w}" height="${sl.h}" rx="3"
           class="slot hit ${hit ? 'hl' : ''} ${dim ? 'dim' : ''}" data-slot="${esc(sl.id)}"/>`;
-    s += `<text x="${sl.x + sl.w / 2}" y="${sl.y + 12}" text-anchor="middle" class="snum">${esc(sl.id)}</text>`;
-    ps.forEach((p, i) => {
-      const st = pianoStatus(p);
-      const cx = sl.x + sl.w / 2 + (i - (ps.length - 1) / 2) * 18;
-      const cy = sl.y + sl.h / 2 + 4;
-      const sc = Math.min(sl.w, sl.h) > 45 ? 1.6 : 1.1;
-      s += `<g class="piano ${st} ${q && !matches(p, q) ? 'dim' : ''} ${q && matches(p, q) ? 'hl' : ''}"
-            data-slot="${esc(sl.id)}" data-row="${p.row}">${glyph(p.type, cx, cy, sc)}</g>`;
-    });
+    // slot number: as large as fits, parked on the left side of the box
+    const fs = Math.max(11, Math.min(34, sl.h * 0.42, (sl.w * 0.9) / (sl.id.length + 0.5)));
+    const numW = fs * 0.62 * sl.id.length + 8;
+    s += `<text x="${sl.x + 6}" y="${sl.y + sl.h / 2 + fs * 0.36}" class="snum"
+          font-size="${fs}">${esc(sl.id)}</text>`;
+    // pianos: fill the remaining width, spaced so shapes never touch
+    const n = ps.length;
+    if (n) {
+      const availW = sl.w - numW - 10;
+      const per = 27;                       // icon (20) + gap (7) at scale 1
+      const sc = Math.max(0.75, Math.min((sl.h - 8) / 21, availW / (n * per), 4.5));
+      const x0 = sl.x + numW + (availW - n * per * sc) / 2 + (per * sc) / 2;
+      ps.forEach((p, i) => {
+        const st = pianoStatus(p);
+        const cx = x0 + i * per * sc;
+        const cy = sl.y + sl.h / 2;
+        s += `<g class="piano ${st} ${q && !matches(p, q) ? 'dim' : ''} ${q && matches(p, q) ? 'hl' : ''}"
+              data-slot="${esc(sl.id)}" data-row="${p.row}">${glyph(p.type, cx, cy, sc)}</g>`;
+      });
+    }
   }
   const svg = $('#plan');
   svg.setAttribute('viewBox', S.vb.join(' '));
@@ -219,7 +233,7 @@ $('#pop').addEventListener('mouseleave', scheduleHide);
 
 function popHTML(p) {
   const st = pianoStatus(p);
-  const tags = {in: 'IN PLACE', new: 'NEW · FIRST 7 DAYS', sched: 'SCHEDULED', move: 'IN TRANSIT'};
+  const tags = {in: 'IN PLACE', new: 'NEW', sched: 'SCHEDULED', move: 'IN TRANSIT'};
   const makeModel = [p.make, p.model].filter(Boolean).join(' ') || p.summary;
   return `<span class="x">✕</span>
     <span class="tag ${st}">${tags[st]} · SLOT ${esc(p.location)}</span>
