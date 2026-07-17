@@ -17,6 +17,8 @@
 
 var APP_URL = 'https://blpstoremap.netlify.app';
 var REPORT_TO = 'info@brighamlarsonpianos.com';
+var PIANO_LOG_ID = '1ZunbPKygpQlcXfTyPowDHdUE9spJ3uV1XA4iX1eoKRc';
+var BRIDGE_SECRET = 'PASTE_SECRET_HERE';  // same value as Netlify BLP_BRIDGE_SECRET
 var KNOWN_AREAS = ['showroom', 'pre-sale showroom', 'third floor', 'storage',
   'shop', 'vestibule', 'wing room', 'holding room', 'attic', 'sold floor',
   'rebuilding line', 'refinishing', 'back shop', 'middle shop', 'basement',
@@ -47,6 +49,56 @@ function sendDailyReport() {
       + '\nDuplicate slots: ' + r.dups.length + '\nMoves today: ' + r.moves.length,
     name: 'BLP Store Map',
   });
+}
+
+/**
+ * Web-app bridge: lets the Store Map app look up / update a piano's
+ * "Location / Status" (column U) in the Piano Log. Deploy as Web app
+ * (execute as me, access: anyone); Netlify keeps the URL + secret in
+ * env vars and proxies /api/move here — the secret never reaches browsers.
+ *
+ * POST JSON: {secret, serial, action: 'lookup'|'move', newLocation?, row?}
+ */
+function doPost(e) {
+  try {
+    var req = JSON.parse(e.postData.contents);
+    if (req.secret !== BRIDGE_SECRET) return json_({error: 'unauthorized'});
+    var sh = SpreadsheetApp.openById(PIANO_LOG_ID).getSheets()[0];
+    var last = sh.getLastRow();
+    var serials = sh.getRange(1, 3, last, 1).getValues();  // col C
+    var owners = sh.getRange(1, 2, last, 1).getValues();   // col B (SOLD divider)
+    var soldRow = last + 1;
+    for (var i = 0; i < last; i++) {
+      if (String(owners[i][0] || '').trim().toUpperCase() === 'SOLD'
+          && !String(serials[i][0] || '').trim()) { soldRow = i + 1; break; }
+    }
+    var want = String(req.serial || '').trim().toLowerCase();
+    if (!want) return json_({error: 'serial required'});
+    var matches = [];
+    for (var r = 1; r < soldRow; r++) {
+      if (String(serials[r - 1][0] || '').trim().toLowerCase() === want) matches.push(r);
+    }
+    if (!matches.length) return json_({error: 'serial not found above the SOLD section'});
+    if (matches.length > 1 && !req.row) {
+      return json_({error: 'multiple active rows share this serial', rows: matches});
+    }
+    var row = req.row || matches[0];
+    var summary = String(sh.getRange(row, 4).getValue() || '');
+    var current = String(sh.getRange(row, 21).getValue() || '');
+    if (req.action === 'move' && req.newLocation != null && String(req.newLocation).trim()) {
+      sh.getRange(row, 21).setValue(String(req.newLocation).trim());
+      return json_({ok: true, moved: true, row: row, summary: summary,
+                    previous: current, location: String(req.newLocation).trim()});
+    }
+    return json_({ok: true, row: row, summary: summary, location: current});
+  } catch (err) {
+    return json_({error: String(err)});
+  }
+}
+
+function json_(o) {
+  return ContentService.createTextOutput(JSON.stringify(o))
+    .setMimeType(ContentService.MimeType.JSON);
 }
 
 function isManualRun_() {
