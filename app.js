@@ -345,15 +345,23 @@ function renderMap() {
         });
       }
     } else {
-      // wide slot: number on the left, pianos in a row
-      const fs = Math.max(11, Math.min(34, sl.h * 0.42, (sl.w * 0.9) / (sl.id.length + 0.5)));
+      // wide slot: number on the left, pianos in a row. Rack rows (short
+      // heights, like spots 214-248) get compact numbers, left-aligned
+      // icons, and near-full-height glyphs so the shelf reads cleanly.
+      const thin = sl.h <= 26;
+      const rack = sl.h < 50;
+      const fs = thin ? Math.max(9, sl.h * 0.55)
+        : Math.max(11, Math.min(34, sl.h * 0.42, (sl.w * 0.9) / (sl.id.length + 0.5)));
       const numW = fs * 0.62 * sl.id.length + 8;
       s += `<text x="${sl.x + 6}" y="${sl.y + sl.h / 2 + fs * 0.36}" class="snum"
             font-size="${fs}">${esc(sl.id)}</text>`;
       if (n) {
         const availW = sl.w - numW - 10;
-        const sc = Math.max(0.75, Math.min((sl.h - 8) / 21, availW / (n * per), 4.5));
-        const x0 = sl.x + numW + (availW - n * per * sc) / 2 + (per * sc) / 2;
+        const pad = thin ? 3 : 8;
+        const sc = Math.max(0.7, Math.min((sl.h - pad) / 21, availW / (n * per), 4.5));
+        const x0 = rack
+          ? sl.x + numW + (per * sc) / 2 + 2
+          : sl.x + numW + (availW - n * per * sc) / 2 + (per * sc) / 2;
         ps.forEach((p, i) => {
           const st = pianoStatus(p);
           const cx = x0 + i * per * sc;
