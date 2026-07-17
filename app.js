@@ -24,17 +24,26 @@ async function fetchData() {
   if (!r.ok) throw new Error('api ' + r.status);
   return r.json();
 }
+async function fetchSlots() {
+  // live geometry regenerated from the Store Map sheet; committed
+  // snapshot as fallback (local dev, or the sheet being unreachable)
+  try {
+    const r = await fetch('/api/slots');
+    if (r.ok) {
+      const doc = await r.json();
+      if (doc.floors) return doc;
+    }
+  } catch (e) { /* fall through */ }
+  return fetch('data/slots.json', {cache: 'no-cache'}).then(r => r.json());
+}
 async function boot() {
-  S.map = await fetch('data/slots.json').then(r => r.json());
+  S.map = await fetchSlots();
   try { S.data = await fetchData(); }
   catch (e) { S.data = EMPTY; }   // draw the floor plan even with no data
   index(); renderAll();
   setInterval(async () => {
     try {
-      const [m, d2] = await Promise.all([
-        fetch('data/slots.json', {cache: 'no-cache'}).then(r => r.json()),
-        fetchData(),
-      ]);
+      const [m, d2] = await Promise.all([fetchSlots(), fetchData()]);
       S.map = m; S.data = d2;
       index(); renderAll();
     } catch (e) { /* keep last */ }

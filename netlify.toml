@@ -8,3 +8,8 @@
   from = "/api/data"
   to = "/.netlify/functions/data"
   status = 200
+
+[[redirects]]
+  from = "/api/slots"
+  to = "/.netlify/functions/slots"
+  status = 200

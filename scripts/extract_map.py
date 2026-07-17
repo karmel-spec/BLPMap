@@ -20,12 +20,16 @@ def sheet_geometry(ws):
     ncols, nrows = ws.max_column, ws.max_row
     dcw = ws.sheet_format.defaultColWidth or 8.43
     drh = ws.sheet_format.defaultRowHeight or 15.0
+    # column widths: defs can span ranges (min..max), which the by-letter
+    # lookup misses — expand them explicitly
+    widths = {}
+    for cd in ws.column_dimensions.values():
+        if cd.width:
+            for c in range(cd.min or 1, (cd.max or cd.min or 1) + 1):
+                widths[c] = cd.width
     xs, x = [0.0], 0.0
     for c in range(1, ncols + 2):
-        letter = openpyxl.utils.get_column_letter(c)
-        cd = ws.column_dimensions.get(letter)
-        w = cd.width if (cd and cd.width) else dcw
-        x += w * COL_PX + 5
+        x += widths.get(c, dcw) * COL_PX + 5
         xs.append(x)
     ys, y = [0.0], 0.0
     for r in range(1, nrows + 2):

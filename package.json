@@ -1,0 +1,8 @@
+{
+  "name": "blp-store-map",
+  "private": true,
+  "description": "Netlify function dependencies for the BLP Store Map",
+  "dependencies": {
+    "exceljs": "^4.4.0"
+  }
+}

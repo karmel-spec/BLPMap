@@ -10,8 +10,12 @@ local computer.
 |---|---|---|
 | Map + stats + reports UI | Netlify (static) | auto-deploy from GitHub |
 | `/api/data` (Piano Log + calendar) | Netlify Function | `BLP_MOVING_ICS` env var |
-| Floor-plan geometry refresh (weekdays ~6 AM) | GitHub Action | `.github/workflows/refresh-map.yml` |
+| `/api/slots` (floor-plan geometry, live from the sheet, 6 h cache) | Netlify Function | none — `netlify/functions/slots.mjs` |
 | Daily report email (weekdays 6 AM) | Google Apps Script as info@ | `apps-script/DailyReport.gs` |
+
+Geometry needs no cron at all: `/api/slots` regenerates from the Store Map
+sheet on demand (cached 6 hours), so floor-plan edits appear the same day.
+`data/slots.json` stays in the repo only as a fallback snapshot.
 
 ## One-time setup
 
