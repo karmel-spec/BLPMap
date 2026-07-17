@@ -19,20 +19,24 @@ sheet on demand (cached 6 hours), so floor-plan edits appear the same day.
 
 ## One-time setup
 
-### 1. Calendar secret on Netlify
-Netlify → blpstoremap → **Site configuration → Environment variables**:
-add `BLP_MOVING_ICS` = the moving calendar's *secret* iCal address
-(in local `config.json`; never commit it). Then **Deploys → Trigger deploy**.
+### 1. Netlify environment variables
+Netlify → blpstoremap → **Site configuration → Environment variables**,
+then **Deploys → Trigger deploy**. All three values are in the local
+`config.json` (never commit them):
 
-### 2. Daily email (Apps Script, ~3 minutes)
-1. [script.google.com](https://script.google.com) signed in as
-   **info@brighamlarsonpianos.com** → New project → name it
-   "Store Map Daily Report".
-2. Paste all of `apps-script/DailyReport.gs` over `Code.gs`, save.
-3. **Run → setup** once; authorize when prompted. It sends a test report
-   immediately and installs the weekday 6 AM Mountain trigger.
-4. On the Mac, set `"daily_email": false` in `config.json` so local dev
-   servers don't double-send.
+| Variable | Value | Powers |
+|---|---|---|
+| `BLP_MOVING_ICS` | the moving calendar's secret iCal address | moves / crew / calendar |
+| `BLP_BRIDGE_URL` | the Apps Script web-app `/exec` URL (`bridge_url`) | move-a-piano updates |
+| `BLP_BRIDGE_SECRET` | shared secret (`bridge_secret`) | move-a-piano auth |
+
+### 2. Daily email + sheet bridge (Apps Script) — DONE July 17 2026
+The "Store Map Daily Report" project lives in **brigham@**'s Apps Script
+(script.google.com → My Projects). `setup()` has been run and authorized:
+the weekday 6 AM Mountain trigger is installed and the web-app bridge
+("Store Map bridge v1") is deployed. To rotate the secret or redeploy after
+code changes: edit Code.gs, then Deploy → Manage deployments → ✏️ →
+New version → Deploy. Rerun `setup()` only to reinstall the trigger.
 
 ## Local dev
 `python3 server.py` still works exactly as before (port 8641) and needs
