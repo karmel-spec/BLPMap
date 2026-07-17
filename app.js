@@ -179,17 +179,26 @@ function glyph(type, cx, cy, sc) {
     <rect x="0" y="1" width="3" height="18" rx="1" class="pk"/></g>`;
 }
 
+// sheet fill -> theme class: light gray / dark gray stay gray, blue becomes red
+function fillClass(hex) {
+  if (!hex) return '';
+  const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16),
+        b = parseInt(hex.slice(5, 7), 16);
+  if (b > r + 30 && b > g + 10) return 'accent';
+  return (r + g + b) / 3 < 200 ? 'dark' : 'light';
+}
+
 function renderMap() {
   const f = S.map.floors[S.floor];
   const q = S.search.trim().toLowerCase();
   if (!S.vb) S.vb = [0, 0, f.width, f.height];
   let s = '';
   for (const z of f.labels) {
-    const filled = z.fill && z.fill !== '#ffffff';
+    const cls = fillClass(z.fill);
     if (z.w > 4 && z.h > 4)
-      s += `<rect x="${z.x}" y="${z.y}" width="${z.w}" height="${z.h}" class="zonebox ${filled ? 'filled' : ''}"/>`;
+      s += `<rect x="${z.x}" y="${z.y}" width="${z.w}" height="${z.h}" class="zonebox ${cls}"/>`;
     s += `<text x="${z.x + z.w / 2}" y="${z.y + z.h / 2 + 4}" text-anchor="middle"
-          class="zlabel" font-size="${Math.min(13, Math.max(9, z.h * 0.5))}">${esc(z.text)}</text>`;
+          class="zlabel ${cls}" font-size="${Math.min(13, Math.max(9, z.h * 0.5))}">${esc(z.text)}</text>`;
   }
   for (const w of f.walls)
     s += `<line x1="${w.x1}" y1="${w.y1}" x2="${w.x2}" y2="${w.y2}" class="wall"/>`;
@@ -198,7 +207,7 @@ function renderMap() {
     const hit = q && (sl.id.toLowerCase() === q || ps.some(p => matches(p, q)));
     const dim = q && !hit;
     s += `<rect x="${sl.x}" y="${sl.y}" width="${sl.w}" height="${sl.h}" rx="3"
-          class="slot hit ${hit ? 'hl' : ''} ${dim ? 'dim' : ''}" data-slot="${esc(sl.id)}"/>`;
+          class="slot hit ${fillClass(sl.fill)} ${hit ? 'hl' : ''} ${dim ? 'dim' : ''}" data-slot="${esc(sl.id)}"/>`;
     // slot number: as large as fits, parked on the left side of the box
     const fs = Math.max(11, Math.min(34, sl.h * 0.42, (sl.w * 0.9) / (sl.id.length + 0.5)));
     const numW = fs * 0.62 * sl.id.length + 8;

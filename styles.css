@@ -54,13 +54,20 @@ body{background:#f7f8f9;color:#121212;display:flex;flex-direction:column;overflo
 #plan.panning{cursor:grabbing}
 .wall{stroke:#7d8b99;stroke-width:2.5;stroke-linecap:square}
 .slot{fill:#fff;stroke:#a6b2bd;stroke-width:1}
+.slot.light{fill:#eef1f3}
+.slot.dark{fill:#c6cdd3;stroke:#9aa5b0}
+.slot.accent{fill:rgba(158,32,32,.14);stroke:#b05050}
 .slot.hit{cursor:pointer}
 .slot.dim{opacity:.25}
 .slot.hl{stroke:#9e2020;stroke-width:2;fill:#fdf3f3}
 .snum{fill:#8d9aa7;font-family:'SF Mono',Menlo,monospace;font-weight:500;pointer-events:none}
-.zonebox{fill:rgba(125,145,165,.07);stroke:#b7c2cc;stroke-dasharray:4 4}
-.zonebox.filled{fill:rgba(125,145,165,.16);stroke:none}
+.zonebox{fill:#fff;stroke:#c9d1d8}
+.zonebox.light{fill:#eef1f4;stroke:#d5dbe0}
+.zonebox.dark{fill:#c2c9cf;stroke:#a8b1b9}
+.zonebox.accent{fill:rgba(158,32,32,.15);stroke:#b05050}
 .zlabel{font-size:10.5px;fill:#93a0ac;letter-spacing:1.6px;font-weight:600;pointer-events:none}
+.zlabel.dark{fill:#4a545d}
+.zlabel.accent{fill:#9e2020;font-weight:700}
 .piano{cursor:pointer}
 .piano .pbody{fill:#2b2f33}
 .piano .pk{fill:#8f979e}

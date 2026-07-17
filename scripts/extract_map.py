@@ -77,11 +77,11 @@ def extract(ws):
             text = str(v).strip()
             item = {'x': round(x, 1), 'y': round(y, 1), 'w': round(w, 1), 'h': round(h, 1)}
             fill = fill_hex(cell)
+            if fill:
+                item['fill'] = fill
             if SLOT_RE.match(text):
                 slots.append({'id': text, **item})
             else:
-                if fill:
-                    item['fill'] = fill
                 labels.append({'text': text, **item})
     # wall segments from medium/thick borders
     walls = []
