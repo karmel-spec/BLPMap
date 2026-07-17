@@ -232,25 +232,46 @@ function renderMap() {
     const dim = q && !hit;
     s += `<rect x="${sl.x}" y="${sl.y}" width="${sl.w}" height="${sl.h}" rx="3"
           class="slot hit ${fillClass(sl.fill)} ${hit ? 'hl' : ''} ${dim ? 'dim' : ''}" data-slot="${esc(sl.id)}"/>`;
-    // slot number: as large as fits, parked on the left side of the box
-    const fs = Math.max(11, Math.min(34, sl.h * 0.42, (sl.w * 0.9) / (sl.id.length + 0.5)));
-    const numW = fs * 0.62 * sl.id.length + 8;
-    s += `<text x="${sl.x + 6}" y="${sl.y + sl.h / 2 + fs * 0.36}" class="snum"
-          font-size="${fs}">${esc(sl.id)}</text>`;
-    // pianos: fill the remaining width, spaced so shapes never touch
     const n = ps.length;
-    if (n) {
-      const availW = sl.w - numW - 10;
-      const per = 27;                       // icon (20) + gap (7) at scale 1
-      const sc = Math.max(0.75, Math.min((sl.h - 8) / 21, availW / (n * per), 4.5));
-      const x0 = sl.x + numW + (availW - n * per * sc) / 2 + (per * sc) / 2;
-      ps.forEach((p, i) => {
-        const st = pianoStatus(p);
-        const cx = x0 + i * per * sc;
-        const cy = sl.y + sl.h / 2;
-        s += `<g class="piano ${st} ${q && !matches(p, q) ? 'dim' : ''} ${q && matches(p, q) ? 'hl' : ''}"
-              data-slot="${esc(sl.id)}" data-row="${p.row}">${glyph(p.type, cx, cy, sc)}</g>`;
-      });
+    const portrait = sl.h > sl.w * 1.25;
+    const per = 27;                         // icon (20) + gap (7) at scale 1
+    if (portrait) {
+      // tall slot: number on top, pianos stacked and rotated 90° so
+      // uprights sit flat against the wall — and get to be bigger
+      const fs = Math.max(11, Math.min(30, sl.w * 0.42, (sl.h * 0.9) / (sl.id.length + 0.5)));
+      s += `<text x="${sl.x + sl.w / 2}" y="${sl.y + fs + 2}" text-anchor="middle"
+            class="snum" font-size="${fs}">${esc(sl.id)}</text>`;
+      if (n) {
+        const numH = fs + 8;
+        const availH = sl.h - numH - 10;
+        const sc = Math.max(0.75, Math.min((sl.w - 6) / 21, availH / (n * per), 4.5));
+        const y0 = sl.y + numH + (availH - n * per * sc) / 2 + (per * sc) / 2;
+        ps.forEach((p, i) => {
+          const st = pianoStatus(p);
+          const cx = sl.x + sl.w / 2, cy = y0 + i * per * sc;
+          s += `<g class="piano ${st} ${q && !matches(p, q) ? 'dim' : ''} ${q && matches(p, q) ? 'hl' : ''}"
+                data-slot="${esc(sl.id)}" data-row="${p.row}">
+                <g transform="rotate(90 ${cx} ${cy})">${glyph(p.type, cx, cy, sc)}</g></g>`;
+        });
+      }
+    } else {
+      // wide slot: number on the left, pianos in a row
+      const fs = Math.max(11, Math.min(34, sl.h * 0.42, (sl.w * 0.9) / (sl.id.length + 0.5)));
+      const numW = fs * 0.62 * sl.id.length + 8;
+      s += `<text x="${sl.x + 6}" y="${sl.y + sl.h / 2 + fs * 0.36}" class="snum"
+            font-size="${fs}">${esc(sl.id)}</text>`;
+      if (n) {
+        const availW = sl.w - numW - 10;
+        const sc = Math.max(0.75, Math.min((sl.h - 8) / 21, availW / (n * per), 4.5));
+        const x0 = sl.x + numW + (availW - n * per * sc) / 2 + (per * sc) / 2;
+        ps.forEach((p, i) => {
+          const st = pianoStatus(p);
+          const cx = x0 + i * per * sc;
+          const cy = sl.y + sl.h / 2;
+          s += `<g class="piano ${st} ${q && !matches(p, q) ? 'dim' : ''} ${q && matches(p, q) ? 'hl' : ''}"
+                data-slot="${esc(sl.id)}" data-row="${p.row}">${glyph(p.type, cx, cy, sc)}</g>`;
+        });
+      }
     }
   }
   const svg = $('#plan');
@@ -279,20 +300,61 @@ function popHTML(p) {
   const st = pianoStatus(p);
   const tags = {in: 'IN PLACE', new: 'NEW', sched: 'SCHEDULED', move: 'IN TRANSIT'};
   const makeModel = [p.make, p.model].filter(Boolean).join(' ') || p.summary;
+  const mover = p.serial
+    ? `<div class="movebox">
+         <input class="mvin" placeholder="new slot #" maxlength="12">
+         <button class="mvgo">Move</button>
+       </div><div class="mvmsg"></div>`
+    : `<div class="mvmsg">No serial # — change location in the Piano Log.</div>`;
   return `<span class="x">✕</span>
     <span class="tag ${st}">${tags[st]} · SLOT ${esc(p.location)}</span>
     <h3>${esc(makeModel)}</h3>
     <div class="row">Serial # <b>${esc(p.serial || '—')}</b></div>
     <div class="row">Status <b>${esc(p.status || '—')}</b></div>
     <div class="row">Owner <b>${esc(p.owner || '—')}</b></div>
+    ${mover}
     <span class="btn">Open Piano Log ↗</span>`;
 }
 function wirePop(p) {
   const pop = $('#pop');
   pop.onclick = ev => {
     if (ev.target.classList.contains('x')) { pop.hidden = true; popPinned = false; return; }
+    if (ev.target.closest('.movebox') || ev.target.closest('.mvmsg')) return;
+    if (ev.target.classList.contains('mvin')) return;
     window.open(logLink(p), '_blank', 'noopener');
   };
+  const go = pop.querySelector('.mvgo');
+  if (go) go.onclick = () => movePiano(p, pop.querySelector('.mvin').value.trim(), pop);
+  const inp = pop.querySelector('.mvin');
+  if (inp) inp.onkeydown = e => {
+    if (e.key === 'Enter') movePiano(p, inp.value.trim(), pop);
+  };
+}
+
+async function movePiano(p, dest, pop) {
+  const msg = pop.querySelector('.mvmsg');
+  if (!dest) { msg.textContent = 'Type a slot number or area name first.'; return; }
+  const known = S.slotFloor.has(dest.toLowerCase());
+  msg.textContent = 'Updating Piano Log…';
+  popPinned = true;
+  try {
+    const r = await fetch('/api/move', {
+      method: 'POST', headers: {'content-type': 'application/json'},
+      body: JSON.stringify({serial: p.serial, newLocation: dest}),
+    });
+    const j = await r.json();
+    if (j.moved) {
+      msg.textContent = `✓ Moved from ${j.previous || '—'} to ${j.location}`
+        + (known ? '' : ' (not a numbered map slot — it will show in reports)');
+      p.location = j.location;
+      p.isSlot = SLOT_RE.test(j.location);
+      index(); renderKpis(); renderMap(); renderReport();
+    } else {
+      msg.textContent = '✗ ' + (j.error || 'update failed');
+    }
+  } catch (e) {
+    msg.textContent = '✗ ' + e.message;
+  }
 }
 function openPop(row, el, pinned) {
   cancelHide();

@@ -13,3 +13,8 @@
   from = "/api/slots"
   to = "/.netlify/functions/slots"
   status = 200
+
+[[redirects]]
+  from = "/api/move"
+  to = "/.netlify/functions/move"
+  status = 200

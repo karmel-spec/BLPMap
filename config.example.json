@@ -1,3 +1,6 @@
 {
-  "moving_ics_url": "https://calendar.google.com/calendar/ical/pianomoving.blp%40gmail.com/private-XXXXXXXX/basic.ics"
+  "moving_ics_url": "https://calendar.google.com/calendar/ical/pianomoving.blp%40gmail.com/private-XXXXXXXX/basic.ics",
+  "daily_email": false,
+  "bridge_url": "https://script.google.com/macros/s/DEPLOYMENT_ID/exec",
+  "bridge_secret": "PASTE_SECRET_HERE"
 }

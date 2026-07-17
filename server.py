@@ -418,7 +418,56 @@ def _geometry_scheduler():
         time.sleep(600)
 
 
+BRIDGE_URL = _CFG.get('bridge_url', '')
+BRIDGE_SECRET = _CFG.get('bridge_secret', '')
+
+
+def bridge_call(payload):
+    """POST to the Apps Script bridge; follow its 302 to the echo URL."""
+    body = json.dumps({**payload, 'secret': BRIDGE_SECRET}).encode()
+
+    class NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, *a, **k):
+            return None
+    opener = urllib.request.build_opener(NoRedirect)
+    req = urllib.request.Request(BRIDGE_URL, data=body,
+                                 headers={'Content-Type': 'application/json'})
+    try:
+        resp = opener.open(req, timeout=30)
+        return json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        if e.code in (301, 302, 303, 307) and e.headers.get('Location'):
+            with urllib.request.urlopen(e.headers['Location'], timeout=30) as r2:
+                return json.loads(r2.read())
+        raise
+
+
 class Handler(SimpleHTTPRequestHandler):
+    def do_POST(self):
+        if self.path.split('?')[0] == '/api/move':
+            try:
+                if not BRIDGE_URL or not BRIDGE_SECRET:
+                    raise RuntimeError('bridge not configured in config.json')
+                n = int(self.headers.get('Content-Length', 0))
+                req = json.loads(self.rfile.read(n) or b'{}')
+                payload = {'serial': str(req.get('serial', '')),
+                           'action': 'move' if req.get('newLocation') else 'lookup'}
+                if req.get('newLocation'):
+                    payload['newLocation'] = str(req['newLocation'])
+                if req.get('row'):
+                    payload['row'] = req['row']
+                out = bridge_call(payload)
+            except Exception as exc:
+                out = {'error': str(exc)}
+            body = json.dumps(out).encode()
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-Length', str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        self.send_error(404)
+
     def do_GET(self):
         if self.path.split('?')[0] == '/api/data':
             body = json.dumps(get_data()).encode()
