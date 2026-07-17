@@ -299,9 +299,9 @@ function renderReport() {
   $('#unplacedCount').textContent = un.length;
   $('#dupCount').textContent = du.length;
   $('#unplacedTable').innerHTML =
-    `<tr><th>PIANO</th><th>SERIAL</th><th>OWNER</th><th>STATUS</th><th>COL U SAYS</th><th></th></tr>` +
+    `<tr><th>PIANO</th><th>SERIAL</th><th>LOG SECTION</th><th>STATUS</th><th>COL U SAYS</th><th></th></tr>` +
     (un.map(p => `<tr><td>${esc(p.summary)}</td><td>${esc(p.serial)}</td>
-      <td>${esc(p.owner)}</td><td>${esc(p.status)}</td>
+      <td>${esc((p.section || '—').slice(0, 38))}</td><td>${esc(p.status)}</td>
       <td class="locraw">${esc(p.location || '(blank)')}</td>
       <td><a target="_blank" rel="noopener" href="${logLink(p)}">open ↗</a></td></tr>`).join('')
      || '<tr><td colspan="6" class="empty">None — every active piano has a valid map location. 🎉</td></tr>');

@@ -78,13 +78,23 @@ def parse_pianos(raw):
     rows = list(csv.reader(io.StringIO(raw.decode('utf-8', 'replace'))))
     pianos = []
     today = date.today()
+    section = ''
+    sold_zone = False   # True once the "SOLD" divider row passes: rows below
+                        # it are exited pianos (year archives + WEB galleries)
     for i, r in enumerate(rows[2:], start=3):
         def col(idx):
             return r[idx].strip() if len(r) > idx else ''
         serial, summary = col(2), col(3)
         if not serial and not summary:
+            head = col(1)
+            if head:                       # section divider row
+                section = head
+                if head.strip().upper() == 'SOLD':
+                    sold_zone = True
             continue
-        # skip the sheet's section-divider / sub-header rows
+        if sold_zone:
+            continue  # moved to the SOLD rows = exited the building
+        # skip the sheet's sub-header rows
         if summary.upper() in ('SHOPIFY', 'ADMIN', 'WEB') \
                 or col(20).upper() in ('ADMIN', 'LOCATION / STATUS') \
                 or 'Arrival Date' in col(21):
@@ -94,16 +104,15 @@ def parse_pianos(raw):
         dates = parse_dates(col(21))
         entered = max((d for d in dates if d <= today), default=None)
         is_new = bool(entered and (today - entered).days <= 7)
-        sl = status.lower()
         ol = col(1).lower()
-        # a piano is "on the floor" unless its status says Sold; pianos whose
-        # status is blank but that have a location are treated as active too.
-        # "NEVER RECEIVED" and "(DUPLICATE)" rows are bookkeeping, not pianos.
-        active = ('sold' not in sl and (bool(status) or bool(loc))
-                  and 'never received' not in ol and 'never received' not in sl
+        # Above the SOLD divider a piano is physically here (even "SOLD OR
+        # COMPLETED (but not gone yet)") unless the row is pure bookkeeping.
+        active = ('never received' not in ol
+                  and 'never received' not in status.lower()
                   and 'duplicate' not in ol)
         pianos.append({
             'row': i,
+            'section': section,
             'owner': col(1),
             'serial': serial,
             'summary': summary or f"{col(4)} {col(5)} {col(6)}".strip(),
