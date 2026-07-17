@@ -18,18 +18,22 @@ const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"]/g,
   c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
 
+const EMPTY = {pianos: [], events: [], crew: [], fetchedAt: null, stale: true};
+async function fetchData() {
+  const r = await fetch('/api/data');
+  if (!r.ok) throw new Error('api ' + r.status);
+  return r.json();
+}
 async function boot() {
-  const [map, data] = await Promise.all([
-    fetch('data/slots.json').then(r => r.json()),
-    fetch('/api/data').then(r => r.json()),
-  ]);
-  S.map = map; S.data = data;
+  S.map = await fetch('data/slots.json').then(r => r.json());
+  try { S.data = await fetchData(); }
+  catch (e) { S.data = EMPTY; }   // draw the floor plan even with no data
   index(); renderAll();
   setInterval(async () => {
     try {
       const [m, d2] = await Promise.all([
         fetch('data/slots.json', {cache: 'no-cache'}).then(r => r.json()),
-        fetch('/api/data').then(r => r.json()),
+        fetchData(),
       ]);
       S.map = m; S.data = d2;
       index(); renderAll();
@@ -69,12 +73,13 @@ function duplicates() {
   for (const [slot, ps] of S.bySlot) if (ps.length > 1) out.push({slot, pianos: ps});
   return out.sort((a, b) => b.pianos.length - a.pianos.length);
 }
+const localDay = () => new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD local
 function todaysMoves() {
-  const t = new Date().toISOString().slice(0, 10);
+  const t = localDay();
   return S.data.events.filter(e => e.date === t);
 }
 function pianoStatus(p) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDay();
   if (p.serial && p.serial.length > 4) {
     const ev = S.data.events.find(e => (e.summary + e.description).includes(p.serial));
     if (ev && !ev.done) return ev.date === today ? 'move' : 'sched';
@@ -322,7 +327,7 @@ function renderReport() {
 function renderBoard() {
   const evs = S.data.events;
   $('#boardCount').textContent = evs.length;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDay();
   const byDay = {};
   evs.forEach(e => (byDay[e.date] = byDay[e.date] || []).push(e));
   $('#board').innerHTML = Object.keys(byDay).sort().map(d => {
