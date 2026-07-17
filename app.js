@@ -10,7 +10,8 @@ const KNOWN_AREAS = ['showroom', 'pre-sale showroom', 'third floor', 'storage',
 
 const S = {
   map: null, data: null, floor: 0, search: '', view: 'map',
-  bySlot: new Map(), slotFloor: new Map(), vb: null,
+  bySlot: new Map(), slotFloor: new Map(),
+  zoom: 1,   // 1 = map fills the card width; scroll down to explore
   feedOpen: window.innerWidth >= 1200,
 };
 
@@ -120,8 +121,9 @@ function renderTabs() {
   $('#floorTabs').innerHTML = S.map.floors.map((f, i) =>
     `<div class="${i === S.floor ? 'on' : ''}" data-f="${i}">${esc(f.name.replace(' floor', ''))} floor</div>`).join('');
   $('#floorTabs').querySelectorAll('div').forEach(el =>
-    el.onclick = () => { S.floor = +el.dataset.f; S.vb = null;
-      if (S.view !== 'map') switchView('map'); renderMap(); renderTabs(); });
+    el.onclick = () => { S.floor = +el.dataset.f;
+      if (S.view !== 'map') switchView('map');
+      renderMap(); renderTabs(); $('#mapscroll').scrollTop = 0; });
 }
 
 function renderKpis() {
@@ -197,10 +199,23 @@ function fillClass(hex) {
   return (r + g + b) / 3 < 200 ? 'dark' : 'light';
 }
 
+// size the SVG like a document: card width x true sheet proportions,
+// so the user scrolls down through the building exactly like the sheet
+function sizePlan() {
+  const f = S.map && S.map.floors[S.floor];
+  if (!f) return;
+  const sc = $('#mapscroll');
+  const w = Math.max(320, sc.clientWidth - 2) * S.zoom;
+  const svg = $('#plan');
+  svg.setAttribute('viewBox', `0 0 ${f.width} ${f.height}`);
+  svg.style.width = w + 'px';
+  svg.style.height = (w * f.height / f.width) + 'px';
+}
+window.addEventListener('resize', sizePlan);
+
 function renderMap() {
   const f = S.map.floors[S.floor];
   const q = S.search.trim().toLowerCase();
-  if (!S.vb) S.vb = [0, 0, f.width, f.height];
   let s = '';
   for (const z of f.labels) {
     const cls = fillClass(z.fill);
@@ -239,8 +254,8 @@ function renderMap() {
     }
   }
   const svg = $('#plan');
-  svg.setAttribute('viewBox', S.vb.join(' '));
   svg.innerHTML = s;
+  sizePlan();
   svg.querySelectorAll('.piano').forEach(el => {
     el.addEventListener('click', ev => { ev.stopPropagation(); openPop(+el.dataset.row, el, true); });
     el.addEventListener('mouseenter', () => openPop(+el.dataset.row, el, false));
@@ -386,67 +401,32 @@ $('#search').addEventListener('input', e => {
   renderMap();
 });
 
-/* ---------- zoom / pan (mouse + touch pinch) ---------- */
-(function zoomPan() {
-  const svg = $('#plan');
-  function setVB() { svg.setAttribute('viewBox', S.vb.join(' ')); }
-  svg.addEventListener('wheel', e => {
-    e.preventDefault();
-    const [x, y, w, h] = S.vb;
-    const k = e.deltaY > 0 ? 1.12 : 0.89;
-    const r = svg.getBoundingClientRect();
-    const mx = x + (e.clientX - r.left) / r.width * w;
-    const my = y + (e.clientY - r.top) / r.height * h;
-    S.vb = [mx - (mx - x) * k, my - (my - y) * k, w * k, h * k];
-    setVB();
-  }, {passive: false});
-
-  const ptrs = new Map();
-  let pinchDist = 0;
-  svg.addEventListener('pointerdown', e => {
-    ptrs.set(e.pointerId, [e.clientX, e.clientY]);
-    if (ptrs.size === 1) svg.classList.add('panning');
-    if (ptrs.size === 2) {
-      const [a, b] = [...ptrs.values()];
-      pinchDist = Math.hypot(a[0] - b[0], a[1] - b[1]);
-    }
-    svg.setPointerCapture(e.pointerId);
-  });
-  svg.addEventListener('pointermove', e => {
-    if (!ptrs.has(e.pointerId)) return;
-    const prev = ptrs.get(e.pointerId);
-    ptrs.set(e.pointerId, [e.clientX, e.clientY]);
-    const r = svg.getBoundingClientRect();
-    if (ptrs.size === 1) {
-      const [x, y, w, h] = S.vb;
-      S.vb = [x - (e.clientX - prev[0]) / r.width * w,
-              y - (e.clientY - prev[1]) / r.height * h, w, h];
-      setVB();
-    } else if (ptrs.size === 2) {
-      const [a, b] = [...ptrs.values()];
-      const d = Math.hypot(a[0] - b[0], a[1] - b[1]);
-      if (pinchDist > 0 && d > 0) {
-        const k = pinchDist / d;
-        const [x, y, w, h] = S.vb;
-        const cxs = (a[0] + b[0]) / 2, cys = (a[1] + b[1]) / 2;
-        const mx = x + (cxs - r.left) / r.width * w;
-        const my = y + (cys - r.top) / r.height * h;
-        S.vb = [mx - (mx - x) * k, my - (my - y) * k, w * k, h * k];
-        setVB();
-      }
-      pinchDist = d;
-    }
-  });
-  ['pointerup', 'pointercancel', 'pointerleave'].forEach(ev =>
-    svg.addEventListener(ev, e => {
-      ptrs.delete(e.pointerId);
-      if (!ptrs.size) svg.classList.remove('panning');
-    }));
-  svg.addEventListener('dblclick', () => {
-    const f = S.map.floors[S.floor];
-    S.vb = [0, 0, f.width, f.height];
-    setVB();
-  });
-})();
+/* ---------- document-style zoom (scroll is native) ---------- */
+function zoomAt(k, cx, cy) {
+  const sc = $('#mapscroll');
+  const r = sc.getBoundingClientRect();
+  const prev = S.zoom;
+  S.zoom = Math.min(8, Math.max(1, S.zoom * k));
+  const real = S.zoom / prev;
+  if (real === 1) return;
+  const ox = (cx ?? r.left + r.width / 2) - r.left;
+  const oy = (cy ?? r.top + r.height / 2) - r.top;
+  const px = sc.scrollLeft + ox, py = sc.scrollTop + oy;
+  sizePlan();
+  sc.scrollLeft = px * real - ox;
+  sc.scrollTop = py * real - oy;
+}
+$('#zoomIn').onclick = () => zoomAt(1.4);
+$('#zoomOut').onclick = () => zoomAt(1 / 1.4);
+$('#zoomFit').onclick = () => { S.zoom = 1; sizePlan(); };
+$('#mapscroll').addEventListener('wheel', e => {
+  if (!e.ctrlKey && !e.metaKey) return;      // plain scroll stays native
+  e.preventDefault();
+  zoomAt(e.deltaY > 0 ? 1 / 1.18 : 1.18, e.clientX, e.clientY);
+}, {passive: false});
+$('#mapscroll').addEventListener('dblclick', e => {
+  if (e.target.closest('.piano') || e.target.closest('.slot')) return;
+  S.zoom = 1; sizePlan();
+});
 
 boot();

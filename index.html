@@ -37,9 +37,13 @@
 
   <div class="view" id="view-map">
     <div class="mapcard">
-      <div class="gridbg"></div>
-      <svg id="plan"></svg>
+      <div class="mapscroll" id="mapscroll"><svg id="plan"></svg></div>
       <div class="pop" id="pop" hidden></div>
+      <div class="zoomctrl">
+        <button id="zoomOut" aria-label="Zoom out">−</button>
+        <button id="zoomFit" aria-label="Fit width">⤢</button>
+        <button id="zoomIn" aria-label="Zoom in">+</button>
+      </div>
       <button class="lgbtn" id="legendBtn">Legend</button>
       <div class="lgpanel" id="legendPanel" hidden>
         <div class="shape-row">
