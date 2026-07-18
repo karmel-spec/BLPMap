@@ -62,7 +62,8 @@ body{background:#f7f8f9;color:#121212;display:flex;flex-direction:column;overflo
 .slot.hit{cursor:pointer}
 .slot.dim{opacity:.25}
 .slot.hl{stroke:#9e2020;stroke-width:2;fill:#fdf3f3}
-.snum{fill:#8d9aa7;font-family:'SF Mono',Menlo,monospace;font-weight:500;pointer-events:none}
+.snum{fill:#8d9aa7;font-family:'SF Mono',Menlo,monospace;font-weight:500;pointer-events:none;
+  paint-order:stroke;stroke:#eef1f3;stroke-width:5px;stroke-linejoin:round}
 .zonebox{fill:#fff;stroke:#c9d1d8}
 .zonebox.light{fill:#eef1f4;stroke:#d5dbe0}
 .zonebox.dark{fill:#c2c9cf;stroke:#a8b1b9}
