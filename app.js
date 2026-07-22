@@ -353,6 +353,18 @@ function wrapWords(text, w, fs) {
   if (cur) lines.push(cur);
   return lines;
 }
+// wrap to at most maxLines; ellipsize the last line if it overflows
+function wrapCap(text, w, fs, maxLines) {
+  const maxc = Math.max(4, Math.floor((w - 8) / (fs * 0.58 + 1.4)));
+  let lines = wrapWords(text, w, fs).map(L => L.length > maxc ? L.slice(0, maxc - 1) + '…' : L);
+  if (lines.length > maxLines) {
+    lines = lines.slice(0, maxLines);
+    let last = lines[maxLines - 1];
+    if (last.length > maxc - 1) last = last.slice(0, maxc - 1);
+    lines[maxLines - 1] = last.replace(/…?$/, '…');
+  }
+  return lines;
+}
 function zoneLabelSVG(z, cls) {
   let fs = Math.min(13, Math.max(9, z.h * 0.5));
   const cx = z.x + (z.w || 0) / 2;
@@ -459,23 +471,39 @@ function renderMap() {
       s += `<rect x="${zoneX}" y="80" width="${zoneW}" height="${zoneH}" rx="20" class="holdzone"/>`;
       s += `<text x="${zoneX + zoneW / 2}" y="160" text-anchor="middle" class="holdtitle">NOT ON THE MAP — ${list.length} PIANOS NEED A SPOT #</text>`;
       s += `<text x="${zoneX + zoneW / 2}" y="200" text-anchor="middle" class="holdsub">click one, then use its “new spot #” box to place it on the map</text>`;
+      const iw = cw - 14, ih = ch - 14;          // inner cell size
+      const NLH = 15, LLH = 13, PAD = 9;         // line heights, bottom pad
       list.forEach((p, idx) => {
         const cx0 = x0 + (idx % cols) * cw, cy0 = y0 + Math.floor(idx / cols) * ch;
-        const cx = cx0 + (cw - 14) / 2, cy = cy0 + 54;
-        S.holdingXY[p.row] = {x: cx, y: cy0 + ch / 2};
+        const cx = cx0 + iw / 2;
         const st = pianoStatus(p);
         const hl = S.focusRow === p.row || (q && matches(p, q));
         const dim = q && !matches(p, q);
-        s += `<rect x="${cx0}" y="${cy0}" width="${cw - 14}" height="${ch - 14}" rx="11"
+        // wrap name + location to fit; each capped at 2 lines
+        const nm = (p.year ? p.year + ' ' : '')
+          + ([p.make, p.model].filter(Boolean).join(' ') || p.summary || '');
+        const loc = p.location ? p.location.replace(/\s+/g, ' ') : 'no spot yet';
+        const nameLines = wrapCap(nm, iw - 8, 13.5, 2);
+        const locLines = wrapCap(loc, iw - 8, 12, 2);
+        const textH = nameLines.length * NLH + 3 + locLines.length * LLH;
+        const textTop = cy0 + ih - PAD - textH;   // text block hugs the bottom
+        // icon fills the space above the text; scale to what remains
+        const regTop = cy0 + 8, regBot = textTop - 4;
+        const iconCy = (regTop + regBot) / 2;
+        const sc = Math.max(1.4, Math.min(2.7, (regBot - regTop) / 22));
+        S.holdingXY[p.row] = {x: cx, y: cy0 + ih / 2};
+        s += `<rect x="${cx0}" y="${cy0}" width="${iw}" height="${ih}" rx="11"
               class="holdcell ${hl ? 'hl' : ''} ${dim ? 'dim' : ''}" data-row="${p.row}"/>`;
         s += `<g class="piano ${st} own-${ownerClass(p)} ${dim ? 'dim' : ''} ${hl ? 'hl' : ''}"
-              data-row="${p.row}">${glyph(p.type, cx, cy, 2.7)}${phaseText(p, cx, cy, 2.7)}</g>`;
-        const clip = (t, n) => t.length > n ? t.slice(0, n - 1) + '…' : t;
-        const nm = clip((p.year ? p.year + ' ' : '')
-          + ([p.make, p.model].filter(Boolean).join(' ') || p.summary || ''), 18);
-        const loc = clip(p.location ? p.location.replace(/\s+/g, ' ') : 'no spot yet', 18);
-        s += `<text x="${cx}" y="${cy0 + 104}" text-anchor="middle" class="holdname">${esc(nm)}</text>`;
-        s += `<text x="${cx}" y="${cy0 + 122}" text-anchor="middle" class="holdloc">${esc(loc)}</text>`;
+              data-row="${p.row}">${glyph(p.type, cx, iconCy, sc)}${phaseText(p, cx, iconCy, sc)}</g>`;
+        let ty = textTop + 11;
+        s += `<text x="${cx}" y="${ty}" text-anchor="middle" class="holdname">`
+          + nameLines.map((L, li) => `<tspan x="${cx}" ${li ? `dy="${NLH}"` : ''}>${esc(L)}</tspan>`).join('')
+          + `</text>`;
+        ty += (nameLines.length - 1) * NLH + LLH + 3;
+        s += `<text x="${cx}" y="${ty}" text-anchor="middle" class="holdloc">`
+          + locLines.map((L, li) => `<tspan x="${cx}" ${li ? `dy="${LLH}"` : ''}>${esc(L)}</tspan>`).join('')
+          + `</text>`;
       });
       drawW = x0 + cols * cw + 40;
     }
