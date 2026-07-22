@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Quick health check for the Apps Script bridge using config.json values."""
+"""Quick health check for the Apps Script bridge using config.json values.
+
+The 'move' test is a NO-OP: it looks up the piano's current location and
+"moves" it to that same spot, exercising the sheet-write path without
+changing any data.
+"""
 import json
 import urllib.request
 
@@ -10,8 +15,11 @@ def post(payload):
                                  data=json.dumps(payload).encode(),
                                  headers={'Content-Type': 'application/json'})
     with urllib.request.urlopen(req, timeout=30) as r:
-        return r.read().decode()[:200]
+        return json.loads(r.read().decode())
 
-print('good secret lookup:',
-      post({'secret': cfg['bridge_secret'], 'serial': '181349', 'action': 'lookup'}))
-print('bad secret:', post({'secret': 'WRONG', 'serial': '181349'}))
+look = post({'secret': cfg['bridge_secret'], 'serial': '181349', 'action': 'lookup'})
+print('lookup:', look)
+if look.get('ok') and look.get('location'):
+    noop = post({'secret': cfg['bridge_secret'], 'serial': '181349',
+                 'action': 'move', 'newLocation': look['location'], 'row': look['row']})
+    print('no-op move (same spot back in):', noop)

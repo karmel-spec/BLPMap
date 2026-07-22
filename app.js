@@ -465,6 +465,7 @@ function wirePop(p) {
     popPinned = true;
     tb.hidden = true;
     pop.querySelector('.tunebox').hidden = false;
+    place(pop, S.popAnchor);   // card grew — keep it fully on screen
     pop.querySelector('.tunenotes').focus();
   };
   const tg = pop.querySelector('.tunego');
@@ -583,12 +584,15 @@ function openSlotPop(id) {
 }
 function place(pop, el) {
   pop.hidden = false;
+  S.popAnchor = el || null;   // remembered so the card can re-clamp if it grows
   const card = $('.mapcard').getBoundingClientRect();
   const r = el ? el.getBoundingClientRect() : card;
-  let x = r.left - card.left + r.width + 10, y = r.top - card.top - 10;
-  if (x + 260 > card.width) x = r.left - card.left - 260;
-  if (x < 0) x = 10;
-  y = Math.max(10, Math.min(y, card.height - 210));
+  const pw = pop.offsetWidth || 260, ph = pop.offsetHeight || 220;
+  let x = r.left - card.left + r.width + 10;
+  let y = r.top - card.top - 10;
+  if (x + pw > card.width - 8) x = r.left - card.left - pw - 10;  // flip to the left side
+  x = Math.max(8, Math.min(x, card.width - pw - 8));
+  y = Math.max(8, Math.min(y, card.height - ph - 8));   // never hang off the bottom
   pop.style.left = x + 'px'; pop.style.top = y + 'px';
 }
 

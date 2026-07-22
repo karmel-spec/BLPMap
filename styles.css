@@ -94,7 +94,7 @@ body{background:#f7f8f9;color:#121212;display:flex;flex-direction:column;overflo
 .dot{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:4px;vertical-align:-1px}
 
 /* hover / tap card */
-.pop{position:absolute;background:#fff;border:1px solid #dfe3e7;border-top:4px solid #9e2020;border-radius:10px;width:246px;padding:14px;box-shadow:0 12px 30px rgba(20,30,40,.18);z-index:10;cursor:pointer}
+.pop{position:absolute;background:#fff;border:1px solid #dfe3e7;border-top:4px solid #9e2020;border-radius:10px;width:246px;padding:14px;box-shadow:0 12px 30px rgba(20,30,40,.18);z-index:10;cursor:pointer;max-height:calc(100% - 16px);overflow:auto}
 .pop .tag{display:inline-block;background:#f0f2f4;color:#555;font-size:10px;font-weight:800;letter-spacing:1.5px;padding:3px 8px;border-radius:4px;margin-bottom:6px}
 .pop .tag.move{background:#fbeaea;color:#9e2020}
 .pop .tag.new{background:#e8f4ec;color:#2e7d4f}
