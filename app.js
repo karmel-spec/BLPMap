@@ -93,6 +93,17 @@ function todaysMoves() {
   const t = localDay();
   return S.data.events.filter(e => e.date === t);
 }
+// tuning calendar info for a piano: next scheduled + most recent past
+function tuningInfo(p) {
+  const t = S.data.tunings;
+  if (!t || !p.serial || p.serial.length < 5) return {};
+  const hit = list => list.filter(r => r[2].includes(p.serial));
+  const up = hit(t.upcoming || [])[0];
+  const past = hit(t.past || []).pop();
+  return {next: up ? {date: up[0], time: up[1]} : null,
+          last: past ? past[0] : null};
+}
+
 function pianoStatus(p) {
   const today = localDay();
   if (p.serial && p.serial.length > 4) {
@@ -101,6 +112,7 @@ function pianoStatus(p) {
     const ev = S.data.events.find(e => (e.summary + e.description).includes(p.serial));
     if (ev) return ev.date === today ? 'move' : 'sched';
   }
+  if (tuningInfo(p).next) return 'tune';
   if (p.isNew) return 'new';
   return 'in';
 }
@@ -343,7 +355,7 @@ function renderMap() {
           const st = pianoStatus(p);
           const cx = sl.x + sl.w / 2, cy = y0 + i * per * sc;
           const hl = S.focusRow === p.row || (q && matches(p, q));
-          s += `<g class="piano ${st} ${q && !matches(p, q) ? 'dim' : ''} ${hl ? 'hl' : ''}"
+          s += `<g class="piano ${st} own-${ownerClass(p)} ${q && !matches(p, q) ? 'dim' : ''} ${hl ? 'hl' : ''}"
                 data-slot="${esc(sl.id)}" data-row="${p.row}">
                 <g transform="rotate(90 ${cx} ${cy})">${glyph(p.type, cx, cy, sc)}</g></g>`;
         });
@@ -371,7 +383,7 @@ function renderMap() {
           const cx = x0 + i * per * sc;
           const cy = sl.y + sl.h / 2;
           const hl = S.focusRow === p.row || (q && matches(p, q));
-          s += `<g class="piano ${st} ${q && !matches(p, q) ? 'dim' : ''} ${hl ? 'hl' : ''}"
+          s += `<g class="piano ${st} own-${ownerClass(p)} ${q && !matches(p, q) ? 'dim' : ''} ${hl ? 'hl' : ''}"
                 data-slot="${esc(sl.id)}" data-row="${p.row}">${glyph(p.type, cx, cy, sc)}</g>`;
         });
       }
@@ -401,7 +413,9 @@ $('#pop').addEventListener('mouseleave', scheduleHide);
 
 function popHTML(p) {
   const st = pianoStatus(p);
-  const tags = {in: 'IN PLACE', new: 'NEW', sched: 'SCHEDULED', move: 'IN TRANSIT'};
+  const ti = tuningInfo(p);
+  const tags = {in: 'IN PLACE', new: 'NEW', sched: 'SCHEDULED', move: 'IN TRANSIT',
+                tune: 'TUNING BOOKED'};
   const makeModel = [p.make, p.model].filter(Boolean).join(' ') || p.summary;
   const mover = p.serial
     ? `<div class="movebox">
@@ -409,15 +423,29 @@ function popHTML(p) {
          <button class="mvgo">Move</button>
        </div><div class="mvmsg"></div>`
     : `<div class="mvmsg">No serial # — change location in the Piano Log.</div>`;
+  const tuner = p.serial && p.serial.length >= 5
+    ? (ti.next
+       ? `<div class="row tunerow">🎵 Tuning <b>${esc(fmtDay(ti.next.date))} · ${esc(ti.next.time)}</b></div>`
+       : `<button class="tunebtn">🎵 Request Tuning</button>
+          <div class="tunebox" hidden>
+            <textarea class="tunenotes" rows="2"
+              placeholder="notes for Korban — repairs, prep work… (optional)"></textarea>
+            <button class="tunego">Schedule next open slot</button>
+          </div><div class="tunemsg"></div>`)
+    : '';
   return `<span class="x">✕</span>
     <span class="tag ${st}">${tags[st]} · SPOT ${esc(p.location)}</span>
     <h3>${esc(makeModel)}</h3>
     <div class="row">Serial # <b>${esc(p.serial || '—')}</b></div>
     <div class="row">Status <b>${esc(p.status || '—')}</b></div>
     <div class="row">Owner <b>${esc(p.owner || '—')}</b></div>
+    <div class="row">Last tuned <b>${ti.last ? esc(fmtDay(ti.last)) : '—'}</b></div>
+    ${tuner}
     ${mover}
     <span class="btn">Open Piano Log ↗</span>`;
 }
+const fmtDay = iso => new Date(iso + 'T12:00')
+  .toLocaleDateString('en-US', {weekday: 'short', month: 'short', day: 'numeric'});
 function wirePop(p) {
   const pop = $('#pop');
   pop.onclick = ev => {
@@ -432,6 +460,50 @@ function wirePop(p) {
   if (inp) inp.onkeydown = e => {
     if (e.key === 'Enter') movePiano(p, inp.value.trim(), pop);
   };
+  const tb = pop.querySelector('.tunebtn');
+  if (tb) tb.onclick = () => {
+    popPinned = true;
+    tb.hidden = true;
+    pop.querySelector('.tunebox').hidden = false;
+    pop.querySelector('.tunenotes').focus();
+  };
+  const tg = pop.querySelector('.tunego');
+  if (tg) tg.onclick = () => requestTuning(p, pop);
+}
+
+async function requestTuning(p, pop) {
+  const msg = pop.querySelector('.tunemsg');
+  const notes = pop.querySelector('.tunenotes').value.trim();
+  popPinned = true;
+  const pin = teamPin(false);
+  if (!pin) { msg.textContent = 'A team PIN is required to schedule tunings.'; return; }
+  msg.textContent = 'Finding Korban’s next open slot…';
+  try {
+    const r = await fetch(BRIDGE_URL, {
+      method: 'POST', redirect: 'follow',
+      headers: {'content-type': 'text/plain;charset=utf-8'},
+      body: JSON.stringify({pin, serial: p.serial, action: 'tune', notes}),
+    });
+    const j = await r.json();
+    if (j.error === 'unauthorized') {
+      localStorage.removeItem('blpPin');
+      msg.textContent = '✗ Wrong PIN — click Schedule to try again.';
+      return;
+    }
+    if (j.scheduled) {
+      msg.textContent = `✓ Tuning booked: ${j.date} at ${j.time}`;
+      // reflect immediately: add to local tunings so the piano turns blue
+      S.data.tunings = S.data.tunings || {upcoming: [], past: []};
+      S.data.tunings.upcoming.push([j.iso || localDay(), j.hhmm || j.time,
+        `${j.title || 'Tuning'} SN ${p.serial}`]);
+      pop.querySelector('.tunebox').hidden = true;
+      renderMap(); renderKpis();
+    } else {
+      msg.textContent = '✗ ' + (j.error || 'scheduling failed');
+    }
+  } catch (e) {
+    msg.textContent = '✗ ' + e.message;
+  }
 }
 
 function teamPin(forceAsk) {

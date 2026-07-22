@@ -74,8 +74,13 @@ body{background:#f7f8f9;color:#121212;display:flex;flex-direction:column;overflo
 .piano{cursor:pointer}
 .piano .pbody{fill:#2b2f33}
 .piano .pk{fill:#8f979e}
+/* ownership: client/consignment stay black; BLP-owned render silver
+   (status colors below override the body while a status is active) */
+.piano.own-blp .pbody{fill:#9aa3ac}
+.piano.own-blp .pk{fill:#454b51}
 .piano.new .pbody{fill:#2e7d4f}
 .piano.sched .pbody{fill:#c9942e}
+.piano.tune .pbody{fill:#3a6ea5}
 .piano.move .pbody{fill:#c03636}
 .piano.move{filter:drop-shadow(0 0 5px rgba(192,54,54,.65))}
 .piano.dim{opacity:.15}
@@ -94,6 +99,15 @@ body{background:#f7f8f9;color:#121212;display:flex;flex-direction:column;overflo
 .pop .tag.move{background:#fbeaea;color:#9e2020}
 .pop .tag.new{background:#e8f4ec;color:#2e7d4f}
 .pop .tag.sched{background:#faf3e3;color:#a8791c}
+.pop .tag.tune{background:#e8eef6;color:#3a6ea5}
+.tunebtn{width:100%;margin-top:8px;background:#fff;color:#3a6ea5;border:1.5px solid #3a6ea5;border-radius:7px;padding:8px;font-weight:700;font-size:12.5px;cursor:pointer}
+.tunebtn:hover{background:#e8eef6}
+.tunebox{margin-top:7px}
+.tunenotes{width:100%;border:1px solid #d9dde1;border-radius:7px;padding:7px 9px;font-size:12.5px;resize:vertical;outline:none;font-family:inherit}
+.tunenotes:focus{border-color:#3a6ea5}
+.tunego{width:100%;margin-top:6px;background:#3a6ea5;color:#fff;border:none;border-radius:7px;padding:8px;font-weight:700;font-size:12.5px;cursor:pointer}
+.tunemsg{font-size:12px;color:#3a6ea5;font-weight:600;margin-top:5px;min-height:14px}
+.row.tunerow b{color:#3a6ea5}
 .pop h3{font-size:15px}
 .pop .row{font-size:12.5px;margin:4px 0;color:#3a4046}
 .pop .row b{color:#121212}

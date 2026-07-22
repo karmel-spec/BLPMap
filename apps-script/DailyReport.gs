@@ -21,6 +21,9 @@ var PIANO_LOG_ID = '1ZunbPKygpQlcXfTyPowDHdUE9spJ3uV1XA4iX1eoKRc';
 var BRIDGE_SECRET = 'PASTE_SECRET_HERE';   // server-to-server auth (optional)
 var TEAM_PIN = 'PASTE_PIN_HERE';           // what BLP team members type to move pianos
 var MOVING_ICS = 'PASTE_ICS_URL_HERE';     // the moving calendar's SECRET iCal address
+var TUNING_CAL = 'korbangreenhalgh.blp@gmail.com';  // 09-Korban Greenhalgh
+var TUNING_SLOTS = [8, 10];                // weekday tuning start hours (Denver)
+var TUNING_MINUTES = 90;                   // block length, matches Korban's bookings
 var KNOWN_AREAS = ['showroom', 'pre-sale showroom', 'third floor', 'storage',
   'shop', 'vestibule', 'wing room', 'holding room', 'attic', 'sold floor',
   'rebuilding line', 'refinishing', 'back shop', 'middle shop', 'basement',
@@ -72,7 +75,113 @@ function doGet(e) {
     try { return json_({events: fetchEvents_()}); }
     catch (err) { return json_({error: String(err), events: []}); }
   }
+  if (e && e.parameter && e.parameter.fn === 'tunings') {
+    try { return json_(tunings_()); }
+    catch (err) { return json_({error: String(err), upcoming: [], past: []}); }
+  }
   return json_({ok: true, service: 'BLP Store Map bridge'});
+}
+
+/**
+ * Tuning feature — Korban's calendar (TUNING_CAL, shared with this
+ * script's owner). ?fn=tunings returns compact upcoming/past event lists
+ * (only events whose titles contain a 5+ digit run, i.e. a serial) so the
+ * map can color scheduled pianos and show "last tuned". 30-min cache.
+ */
+function tunings_() {
+  var cache = CacheService.getScriptCache();
+  var hit = cache.get('tunings');
+  if (hit) return JSON.parse(hit);
+  var tz = 'America/Denver';
+  var cal = CalendarApp.getCalendarById(TUNING_CAL);
+  if (!cal) return {error: 'tuning calendar not shared with ' + Session.getEffectiveUser(), upcoming: [], past: []};
+  var now = new Date();
+  var past = [], upcoming = [];
+  var evs = cal.getEvents(new Date(now.getTime() - 540 * 86400000),
+                          new Date(now.getTime() + 60 * 86400000));
+  for (var i = 0; i < evs.length; i++) {
+    var t = evs[i].getTitle() || '';
+    if (!/\d{5,}/.test(t)) continue;   // only piano-ish events (serial in title)
+    var st = evs[i].getStartTime();
+    var rec = [Utilities.formatDate(st, tz, 'yyyy-MM-dd'),
+               Utilities.formatDate(st, tz, 'HH:mm'),
+               t.slice(0, 70)];
+    (st < now ? past : upcoming).push(rec);
+  }
+  var out = {upcoming: upcoming, past: past.slice(-800)};
+  try { cache.put('tunings', JSON.stringify(out), 1800); } catch (ig) {}
+  return out;
+}
+
+function scheduleTuning_(req) {
+  var tz = 'America/Denver';
+  var cal = CalendarApp.getCalendarById(TUNING_CAL);
+  if (!cal) return {error: "Korban's calendar is not shared with " + Session.getEffectiveUser()};
+  // find the piano for a friendly title
+  var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+  var found = findPiano_(sh, req.serial, req.row);
+  if (found.error) return found;
+  var title = 'Tuning: ' + (found.summary || 'piano') + ' SN ' + req.serial
+    + (found.location ? ' @ spot ' + found.location : '');
+  // next open weekday slot, starting tomorrow, up to 6 weeks out
+  var day = new Date();
+  for (var d = 1; d <= 42; d++) {
+    day = new Date(Date.now() + d * 86400000);
+    var dow = Number(Utilities.formatDate(day, tz, 'u'));
+    if (dow > 5) continue;                       // weekdays only
+    var y = Utilities.formatDate(day, tz, 'yyyy-MM-dd');
+    var dayEvents = cal.getEvents(new Date(y + 'T00:00:00'), new Date(y + 'T23:59:59'));
+    var blocked = dayEvents.some(function (ev) {
+      return /NO KORBAN/i.test(ev.getTitle() || '');
+    });
+    if (blocked) continue;
+    for (var s = 0; s < TUNING_SLOTS.length; s++) {
+      var start = new Date(y + 'T' + ('0' + TUNING_SLOTS[s]).slice(-2) + ':00:00');
+      var end = new Date(start.getTime() + TUNING_MINUTES * 60000);
+      var clash = dayEvents.some(function (ev) {
+        return !ev.isAllDayEvent() && ev.getStartTime() < end && ev.getEndTime() > start;
+      });
+      if (clash) continue;
+      var desc = 'Requested via BLP Store Map (' +
+        Utilities.formatDate(new Date(), tz, 'MMM d, h:mm a') + ')';
+      if (req.notes && String(req.notes).trim()) {
+        desc += '\n\nNotes / prep work:\n' + String(req.notes).trim();
+      }
+      desc += '\n\nPiano Log: https://pianologapp.netlify.app/#piano=' +
+        encodeURIComponent(req.serial);
+      cal.createEvent(title, start, end, {description: desc});
+      try { CacheService.getScriptCache().remove('tunings'); } catch (ig) {}
+      return {ok: true, scheduled: true,
+              date: Utilities.formatDate(start, tz, 'EEE, MMM d'),
+              iso: Utilities.formatDate(start, tz, 'yyyy-MM-dd'),
+              hhmm: Utilities.formatDate(start, tz, 'HH:mm'),
+              time: Utilities.formatDate(start, tz, 'h:mm a'),
+              summary: found.summary, title: title};
+    }
+  }
+  return {error: 'no open tuning slot found in the next 6 weeks'};
+}
+
+function findPiano_(sh, serial, rowOverride) {
+  var last = sh.getLastRow();
+  var serials = sh.getRange(1, 3, last, 1).getValues();
+  var owners = sh.getRange(1, 2, last, 1).getValues();
+  var soldRow = last + 1;
+  for (var i = 0; i < last; i++) {
+    if (String(owners[i][0] || '').trim().toUpperCase() === 'SOLD'
+        && !String(serials[i][0] || '').trim()) { soldRow = i + 1; break; }
+  }
+  var want = String(serial || '').trim().toLowerCase();
+  if (!want) return {error: 'serial required'};
+  var matches = [];
+  for (var r = 1; r < soldRow; r++) {
+    if (String(serials[r - 1][0] || '').trim().toLowerCase() === want) matches.push(r);
+  }
+  if (!matches.length) return {error: 'serial not found above the SOLD section'};
+  var row = rowOverride || matches[0];
+  return {row: row,
+          summary: String(sh.getRange(row, 4).getValue() || ''),
+          location: String(sh.getRange(row, 21).getValue() || '')};
 }
 
 function fetchEvents_() {
@@ -131,6 +240,7 @@ function doPost(e) {
     if (req.secret !== BRIDGE_SECRET && req.pin !== TEAM_PIN) {
       return json_({error: 'unauthorized'});
     }
+    if (req.action === 'tune') return json_(scheduleTuning_(req));
     var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
     var last = sh.getLastRow();
     var serials = sh.getRange(1, 3, last, 1).getValues();  // col C

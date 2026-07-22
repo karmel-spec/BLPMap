@@ -212,6 +212,15 @@ def build_payload():
     pianos_raw = _fetch(PIANO_LOG_CSV)
     pianos = parse_pianos(pianos_raw)
     events = parse_events(_fetch(MOVING_ICS)) if MOVING_ICS else []
+    tunings = {'upcoming': [], 'past': []}
+    bridge = _CFG.get('bridge_url')
+    if bridge:
+        try:
+            t = json.loads(_fetch(bridge + '?fn=tunings'))
+            if 'upcoming' in t:
+                tunings = t
+        except Exception:
+            pass  # tuning calendar unavailable: feature degrades gracefully
     return {
         'pianos': pianos,
         'events': events,

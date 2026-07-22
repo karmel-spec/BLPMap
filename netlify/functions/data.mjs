@@ -174,8 +174,13 @@ export default async () => {
         events = j.events || [];
       }
     } catch { /* calendar down: pianos still ship */ }
+    let tunings = { upcoming: [], past: [] };
+    try {
+      const t = await (await fetch(BRIDGE_URL + '?fn=tunings', { redirect: 'follow' })).json();
+      if (t.upcoming) tunings = t;
+    } catch { /* tuning calendar unavailable: feature degrades gracefully */ }
     const payload = {
-      pianos, events, crew: crewToday(events),
+      pianos, events, crew: crewToday(events), tunings,
       fetchedAt: new Date().toLocaleString('sv-SE', { timeZone: TZ }).replace(' ', 'T'),
       stale: false, calendarConfigured: events.length > 0 || !!icsUrl,
     };
