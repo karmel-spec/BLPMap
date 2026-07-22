@@ -396,3 +396,9 @@ function reportHtml_(r) {
     + '<a href="' + APP_URL + '" style="color:#9e2020">the map</a> updates within 2 minutes. '
     + 'Sent by the Store Map Apps Script, weekdays at 6 AM Mountain.</p></div></div>';
 }
+
+// Run once from the editor to grant Calendar access (used by the tuning feature)
+function authorizeCalendar() {
+  var cal = CalendarApp.getCalendarById(TUNING_CAL);
+  Logger.log(cal ? 'OK: can see ' + cal.getName() : 'Calendar not shared with this account');
+}
