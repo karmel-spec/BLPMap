@@ -78,7 +78,10 @@ body{background:#f7f8f9;color:#121212;display:flex;flex-direction:column;overflo
    (status colors below override the body while a status is active) */
 .piano.own-blp .pbody{fill:#9aa3ac}
 .piano.own-blp .pk{fill:#454b51}
-.piano.new .pbody{fill:#2e7d4f}
+.piano.new .pbody{fill:#ff2d9e}
+.piano.sale .pbody{fill:#2e7d4f}
+.piano.sale .pk{fill:#1c1c1c}          /* for-sale: bench shows ownership — black = client/consigned */
+.piano.sale.own-blp .pk{fill:#9aa3ac}  /* gray bench = BLP owned */
 .piano.sched .pbody{fill:#c9942e}
 .piano.tune .pbody{fill:#3a6ea5}
 .piano.move .pbody{fill:#c03636}
@@ -107,7 +110,8 @@ body{background:#f7f8f9;color:#121212;display:flex;flex-direction:column;overflo
 .pop{position:absolute;background:#fff;border:1px solid #dfe3e7;border-top:4px solid #9e2020;border-radius:10px;width:246px;padding:14px;box-shadow:0 12px 30px rgba(20,30,40,.18);z-index:10;cursor:pointer;max-height:calc(100% - 16px);overflow:auto}
 .pop .tag{display:inline-block;background:#f0f2f4;color:#555;font-size:10px;font-weight:800;letter-spacing:1.5px;padding:3px 8px;border-radius:4px;margin-bottom:6px}
 .pop .tag.move{background:#fbeaea;color:#9e2020}
-.pop .tag.new{background:#e8f4ec;color:#2e7d4f}
+.pop .tag.new{background:#fce8f3;color:#c2187a}
+.pop .tag.sale{background:#e8f4ec;color:#2e7d4f}
 .pop .tag.sched{background:#faf3e3;color:#a8791c}
 .pop .tag.tune{background:#e8eef6;color:#3a6ea5}
 .tunebtn{width:100%;margin-top:8px;background:#fff;color:#3a6ea5;border:1.5px solid #3a6ea5;border-radius:7px;padding:8px;font-weight:700;font-size:12.5px;cursor:pointer}

@@ -63,6 +63,14 @@ function parsePianos(text) {
   const pianos = [];
   const phaseIdx = rows[1]
     ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'CURRENT PHASE') : -1;
+  // CUSTOM SHOPWORK queue bounds (1-based rows)
+  let qHdr = 0, qEnd = 0;
+  for (let k = 0; k < rows.length; k++) {
+    const b = (rows[k][1] || '').trim(), c = (rows[k][2] || '').trim(), d = (rows[k][3] || '').trim();
+    if (!qHdr) { if (b.toUpperCase() === 'CUSTOM SHOPWORK' && !c && !d) qHdr = k + 1; }
+    else if (!qEnd && !b && !c && !d) qEnd = k + 1;
+  }
+  const qTotal = (qHdr && qEnd) ? qEnd - qHdr - 1 : 0;
   const todayUTC = new Date(denverDay() + 'T00:00:00Z');
   let section = '', soldZone = false;
   for (let i = 2; i < rows.length; i++) {
@@ -96,6 +104,8 @@ function parsePianos(text) {
       isSlot: SLOT_RE.test(loc),
       entered: entered ? entered.toISOString().slice(0, 10) : null,
       phase: phaseIdx >= 0 ? col(phaseIdx) : '',
+      queuePos: (qHdr && qEnd && (i + 1) > qHdr && (i + 1) < qEnd) ? (i + 1) - qHdr : 0,
+      queueTotal: qTotal,
       isNew, active,
     });
   }

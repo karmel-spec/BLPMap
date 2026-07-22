@@ -5,11 +5,12 @@ const PIANOLOG_URL = 'https://pianologapp.netlify.app/';
 const PHASES = ['New Arrival', 'Assessment', 'Teardown', 'PRSB', 'CAP',
   'Refinishing', 'Final Assembly', 'DHRT', 'Tuning', 'QC',
   'Admin Exit Prep', 'Delivered'];
-const PHASE_STATES = ['In Queue', 'Paused'];
+const PHASE_STATES = ['In Queue', 'Paused', 'For Sale'];   // unnumbered states; For Sale turns the icon green
 function phaseMark(phase) {          // what gets drawn on the icon
   if (!phase) return null;
   if (phase === 'In Queue') return 'Q';
   if (phase === 'Paused') return 'P';
+  if (phase === 'For Sale') return null;   // shown by the green body, not a mark
   const i = PHASES.indexOf(phase);
   return i >= 0 && phase !== 'Delivered' ? String(i + 1) : null;
 }
@@ -150,6 +151,7 @@ function pianoStatus(p) {
     const ev = S.data.events.find(e => (e.summary + e.description).includes(p.serial));
     if (ev) return ev.date === today ? 'move' : 'sched';
   }
+  if ((p.phase || '') === 'For Sale') return 'sale';
   if (tuningInfo(p).next) return 'tune';
   if (p.isNew) return 'new';
   return 'in';
@@ -462,7 +464,7 @@ function popHTML(p) {
   const st = pianoStatus(p);
   const ti = tuningInfo(p);
   const tags = {in: 'IN PLACE', new: 'NEW', sched: 'SCHEDULED', move: 'IN TRANSIT',
-                tune: 'TUNING BOOKED'};
+                tune: 'TUNING CAL', sale: 'FOR SALE'};
   const makeModel = [p.make, p.model].filter(Boolean).join(' ') || p.summary;
   const mover = p.serial
     ? `<div class="movebox">
@@ -609,7 +611,7 @@ async function requestTuning(p, pop) {
       return;
     }
     if (j.scheduled) {
-      msg.textContent = `✓ Tuning booked: ${j.date} at ${j.time}`;
+      msg.textContent = `✓ On the tuning cal: ${j.date} at ${j.time}`;
       // reflect immediately: add to local tunings so the piano turns blue
       S.data.tunings = S.data.tunings || {upcoming: [], past: []};
       S.data.tunings.upcoming.push([j.iso || localDay(), j.hhmm || j.time,

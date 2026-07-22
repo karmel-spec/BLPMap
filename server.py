@@ -91,6 +91,19 @@ def parse_pianos(raw):
     hdr = rows[1] if len(rows) > 1 else []
     phase_idx = next((i for i, h in enumerate(hdr)
                       if h.strip().upper() == 'CURRENT PHASE'), -1)
+    # CUSTOM SHOPWORK queue bounds (1-based rows). Queue position = row - header;
+    # total = rows from just after the header down to the first fully-blank row.
+    q_hdr = q_end = None
+    for idx, rr in enumerate(rows, start=1):
+        b = rr[1].strip() if len(rr) > 1 else ''
+        c = rr[2].strip() if len(rr) > 2 else ''
+        d = rr[3].strip() if len(rr) > 3 else ''
+        if q_hdr is None:
+            if b.upper() == 'CUSTOM SHOPWORK' and not c and not d:
+                q_hdr = idx
+        elif q_end is None and not b and not c and not d:
+            q_end = idx
+    q_total = (q_end - q_hdr - 1) if (q_hdr and q_end) else 0
     section = ''
     sold_zone = False   # True once the "SOLD" divider row passes: rows below
                         # it are exited pianos (year archives + WEB galleries)
@@ -136,6 +149,8 @@ def parse_pianos(raw):
             'isSlot': bool(SLOT_RE.match(loc)),
             'entered': entered.isoformat() if entered else None,
             'phase': col(phase_idx) if phase_idx >= 0 else '',
+            'queuePos': (i - q_hdr) if (q_hdr and q_end and q_hdr < i < q_end) else 0,
+            'queueTotal': q_total,
             'isNew': is_new,
             'active': active,
         })
