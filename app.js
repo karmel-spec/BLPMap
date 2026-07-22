@@ -465,7 +465,12 @@ function popHTML(p) {
   const ti = tuningInfo(p);
   const tags = {in: 'IN PLACE', new: 'NEW', sched: 'SCHEDULED', move: 'IN TRANSIT',
                 tune: 'TUNING CAL', sale: 'FOR SALE'};
-  const makeModel = [p.make, p.model].filter(Boolean).join(' ') || p.summary;
+  // title: year (col E) then make/model; fall back to the summary as-is
+  const base = [p.make, p.model].filter(Boolean).join(' ');
+  const makeModel = base ? (p.year ? p.year + ' ' + base : base) : p.summary;
+  const queueChip = p.queuePos
+    ? `<span class="qchip" title="Custom Shop Work queue">Queue #${p.queuePos}/${p.queueTotal}</span>`
+    : '';
   const mover = p.serial
     ? `<div class="movebox">
          <input class="mvin" placeholder="new spot #" maxlength="12">
@@ -495,7 +500,7 @@ function popHTML(p) {
   return `<span class="x">✕</span>
     <span class="tag ${st}">${tags[st]} · SPOT ${esc(p.location)}</span>
     <h3>${esc(makeModel)}</h3>
-    <div class="row">Serial # <b>${esc(p.serial || '—')}</b></div>
+    <div class="row rowflex"><span>Serial # <b>${esc(p.serial || '—')}</b></span>${queueChip}</div>
     <div class="row">Status <b>${esc(p.status || '—')}</b></div>
     <div class="row">Owner <b>${esc(p.owner || '—')}</b></div>
     <div class="row">Last tuned <b>${ti.last ? esc(fmtDay(ti.last)) : '—'}</b></div>
