@@ -241,6 +241,7 @@ function doPost(e) {
       return json_({error: 'unauthorized'});
     }
     if (req.action === 'tune') return json_(scheduleTuning_(req));
+    if (req.action === 'setphase') return json_(setPhase_(req));
     var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
     var last = sh.getLastRow();
     var serials = sh.getRange(1, 3, last, 1).getValues();  // col C
@@ -401,4 +402,38 @@ function reportHtml_(r) {
 function authorizeCalendar() {
   var cal = CalendarApp.getCalendarById(TUNING_CAL);
   Logger.log(cal ? 'OK: can see ' + cal.getName() : 'Calendar not shared with this account');
+}
+
+
+/**
+ * Shop pipeline phase — shared with the BLP Shop app. Stored in the Piano
+ * Log's CURRENT PHASE column (created at the first free column, header on
+ * row 2, and found by name so column shuffles can't break it).
+ */
+var PHASE_HEADER = 'CURRENT PHASE';
+var PHASE_VALUES = ['New Arrival', 'Assessment', 'Teardown', 'PRSB', 'CAP',
+  'Refinishing', 'Final Assembly', 'DHRT', 'Tuning', 'QC',
+  'Admin Exit Prep', 'Delivered', 'In Queue', 'Paused'];
+
+function phaseCol_(sh) {
+  var last = sh.getLastColumn();
+  var hdr = sh.getRange(2, 1, 1, last).getValues()[0];
+  for (var c = 0; c < hdr.length; c++) {
+    if (String(hdr[c] || '').trim().toUpperCase() === PHASE_HEADER) return c + 1;
+  }
+  sh.getRange(2, last + 1).setValue(PHASE_HEADER);
+  return last + 1;
+}
+
+function setPhase_(req) {
+  var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+  var found = findPiano_(sh, req.serial, req.row);
+  if (found.error) return found;
+  var phase = String(req.phase == null ? '' : req.phase).trim();
+  if (phase && PHASE_VALUES.indexOf(phase) < 0) return {error: 'unknown phase: ' + phase};
+  var col = phaseCol_(sh);
+  var prev = String(sh.getRange(found.row, col).getValue() || '');
+  sh.getRange(found.row, col).setValue(phase);
+  return {ok: true, row: found.row, summary: found.summary,
+          previous: prev, phase: phase};
 }

@@ -61,6 +61,8 @@ const SLOT_RE = /^\d+[a-zA-Z]?$/;
 function parsePianos(text) {
   const rows = parseCSV(text);
   const pianos = [];
+  const phaseIdx = rows[1]
+    ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'CURRENT PHASE') : -1;
   const todayUTC = new Date(denverDay() + 'T00:00:00Z');
   let section = '', soldZone = false;
   for (let i = 2; i < rows.length; i++) {
@@ -93,6 +95,7 @@ function parsePianos(text) {
       type: pianoType(col(9)), status, location: loc,
       isSlot: SLOT_RE.test(loc),
       entered: entered ? entered.toISOString().slice(0, 10) : null,
+      phase: phaseIdx >= 0 ? col(phaseIdx) : '',
       isNew, active,
     });
   }

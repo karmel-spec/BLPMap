@@ -88,6 +88,9 @@ def parse_pianos(raw):
     rows = list(csv.reader(io.StringIO(raw.decode('utf-8', 'replace'))))
     pianos = []
     today = date.today()
+    hdr = rows[1] if len(rows) > 1 else []
+    phase_idx = next((i for i, h in enumerate(hdr)
+                      if h.strip().upper() == 'CURRENT PHASE'), -1)
     section = ''
     sold_zone = False   # True once the "SOLD" divider row passes: rows below
                         # it are exited pianos (year archives + WEB galleries)
@@ -132,6 +135,7 @@ def parse_pianos(raw):
             'location': loc,
             'isSlot': bool(SLOT_RE.match(loc)),
             'entered': entered.isoformat() if entered else None,
+            'phase': col(phase_idx) if phase_idx >= 0 else '',
             'isNew': is_new,
             'active': active,
         })

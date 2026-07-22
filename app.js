@@ -1,5 +1,18 @@
 /* BLP Store Map — front-end */
 const PIANOLOG_URL = 'https://pianologapp.netlify.app/';
+// shop pipeline phases (shared with the BLP Shop app via the Piano Log's
+// CURRENT PHASE column). Q/P are the parking states.
+const PHASES = ['New Arrival', 'Assessment', 'Teardown', 'PRSB', 'CAP',
+  'Refinishing', 'Final Assembly', 'DHRT', 'Tuning', 'QC',
+  'Admin Exit Prep', 'Delivered'];
+const PHASE_STATES = ['In Queue', 'Paused'];
+function phaseMark(phase) {          // what gets drawn on the icon
+  if (!phase) return null;
+  if (phase === 'In Queue') return 'Q';
+  if (phase === 'Paused') return 'P';
+  const i = PHASES.indexOf(phase);
+  return i >= 0 && phase !== 'Delivered' ? String(i + 1) : null;
+}
 // Apps Script bridge for piano moves. The URL is public; writes require
 // the team PIN (asked once, remembered on this device).
 const BRIDGE_URL =
@@ -249,6 +262,15 @@ function renderMoves() {
     </div>`).join('') : '<div class="empty">No moves on today’s calendar.</div>';
 }
 
+// phase number/letter drawn dead-center on the icon (always upright,
+// even when the piano glyph itself is rotated against a wall)
+function phaseText(p, cx, cy, sc) {
+  const mark = phaseMark(p.phase);
+  if (!mark) return '';
+  return `<text x="${cx}" y="${cy + 4.2 * sc}" text-anchor="middle" class="phnum"
+          font-size="${11 * sc}">${mark}</text>`;
+}
+
 function glyph(type, cx, cy, sc) {
   // digitals render as uprights on the map
   if (type === 'upright' || type === 'digital')
@@ -357,7 +379,7 @@ function renderMap() {
           const hl = S.focusRow === p.row || (q && matches(p, q));
           s += `<g class="piano ${st} own-${ownerClass(p)} ${q && !matches(p, q) ? 'dim' : ''} ${hl ? 'hl' : ''}"
                 data-slot="${esc(sl.id)}" data-row="${p.row}">
-                <g transform="rotate(90 ${cx} ${cy})">${glyph(p.type, cx, cy, sc)}</g></g>`;
+                <g transform="rotate(90 ${cx} ${cy})">${glyph(p.type, cx, cy, sc)}</g>${phaseText(p, cx, cy, sc)}</g>`;
         });
       }
     } else {
@@ -384,7 +406,7 @@ function renderMap() {
           const cy = sl.y + sl.h / 2;
           const hl = S.focusRow === p.row || (q && matches(p, q));
           s += `<g class="piano ${st} own-${ownerClass(p)} ${q && !matches(p, q) ? 'dim' : ''} ${hl ? 'hl' : ''}"
-                data-slot="${esc(sl.id)}" data-row="${p.row}">${glyph(p.type, cx, cy, sc)}</g>`;
+                data-slot="${esc(sl.id)}" data-row="${p.row}">${glyph(p.type, cx, cy, sc)}${phaseText(p, cx, cy, sc)}</g>`;
         });
       }
     }
@@ -433,6 +455,16 @@ function popHTML(p) {
             <button class="tunego">Schedule next open slot</button>
           </div><div class="tunemsg"></div>`)
     : '';
+  const phaser = p.serial
+    ? `<div class="row phrow">Shop phase
+         <select class="phsel">
+           <option value="">— none —</option>
+           ${PHASES.map((ph, i) =>
+             `<option value="${esc(ph)}" ${p.phase === ph ? 'selected' : ''}>${i + 1} · ${esc(ph)}</option>`).join('')}
+           ${PHASE_STATES.map(ph =>
+             `<option value="${esc(ph)}" ${p.phase === ph ? 'selected' : ''}>${esc(ph)}</option>`).join('')}
+         </select></div><div class="phmsg"></div>`
+    : '';
   return `<span class="x">✕</span>
     <span class="tag ${st}">${tags[st]} · SPOT ${esc(p.location)}</span>
     <h3>${esc(makeModel)}</h3>
@@ -440,6 +472,7 @@ function popHTML(p) {
     <div class="row">Status <b>${esc(p.status || '—')}</b></div>
     <div class="row">Owner <b>${esc(p.owner || '—')}</b></div>
     <div class="row">Last tuned <b>${ti.last ? esc(fmtDay(ti.last)) : '—'}</b></div>
+    ${phaser}
     ${tuner}
     ${mover}
     <span class="btn">Open Piano Log ↗</span>`;
@@ -470,6 +503,41 @@ function wirePop(p) {
   };
   const tg = pop.querySelector('.tunego');
   if (tg) tg.onclick = () => requestTuning(p, pop);
+  const ps = pop.querySelector('.phsel');
+  if (ps) {
+    ps.onclick = ev => ev.stopPropagation();
+    ps.onchange = () => setPhase(p, ps.value, pop);
+  }
+}
+
+async function setPhase(p, phase, pop) {
+  const msg = pop.querySelector('.phmsg');
+  popPinned = true;
+  const pin = teamPin(false);
+  if (!pin) { msg.textContent = 'A team PIN is required to change phases.'; return; }
+  msg.textContent = 'Updating Piano Log…';
+  try {
+    const r = await fetch(BRIDGE_URL, {
+      method: 'POST', redirect: 'follow',
+      headers: {'content-type': 'text/plain;charset=utf-8'},
+      body: JSON.stringify({pin, serial: p.serial, action: 'setphase', phase}),
+    });
+    const j = await r.json();
+    if (j.error === 'unauthorized') {
+      localStorage.removeItem('blpPin');
+      msg.textContent = '✗ Wrong PIN — change the phase again to retry.';
+      return;
+    }
+    if (j.ok) {
+      p.phase = j.phase || phase;
+      msg.textContent = phase ? `✓ Phase set to ${p.phase}` : '✓ Phase cleared';
+      renderMap();   // repaint the number on the icon
+    } else {
+      msg.textContent = '✗ ' + (j.error || 'update failed');
+    }
+  } catch (e) {
+    msg.textContent = '✗ ' + e.message;
+  }
 }
 
 async function requestTuning(p, pop) {
