@@ -127,6 +127,12 @@ function duplicates() {
   for (const [slot, ps] of S.bySlot) if (ps.length > 1) out.push({slot, pianos: ps});
   return out.sort((a, b) => b.pianos.length - a.pianos.length);
 }
+// active pianos that aren't on any numbered map spot — shown in the
+// second-floor holding zone so nothing is invisible
+function unplacedPianos() {
+  return S.data.pianos.filter(p => p.active
+    && !(p.isSlot && S.slotFloor.has((p.location || '').toLowerCase())));
+}
 const localDay = () => new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD local
 function todaysMoves() {
   const t = localDay();
@@ -226,20 +232,21 @@ function gotoFloor(fi) {
 function focusPiano(p) {
   if (S.view !== 'map') switchView('map');
   S.focusRow = p.row;
-  const fi = p.isSlot ? S.slotFloor.get(p.location.toLowerCase()) : undefined;
-  if (fi !== undefined && fi !== S.floor) { S.floor = fi; renderTabs(); }
+  const placed = p.isSlot && S.slotFloor.has(p.location.toLowerCase());
+  const fi = placed ? S.slotFloor.get(p.location.toLowerCase()) : 1; // unplaced live on floor 2
+  if (fi !== S.floor) { S.floor = fi; renderTabs(); }
   renderMap();
   const f = S.map.floors[S.floor];
-  const sl = fi !== undefined
-    ? f.slots.find(x => x.id.toLowerCase() === p.location.toLowerCase()) : null;
-  if (sl) {
+  const sl = placed ? f.slots.find(x => x.id.toLowerCase() === p.location.toLowerCase()) : null;
+  const target = sl ? {x: sl.x + sl.w / 2, y: sl.y + sl.h / 2} : (S.holdingXY || {})[p.row];
+  if (target) {
     S.zoom = Math.max(S.zoom, 2.4); sizePlan();
     const sc = $('#mapscroll');
-    const k = sc.querySelector('svg').clientWidth / f.width;
-    sc.scrollLeft = (sl.x + sl.w / 2) * k - sc.clientWidth / 2;
-    sc.scrollTop = (sl.y + sl.h / 2) * k - sc.clientHeight / 2;
+    const k = sc.querySelector('svg').clientWidth / (S.drawW || f.width);
+    sc.scrollLeft = target.x * k - sc.clientWidth / 2;
+    sc.scrollTop = target.y * k - sc.clientHeight / 2;
   }
-  const el = document.querySelector(`.piano[data-row="${p.row}"]`);
+  const el = document.querySelector(`.piano[data-row="${p.row}"], .holdcell[data-row="${p.row}"]`);
   openPop(p.row, el, true);
 }
 
@@ -253,7 +260,7 @@ function focusSpot(id) {
   if (!sl) return;
   S.zoom = Math.max(S.zoom, 2.4); sizePlan();
   const sc = $('#mapscroll');
-  const k = sc.querySelector('svg').clientWidth / f.width;
+  const k = sc.querySelector('svg').clientWidth / (S.drawW || f.width);
   sc.scrollLeft = (sl.x + sl.w / 2) * k - sc.clientWidth / 2;
   sc.scrollTop = (sl.y + sl.h / 2) * k - sc.clientHeight / 2;
   openSlotPop(sl.id);
@@ -323,12 +330,13 @@ function fillClass(hex) {
 function sizePlan() {
   const f = S.map && S.map.floors[S.floor];
   if (!f) return;
+  const W = S.drawW || f.width, H = S.drawH || f.height;
   const sc = $('#mapscroll');
   const w = Math.max(320, sc.clientWidth - 2) * S.zoom;
   const svg = $('#plan');
-  svg.setAttribute('viewBox', `0 0 ${f.width} ${f.height}`);
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
   svg.style.width = w + 'px';
-  svg.style.height = (w * f.height / f.width) + 'px';
+  svg.style.height = (w * H / W) + 'px';
 }
 window.addEventListener('resize', sizePlan);
 
@@ -438,11 +446,52 @@ function renderMap() {
       }
     }
   }
+  // ---- second-floor holding zone: every active piano not on a spot ----
+  let drawW = f.width, drawH = f.height;
+  S.holdingXY = {};
+  if (S.floor === 1) {
+    const list = unplacedPianos();
+    if (list.length) {
+      const gap = 110, cols = 9, cw = 158, ch = 140, x0 = f.width + gap, y0 = 250;
+      const zoneW = cols * cw + 60, zoneX = x0 - 30;
+      const rows = Math.ceil(list.length / cols);
+      const zoneH = y0 - 80 + rows * ch + 40;
+      s += `<rect x="${zoneX}" y="80" width="${zoneW}" height="${zoneH}" rx="20" class="holdzone"/>`;
+      s += `<text x="${zoneX + zoneW / 2}" y="160" text-anchor="middle" class="holdtitle">NOT ON THE MAP — ${list.length} PIANOS NEED A SPOT #</text>`;
+      s += `<text x="${zoneX + zoneW / 2}" y="200" text-anchor="middle" class="holdsub">click one, then use its “new spot #” box to place it on the map</text>`;
+      list.forEach((p, idx) => {
+        const cx0 = x0 + (idx % cols) * cw, cy0 = y0 + Math.floor(idx / cols) * ch;
+        const cx = cx0 + (cw - 14) / 2, cy = cy0 + 54;
+        S.holdingXY[p.row] = {x: cx, y: cy0 + ch / 2};
+        const st = pianoStatus(p);
+        const hl = S.focusRow === p.row || (q && matches(p, q));
+        const dim = q && !matches(p, q);
+        s += `<rect x="${cx0}" y="${cy0}" width="${cw - 14}" height="${ch - 14}" rx="11"
+              class="holdcell ${hl ? 'hl' : ''} ${dim ? 'dim' : ''}" data-row="${p.row}"/>`;
+        s += `<g class="piano ${st} own-${ownerClass(p)} ${dim ? 'dim' : ''} ${hl ? 'hl' : ''}"
+              data-row="${p.row}">${glyph(p.type, cx, cy, 2.7)}${phaseText(p, cx, cy, 2.7)}</g>`;
+        const clip = (t, n) => t.length > n ? t.slice(0, n - 1) + '…' : t;
+        const nm = clip((p.year ? p.year + ' ' : '')
+          + ([p.make, p.model].filter(Boolean).join(' ') || p.summary || ''), 18);
+        const loc = clip(p.location ? p.location.replace(/\s+/g, ' ') : 'no spot yet', 18);
+        s += `<text x="${cx}" y="${cy0 + 104}" text-anchor="middle" class="holdname">${esc(nm)}</text>`;
+        s += `<text x="${cx}" y="${cy0 + 122}" text-anchor="middle" class="holdloc">${esc(loc)}</text>`;
+      });
+      drawW = x0 + cols * cw + 40;
+    }
+  }
+  S.drawW = drawW; S.drawH = drawH;
+
   const svg = $('#plan');
   svg.innerHTML = s;
   sizePlan();
   svg.querySelectorAll('.piano').forEach(el => {
     el.addEventListener('click', ev => { ev.stopPropagation(); openPop(+el.dataset.row, el, true); });
+    el.addEventListener('mouseenter', () => openPop(+el.dataset.row, el, false));
+    el.addEventListener('mouseleave', scheduleHide);
+  });
+  svg.querySelectorAll('.holdcell[data-row]').forEach(el => {
+    el.addEventListener('click', () => openPop(+el.dataset.row, el, true));
     el.addEventListener('mouseenter', () => openPop(+el.dataset.row, el, false));
     el.addEventListener('mouseleave', scheduleHide);
   });
