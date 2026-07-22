@@ -69,7 +69,32 @@ async function boot() {
   }, 150000);
 }
 
+// edits confirmed by the bridge but maybe not yet reflected in the 2-min
+// cached /api/data — re-applied after every poll so a refresh can't revert
+// a just-saved change. Keyed by piano row. {phase, location}
+const pendingEdits = new Map();
+function applyPending() {
+  if (!pendingEdits.size) return;
+  const byRow = new Map(S.data.pianos.map(p => [p.row, p]));
+  for (const [row, edit] of pendingEdits) {
+    const p = byRow.get(row);
+    if (!p) continue;
+    // once the server agrees, stop overriding
+    let stillPending = false;
+    if ('phase' in edit) {
+      if ((p.phase || '') === edit.phase) delete edit.phase;
+      else { p.phase = edit.phase; stillPending = true; }
+    }
+    if ('location' in edit) {
+      if ((p.location || '') === edit.location) delete edit.location;
+      else { p.location = edit.location; p.isSlot = SLOT_RE.test(edit.location); stillPending = true; }
+    }
+    if (!stillPending) pendingEdits.delete(row);
+  }
+}
+
 function index() {
+  applyPending();
   S.bySlot.clear(); S.slotFloor.clear();
   S.map.floors.forEach((f, fi) =>
     f.slots.forEach(sl => S.slotFloor.set(sl.id.toLowerCase(), fi)));
@@ -512,32 +537,56 @@ function wirePop(p) {
 
 async function setPhase(p, phase, pop) {
   const msg = pop.querySelector('.phmsg');
+  const sel = pop.querySelector('.phsel');
+  const was = p.phase || '';
+  if (phase === was) return;
   popPinned = true;
-  const pin = teamPin(false);
-  if (!pin) { msg.textContent = 'A team PIN is required to change phases.'; return; }
-  msg.textContent = 'Updating Piano Log…';
+  const pin = teamPin(false);   // prompts on first use of this device
+  if (!pin) {
+    msg.className = 'phmsg err'; msg.textContent = 'A team PIN is required — nothing saved.';
+    if (sel) sel.value = was;   // revert the dropdown so it matches reality
+    return;
+  }
+  // optimistic: paint immediately, remember until the server confirms
+  p.phase = phase;
+  const edit = pendingEdits.get(p.row) || {};
+  edit.phase = phase; pendingEdits.set(p.row, edit);
+  renderMap();
+  msg.className = 'phmsg'; msg.textContent = 'Saving…';
+  if (sel) sel.disabled = true;
   try {
     const r = await fetch(BRIDGE_URL, {
       method: 'POST', redirect: 'follow',
       headers: {'content-type': 'text/plain;charset=utf-8'},
-      body: JSON.stringify({pin, serial: p.serial, action: 'setphase', phase}),
+      body: JSON.stringify({pin, serial: p.serial, action: 'setphase', phase, row: p.row}),
     });
     const j = await r.json();
     if (j.error === 'unauthorized') {
       localStorage.removeItem('blpPin');
-      msg.textContent = '✗ Wrong PIN — change the phase again to retry.';
-      return;
-    }
-    if (j.ok) {
-      p.phase = j.phase || phase;
-      msg.textContent = phase ? `✓ Phase set to ${p.phase}` : '✓ Phase cleared';
-      renderMap();   // repaint the number on the icon
+      revertPhase(p, was, sel, edit);
+      msg.className = 'phmsg err'; msg.textContent = '✗ Wrong PIN — change it again to retry.';
+    } else if (j.ok) {
+      p.phase = j.phase != null ? j.phase : phase;
+      edit.phase = p.phase;   // keep protecting until /api/data catches up
+      msg.className = 'phmsg ok';
+      msg.textContent = p.phase ? `✓ Saved — ${p.phase}` : '✓ Phase cleared';
+      renderMap();
     } else {
-      msg.textContent = '✗ ' + (j.error || 'update failed');
+      revertPhase(p, was, sel, edit);
+      msg.className = 'phmsg err'; msg.textContent = '✗ ' + (j.error || 'update failed');
     }
   } catch (e) {
-    msg.textContent = '✗ ' + e.message;
+    revertPhase(p, was, sel, edit);
+    msg.className = 'phmsg err'; msg.textContent = '✗ ' + e.message + ' — not saved';
+  } finally {
+    if (sel) sel.disabled = false;
   }
+}
+function revertPhase(p, was, sel, edit) {
+  p.phase = was;
+  if (edit) { delete edit.phase; if (!Object.keys(edit).length) pendingEdits.delete(p.row); }
+  if (sel) sel.value = was;
+  renderMap();
 }
 
 async function requestTuning(p, pop) {
@@ -597,25 +646,28 @@ async function movePiano(p, dest, pop) {
     const r = await fetch(BRIDGE_URL, {
       method: 'POST', redirect: 'follow',
       headers: {'content-type': 'text/plain;charset=utf-8'},
-      body: JSON.stringify({pin, serial: p.serial, action: 'move', newLocation: dest}),
+      body: JSON.stringify({pin, serial: p.serial, action: 'move', newLocation: dest, row: p.row}),
     });
     const j = await r.json();
     if (j.error === 'unauthorized') {
       localStorage.removeItem('blpPin');
-      msg.textContent = '✗ Wrong PIN — click Move to try again.';
+      msg.className = 'mvmsg err'; msg.textContent = '✗ Wrong PIN — click Move to try again.';
       return;
     }
     if (j.moved) {
+      msg.className = 'mvmsg ok';
       msg.textContent = `✓ Moved from ${j.previous || '—'} to ${j.location}`
         + (known ? '' : ' (not a numbered map spot — it will show in reports)');
       p.location = j.location;
       p.isSlot = SLOT_RE.test(j.location);
+      const edit = pendingEdits.get(p.row) || {};
+      edit.location = j.location; pendingEdits.set(p.row, edit);
       index(); renderKpis(); renderMap(); renderReport();
     } else {
-      msg.textContent = '✗ ' + (j.error || 'update failed');
+      msg.className = 'mvmsg err'; msg.textContent = '✗ ' + (j.error || 'update failed');
     }
   } catch (e) {
-    msg.textContent = '✗ ' + e.message;
+    msg.className = 'mvmsg err'; msg.textContent = '✗ ' + e.message + ' — not saved';
   }
 }
 function openPop(row, el, pinned) {
