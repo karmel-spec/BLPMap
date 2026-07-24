@@ -24,7 +24,26 @@ const SLOT_RE = /^\d+[a-zA-Z]?$/;
 const KNOWN_AREAS = ['showroom', 'pre-sale showroom', 'third floor', 'storage',
   'shop', 'vestibule', 'wing room', 'holding room', 'attic', 'sold floor',
   'rebuilding line', 'refinishing', 'back shop', 'middle shop', 'basement',
-  'warehouse', 'rental', 'out for delivery', 'customer'];
+  'warehouse', 'rental', 'out for delivery', 'customer', 'sanding', 'coming soon'];
+
+// pianos parked in a named work area are drawn INSIDE that zone on the map
+// (not in the holding grid). location text -> map zone label to place them in.
+const AREA_BINS = [
+  {test: l => l.includes('refinish'), zones: ['refinishing shop', 'refinishing room']},
+  {test: l => l.includes('sanding'), zones: ['sanding shop', 'back shop', 'sanding room']},
+];
+// which bin (if any) a piano's location assigns it to
+function areaBinFor(p) {
+  if (p.isSlot && S.slotFloor.has((p.location || '').toLowerCase())) return null;
+  const l = (p.location || '').toLowerCase();
+  return AREA_BINS.find(b => b.test(l)) || null;
+}
+// the bin whose zones list includes this zone-label (or null)
+function binForZone(normLabel) {
+  return AREA_BINS.find(b => b.zones.includes(normLabel)) || null;
+}
+// display relabels for zone labels (sheet may still say "Back Shop")
+const ZONE_RELABEL = {'back shop': 'Sanding Shop'};
 
 const S = {
   map: null, data: null, floor: 0, search: '', view: 'map',
@@ -131,7 +150,8 @@ function duplicates() {
 // second-floor holding zone so nothing is invisible
 function unplacedPianos() {
   return S.data.pianos.filter(p => p.active
-    && !(p.isSlot && S.slotFloor.has((p.location || '').toLowerCase())));
+    && !(p.isSlot && S.slotFloor.has((p.location || '').toLowerCase()))
+    && !areaBinFor(p));   // area-bin pianos are drawn in their zone instead
 }
 const localDay = () => new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD local
 function todaysMoves() {
@@ -149,8 +169,12 @@ function tuningInfo(p) {
           last: past ? past[0] : null};
 }
 
+function comingSoon(p) {
+  return (p.location || '').trim().replace(/\s+/g, ' ').toLowerCase().startsWith('coming soon');
+}
 function pianoStatus(p) {
   const today = localDay();
+  if (comingSoon(p)) return 'coming';   // not yet at the store — yellow
   if (p.serial && p.serial.length > 4) {
     // note: the calendar's "x " prefix is admin bookkeeping (reminder
     // calls), NOT completion — so any mention today counts as in transit
@@ -233,12 +257,14 @@ function focusPiano(p) {
   if (S.view !== 'map') switchView('map');
   S.focusRow = p.row;
   const placed = p.isSlot && S.slotFloor.has(p.location.toLowerCase());
-  const fi = placed ? S.slotFloor.get(p.location.toLowerCase()) : 1; // unplaced live on floor 2
+  const inBin = areaBinFor(p);   // parked in a named work-area zone (floor 0)
+  const fi = placed ? S.slotFloor.get(p.location.toLowerCase()) : (inBin ? 0 : 1);
   if (fi !== S.floor) { S.floor = fi; renderTabs(); }
   renderMap();
   const f = S.map.floors[S.floor];
   const sl = placed ? f.slots.find(x => x.id.toLowerCase() === p.location.toLowerCase()) : null;
-  const target = sl ? {x: sl.x + sl.w / 2, y: sl.y + sl.h / 2} : (S.holdingXY || {})[p.row];
+  const target = sl ? {x: sl.x + sl.w / 2, y: sl.y + sl.h / 2}
+    : (S.binXY || {})[p.row] || (S.holdingXY || {})[p.row];
   if (target) {
     S.zoom = Math.max(S.zoom, 2.4); sizePlan();
     const sc = $('#mapscroll');
@@ -390,11 +416,42 @@ function renderMap() {
   const f = S.map.floors[S.floor];
   const q = S.search.trim().toLowerCase();
   let s = '';
+  // pianos to draw inside named work-area zones on this floor, keyed by bin
+  const binPianos = new Map();
+  for (const p of S.data.pianos) {
+    if (!p.active) continue;
+    const b = areaBinFor(p);
+    if (b) { if (!binPianos.has(b)) binPianos.set(b, []); binPianos.get(b).push(p); }
+  }
+  S.binXY = {};
   for (const z of f.labels) {
     const cls = fillClass(z.fill);
+    const norm = z.text.trim().toLowerCase();
+    const disp = ZONE_RELABEL[norm] || z.text;
+    const bin = binForZone(norm);
+    const list = bin ? binPianos.get(bin) : null;
     if (z.w > 4 && z.h > 4)
       s += `<rect x="${z.x}" y="${z.y}" width="${z.w}" height="${z.h}" class="zonebox ${cls}"/>`;
-    s += zoneLabelSVG(z, cls);
+    if (list && list.length) {
+      // label rides the top; pianos fill the rest of the zone in a row
+      const fs = Math.min(12, Math.max(9, z.h * 0.28));
+      s += `<text x="${z.x + z.w / 2}" y="${z.y + fs + 3}" text-anchor="middle" class="zlabel ${cls}" font-size="${fs}">${esc(disp)}</text>`;
+      const top = z.y + fs + 8, availH = z.y + z.h - top - 4;
+      const sc = Math.max(1, Math.min(availH / 22, (z.w - 12) / (list.length * 27)));
+      const iy = top + availH / 2, totalW = list.length * 27 * sc;
+      let ix = z.x + (z.w - totalW) / 2 + 13.5 * sc;
+      list.forEach((p, i) => {
+        const cx = ix + i * 27 * sc, cy = iy;
+        S.binXY[p.row] = {x: cx, y: cy};
+        const st = pianoStatus(p);
+        const hl = S.focusRow === p.row || (q && matches(p, q));
+        const dim = q && !matches(p, q);
+        s += `<g class="piano ${st} own-${ownerClass(p)} ${dim ? 'dim' : ''} ${hl ? 'hl' : ''}"
+              data-row="${p.row}">${glyph(p.type, cx, cy, sc)}${phaseText(p, cx, cy, sc)}</g>`;
+      });
+    } else {
+      s += zoneLabelSVG(disp === z.text ? z : {...z, text: disp}, cls);
+    }
   }
   for (const w of f.walls)
     s += `<line x1="${w.x1}" y1="${w.y1}" x2="${w.x2}" y2="${w.y2}" class="wall"/>`;
@@ -541,6 +598,7 @@ function popHTML(p) {
   const st = pianoStatus(p);
   const ti = tuningInfo(p);
   const tags = {in: 'IN PLACE', new: 'NEW', sched: 'SCHEDULED', move: 'IN TRANSIT',
+                coming: 'COMING SOON',
                 tune: 'TUNING CAL', sale: 'FOR SALE'};
   // title: year (col E) then make/model; fall back to the summary as-is
   const base = [p.make, p.model].filter(Boolean).join(' ');

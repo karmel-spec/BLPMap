@@ -84,6 +84,8 @@ body{background:#f7f8f9;color:#121212;display:flex;flex-direction:column;overflo
 .piano.sale.own-blp .pk{fill:#9aa3ac}  /* gray bench = BLP owned */
 .piano.sched .pbody{fill:#c9942e}
 .piano.tune .pbody{fill:#3a6ea5}
+.piano.coming .pbody{fill:#f4c20d}   /* not yet at the store */
+.piano.coming .pk{fill:#8a6a00}
 .piano.move .pbody{fill:#c03636}
 .piano.move{filter:drop-shadow(0 0 5px rgba(192,54,54,.65))}
 .piano.dim{opacity:.15}
@@ -126,6 +128,7 @@ body{background:#f7f8f9;color:#121212;display:flex;flex-direction:column;overflo
 .pop .tag.sale{background:#e8f4ec;color:#2e7d4f}
 .pop .tag.sched{background:#faf3e3;color:#a8791c}
 .pop .tag.tune{background:#e8eef6;color:#3a6ea5}
+.pop .tag.coming{background:#fdf3cf;color:#8a6a00}
 .tunebtn{width:100%;margin-top:8px;background:#fff;color:#3a6ea5;border:1.5px solid #3a6ea5;border-radius:7px;padding:8px;font-weight:700;font-size:12.5px;cursor:pointer}
 .tunebtn:hover{background:#e8eef6}
 .tunebox{margin-top:7px}
