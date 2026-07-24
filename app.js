@@ -387,6 +387,19 @@ function mediaNeeds(p) {
   return {needBP, needBV, needAP, needAV,
           photo: needBP || needAP, video: needBV || needAV};
 }
+// price shown under green For Sale pianos: "$49,998.00" -> "$49,998"
+function priceLabel(p) {
+  if (effectivePhase(p) !== 'For Sale' || !p.price) return '';
+  return String(p.price).replace(/\.\d{2}\s*$/, '').trim();
+}
+function priceText(p, cx, cy, sc) {
+  const t = priceLabel(p);
+  if (!t) return '';
+  const fs = Math.max(6, Math.min(8.5 * sc, (30 * sc) / Math.max(t.length * 0.55, 2)));
+  return `<text x="${cx}" y="${cy + 13.5 * sc}" text-anchor="middle" class="pricetag"
+          font-size="${fs}">${esc(t)}</text>`;
+}
+
 // small red photo-camera glyph centred at (x,y), width ~s
 function camGlyph(x, y, s) {
   const k = s / 12;
@@ -588,7 +601,7 @@ function renderMap() {
           const hl = S.focusRow === p.row || (q && matches(p, q));
           s += `<g class="piano ${st} own-${ownerClass(p)} ${q && !matches(p, q) ? 'dim' : ''} ${hl ? 'hl' : ''}"
                 data-slot="${esc(sl.id)}" data-row="${p.row}">
-                <g transform="rotate(90 ${cx} ${cy})">${glyph(p.type, cx, cy, sc)}</g>${phaseText(p, cx, cy, sc)}${mediaBadge(p, cx, cy, sc)}</g>`;
+                <g transform="rotate(90 ${cx} ${cy})">${glyph(p.type, cx, cy, sc)}</g>${phaseText(p, cx, cy, sc)}${mediaBadge(p, cx, cy, sc)}${priceText(p, cx, cy, sc)}</g>`;
         });
       }
     } else {
@@ -615,7 +628,7 @@ function renderMap() {
           const cy = sl.y + sl.h / 2;
           const hl = S.focusRow === p.row || (q && matches(p, q));
           s += `<g class="piano ${st} own-${ownerClass(p)} ${q && !matches(p, q) ? 'dim' : ''} ${hl ? 'hl' : ''}"
-                data-slot="${esc(sl.id)}" data-row="${p.row}">${glyph(p.type, cx, cy, sc)}${phaseText(p, cx, cy, sc)}${mediaBadge(p, cx, cy, sc)}</g>`;
+                data-slot="${esc(sl.id)}" data-row="${p.row}">${glyph(p.type, cx, cy, sc)}${phaseText(p, cx, cy, sc)}${mediaBadge(p, cx, cy, sc)}${priceText(p, cx, cy, sc)}</g>`;
         });
       }
     }
@@ -744,6 +757,7 @@ function popHTML(p) {
     <div class="row rowflex"><span>Serial # <b>${esc(p.serial || '—')}</b></span>${queueChip}</div>
     <div class="row">Status <b>${esc(p.status || '—')}</b></div>
     <div class="row">Owner <b>${esc(p.owner || '—')}</b></div>
+    ${priceLabel(p) ? `<div class="row">Price <b class="pricecard">${esc(priceLabel(p))}</b></div>` : ''}
     <div class="row">Last tuned <b>${ti.last ? esc(fmtDay(ti.last)) : '—'}</b></div>
     ${mediaCard(p)}
     ${phaser}

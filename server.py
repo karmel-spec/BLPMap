@@ -91,6 +91,8 @@ def parse_pianos(raw):
     hdr = rows[1] if len(rows) > 1 else []
     phase_idx = next((i for i, h in enumerate(hdr)
                       if h.strip().upper() == 'CURRENT PHASE'), -1)
+    price_idx = next((i for i, h in enumerate(hdr)
+                      if h.strip().upper() == 'PRICE'), -1)
     # CUSTOM SHOPWORK queue bounds (1-based rows). Queue position = row - header;
     # total = rows from just after the header down to the first fully-blank row.
     q_hdr = q_end = None
@@ -149,6 +151,7 @@ def parse_pianos(raw):
             'isSlot': bool(SLOT_RE.match(loc)),
             'entered': entered.isoformat() if entered else None,
             'phase': col(phase_idx) if phase_idx >= 0 else '',
+            'price': col(price_idx) if price_idx >= 0 else '',
             'bphoto': bool(col(13)), 'aphoto': bool(col(15)),
             'bvideo': bool(col(16)), 'avideo': bool(col(17)),
             'queuePos': (i - q_hdr) if (q_hdr and q_end and q_hdr < i < q_end) else 0,

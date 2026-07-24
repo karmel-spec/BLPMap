@@ -63,6 +63,8 @@ function parsePianos(text) {
   const pianos = [];
   const phaseIdx = rows[1]
     ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'CURRENT PHASE') : -1;
+  const priceIdx = rows[1]
+    ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'PRICE') : -1;
   // CUSTOM SHOPWORK queue bounds (1-based rows)
   let qHdr = 0, qEnd = 0;
   for (let k = 0; k < rows.length; k++) {
@@ -104,6 +106,7 @@ function parsePianos(text) {
       isSlot: SLOT_RE.test(loc),
       entered: entered ? entered.toISOString().slice(0, 10) : null,
       phase: phaseIdx >= 0 ? col(phaseIdx) : '',
+      price: priceIdx >= 0 ? col(priceIdx) : '',
       bphoto: !!col(13), aphoto: !!col(15), bvideo: !!col(16), avideo: !!col(17),
       queuePos: (qHdr && qEnd && (i + 1) > qHdr && (i + 1) < qEnd) ? (i + 1) - qHdr : 0,
       queueTotal: qTotal,
