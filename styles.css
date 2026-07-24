@@ -90,6 +90,9 @@ body{background:#f7f8f9;color:#121212;display:flex;flex-direction:column;overflo
 .piano.move{filter:drop-shadow(0 0 5px rgba(192,54,54,.65))}
 .piano.dim{opacity:.15}
 .mediabadge{paint-order:stroke;stroke:#fff;stroke-width:2px;stroke-linejoin:round;pointer-events:none}
+.micon{pointer-events:none}
+.micon rect,.micon path,.micon circle{fill:#d31a1a;stroke:#fff;stroke-width:0.9;paint-order:stroke}
+.micon .mlens{fill:#fff;stroke:none}
 .mediabox{border-top:1px solid #eef1f4;border-bottom:1px solid #eef1f4;margin:4px 0;padding:2px 0}
 .myes{color:#2e7d4f}.mno{color:#c03636}.mna{color:#9aa2ab;font-weight:600}
 .msec{font-size:13px;letter-spacing:1px;color:#121212;margin:16px 0 4px}
@@ -125,6 +128,8 @@ body{background:#f7f8f9;color:#121212;display:flex;flex-direction:column;overflo
 .shape-row{display:flex;gap:14px;align-items:center;color:#3a4046;flex-wrap:wrap}
 .legend{display:flex;gap:12px;font-size:11.5px;color:#555;align-items:center;margin-top:8px;flex-wrap:wrap}
 .dot{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:4px;vertical-align:-1px}
+.phaselegend{max-width:520px}
+.phaselegend b{color:#121212}
 
 /* hover / tap card */
 .pop{position:absolute;background:#fff;border:1px solid #dfe3e7;border-top:4px solid #9e2020;border-radius:10px;width:246px;padding:14px;box-shadow:0 12px 30px rgba(20,30,40,.18);z-index:10;cursor:pointer;max-height:calc(100% - 16px);overflow:auto}

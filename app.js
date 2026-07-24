@@ -6,13 +6,22 @@ const PHASES = ['New Arrival', 'Assessment', 'Teardown', 'PRSB', 'CAP',
   'Refinishing', 'Final Assembly', 'DHRT', 'Tuning', 'QC',
   'Admin Exit Prep', 'Delivered'];
 const PHASE_STATES = ['In Queue', 'Paused', 'For Sale'];   // unnumbered states; For Sale turns the icon green
-function phaseMark(phase) {          // what gets drawn on the icon
+// first-letter code for each numbered phase (10 = QC gets two letters)
+const PHASE_ABBR = {
+  'New Arrival': 'N', 'Assessment': 'A', 'Teardown': 'T', 'PRSB': 'P', 'CAP': 'C',
+  'Refinishing': 'R', 'Final Assembly': 'F', 'DHRT': 'D', 'Tuning': 'T',
+  'QC': 'QC', 'Admin Exit Prep': 'A',
+};
+// what an icon should read: {full:'6R', short:'6'} — or null for none
+function phaseLabels(phase) {
   if (!phase) return null;
-  if (phase === 'In Queue') return 'Q';
-  if (phase === 'Paused') return 'P';
-  if (phase === 'For Sale') return null;   // shown by the green body, not a mark
+  if (phase === 'In Queue') return {full: 'Q', short: 'Q'};
+  if (phase === 'Paused') return {full: 'P', short: 'P'};
+  if (phase === 'Delivered' || phase === 'For Sale') return null;
   const i = PHASES.indexOf(phase);
-  return i >= 0 && phase !== 'Delivered' ? String(i + 1) : null;
+  if (i < 0) return null;
+  const num = String(i + 1);
+  return {full: num + (PHASE_ABBR[phase] || ''), short: num};
 }
 // Apps Script bridge for piano moves. The URL is public; writes require
 // the team PIN (asked once, remembered on this device).
@@ -333,17 +342,26 @@ function renderMoves() {
 // phase number/letter drawn dead-center on the icon (always upright,
 // even when the piano glyph itself is rotated against a wall)
 function phaseText(p, cx, cy, sc) {
-  const mark = phaseMark(p.phase);
-  if (!mark) return '';
-  return `<text x="${cx}" y="${cy + 4.2 * sc}" text-anchor="middle" class="phnum"
-          font-size="${11 * sc}">${mark}</text>`;
+  const lab = phaseLabels(effectivePhase(p));
+  if (!lab) return '';
+  // fit the full "6R"/"10QC" label to the icon width; shrink font as needed,
+  // and if it would get too tiny fall back to the number/letter only
+  let text = lab.full;
+  let fs = Math.min(11 * sc, (26 * sc) / Math.max(text.length, 1.6));
+  if (fs < 6.5) { text = lab.short; fs = Math.min(11 * sc, (26 * sc) / Math.max(text.length, 1.6)); }
+  return `<text x="${cx}" y="${cy + fs * 0.36}" text-anchor="middle" class="phnum"
+          font-size="${fs}">${text}</text>`;
 }
 
 // ---- media (before/after photos + videos) --------------------------------
 // after-media only becomes relevant once a piano reaches Tuning (phase 9),
 // i.e. it's essentially finished — through Tuning & QC
 const AFTER_MIN = PHASES.indexOf('Tuning') + 1;   // 9
-function phaseNum(p) { const i = PHASES.indexOf(p.phase); return i >= 0 ? i + 1 : 0; }
+function phaseNum(p) { const i = PHASES.indexOf(effectivePhase(p)); return i >= 0 ? i + 1 : 0; }
+function effectivePhase(p) {
+  if (p.phase) return p.phase;
+  return (p.isNew && !comingSoon(p)) ? 'New Arrival' : '';   // not-yet-arrived stays unphased
+}
 // four media lines for the data card (✓ have it / ✗ needed / — n/a yet)
 function mediaCard(p) {
   const late = isLate(p);
@@ -361,20 +379,47 @@ function mediaCard(p) {
 }
 function isLate(p) { return phaseNum(p) >= AFTER_MIN; }
 function mediaNeeds(p) {
+  // not-yet-arrived pianos aren't photographed until they're here (NEW / 1N)
+  if (comingSoon(p)) return {needBP: false, needBV: false, needAP: false, needAV: false, photo: false, video: false};
   const late = isLate(p);
   const needBP = !p.bphoto, needBV = !p.bvideo;
   const needAP = late && !p.aphoto, needAV = late && !p.avideo;
   return {needBP, needBV, needAP, needAV,
           photo: needBP || needAP, video: needBV || needAV};
 }
-// 📷 / 🎥 badge above the icon when media is outstanding
+// small red photo-camera glyph centred at (x,y), width ~s
+function camGlyph(x, y, s) {
+  const k = s / 12;
+  return `<g class="micon" transform="translate(${x - 6 * k},${y - 4.5 * k}) scale(${k})">
+    <rect x="0" y="2.4" width="12" height="7.4" rx="1.5"/>
+    <rect x="3.4" y="0.5" width="4" height="2.4" rx="0.6"/>
+    <circle cx="6" cy="6.1" r="2.3" class="mlens"/></g>`;
+}
+// small red video-camera glyph
+function vidGlyph(x, y, s) {
+  const k = s / 13;
+  return `<g class="micon" transform="translate(${x - 6.5 * k},${y - 4 * k}) scale(${k})">
+    <rect x="0" y="1.4" width="9" height="7" rx="1.3"/>
+    <path d="M9 3.1 L13 1.1 L13 8.9 L9 6.9 Z"/></g>`;
+}
+// red 📷/🎥 badge above the icon when media is outstanding; a gap between
+// the two when both are shown and there's room
 function mediaBadge(p, cx, cy, sc) {
   const m = mediaNeeds(p);
-  if (!m.photo && !m.video) return '';
-  const icons = (m.photo ? '📷' : '') + (m.video ? '🎥' : '');
-  const fs = Math.max(7, 8.5 * sc);
-  return `<text x="${cx}" y="${cy - 8.5 * sc}" text-anchor="middle" class="mediabadge"
-          font-size="${fs}">${icons}</text>`;
+  const items = [];
+  if (m.photo) items.push('cam');
+  if (m.video) items.push('vid');
+  if (!items.length) return '';
+  const s = 11 * sc, gap = 3.2 * sc;
+  const totalW = items.length * s + (items.length - 1) * gap;
+  let x = cx - totalW / 2 + s / 2;
+  const by = cy - 10 * sc;
+  let out = '';
+  for (const it of items) {
+    out += it === 'cam' ? camGlyph(x, by, s) : vidGlyph(x, by, s);
+    x += s + gap;
+  }
+  return out;
 }
 
 function glyph(type, cx, cy, sc) {
@@ -499,8 +544,22 @@ function renderMap() {
       s += zoneLabelSVG(disp === z.text ? z : {...z, text: disp}, cls);
     }
   }
-  for (const w of f.walls)
+  // drop leftover spreadsheet cell-border fragments inside filled fixture
+  // boxes: a segment counts as interior clutter when it lies within the box
+  // and is strictly inside along its perpendicular axis (edge walls survive)
+  const solidZones = f.labels.filter(z => z.w > 4 && z.h > 4 && z.fill);
+  const clutter = w => solidZones.some(z => {
+    const inX = Math.min(w.x1, w.x2) >= z.x - 1 && Math.max(w.x1, w.x2) <= z.x + z.w + 1;
+    const inY = Math.min(w.y1, w.y2) >= z.y - 1 && Math.max(w.y1, w.y2) <= z.y + z.h + 1;
+    if (!inX || !inY) return false;
+    if (w.y1 === w.y2) return w.y1 > z.y + 2 && w.y1 < z.y + z.h - 2;   // horizontal
+    if (w.x1 === w.x2) return w.x1 > z.x + 2 && w.x1 < z.x + z.w - 2;   // vertical
+    return false;
+  });
+  for (const w of f.walls) {
+    if (clutter(w)) continue;
     s += `<line x1="${w.x1}" y1="${w.y1}" x2="${w.x2}" y2="${w.y2}" class="wall"/>`;
+  }
   for (const sl of f.slots) {
     const ps = S.bySlot.get(sl.id.toLowerCase()) || [];
     const hit = q && (sl.id.toLowerCase() === q || ps.some(p => matches(p, q)));
@@ -668,14 +727,15 @@ function popHTML(p) {
             <button class="tunego">Schedule next open slot</button>
           </div><div class="tunemsg"></div>`)
     : '';
+  const effPh = effectivePhase(p);
   const phaser = p.serial
     ? `<div class="row phrow">Shop phase
          <select class="phsel">
            <option value="">— none —</option>
            ${PHASES.map((ph, i) =>
-             `<option value="${esc(ph)}" ${p.phase === ph ? 'selected' : ''}>${i + 1} · ${esc(ph)}</option>`).join('')}
+             `<option value="${esc(ph)}" ${effPh === ph ? 'selected' : ''}>${i + 1} · ${esc(ph)}</option>`).join('')}
            ${PHASE_STATES.map(ph =>
-             `<option value="${esc(ph)}" ${p.phase === ph ? 'selected' : ''}>${esc(ph)}</option>`).join('')}
+             `<option value="${esc(ph)}" ${effPh === ph ? 'selected' : ''}>${esc(ph)}</option>`).join('')}
          </select></div><div class="phmsg"></div>`
     : '';
   return `<span class="x">✕</span>
