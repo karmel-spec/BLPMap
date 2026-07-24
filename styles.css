@@ -82,13 +82,19 @@ body{background:#f7f8f9;color:#121212;display:flex;flex-direction:column;overflo
 .piano.sale .pbody{fill:#2e7d4f}
 .piano.sale .pk{fill:#1c1c1c}          /* for-sale: bench shows ownership — black = client/consigned */
 .piano.sale.own-blp .pk{fill:#9aa3ac}  /* gray bench = BLP owned */
-.piano.sched .pbody{fill:#c9942e}
+.piano.sched .pbody{fill:#7c3aed}
 .piano.tune .pbody{fill:#3a6ea5}
 .piano.coming .pbody{fill:#f4c20d}   /* not yet at the store */
 .piano.coming .pk{fill:#8a6a00}
 .piano.move .pbody{fill:#c03636}
 .piano.move{filter:drop-shadow(0 0 5px rgba(192,54,54,.65))}
 .piano.dim{opacity:.15}
+.mediabadge{paint-order:stroke;stroke:#fff;stroke-width:2px;stroke-linejoin:round;pointer-events:none}
+.mediabox{border-top:1px solid #eef1f4;border-bottom:1px solid #eef1f4;margin:4px 0;padding:2px 0}
+.myes{color:#2e7d4f}.mno{color:#c03636}.mna{color:#9aa2ab;font-weight:600}
+.msec{font-size:13px;letter-spacing:1px;color:#121212;margin:16px 0 4px}
+.msec .pc{color:#9e2020;margin-left:4px}
+.mrow{cursor:pointer}.mrow:hover td{background:#fdf3f3}
 .phnum{fill:#fff;font-family:'Assistant','Helvetica Neue',Arial,sans-serif;font-weight:800;
   paint-order:stroke;stroke:#1a1d20;stroke-width:2.6px;stroke-linejoin:round;pointer-events:none}
 .phrow{display:flex;align-items:center;gap:8px}
@@ -126,7 +132,7 @@ body{background:#f7f8f9;color:#121212;display:flex;flex-direction:column;overflo
 .pop .tag.move{background:#fbeaea;color:#9e2020}
 .pop .tag.new{background:#fce8f3;color:#c2187a}
 .pop .tag.sale{background:#e8f4ec;color:#2e7d4f}
-.pop .tag.sched{background:#faf3e3;color:#a8791c}
+.pop .tag.sched{background:#f0eafd;color:#5b3fb0}
 .pop .tag.tune{background:#e8eef6;color:#3a6ea5}
 .pop .tag.coming{background:#fdf3cf;color:#8a6a00}
 .tunebtn{width:100%;margin-top:8px;background:#fff;color:#3a6ea5;border:1.5px solid #3a6ea5;border-radius:7px;padding:8px;font-weight:700;font-size:12.5px;cursor:pointer}

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Store Map — Brigham Larson Pianos</title>
 <link rel="icon" href="assets/blp-logo.png">
-<link rel="stylesheet" href="styles.css?v=21">
+<link rel="stylesheet" href="styles.css?v=22">
 </head>
 <body>
 
@@ -28,6 +28,7 @@
     <div class="navitem" data-view="board"><span class="ic">🚚</span>Move Board</div>
     <div class="navitem" data-view="cal"><span class="ic">📅</span>Calendar</div>
     <div class="navitem" data-view="report"><span class="ic">⚠️</span>Reports</div>
+    <div class="navitem" data-view="media"><span class="ic">📸</span>Media</div>
     <div class="crew">
       <b>Move Crew Today</b><span id="crew">—</span>
       <span id="crewMoves" class="crewmoves">— Moves Today</span>
@@ -59,7 +60,7 @@
           <span><b style="font-size:11px">1–11</b>&nbsp;shop phase · <b style="font-size:11px">Q</b>&nbsp;queue · <b style="font-size:11px">P</b>&nbsp;paused</span>
         </div>
         <div class="legend">
-          <span><i class="dot" style="background:#c9942e"></i>Scheduled</span>
+          <span><i class="dot" style="background:#7c3aed"></i>Scheduled</span>
           <span><i class="dot" style="background:#c03636"></i>In transit</span>
           <span><i class="dot" style="background:#ff2d9e"></i>New</span>
           <span><i class="dot" style="background:#2e7d4f"></i>For sale</span>
@@ -106,8 +107,16 @@
       <div id="board"></div>
     </div>
   </div>
+
+  <div class="view panelview" id="view-media" hidden>
+    <div class="panel">
+      <h2 class="ph">📸 MEDIA NEEDED</h2>
+      <p class="pd">Before photos/videos for every active piano; after photos/videos once a piano reaches Tuning or later. Click a row to jump to the piano on the map.</p>
+      <div id="mediaBody"></div>
+    </div>
+  </div>
 </div>
 
-<script src="app.js?v=21"></script>
+<script src="app.js?v=22"></script>
 </body>
 </html>

@@ -104,6 +104,7 @@ function parsePianos(text) {
       isSlot: SLOT_RE.test(loc),
       entered: entered ? entered.toISOString().slice(0, 10) : null,
       phase: phaseIdx >= 0 ? col(phaseIdx) : '',
+      bphoto: !!col(13), aphoto: !!col(15), bvideo: !!col(16), avideo: !!col(17),
       queuePos: (qHdr && qEnd && (i + 1) > qHdr && (i + 1) < qEnd) ? (i + 1) - qHdr : 0,
       queueTotal: qTotal,
       isNew, active,

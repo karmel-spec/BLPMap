@@ -203,12 +203,17 @@ function logLink(p) {
 /* ---------- rendering ---------- */
 function renderAll() {
   renderTabs(); renderKpis(); renderCrew(); renderMoves();
-  renderMap(); renderReport(); renderBoard(); renderCal(); showView(S.view); syncFeed();
+  renderMap(); renderReport(); renderBoard(); renderCal(); renderMedia(); showView(S.view); syncFeed();
 }
 
 function renderTabs() {
-  $('#floorTabs').innerHTML = S.map.floors.map((f, i) =>
-    `<div class="${i === S.floor ? 'on' : ''}" data-f="${i}">${esc(f.name.replace(' floor', ''))} floor</div>`).join('');
+  // narrow screens: "1st floor" / "2nd floor" to save space; wide: full name
+  const short = window.innerWidth <= 760;
+  $('#floorTabs').innerHTML = S.map.floors.map((f, i) => {
+    const full = esc(f.name.replace(' floor', '')) + ' floor';
+    const abbr = ['1st floor', '2nd floor', '3rd floor'][i] || full;
+    return `<div class="${i === S.floor ? 'on' : ''}" data-f="${i}">${short ? abbr : full}</div>`;
+  }).join('');
   $('#floorTabs').querySelectorAll('div').forEach(el =>
     el.onclick = () => { S.floor = +el.dataset.f;
       if (S.view !== 'map') switchView('map');
@@ -226,6 +231,7 @@ function renderKpis() {
   const tm = todaysMoves().length;
   const own = {blp: 0, csgn: 0, client: 0};
   act.forEach(p => own[ownerClass(p)]++);
+  const mediaCount = act.filter(p => { const m = mediaNeeds(p); return m.photo || m.video; }).length;
   $('#movesBadge').textContent = tm;
   $('#kpis').innerHTML = `
     <div class="kpi"><span class="n">${total}</span><span class="l">TOTAL PIANOS</span></div>
@@ -234,8 +240,10 @@ function renderKpis() {
     <div class="kpi"><span class="n">${own.blp}<small> / ${own.csgn} / ${own.client}</small></span><span class="l">BLP / CONSIGN / CLIENT</span></div>
     <div class="kpi"><span class="n">${tm}</span><span class="l">MOVES TODAY</span></div>
     <div class="kpi click" id="kpiNew"><span class="n">${newWeek}</span><span class="l">NEW THIS WEEK →</span></div>
+    <div class="kpi click" id="kpiMedia"><span class="n">${mediaCount} 📷</span><span class="l">MEDIA NEEDED →</span></div>
     <div class="kpi red" id="kpiReport"><span class="n">${un} <small>+ ${du} dup</small></span><span class="l">UNPLACED / ERRORS →</span></div>`;
   $('#kpiReport').onclick = () => switchView('report');
+  $('#kpiMedia').onclick = () => switchView('media');
   $('#kpiF1').onclick = () => gotoFloor(0);
   $('#kpiF2').onclick = () => gotoFloor(1);
   $('#kpiNew').onclick = () => {
@@ -329,6 +337,44 @@ function phaseText(p, cx, cy, sc) {
   if (!mark) return '';
   return `<text x="${cx}" y="${cy + 4.2 * sc}" text-anchor="middle" class="phnum"
           font-size="${11 * sc}">${mark}</text>`;
+}
+
+// ---- media (before/after photos + videos) --------------------------------
+// after-media only becomes relevant once a piano reaches Tuning (phase 9),
+// i.e. it's essentially finished — through Tuning & QC
+const AFTER_MIN = PHASES.indexOf('Tuning') + 1;   // 9
+function phaseNum(p) { const i = PHASES.indexOf(p.phase); return i >= 0 ? i + 1 : 0; }
+// four media lines for the data card (✓ have it / ✗ needed / — n/a yet)
+function mediaCard(p) {
+  const late = isLate(p);
+  const line = (label, have, active) => {
+    const mark = !active ? '<b class="mna">— after Tuning/QC</b>'
+      : have ? '<b class="myes">✓ have</b>' : '<b class="mno">✗ needed</b>';
+    return `<div class="row rowflex"><span>${label}</span>${mark}</div>`;
+  };
+  return `<div class="mediabox">
+    ${line('Before photos', p.bphoto, true)}
+    ${line('Before video', p.bvideo, true)}
+    ${line('After photos', p.aphoto, late)}
+    ${line('After video', p.avideo, late)}
+  </div>`;
+}
+function isLate(p) { return phaseNum(p) >= AFTER_MIN; }
+function mediaNeeds(p) {
+  const late = isLate(p);
+  const needBP = !p.bphoto, needBV = !p.bvideo;
+  const needAP = late && !p.aphoto, needAV = late && !p.avideo;
+  return {needBP, needBV, needAP, needAV,
+          photo: needBP || needAP, video: needBV || needAV};
+}
+// 📷 / 🎥 badge above the icon when media is outstanding
+function mediaBadge(p, cx, cy, sc) {
+  const m = mediaNeeds(p);
+  if (!m.photo && !m.video) return '';
+  const icons = (m.photo ? '📷' : '') + (m.video ? '🎥' : '');
+  const fs = Math.max(7, 8.5 * sc);
+  return `<text x="${cx}" y="${cy - 8.5 * sc}" text-anchor="middle" class="mediabadge"
+          font-size="${fs}">${icons}</text>`;
 }
 
 function glyph(type, cx, cy, sc) {
@@ -447,7 +493,7 @@ function renderMap() {
         const hl = S.focusRow === p.row || (q && matches(p, q));
         const dim = q && !matches(p, q);
         s += `<g class="piano ${st} own-${ownerClass(p)} ${dim ? 'dim' : ''} ${hl ? 'hl' : ''}"
-              data-row="${p.row}">${glyph(p.type, cx, cy, sc)}${phaseText(p, cx, cy, sc)}</g>`;
+              data-row="${p.row}">${glyph(p.type, cx, cy, sc)}${phaseText(p, cx, cy, sc)}${mediaBadge(p, cx, cy, sc)}</g>`;
       });
     } else {
       s += zoneLabelSVG(disp === z.text ? z : {...z, text: disp}, cls);
@@ -483,7 +529,7 @@ function renderMap() {
           const hl = S.focusRow === p.row || (q && matches(p, q));
           s += `<g class="piano ${st} own-${ownerClass(p)} ${q && !matches(p, q) ? 'dim' : ''} ${hl ? 'hl' : ''}"
                 data-slot="${esc(sl.id)}" data-row="${p.row}">
-                <g transform="rotate(90 ${cx} ${cy})">${glyph(p.type, cx, cy, sc)}</g>${phaseText(p, cx, cy, sc)}</g>`;
+                <g transform="rotate(90 ${cx} ${cy})">${glyph(p.type, cx, cy, sc)}</g>${phaseText(p, cx, cy, sc)}${mediaBadge(p, cx, cy, sc)}</g>`;
         });
       }
     } else {
@@ -510,7 +556,7 @@ function renderMap() {
           const cy = sl.y + sl.h / 2;
           const hl = S.focusRow === p.row || (q && matches(p, q));
           s += `<g class="piano ${st} own-${ownerClass(p)} ${q && !matches(p, q) ? 'dim' : ''} ${hl ? 'hl' : ''}"
-                data-slot="${esc(sl.id)}" data-row="${p.row}">${glyph(p.type, cx, cy, sc)}${phaseText(p, cx, cy, sc)}</g>`;
+                data-slot="${esc(sl.id)}" data-row="${p.row}">${glyph(p.type, cx, cy, sc)}${phaseText(p, cx, cy, sc)}${mediaBadge(p, cx, cy, sc)}</g>`;
         });
       }
     }
@@ -552,7 +598,7 @@ function renderMap() {
         s += `<rect x="${cx0}" y="${cy0}" width="${iw}" height="${ih}" rx="11"
               class="holdcell ${hl ? 'hl' : ''} ${dim ? 'dim' : ''}" data-row="${p.row}"/>`;
         s += `<g class="piano ${st} own-${ownerClass(p)} ${dim ? 'dim' : ''} ${hl ? 'hl' : ''}"
-              data-row="${p.row}">${glyph(p.type, cx, iconCy, sc)}${phaseText(p, cx, iconCy, sc)}</g>`;
+              data-row="${p.row}">${glyph(p.type, cx, iconCy, sc)}${phaseText(p, cx, iconCy, sc)}${mediaBadge(p, cx, iconCy, sc)}</g>`;
         let ty = textTop + 11;
         s += `<text x="${cx}" y="${ty}" text-anchor="middle" class="holdname">`
           + nameLines.map((L, li) => `<tspan x="${cx}" ${li ? `dy="${NLH}"` : ''}>${esc(L)}</tspan>`).join('')
@@ -639,6 +685,7 @@ function popHTML(p) {
     <div class="row">Status <b>${esc(p.status || '—')}</b></div>
     <div class="row">Owner <b>${esc(p.owner || '—')}</b></div>
     <div class="row">Last tuned <b>${ti.last ? esc(fmtDay(ti.last)) : '—'}</b></div>
+    ${mediaCard(p)}
     ${phaser}
     ${tuner}
     ${mover}
@@ -877,6 +924,36 @@ function renderReport() {
      || '<tr><td colspan="2" class="empty">No duplicate slot assignments. 🎉</td></tr>');
 }
 
+/* ---------- media report ---------- */
+function renderMedia() {
+  const el = $('#mediaBody');
+  if (!el) return;
+  const act = S.data.pianos.filter(p => p.active);
+  const lists = {
+    'Need BEFORE photos 📷': act.filter(p => mediaNeeds(p).needBP),
+    'Need BEFORE video 🎥': act.filter(p => mediaNeeds(p).needBV),
+    'Ready — need AFTER photos 📷': act.filter(p => mediaNeeds(p).needAP),
+    'Ready — need AFTER video 🎥': act.filter(p => mediaNeeds(p).needAV),
+  };
+  const rowFor = p => {
+    const nm = (p.year ? p.year + ' ' : '') + ([p.make, p.model].filter(Boolean).join(' ') || p.summary);
+    const where = p.location || 'no spot';
+    const ph = p.phase ? ` · ${esc(p.phase)}` : '';
+    return `<tr class="mrow" data-row="${p.row}"><td>${esc(nm)}</td>
+      <td>${esc(p.serial)}</td><td class="locraw">${esc(where)}</td><td>${ph}</td>
+      <td><a target="_blank" rel="noopener" href="${logLink(p)}">log ↗</a></td></tr>`;
+  };
+  el.innerHTML = Object.entries(lists).map(([title, ps]) =>
+    `<h3 class="msec">${title} <span class="pc">${ps.length}</span></h3>
+     <div class="tscroll"><table>${
+       ps.length ? ps.map(rowFor).join('')
+       : '<tr><td class="empty">None 🎉</td></tr>'}</table></div>`).join('');
+  el.querySelectorAll('.mrow').forEach(tr => tr.onclick = () => {
+    const p = S.data.pianos.find(x => x.row === +tr.dataset.row);
+    if (p) focusPiano(p);
+  });
+}
+
 /* ---------- move board ---------- */
 function renderBoard() {
   const evs = S.data.events;
@@ -896,7 +973,7 @@ function renderBoard() {
 
 /* ---------- views / nav / drawers ---------- */
 function showView(v) {
-  ['map', 'report', 'board', 'cal'].forEach(x => $('#view-' + x).hidden = x !== v);
+  ['map', 'report', 'board', 'cal', 'media'].forEach(x => $('#view-' + x).hidden = x !== v);
   document.querySelectorAll('.navitem[data-view]').forEach(el =>
     el.classList.toggle('on', el.dataset.view === v));
 }

@@ -149,6 +149,8 @@ def parse_pianos(raw):
             'isSlot': bool(SLOT_RE.match(loc)),
             'entered': entered.isoformat() if entered else None,
             'phase': col(phase_idx) if phase_idx >= 0 else '',
+            'bphoto': bool(col(13)), 'aphoto': bool(col(15)),
+            'bvideo': bool(col(16)), 'avideo': bool(col(17)),
             'queuePos': (i - q_hdr) if (q_hdr and q_end and q_hdr < i < q_end) else 0,
             'queueTotal': q_total,
             'isNew': is_new,
