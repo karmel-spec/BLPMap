@@ -633,54 +633,55 @@ function renderMap() {
       }
     }
   }
-  // ---- second-floor holding zone: every active piano not on a spot ----
+  // ---- ATTIC holding zone (2nd floor): every active piano not on a spot,
+  // drawn inside the map's empty lower-right region as a full rectangle
+  // flush with the map's right and bottom edges
   let drawW = f.width, drawH = f.height;
   S.holdingXY = {};
   if (S.floor === 1) {
     const list = unplacedPianos();
     if (list.length) {
-      const gap = 110, cols = 9, cw = 158, ch = 140, x0 = f.width + gap, y0 = 250;
-      const zoneW = cols * cw + 60, zoneX = x0 - 30;
+      const AT = {x: 1412, y: 2620, x2: 2082, y2: 3818};   // attic rectangle
+      const zoneW = AT.x2 - AT.x, zoneH = AT.y2 - AT.y;
+      s += `<rect x="${AT.x}" y="${AT.y}" width="${zoneW}" height="${zoneH}" rx="8" class="holdzone"/>`;
+      s += `<text x="${AT.x + zoneW / 2}" y="${AT.y + 34}" text-anchor="middle" class="holdtitle" font-size="24">ATTIC — NOT ON THE MAP (${list.length})</text>`;
+      s += `<text x="${AT.x + zoneW / 2}" y="${AT.y + 56}" text-anchor="middle" class="holdsub" font-size="13">click a piano, then “new spot #” to place it</text>`;
+      const headH = 68;
+      const cols = 6;
       const rows = Math.ceil(list.length / cols);
-      const zoneH = y0 - 80 + rows * ch + 40;
-      s += `<rect x="${zoneX}" y="80" width="${zoneW}" height="${zoneH}" rx="20" class="holdzone"/>`;
-      s += `<text x="${zoneX + zoneW / 2}" y="160" text-anchor="middle" class="holdtitle">NOT ON THE MAP — ${list.length} PIANOS NEED A SPOT #</text>`;
-      s += `<text x="${zoneX + zoneW / 2}" y="200" text-anchor="middle" class="holdsub">click one, then use its “new spot #” box to place it on the map</text>`;
-      const iw = cw - 14, ih = ch - 14;          // inner cell size
-      const NLH = 15, LLH = 13, PAD = 9;         // line heights, bottom pad
+      const cw = (zoneW - 16) / cols;
+      const ch = Math.min(120, (zoneH - headH - 12) / rows);
+      const iw = cw - 8, ih = ch - 8;
       list.forEach((p, idx) => {
-        const cx0 = x0 + (idx % cols) * cw, cy0 = y0 + Math.floor(idx / cols) * ch;
+        const cx0 = AT.x + 8 + (idx % cols) * cw, cy0 = AT.y + headH + Math.floor(idx / cols) * ch;
         const cx = cx0 + iw / 2;
         const st = pianoStatus(p);
         const hl = S.focusRow === p.row || (q && matches(p, q));
         const dim = q && !matches(p, q);
-        // wrap name + location to fit; each capped at 2 lines
         const nm = (p.year ? p.year + ' ' : '')
           + ([p.make, p.model].filter(Boolean).join(' ') || p.summary || '');
         const loc = p.location ? p.location.replace(/\s+/g, ' ') : 'no spot yet';
-        const nameLines = wrapCap(nm, iw - 8, 13.5, 2);
-        const locLines = wrapCap(loc, iw - 8, 12, 2);
-        const textH = nameLines.length * NLH + 3 + locLines.length * LLH;
-        const textTop = cy0 + ih - PAD - textH;   // text block hugs the bottom
-        // icon fills the space above the text; scale to what remains
-        const regTop = cy0 + 8, regBot = textTop - 4;
-        const iconCy = (regTop + regBot) / 2;
-        const sc = Math.max(1.4, Math.min(2.7, (regBot - regTop) / 22));
+        const nameLines = wrapCap(nm, iw - 6, 10.5, ih > 92 ? 2 : 1);
+        const locLines = wrapCap(loc, iw - 6, 9.5, 1);
+        const NLH = 12, LLH = 11;
+        const textH = nameLines.length * NLH + 2 + locLines.length * LLH;
+        const textTop = cy0 + ih - 6 - textH;
+        const iconCy = (cy0 + 5 + textTop - 3) / 2;
+        const sc = Math.max(1.0, Math.min(2.0, (textTop - cy0 - 8) / 22));
         S.holdingXY[p.row] = {x: cx, y: cy0 + ih / 2};
-        s += `<rect x="${cx0}" y="${cy0}" width="${iw}" height="${ih}" rx="11"
+        s += `<rect x="${cx0}" y="${cy0}" width="${iw}" height="${ih}" rx="8"
               class="holdcell ${hl ? 'hl' : ''} ${dim ? 'dim' : ''}" data-row="${p.row}"/>`;
         s += `<g class="piano ${st} own-${ownerClass(p)} ${dim ? 'dim' : ''} ${hl ? 'hl' : ''}"
               data-row="${p.row}">${glyph(p.type, cx, iconCy, sc)}${phaseText(p, cx, iconCy, sc)}${mediaBadge(p, cx, iconCy, sc)}</g>`;
-        let ty = textTop + 11;
-        s += `<text x="${cx}" y="${ty}" text-anchor="middle" class="holdname">`
+        let ty = textTop + 9;
+        s += `<text x="${cx}" y="${ty}" text-anchor="middle" class="holdname" font-size="10.5">`
           + nameLines.map((L, li) => `<tspan x="${cx}" ${li ? `dy="${NLH}"` : ''}>${esc(L)}</tspan>`).join('')
           + `</text>`;
-        ty += (nameLines.length - 1) * NLH + LLH + 3;
-        s += `<text x="${cx}" y="${ty}" text-anchor="middle" class="holdloc">`
+        ty += (nameLines.length - 1) * NLH + LLH;
+        s += `<text x="${cx}" y="${ty}" text-anchor="middle" class="holdloc" font-size="9.5">`
           + locLines.map((L, li) => `<tspan x="${cx}" ${li ? `dy="${LLH}"` : ''}>${esc(L)}</tspan>`).join('')
           + `</text>`;
       });
-      drawW = x0 + cols * cw + 40;
     }
   }
   S.drawW = drawW; S.drawH = drawH;
