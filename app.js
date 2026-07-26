@@ -27,6 +27,10 @@ function phaseLabels(phase) {
 // the team PIN (asked once, remembered on this device).
 const BRIDGE_URL =
   'https://script.google.com/macros/s/AKfycbxY4BKnr_Tr0iCTc9itCWhNYLvgszmkI1IoYSkbBWpyAqRtWI-yaUkJQjcVdgG58KXt/exec';
+// "Sign in with Google" (identity for the activity log — who changed what).
+// Same public web client the BLP Shop app uses; empty string hides the UI.
+const GOOGLE_CLIENT_ID = '118454775893-17u7t3glh8eu4kffhe7b42jl71apre4f.apps.googleusercontent.com';
+const PRICETAGS_URL = 'https://blppricetags.netlify.app/';
 const SLOT_RE = /^\d+[a-zA-Z]?$/;
 // named areas in col U that are legitimate (not "unplaced") even though
 // they aren't numbered slots on the map
@@ -117,6 +121,11 @@ function applyPending() {
     if ('location' in edit) {
       if ((p.location || '') === edit.location) delete edit.location;
       else { p.location = edit.location; p.isSlot = SLOT_RE.test(edit.location); stillPending = true; }
+    }
+    for (const f of ['bphoto', 'bvideo', 'aphoto', 'avideo']) {
+      if (!(f in edit)) continue;
+      if (p[f]) delete edit[f];               // server caught up
+      else { p[f] = true; stillPending = true; }
     }
     if (!stillPending) pendingEdits.delete(row);
   }
@@ -362,19 +371,23 @@ function effectivePhase(p) {
   if (p.phase) return p.phase;
   return (p.isNew && !comingSoon(p)) ? 'New Arrival' : '';   // not-yet-arrived stays unphased
 }
-// four media lines for the data card (✓ have it / ✗ needed / — n/a yet)
+// four media lines for the data card (✓ have it / mark-done button / — n/a).
+// "mark done" writes a dated ✓ into the Piano Log and clears the red icon.
 function mediaCard(p) {
   const late = isLate(p);
-  const line = (label, have, active) => {
+  const line = (label, field, have, active) => {
     const mark = !active ? '<b class="mna">— after Tuning/QC</b>'
-      : have ? '<b class="myes">✓ have</b>' : '<b class="mno">✗ needed</b>';
+      : have ? '<b class="myes">✓ have</b>'
+      : (p.serial ? `<button class="mmark" data-f="${field}">✗ needed — mark done</button>`
+                  : '<b class="mno">✗ needed</b>');
     return `<div class="row rowflex"><span>${label}</span>${mark}</div>`;
   };
   return `<div class="mediabox">
-    ${line('Before photos', p.bphoto, true)}
-    ${line('Before video', p.bvideo, true)}
-    ${line('After photos', p.aphoto, late)}
-    ${line('After video', p.avideo, late)}
+    ${line('Before photos', 'bphoto', p.bphoto, true)}
+    ${line('Before video', 'bvideo', p.bvideo, true)}
+    ${line('After photos', 'aphoto', p.aphoto, late)}
+    ${line('After video', 'avideo', p.avideo, late)}
+    <div class="mdmsg"></div>
   </div>`;
 }
 function isLate(p) { return phaseNum(p) >= AFTER_MIN; }
@@ -398,6 +411,82 @@ function priceText(p, cx, cy, sc) {
   const fs = Math.max(6, Math.min(8.5 * sc, (30 * sc) / Math.max(t.length * 0.55, 2)));
   return `<text x="${cx}" y="${cy + 13.5 * sc}" text-anchor="middle" class="pricetag"
           font-size="${fs}">${esc(t)}</text>`;
+}
+
+/* ---------- printable tags ---------- */
+// hand the piano to the BLP Price Tag Maker, prefilled via its URL params
+function priceTagUrl(p) {
+  const model = [(p.year || ''), p.make, p.model].filter(Boolean).join(' ')
+    + (p.size ? ' / ' + p.size : '');
+  const digits = String(p.price || '').replace(/\.\d{2}\s*$/, '').replace(/[^0-9]/g, '');
+  const q = new URLSearchParams();
+  if (model.trim()) q.set('model', model.trim());
+  if (digits) q.set('price', digits);
+  if (p.serial) q.set('serial', p.serial);
+  return PRICETAGS_URL + '?' + q.toString();
+}
+// 4x6 shop tag: identity + phase checklist + QR to the Piano Log entry
+function printShopTag(p) {
+  const nm = [(p.year || ''), p.make, p.model].filter(Boolean).join(' ') || p.summary || 'Piano';
+  const eff = effectivePhase(p);
+  const qr = 'https://api.qrserver.com/v1/create-qr-code/?size=150x150&data='
+    + encodeURIComponent(logLink(p));
+  const rows = PHASES.map((ph, i) => {
+    const done = PHASES.indexOf(eff) > i;
+    const cur = eff === ph;
+    return `<div class="ph ${cur ? 'cur' : ''} ${done ? 'done' : ''}">
+      <span class="box">${done ? '✓' : cur ? '▶' : ''}</span>
+      <span class="n">${i + 1}</span> ${esc(ph)}</div>`;
+  }).join('');
+  const state = ['In Queue', 'Paused', 'For Sale'].includes(eff)
+    ? `<div class="state">${esc(eff.toUpperCase())}</div>` : '';
+  const w = window.open('', '_blank');
+  if (!w) { alert('Pop-up blocked — allow pop-ups to print shop tags.'); return; }
+  w.document.write(`<!doctype html><html><head><title>Shop tag — ${esc(nm)}</title><style>
+    @page { size: 4in 6in; margin: 0.18in; }
+    * { box-sizing: border-box; margin: 0; }
+    body { font: 11px/1.35 Helvetica, Arial, sans-serif; color: #121212; width: 3.6in; }
+    .hd { background: #0d0d0d; color: #fff; padding: 8px 10px; border-radius: 6px 6px 0 0;
+          font-family: Georgia, serif; letter-spacing: 3px; font-size: 13px; }
+    .hd small { display: block; font-family: Helvetica, Arial, sans-serif; letter-spacing: 2px;
+          font-size: 8px; color: #bbb; margin-top: 2px; }
+    .bd { border: 1.5px solid #121212; border-top: none; border-radius: 0 0 6px 6px; padding: 8px 10px; }
+    h1 { font-size: 15px; margin: 0 0 4px; }
+    .meta { display: grid; grid-template-columns: 1fr 1fr; gap: 1px 8px; margin-bottom: 6px; }
+    .meta b { font-size: 12px; }
+    .meta span { color: #555; font-size: 9px; letter-spacing: 1px; text-transform: uppercase; }
+    .state { border: 2px solid #9e2020; color: #9e2020; font-weight: 800; text-align: center;
+             padding: 3px; margin: 4px 0; letter-spacing: 2px; border-radius: 4px; }
+    .phases { column-count: 2; column-gap: 10px; border-top: 1px solid #ddd; padding-top: 6px; }
+    .ph { break-inside: avoid; padding: 1.5px 0; color: #444; }
+    .ph .box { display: inline-block; width: 12px; height: 12px; border: 1.2px solid #888;
+               border-radius: 2px; text-align: center; line-height: 11px; font-size: 9px; margin-right: 3px; }
+    .ph .n { color: #999; font-size: 9px; }
+    .ph.done { color: #999; } .ph.done .box { border-color: #2e7d4f; color: #2e7d4f; }
+    .ph.cur { color: #9e2020; font-weight: 800; } .ph.cur .box { border-color: #9e2020; color: #9e2020; }
+    .ft { display: flex; align-items: center; gap: 8px; margin-top: 7px; border-top: 1px solid #ddd; padding-top: 6px; }
+    .ft img { width: 68px; height: 68px; }
+    .ft .note { font-size: 8.5px; color: #666; }
+  </style></head><body>
+    <div class="hd">BRIGHAM LARSON PIANOS<small>SHOP TAG · ${esc(new Date().toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'}))}</small></div>
+    <div class="bd">
+      <h1>${esc(nm)}</h1>
+      <div class="meta">
+        <div><span>Serial</span><br><b>${esc(p.serial || '—')}</b></div>
+        <div><span>Spot</span><br><b>${esc(p.location || '—')}</b></div>
+        <div><span>Owner</span><br><b>${esc((p.owner || '—').slice(0, 22))}</b></div>
+        <div><span>${p.queuePos ? 'Queue' : 'Type'}</span><br><b>${p.queuePos ? '#' + p.queuePos + ' of ' + p.queueTotal : esc(p.type || '—')}</b></div>
+      </div>
+      ${state}
+      <div class="phases">${rows}</div>
+      <div class="ft"><img src="${qr}" alt="QR">
+        <div class="note"><b>Scan for the Piano Log entry</b><br>
+        Live location + phase: blpstoremap.netlify.app<br>
+        Update the phase from the map’s data card.</div></div>
+    </div>
+    <script>onload = () => setTimeout(() => print(), 300)<\/script>
+  </body></html>`);
+  w.document.close();
 }
 
 // small red photo-camera glyph centred at (x,y), width ~s
@@ -741,6 +830,11 @@ function popHTML(p) {
             <button class="tunego">Schedule next open slot</button>
           </div><div class="tunemsg"></div>`)
     : '';
+  const photo = p.serial
+    ? `<button class="photobtn">📸 Add progress photo</button>
+       <input type="file" class="photoin" accept="image/*" capture="environment" hidden>
+       <div class="photomsg"></div>`
+    : '';
   const effPh = effectivePhase(p);
   const phaser = p.serial
     ? `<div class="row phrow">Shop phase
@@ -763,7 +857,13 @@ function popHTML(p) {
     ${mediaCard(p)}
     ${phaser}
     ${tuner}
+    ${photo}
     ${mover}
+    <div class="tagbtns">
+      ${priceLabel(p) ? `<a class="tagbtn" target="_blank" rel="noopener"
+        href="${priceTagUrl(p)}">🏷 Price tag ↗</a>` : ''}
+      ${p.serial ? `<button class="tagbtn shoptag">🖨 Shop tag</button>` : ''}
+    </div>
     <span class="btn">Open Piano Log ↗</span>`;
 }
 const fmtDay = iso => new Date(iso + 'T12:00')
@@ -797,6 +897,21 @@ function wirePop(p) {
     ps.onclick = ev => ev.stopPropagation();
     ps.onchange = () => setPhase(p, ps.value, pop);
   }
+  pop.querySelectorAll('.mmark').forEach(b => b.onclick = ev => {
+    ev.stopPropagation();
+    setMedia(p, b.dataset.f, pop);
+  });
+  const pb = pop.querySelector('.photobtn');
+  const pi = pop.querySelector('.photoin');
+  if (pb) pb.onclick = ev => { ev.stopPropagation(); popPinned = true; pi.click(); };
+  if (pi) {
+    pi.onclick = ev => ev.stopPropagation();
+    pi.onchange = () => uploadPhoto(p, pi, pop);
+  }
+  const st = pop.querySelector('.shoptag');
+  if (st) st.onclick = ev => { ev.stopPropagation(); printShopTag(p); };
+  const pt = pop.querySelector('.tagbtns a');
+  if (pt) pt.onclick = ev => ev.stopPropagation();
 }
 
 async function setPhase(p, phase, pop) {
@@ -822,7 +937,7 @@ async function setPhase(p, phase, pop) {
     const r = await fetch(BRIDGE_URL, {
       method: 'POST', redirect: 'follow',
       headers: {'content-type': 'text/plain;charset=utf-8'},
-      body: JSON.stringify({pin, serial: p.serial, action: 'setphase', phase, row: p.row}),
+      body: JSON.stringify({pin, serial: p.serial, action: 'setphase', phase, row: p.row, ...authFields()}),
     });
     const j = await r.json();
     if (j.error === 'unauthorized') {
@@ -846,6 +961,42 @@ async function setPhase(p, phase, pop) {
     if (sel) sel.disabled = false;
   }
 }
+// mark a media item done: optimistic (icon clears immediately), reverted
+// with a message if the bridge says no
+async function setMedia(p, field, pop) {
+  const msg = pop.querySelector('.mdmsg');
+  popPinned = true;
+  const pin = teamPin(false);
+  if (!pin) { msg.className = 'mdmsg err'; msg.textContent = 'A team PIN is required — nothing saved.'; return; }
+  p[field] = true;
+  const edit = pendingEdits.get(p.row) || {};
+  edit[field] = true; pendingEdits.set(p.row, edit);
+  renderMap(); renderKpis();
+  const btn = pop.querySelector(`.mmark[data-f="${field}"]`);
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+  try {
+    const r = await fetch(BRIDGE_URL, {
+      method: 'POST', redirect: 'follow',
+      headers: {'content-type': 'text/plain;charset=utf-8'},
+      body: JSON.stringify({pin, serial: p.serial, action: 'setmedia', field, row: p.row, ...authFields()}),
+    });
+    const j = await r.json();
+    if (j.ok) {
+      if (btn) btn.outerHTML = '<b class="myes">✓ have</b>';
+      msg.className = 'mdmsg ok'; msg.textContent = '✓ Saved to the Piano Log';
+    } else {
+      throw new Error(j.error === 'unauthorized' ? 'Wrong PIN' : (j.error || 'update failed'));
+    }
+  } catch (e) {
+    if (e.message === 'Wrong PIN') localStorage.removeItem('blpPin');
+    p[field] = false;
+    delete edit[field]; if (!Object.keys(edit).length) pendingEdits.delete(p.row);
+    if (btn) { btn.disabled = false; btn.textContent = '✗ needed — mark done'; }
+    msg.className = 'mdmsg err'; msg.textContent = '✗ ' + e.message + ' — not saved';
+    renderMap(); renderKpis();
+  }
+}
+
 function revertPhase(p, was, sel, edit) {
   p.phase = was;
   if (edit) { delete edit.phase; if (!Object.keys(edit).length) pendingEdits.delete(p.row); }
@@ -864,7 +1015,7 @@ async function requestTuning(p, pop) {
     const r = await fetch(BRIDGE_URL, {
       method: 'POST', redirect: 'follow',
       headers: {'content-type': 'text/plain;charset=utf-8'},
-      body: JSON.stringify({pin, serial: p.serial, action: 'tune', notes}),
+      body: JSON.stringify({pin, serial: p.serial, action: 'tune', notes, ...authFields()}),
     });
     const j = await r.json();
     if (j.error === 'unauthorized') {
@@ -888,6 +1039,61 @@ async function requestTuning(p, pop) {
   }
 }
 
+// one-tap progress photo: camera → downscale → the piano's Tech Drive folder
+// (named serial__phase__date so client updates can pull photos per stage)
+async function uploadPhoto(p, input, pop) {
+  const f = input.files && input.files[0];
+  if (!f) return;
+  const msg = pop.querySelector('.photomsg');
+  popPinned = true;
+  const pin = teamPin(false);
+  if (!pin) { msg.className = 'photomsg err'; msg.textContent = 'A team PIN is required — photo not sent.'; return; }
+  try {
+    msg.className = 'photomsg'; msg.textContent = 'Preparing photo…';
+    const dataUrl = await downscalePhoto(f, 1800, 0.85);
+    msg.textContent = 'Uploading to the piano’s Tech folder…';
+    const r = await fetch(BRIDGE_URL, {
+      method: 'POST', redirect: 'follow',
+      headers: {'content-type': 'text/plain;charset=utf-8'},
+      body: JSON.stringify({pin, action: 'photo', serial: p.serial, row: p.row,
+        stage: effectivePhase(p) || '', mime: 'image/jpeg',
+        data: dataUrl.split(',')[1], ...authFields()}),
+    });
+    const j = await r.json();
+    if (j.error === 'unauthorized') {
+      localStorage.removeItem('blpPin');
+      msg.className = 'photomsg err'; msg.textContent = '✗ Wrong PIN — tap the button to try again.';
+    } else if (j.error) {
+      msg.className = 'photomsg err'; msg.textContent = '✗ ' + j.error;
+    } else if (!j.saved) {
+      msg.className = 'photomsg err';
+      msg.textContent = '✗ The bridge needs an update — paste the repo’s DailyReport.gs into Apps Script and deploy a new version.';
+    } else {
+      msg.className = 'photomsg ok'; msg.textContent = `✓ Saved as ${j.name}`;
+    }
+  } catch (e) {
+    msg.className = 'photomsg err'; msg.textContent = '✗ ' + (e.message || e);
+  }
+  input.value = '';   // allow taking another photo right away
+}
+
+function downscalePhoto(file, maxDim, quality) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const sc = Math.min(1, maxDim / Math.max(img.width, img.height));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.width * sc); c.height = Math.round(img.height * sc);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      resolve(c.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('could not read image')); };
+    img.src = url;
+  });
+}
+
 function teamPin(forceAsk) {
   let pin = localStorage.getItem('blpPin') || '';
   if (!pin || forceAsk) {
@@ -896,6 +1102,78 @@ function teamPin(forceAsk) {
   }
   return pin;
 }
+
+/* ---------- Google sign-in (who-changed-what for the activity log) ------ */
+// The PIN stays the write gate; signing in just attaches a verified name to
+// every change. Tokens expire hourly, so GIS auto-refreshes on page load.
+function authUser() {
+  try { return JSON.parse(localStorage.getItem('blpUser') || 'null'); }
+  catch (e) { return null; }
+}
+// fields sent with every bridge write: fresh token when we have one,
+// plus name/email so attribution still works if the token just expired
+function authFields() {
+  const u = authUser();
+  if (!u) return {};
+  const out = {user: {name: u.name, email: u.email}};
+  if (u.exp * 1000 > Date.now() + 30000) out.idToken = u.tok;
+  return out;
+}
+function onGoogleCred(resp) {
+  try {
+    const claims = JSON.parse(atob(resp.credential.split('.')[1]
+      .replace(/-/g, '+').replace(/_/g, '/')));
+    localStorage.setItem('blpUser', JSON.stringify({
+      tok: resp.credential, exp: claims.exp,
+      name: claims.name || claims.email, email: claims.email, pic: claims.picture || '',
+    }));
+  } catch (e) { /* malformed credential — stay signed out */ }
+  renderAuth();
+}
+function signOut() {
+  localStorage.removeItem('blpUser');
+  if (window.google?.accounts?.id) google.accounts.id.disableAutoSelect();
+  renderAuth();
+}
+function renderAuth() {
+  const box = $('#authbox');
+  if (!box) return;
+  if (!GOOGLE_CLIENT_ID) { box.hidden = true; return; }
+  box.hidden = false;
+  const u = authUser();
+  if (u) {
+    box.innerHTML = `<b>Signed in</b>
+      <span class="authname">${u.pic ? `<img class="authpic" src="${esc(u.pic)}" alt="">` : '👤 '}${esc(u.name)}</span>
+      <button class="authout" id="authOut">sign out</button>`;
+    $('#authOut').onclick = signOut;
+  } else {
+    box.innerHTML = `<b>Team member</b>
+      <div class="authhint">Sign in so changes are logged under your name</div>
+      <div id="gsiBtn"></div>`;
+    if (window.google?.accounts?.id) {
+      google.accounts.id.renderButton($('#gsiBtn'),
+        {theme: 'outline', size: 'medium', text: 'signin_with', width: 190});
+    }
+  }
+}
+function initAuth() {
+  if (!GOOGLE_CLIENT_ID) { renderAuth(); return; }
+  const s = document.createElement('script');
+  s.src = 'https://accounts.google.com/gsi/client';
+  s.onload = () => {
+    google.accounts.id.initialize({
+      client_id: GOOGLE_CLIENT_ID, callback: onGoogleCred,
+      auto_select: true, use_fedcm_for_prompt: true,
+    });
+    renderAuth();
+    // silently refresh the hourly token for already-signed-in users
+    const u = authUser();
+    if (u && u.exp * 1000 < Date.now() + 600000) google.accounts.id.prompt();
+  };
+  document.head.appendChild(s);
+  renderAuth();
+}
+initAuth();
 
 async function movePiano(p, dest, pop) {
   const msg = pop.querySelector('.mvmsg');
@@ -910,7 +1188,7 @@ async function movePiano(p, dest, pop) {
     const r = await fetch(BRIDGE_URL, {
       method: 'POST', redirect: 'follow',
       headers: {'content-type': 'text/plain;charset=utf-8'},
-      body: JSON.stringify({pin, serial: p.serial, action: 'move', newLocation: dest, row: p.row}),
+      body: JSON.stringify({pin, serial: p.serial, action: 'move', newLocation: dest, row: p.row, ...authFields()}),
     });
     const j = await r.json();
     if (j.error === 'unauthorized') {
@@ -980,23 +1258,148 @@ function place(pop, el) {
   pop.style.left = x + 'px'; pop.style.top = y + 'px';
 }
 
-/* ---------- report ---------- */
-function renderReport() {
-  const un = unplaced(), du = duplicates();
-  $('#unplacedCount').textContent = un.length;
-  $('#dupCount').textContent = du.length;
-  $('#unplacedTable').innerHTML =
-    `<tr><th>PIANO</th><th>SERIAL</th><th>LOG SECTION</th><th>STATUS</th><th>COL U SAYS</th><th></th></tr>` +
+/* ---------- reports (accordion of printable reports) ---------- */
+// pianos that have arrived but carry no CURRENT PHASE at all
+function missingStage() {
+  return S.data.pianos.filter(p => p.active && !comingSoon(p) && !p.phase && !p.isNew);
+}
+function pianoName(p) {
+  return (p.year ? p.year + ' ' : '')
+    + ([p.make, p.model].filter(Boolean).join(' ') || p.summary || '');
+}
+function unplacedTable() {
+  const un = unplaced();
+  return `<table><tr><th>PIANO</th><th>SERIAL</th><th>LOG SECTION</th><th>STATUS</th><th>COL U SAYS</th><th></th></tr>` +
     (un.map(p => `<tr><td>${esc(p.summary)}</td><td>${esc(p.serial)}</td>
       <td>${esc((p.section || '—').slice(0, 38))}</td><td>${esc(p.status)}</td>
       <td class="locraw">${esc(p.location || '(blank)')}</td>
       <td><a target="_blank" rel="noopener" href="${logLink(p)}">open ↗</a></td></tr>`).join('')
-     || '<tr><td colspan="6" class="empty">None — every active piano has a valid map location. 🎉</td></tr>');
-  $('#dupTable').innerHTML =
-    `<tr><th>SLOT</th><th>PIANOS CLAIMING IT</th></tr>` +
+     || '<tr><td colspan="6" class="empty">None — every active piano has a valid map location. 🎉</td></tr>') + '</table>';
+}
+function dupTable() {
+  const du = duplicates();
+  return `<table><tr><th>SLOT</th><th>PIANOS CLAIMING IT</th></tr>` +
     (du.map(d => `<tr><td class="locraw">${esc(d.slot)}</td>
       <td>${d.pianos.map(p => esc(p.summary) + (p.serial ? ` (SN ${esc(p.serial)})` : '')).join(' &nbsp;•&nbsp; ')}</td></tr>`).join('')
-     || '<tr><td colspan="2" class="empty">No duplicate slot assignments. 🎉</td></tr>');
+     || '<tr><td colspan="2" class="empty">No duplicate slot assignments. 🎉</td></tr>') + '</table>';
+}
+function missingStageTable() {
+  const ms = missingStage();
+  return `<table><tr><th>PIANO</th><th>SERIAL</th><th>LOCATION</th><th>LOG SECTION</th><th></th></tr>` +
+    (ms.map(p => `<tr class="mrow" data-row="${p.row}"><td>${esc(pianoName(p))}</td>
+      <td>${esc(p.serial)}</td><td class="locraw">${esc(p.location || '(blank)')}</td>
+      <td>${esc((p.section || '—').slice(0, 38))}</td>
+      <td><a target="_blank" rel="noopener" href="${logLink(p)}">log ↗</a></td></tr>`).join('')
+     || '<tr><td colspan="5" class="empty">None — every arrived piano has a shop stage. 🎉</td></tr>') + '</table>';
+}
+function mediaTable() {
+  const act = S.data.pianos.filter(p => p.active)
+    .map(p => ({p, m: mediaNeeds(p)})).filter(x => x.m.photo || x.m.video);
+  const need = m => [m.needBP && 'before 📷', m.needBV && 'before 🎥',
+                     m.needAP && 'AFTER 📷', m.needAV && 'AFTER 🎥'].filter(Boolean).join(' · ');
+  return `<table><tr><th>PIANO</th><th>SERIAL</th><th>LOCATION</th><th>PHASE</th><th>STILL NEEDED</th><th></th></tr>` +
+    (act.map(({p, m}) => `<tr class="mrow" data-row="${p.row}"><td>${esc(pianoName(p))}</td>
+      <td>${esc(p.serial)}</td><td class="locraw">${esc(p.location || 'no spot')}</td>
+      <td>${esc(effectivePhase(p) || '—')}</td><td>${need(m)}</td>
+      <td><a target="_blank" rel="noopener" href="${logLink(p)}">log ↗</a></td></tr>`).join('')
+     || '<tr><td colspan="6" class="empty">Every active piano has its media. 🎉</td></tr>') + '</table>';
+}
+function activityTable(rows) {
+  if (!rows) return '<div class="empty">Loading the activity log…</div>';
+  return `<table><tr><th>WHEN</th><th>WHO</th><th>ACTION</th><th>PIANO</th><th>DETAILS</th></tr>` +
+    (rows.map(r => `<tr><td style="white-space:nowrap">${esc(r[0])}</td><td>${esc(r[1])}</td>
+      <td>${esc(r[2])}</td><td>${esc(r[3])}</td><td>${esc(r[4])}</td></tr>`).join('')
+     || '<tr><td colspan="5" class="empty">No activity yet — changes made in the map will appear here.</td></tr>') + '</table>';
+}
+
+const REPORT_DEFS = () => [
+  {id: 'unplaced', icon: '⚠️', title: 'UNPLACED PIANOS', count: unplaced().length,
+   desc: 'Active pianos whose Piano Log location (column U) is empty or doesn’t match any spot or known area.',
+   html: unplacedTable},
+  {id: 'dups', icon: '🔁', title: 'DUPLICATE SPOT NUMBERS', count: duplicates().length,
+   desc: 'Two or more active pianos claim the same map spot — one of them is wrong.',
+   html: dupTable},
+  {id: 'stage', icon: '🔧', title: 'MISSING SHOP STAGE', count: missingStage().length,
+   desc: 'Arrived pianos with no CURRENT PHASE in the Piano Log. Click a row to jump to the piano.',
+   html: missingStageTable},
+  {id: 'media', icon: '📸', title: 'MEDIA NEEDED', count: S.data.pianos.filter(p =>
+     p.active && (mediaNeeds(p).photo || mediaNeeds(p).video)).length,
+   desc: 'Before photos/video for every active piano; after photos/video once it reaches Tuning or later.',
+   html: mediaTable},
+  {id: 'activity', icon: '📝', title: 'ACTIVITY LOG', count: null,
+   desc: 'Who changed what — every move, phase change, media checkoff, and tuning request made through the map.',
+   html: () => activityTable(S.activityRows)},
+];
+
+function renderReport() {
+  const body = $('#reportsBody');
+  if (!body) return;
+  const open = S.openReport;
+  body.innerHTML = REPORT_DEFS().map(r => `
+    <div class="rpt ${open === r.id ? 'open' : ''}" data-r="${r.id}">
+      <button class="rptbtn">
+        <span class="ric">${r.icon}</span><span class="rtitle">${r.title}</span>
+        ${r.count != null ? `<span class="pc ${r.count ? '' : 'zero'}">${r.count}</span>` : ''}
+        <span class="chev">${open === r.id ? '▾' : '▸'}</span>
+      </button>
+      <div class="rptbody" ${open === r.id ? '' : 'hidden'}>
+        <div class="rpthead"><p class="pd">${r.desc}</p>
+          <button class="printbtn" data-r="${r.id}">🖨 Print</button></div>
+        <div class="tscroll">${open === r.id ? r.html() : ''}</div>
+      </div>
+    </div>`).join('');
+  body.querySelectorAll('.rptbtn').forEach(b => b.onclick = () => {
+    const id = b.closest('.rpt').dataset.r;
+    S.openReport = S.openReport === id ? null : id;
+    if (S.openReport === 'activity' && !S.activityRows) loadActivity();
+    renderReport();
+  });
+  body.querySelectorAll('.printbtn').forEach(b => b.onclick = ev => {
+    ev.stopPropagation();
+    const def = REPORT_DEFS().find(r => r.id === b.dataset.r);
+    printReport(def.icon + ' ' + def.title, def.html());
+  });
+  body.querySelectorAll('.mrow').forEach(tr => tr.onclick = ev => {
+    if (ev.target.closest('a')) return;
+    const p = S.data.pianos.find(x => x.row === +tr.dataset.row);
+    if (p) focusPiano(p);
+  });
+}
+
+async function loadActivity() {
+  try {
+    const r = await fetch(BRIDGE_URL + '?fn=activity', {redirect: 'follow'});
+    const j = await r.json();
+    S.activityRows = j.rows || [];
+  } catch (e) { S.activityRows = []; }
+  renderReport();
+}
+
+// clean printable copy: BLP letterhead + the report table, then print()
+function printReport(title, html) {
+  const day = new Date().toLocaleDateString('en-US',
+    {weekday: 'long', month: 'long', day: 'numeric', year: 'numeric'});
+  const w = window.open('', '_blank');
+  if (!w) { alert('Pop-up blocked — allow pop-ups to print reports.'); return; }
+  w.document.write(`<!doctype html><html><head><title>${esc(title)}</title><style>
+    body { font: 12px/1.45 Helvetica, Arial, sans-serif; color: #121212; margin: 28px; }
+    .hd { border-bottom: 3px solid #0d0d0d; padding-bottom: 10px; margin-bottom: 14px; }
+    .brand { font-family: Georgia, serif; letter-spacing: 4px; font-size: 17px; }
+    .sub { font-size: 10px; letter-spacing: 2px; color: #777; margin-top: 3px; }
+    table { width: 100%; border-collapse: collapse; }
+    th { text-align: left; font-size: 9px; letter-spacing: 1px; color: #777;
+         border-bottom: 2px solid #ccc; padding: 4px 8px 4px 0; }
+    td { border-bottom: 1px solid #eee; padding: 5px 8px 5px 0; vertical-align: top; }
+    a { color: inherit; text-decoration: none; }
+    .empty { color: #777; }
+    @media print { .noprint { display: none; } }
+  </style></head><body>
+    <div class="hd"><div class="brand">BRIGHAM LARSON PIANOS</div>
+    <div class="sub">${esc(title)} · ${esc(day)} · blpstoremap.netlify.app</div></div>
+    ${html}
+    <script>onload = () => setTimeout(() => print(), 250)<\/script>
+  </body></html>`);
+  w.document.close();
 }
 
 /* ---------- media report ---------- */

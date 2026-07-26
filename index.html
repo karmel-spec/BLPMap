@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Store Map — Brigham Larson Pianos</title>
 <link rel="icon" href="assets/blp-logo.png">
-<link rel="stylesheet" href="styles.css?v=28">
+<link rel="stylesheet" href="styles.css?v=30">
 </head>
 <body>
 
@@ -34,6 +34,7 @@
       <span id="crewMoves" class="crewmoves">— Moves Today</span>
       <b style="margin-top:10px">Synced</b><span id="synced">loading…</span>
     </div>
+    <div class="authbox" id="authbox" hidden></div>
   </nav>
   <div class="scrim" id="scrim"></div>
 
@@ -82,14 +83,9 @@
 
   <div class="view panelview" id="view-report" hidden>
     <div class="panel">
-      <h2 class="ph">⚠️ UNPLACED PIANOS <span class="pc" id="unplacedCount"></span></h2>
-      <p class="pd">Active pianos whose Piano Log “Location / Status” (column U) is empty or doesn’t match any spot on the Store Map or a known named area. Hunt them down and give them a number.</p>
-      <div class="tscroll"><table id="unplacedTable"></table></div>
-    </div>
-    <div class="panel">
-      <h2 class="ph">🔁 DUPLICATE SPOT NUMBERS <span class="pc" id="dupCount"></span></h2>
-      <p class="pd">Two or more active pianos claim the same map spot — one of them is wrong.</p>
-      <div class="tscroll"><table id="dupTable"></table></div>
+      <h2 class="ph">📋 REPORTS</h2>
+      <p class="pd">Click a report to expand it. Every report has a Print button for a clean printable copy.</p>
+      <div id="reportsBody"></div>
     </div>
   </div>
 
@@ -121,6 +117,6 @@
   </div>
 </div>
 
-<script src="app.js?v=29"></script>
+<script src="app.js?v=30"></script>
 </body>
 </html>

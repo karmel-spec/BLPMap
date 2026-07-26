@@ -20,8 +20,15 @@ var REPORT_TO = 'info@brighamlarsonpianos.com';
 var PIANO_LOG_ID = '1ZunbPKygpQlcXfTyPowDHdUE9spJ3uV1XA4iX1eoKRc';
 var BRIDGE_SECRET = 'PASTE_SECRET_HERE';   // server-to-server auth (optional)
 var TEAM_PIN = 'PASTE_PIN_HERE';           // what BLP team members type to move pianos
+var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
+var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
 var MOVING_ICS = 'PASTE_ICS_URL_HERE';     // the moving calendar's SECRET iCal address
 var TUNING_CAL = 'korbangreenhalgh.blp@gmail.com';  // 09-Korban Greenhalgh
+// every calendar scanned for scheduled/past tunings (requests still go to Korban's)
+var TUNING_CALS = [TUNING_CAL, 'pianotuning.blp@gmail.com'];
+// OAuth web client for "Sign in with Google" in the map app — used only to
+// verify who made a change for the activity log. Client IDs are public.
+var GOOGLE_CLIENT_ID = '118454775893-17u7t3glh8eu4kffhe7b42jl71apre4f.apps.googleusercontent.com';
 var TUNING_SLOTS = [8, 10];                // weekday tuning start hours (Denver)
 var TUNING_MINUTES = 90;                   // block length, matches Korban's bookings
 var KNOWN_AREAS = ['showroom', 'pre-sale showroom', 'third floor', 'storage',
@@ -79,35 +86,46 @@ function doGet(e) {
     try { return json_(tunings_()); }
     catch (err) { return json_({error: String(err), upcoming: [], past: []}); }
   }
+  if (e && e.parameter && e.parameter.fn === 'activity') {
+    try { return json_(activity_()); }
+    catch (err) { return json_({error: String(err), rows: []}); }
+  }
   return json_({ok: true, service: 'BLP Store Map bridge'});
 }
 
 /**
- * Tuning feature — Korban's calendar (TUNING_CAL, shared with this
- * script's owner). ?fn=tunings returns compact upcoming/past event lists
- * (only events whose titles contain a 5+ digit run, i.e. a serial) so the
- * map can color scheduled pianos and show "last tuned". 30-min cache.
+ * Tuning feature — scans every calendar in TUNING_CALS (Korban's and the
+ * pianotuning.blp account, both shared with this script's owner).
+ * ?fn=tunings returns compact upcoming/past event lists (only events whose
+ * titles contain a 5+ digit run, i.e. a serial) so the map can color
+ * scheduled pianos and show "last tuned". 30-min cache.
  */
 function tunings_() {
   var cache = CacheService.getScriptCache();
   var hit = cache.get('tunings');
   if (hit) return JSON.parse(hit);
   var tz = 'America/Denver';
-  var cal = CalendarApp.getCalendarById(TUNING_CAL);
-  if (!cal) return {error: 'tuning calendar not shared with ' + Session.getEffectiveUser(), upcoming: [], past: []};
   var now = new Date();
-  var past = [], upcoming = [];
-  var evs = cal.getEvents(new Date(now.getTime() - 540 * 86400000),
-                          new Date(now.getTime() + 60 * 86400000));
-  for (var i = 0; i < evs.length; i++) {
-    var t = evs[i].getTitle() || '';
-    if (!/\d{5,}/.test(t)) continue;   // only piano-ish events (serial in title)
-    var st = evs[i].getStartTime();
-    var rec = [Utilities.formatDate(st, tz, 'yyyy-MM-dd'),
-               Utilities.formatDate(st, tz, 'HH:mm'),
-               t.slice(0, 70)];
-    (st < now ? past : upcoming).push(rec);
+  var past = [], upcoming = [], seenCal = 0;
+  for (var c = 0; c < TUNING_CALS.length; c++) {
+    var cal = CalendarApp.getCalendarById(TUNING_CALS[c]);
+    if (!cal) continue;
+    seenCal++;
+    var evs = cal.getEvents(new Date(now.getTime() - 540 * 86400000),
+                            new Date(now.getTime() + 60 * 86400000));
+    for (var i = 0; i < evs.length; i++) {
+      var t = evs[i].getTitle() || '';
+      if (!/\d{5,}/.test(t)) continue;   // only piano-ish events (serial in title)
+      var st = evs[i].getStartTime();
+      var rec = [Utilities.formatDate(st, tz, 'yyyy-MM-dd'),
+                 Utilities.formatDate(st, tz, 'HH:mm'),
+                 t.slice(0, 70)];
+      (st < now ? past : upcoming).push(rec);
+    }
   }
+  if (!seenCal) return {error: 'no tuning calendar shared with ' + Session.getEffectiveUser(), upcoming: [], past: []};
+  var bySt = function (a, b) { return (a[0] + a[1]) < (b[0] + b[1]) ? -1 : 1; };
+  past.sort(bySt); upcoming.sort(bySt);
   var out = {upcoming: upcoming, past: past.slice(-800)};
   try { cache.put('tunings', JSON.stringify(out), 1800); } catch (ig) {}
   return out;
@@ -240,8 +258,30 @@ function doPost(e) {
     if (req.secret !== BRIDGE_SECRET && req.pin !== TEAM_PIN) {
       return json_({error: 'unauthorized'});
     }
-    if (req.action === 'tune') return json_(scheduleTuning_(req));
-    if (req.action === 'setphase') return json_(setPhase_(req));
+    var who = who_(req);
+    if (req.action === 'tune') {
+      var t = scheduleTuning_(req);
+      if (t.scheduled) logAct_(who, 'Tuning scheduled', t.summary || req.serial,
+        (t.date || '') + ' ' + (t.time || ''));
+      return json_(t);
+    }
+    if (req.action === 'setphase') {
+      var ph = setPhase_(req);
+      if (ph.ok) logAct_(who, 'Phase change', ph.summary || req.serial,
+        (ph.previous || '(none)') + ' → ' + (ph.phase || '(none)'));
+      return json_(ph);
+    }
+    if (req.action === 'setmedia') {
+      var md = setMedia_(req, who);
+      if (md.ok && md.detail) logAct_(who, 'Media done', md.summary || req.serial, md.detail);
+      return json_(md);
+    }
+    if (req.action === 'photo') {
+      var pt = savePhoto_(req, who);
+      if (pt.saved) logAct_(who, 'Progress photo', pt.summary || req.serial,
+        (req.stage || '(no phase)') + ' → ' + pt.name);
+      return json_(pt);
+    }
     var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
     var last = sh.getLastRow();
     var serials = sh.getRange(1, 3, last, 1).getValues();  // col C
@@ -266,6 +306,8 @@ function doPost(e) {
     var current = String(sh.getRange(row, 21).getValue() || '');
     if (req.action === 'move' && req.newLocation != null && String(req.newLocation).trim()) {
       sh.getRange(row, 21).setValue(String(req.newLocation).trim());
+      logAct_(who, 'Moved', summary || req.serial,
+        (current || '(blank)') + ' → ' + String(req.newLocation).trim());
       return json_({ok: true, moved: true, row: row, summary: summary,
                     previous: current, location: String(req.newLocation).trim()});
     }
@@ -273,6 +315,95 @@ function doPost(e) {
   } catch (err) {
     return json_({error: String(err)});
   }
+}
+
+/* ---------- progress photos (one-tap capture from the Store Map) ---------- */
+// Save a phone photo into the piano's existing "Tech" Drive subfolder, named
+// by serial + current phase + date, and record it on the PHOTO LOG tab so
+// client-update drafts can pull "photos for this stage" later.
+function savePhoto_(req, who) {
+  if (!req.data) return {error: 'no image data'};
+  var ss = SpreadsheetApp.openById(PIANO_LOG_ID);
+  var sh = pianoSheet_(ss);
+  var found = findPiano_(sh, req.serial, req.row);
+  if (found.error) return found;
+  var serial = String(req.serial || '').trim();
+  var tech = techFolderFor_(sh, found.row, serial);
+  if (!tech) return {error: 'no Drive folder found for this piano — add its link to the Main Folder column in the Piano Log'};
+
+  var stageSlug = String(req.stage || '').replace(/[^\w &-]+/g, '').trim()
+                    .replace(/\s+/g, '-') || 'no-phase';
+  var day = Utilities.formatDate(new Date(), 'America/Denver', 'yyyy-MM-dd');
+  var prefix = serial + '__' + stageSlug + '__' + day;
+  var n = 1, it = tech.getFiles();
+  while (it.hasNext()) { if (it.next().getName().indexOf(prefix) === 0) n++; }
+  var name = prefix + '__' + n + (String(req.mime || '') === 'image/png' ? '.png' : '.jpg');
+
+  var blob = Utilities.newBlob(Utilities.base64Decode(String(req.data)),
+                               String(req.mime || 'image/jpeg'), name);
+  var file = tech.createFile(blob);
+
+  var log = ss.getSheetByName(PHOTO_LOG_TAB);
+  if (!log) {
+    log = ss.insertSheet(PHOTO_LOG_TAB);
+    log.appendRow(['When', 'Serial', 'Piano', 'Stage', 'By', 'File', 'Link']);
+    log.setFrozenRows(1);
+  }
+  log.appendRow([new Date(), serial, found.summary || '', String(req.stage || ''),
+                 who, name, file.getUrl()]);
+  return {ok: true, saved: true, name: name, link: file.getUrl(),
+          folder: tech.getName(), summary: found.summary};
+}
+
+// Resolve the piano's "Tech" photos subfolder. Prefers the Main Folder link on
+// the piano's row (located by header text, so the column can move); falls back
+// to searching the photos root tree for a folder whose name carries the serial.
+function techFolderFor_(sh, row, serial) {
+  var folder = null;
+  var hdr = sh.getRange(2, 1, 1, sh.getLastColumn()).getValues()[0];
+  for (var i = 0; i < hdr.length; i++) {
+    if (String(hdr[i] || '').trim().toUpperCase() === 'MAIN FOLDER') {
+      var link = String(sh.getRange(row, i + 1).getValue() || '');
+      var m = /folders\/([A-Za-z0-9_-]+)/.exec(link);
+      if (m) { try { folder = DriveApp.getFolderById(m[1]); } catch (e) {} }
+      break;
+    }
+  }
+  // the link may point at the make-level folder — descend to the serial folder
+  if (folder && folder.getName().indexOf(serial) < 0) {
+    var kids = folder.getFolders();
+    while (kids.hasNext()) {
+      var k = kids.next();
+      if (k.getName().indexOf(serial) >= 0) { folder = k; break; }
+    }
+  }
+  if (!folder && serial) {
+    var q = DriveApp.searchFolders('title contains ' + JSON.stringify(serial));
+    while (q.hasNext()) {
+      var cand = q.next();
+      if (underRoot_(cand)) { folder = cand; break; }
+      if (!folder) folder = cand;   // fallback: any match
+    }
+  }
+  if (!folder) return null;
+  var subs = folder.getFolders();
+  while (subs.hasNext()) {
+    var s = subs.next();
+    if (/^tech/i.test(s.getName())) return s;
+  }
+  return folder.createFolder('Tech');
+}
+
+function underRoot_(folder) {
+  try {
+    var seen = 0, p = folder.getParents();
+    while (p.hasNext() && seen++ < 6) {
+      var par = p.next();
+      if (par.getId() === PHOTOS_ROOT_ID) return true;
+      p = par.getParents();
+    }
+  } catch (e) {}
+  return false;
 }
 
 function pianoSheet_(ss) {
@@ -413,7 +544,7 @@ function authorizeCalendar() {
 var PHASE_HEADER = 'CURRENT PHASE';
 var PHASE_VALUES = ['New Arrival', 'Assessment', 'Teardown', 'PRSB', 'CAP',
   'Refinishing', 'Final Assembly', 'DHRT', 'Tuning', 'QC',
-  'Admin Exit Prep', 'Delivered', 'In Queue', 'Paused'];
+  'Admin Exit Prep', 'Delivered', 'In Queue', 'Paused', 'For Sale'];
 
 function phaseCol_(sh) {
   var last = sh.getLastColumn();
@@ -436,4 +567,96 @@ function setPhase_(req) {
   sh.getRange(found.row, col).setValue(phase);
   return {ok: true, row: found.row, summary: found.summary,
           previous: prev, phase: phase};
+}
+
+/**
+ * Who made this change — for the ACTIVITY LOG sheet. If the request carries
+ * a Google ID token (from "Sign in with Google" in the map app) it is
+ * verified against Google's tokeninfo endpoint; otherwise the unverified
+ * display name the app sent is used, and failing that just "Team (PIN)".
+ */
+function who_(req) {
+  var g = verifyGoogle_(req.idToken);
+  if (g) return (g.name || g.email) + (g.email ? ' <' + g.email + '>' : '');
+  if (req.user && (req.user.name || req.user.email)) {
+    return String(req.user.name || req.user.email).slice(0, 60) + ' (session expired — unverified)';
+  }
+  return 'Team (PIN)';
+}
+
+function verifyGoogle_(tok) {
+  if (!tok) return null;
+  try {
+    var r = UrlFetchApp.fetch(
+      'https://oauth2.googleapis.com/tokeninfo?id_token=' + encodeURIComponent(tok),
+      {muteHttpExceptions: true});
+    if (r.getResponseCode() !== 200) return null;
+    var j = JSON.parse(r.getContentText());
+    if (GOOGLE_CLIENT_ID.indexOf('PASTE') < 0 && j.aud !== GOOGLE_CLIENT_ID) return null;
+    if (Number(j.exp) * 1000 < Date.now()) return null;
+    return {email: j.email || '', name: j.name || ''};
+  } catch (err) { return null; }
+}
+
+/**
+ * Activity log — every write through this bridge is appended to an
+ * "ACTIVITY LOG" tab in the Piano Log spreadsheet (created on first use).
+ * ?fn=activity returns the most recent 300 entries, newest first.
+ */
+function logAct_(who, action, piano, detail) {
+  try {
+    var ss = SpreadsheetApp.openById(PIANO_LOG_ID);
+    var sh = ss.getSheetByName('ACTIVITY LOG');
+    if (!sh) {
+      sh = ss.insertSheet('ACTIVITY LOG');
+      sh.appendRow(['When', 'Who', 'Action', 'Piano', 'Details']);
+      sh.setFrozenRows(1);
+    }
+    sh.appendRow([new Date(), String(who || ''), String(action || ''),
+                  String(piano || ''), String(detail || '')]);
+  } catch (err) { /* logging must never break the write itself */ }
+}
+
+function activity_() {
+  var ss = SpreadsheetApp.openById(PIANO_LOG_ID);
+  var sh = ss.getSheetByName('ACTIVITY LOG');
+  if (!sh || sh.getLastRow() < 2) return {rows: []};
+  var n = Math.min(sh.getLastRow() - 1, 300);
+  var vals = sh.getRange(sh.getLastRow() - n + 1, 1, n, 5).getValues();
+  var tz = 'America/Denver';
+  return {rows: vals.map(function (r) {
+    return [r[0] instanceof Date ? Utilities.formatDate(r[0], tz, 'MMM d, yyyy h:mm a') : String(r[0]),
+            String(r[1]), String(r[2]), String(r[3]), String(r[4])];
+  }).reverse()};
+}
+
+/**
+ * Media checkoffs — "photos taken" / "video made" from the map's data card.
+ * Writes a dated ✓ stamp into the Piano Log's media columns
+ * (N=before photos, P=after photos, Q=before video, R=after video).
+ * One-way on purpose: it never overwrites a non-empty cell (those often
+ * hold real links), so un-marking is done in the spreadsheet itself.
+ */
+var MEDIA_COLS = {bphoto: 14, aphoto: 16, bvideo: 17, avideo: 18};
+var MEDIA_NAMES = {bphoto: 'before photos', aphoto: 'after photos',
+                   bvideo: 'before video', avideo: 'after video'};
+
+function setMedia_(req, who) {
+  var col = MEDIA_COLS[req.field];
+  if (!col) return {error: 'unknown media field: ' + req.field};
+  var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+  var found = findPiano_(sh, req.serial, req.row);
+  if (found.error) return found;
+  var cell = sh.getRange(found.row, col);
+  var prev = String(cell.getValue() || '').trim();
+  if (prev) {   // already has a link/note — nothing to do, but not an error
+    return {ok: true, row: found.row, summary: found.summary,
+            field: req.field, already: true};
+  }
+  var stamp = '✓ ' + Utilities.formatDate(new Date(), 'America/Denver', 'MMM d, yyyy');
+  var name = String(who || '').replace(/\s*<[^>]*>\s*/, '').replace(/\s*\(.*\)\s*$/, '');
+  if (name && name !== 'Team (PIN)') stamp += ' — ' + name;
+  cell.setValue(stamp);
+  return {ok: true, row: found.row, summary: found.summary, field: req.field,
+          detail: MEDIA_NAMES[req.field] + ' marked done'};
 }

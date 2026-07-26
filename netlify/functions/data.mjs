@@ -173,10 +173,16 @@ function crewToday(events) {
 }
 
 /* ---------- handler ---------- */
+// CORS open for reads: the BLP Shop app (blpshop.netlify.app) pulls live
+// phases from here so both apps agree on every piano's stage
+const CORS = { 'access-control-allow-origin': '*' };
+const jsonRes = (body, init = {}) =>
+  Response.json(body, { ...init, headers: { ...CORS, ...(init.headers || {}) } });
+
 export default async () => {
   const now = Date.now();
   if (cache.payload && now - cache.at < CACHE_MS) {
-    return Response.json({ ...cache.payload, cached: true });
+    return jsonRes({ ...cache.payload, cached: true });
   }
   try {
     const csv = await (await fetch(PIANO_LOG_CSV)).text();
@@ -202,10 +208,10 @@ export default async () => {
       stale: false, calendarConfigured: events.length > 0 || !!icsUrl,
     };
     cache = { at: now, payload };
-    return Response.json(payload);
+    return jsonRes(payload);
   } catch (err) {
-    if (cache.payload) return Response.json({ ...cache.payload, stale: true });
-    return Response.json({ error: String(err), pianos: [], events: [], crew: [] },
+    if (cache.payload) return jsonRes({ ...cache.payload, stale: true });
+    return jsonRes({ error: String(err), pianos: [], events: [], crew: [] },
       { status: 502 });
   }
 };
