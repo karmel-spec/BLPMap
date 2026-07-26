@@ -1,0 +1,94 @@
+
+
+/* ======== PROGRESS PHOTOS ADD-ON (paste at the very bottom) ======== */
+var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
+var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
+
+/* ---------- progress photos (one-tap capture from the Store Map) ---------- */
+// Save a phone photo into the piano's existing "Tech" Drive subfolder, named
+// by serial + current phase + date, and record it on the PHOTO LOG tab so
+// client-update drafts can pull "photos for this stage" later.
+function savePhoto_(req, who) {
+  if (!req.data) return {error: 'no image data'};
+  var ss = SpreadsheetApp.openById(PIANO_LOG_ID);
+  var sh = pianoSheet_(ss);
+  var found = findPiano_(sh, req.serial, req.row);
+  if (found.error) return found;
+  var serial = String(req.serial || '').trim();
+  var tech = techFolderFor_(sh, found.row, serial);
+  if (!tech) return {error: 'no Drive folder found for this piano — add its link to the Main Folder column in the Piano Log'};
+
+  var stageSlug = String(req.stage || '').replace(/[^\w &-]+/g, '').trim()
+                    .replace(/\s+/g, '-') || 'no-phase';
+  var day = Utilities.formatDate(new Date(), 'America/Denver', 'yyyy-MM-dd');
+  var prefix = serial + '__' + stageSlug + '__' + day;
+  var n = 1, it = tech.getFiles();
+  while (it.hasNext()) { if (it.next().getName().indexOf(prefix) === 0) n++; }
+  var name = prefix + '__' + n + (String(req.mime || '') === 'image/png' ? '.png' : '.jpg');
+
+  var blob = Utilities.newBlob(Utilities.base64Decode(String(req.data)),
+                               String(req.mime || 'image/jpeg'), name);
+  var file = tech.createFile(blob);
+
+  var log = ss.getSheetByName(PHOTO_LOG_TAB);
+  if (!log) {
+    log = ss.insertSheet(PHOTO_LOG_TAB);
+    log.appendRow(['When', 'Serial', 'Piano', 'Stage', 'By', 'File', 'Link']);
+    log.setFrozenRows(1);
+  }
+  log.appendRow([new Date(), serial, found.summary || '', String(req.stage || ''),
+                 who, name, file.getUrl()]);
+  return {ok: true, saved: true, name: name, link: file.getUrl(),
+          folder: tech.getName(), summary: found.summary};
+}
+
+// Resolve the piano's "Tech" photos subfolder. Prefers the Main Folder link on
+// the piano's row (located by header text, so the column can move); falls back
+// to searching the photos root tree for a folder whose name carries the serial.
+function techFolderFor_(sh, row, serial) {
+  var folder = null;
+  var hdr = sh.getRange(2, 1, 1, sh.getLastColumn()).getValues()[0];
+  for (var i = 0; i < hdr.length; i++) {
+    if (String(hdr[i] || '').trim().toUpperCase() === 'MAIN FOLDER') {
+      var link = String(sh.getRange(row, i + 1).getValue() || '');
+      var m = /folders\/([A-Za-z0-9_-]+)/.exec(link);
+      if (m) { try { folder = DriveApp.getFolderById(m[1]); } catch (e) {} }
+      break;
+    }
+  }
+  // the link may point at the make-level folder — descend to the serial folder
+  if (folder && folder.getName().indexOf(serial) < 0) {
+    var kids = folder.getFolders();
+    while (kids.hasNext()) {
+      var k = kids.next();
+      if (k.getName().indexOf(serial) >= 0) { folder = k; break; }
+    }
+  }
+  if (!folder && serial) {
+    var q = DriveApp.searchFolders('title contains ' + JSON.stringify(serial));
+    while (q.hasNext()) {
+      var cand = q.next();
+      if (underRoot_(cand)) { folder = cand; break; }
+      if (!folder) folder = cand;   // fallback: any match
+    }
+  }
+  if (!folder) return null;
+  var subs = folder.getFolders();
+  while (subs.hasNext()) {
+    var s = subs.next();
+    if (/^tech/i.test(s.getName())) return s;
+  }
+  return folder.createFolder('Tech');
+}
+
+function underRoot_(folder) {
+  try {
+    var seen = 0, p = folder.getParents();
+    while (p.hasNext() && seen++ < 6) {
+      var par = p.next();
+      if (par.getId() === PHOTOS_ROOT_ID) return true;
+      p = par.getParents();
+    }
+  } catch (e) {}
+  return false;
+}

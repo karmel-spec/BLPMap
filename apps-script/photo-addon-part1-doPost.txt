@@ -1,0 +1,6 @@
+    if (req.action === 'photo') {
+      var pt = savePhoto_(req, who);
+      if (pt.saved) logAct_(who, 'Progress photo', pt.summary || req.serial,
+        (req.stage || '(no phase)') + ' → ' + pt.name);
+      return json_(pt);
+    }
