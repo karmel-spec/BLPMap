@@ -30,10 +30,19 @@ var MASTER_TUNING_CAL = 'pianotuning.blp@gmail.com';
 // every calendar scanned for scheduled/past tunings
 var TUNING_CALS = [TUNING_CAL, MASTER_TUNING_CAL];
 var TECH_WORK_START = 8, TECH_WORK_END = 16;   // non-Korban techs: 8am-4pm gap search
+// the tuning-request dropdown (Brigham-approved list, Korban default).
+// Calendar id doubles as the invite email.
+var TUNING_TECHS = [
+  {id: TUNING_CAL, name: 'Korban Greenhalgh'},
+  {id: 'curtisbiggs.blp@gmail.com', name: 'Curtis Biggs'},
+  {id: 'jakepulver.blp@gmail.com', name: 'Jake Pulver'},
+  {id: 'mckinlylopp.blp@gmail.com', name: 'McKinly Lopp'},
+  {id: 'matthewwessman.blp@gmail.com', name: 'Matthew Wessman'},
+];
 // OAuth web client for "Sign in with Google" in the map app — used only to
 // verify who made a change for the activity log. Client IDs are public.
 var GOOGLE_CLIENT_ID = '110628682621-v65mkaoanv87sp75ggdfcrglfr7bkr8p.apps.googleusercontent.com';
-var TUNING_SLOTS = [8, 10];                // weekday tuning start hours (Denver)
+var TUNING_SLOTS = [8, 9.5];               // Korban's weekday starts: 8:00 + 9:30 (Denver)
 var TUNING_MINUTES = 90;                   // block length, matches Korban's bookings
 var KNOWN_AREAS = ['showroom', 'pre-sale showroom', 'third floor', 'storage',
   'shop', 'vestibule', 'wing room', 'holding room', 'attic', 'sold floor',
@@ -151,15 +160,20 @@ function tunings_() {
 function scheduleTuning_(req) {
   var tz = 'America/Denver';
   var techId = String(req.techId || TUNING_CAL).trim();
-  var cal = CalendarApp.getCalendarById(techId);
-  if (!cal) return {error: 'that calendar is not shared with ' + Session.getEffectiveUser() + ': ' + techId};
+  var master = CalendarApp.getCalendarById(MASTER_TUNING_CAL);
+  if (!master) return {error: 'the master tuning calendar is not shared with ' + Session.getEffectiveUser()};
+  // availability is read from the technician's own calendar; if theirs
+  // isn't shared with this account yet, the master calendar stands in
+  var techCal = CalendarApp.getCalendarById(techId);
+  var searchCal = techCal || master;
   var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
   var found = findPiano_(sh, req.serial, req.row);
   if (found.error) return found;
-  var techName = String(req.techName || cal.getName()).replace(/^\d+\s*-\s*/, '').trim();
+  var techName = String(req.techName || (techCal ? techCal.getName() : techId))
+    .replace(/^\d+\s*-\s*/, '').trim();
   var title = 'Tuning: ' + (found.summary || 'piano') + ' SN ' + req.serial
     + (found.location ? ' @ spot ' + found.location : '');
-  var slot = techId === TUNING_CAL ? korbanSlot_(cal, tz) : openGap_(cal, tz, techName);
+  var slot = techId === TUNING_CAL ? korbanSlot_(searchCal, tz) : openGap_(searchCal, tz, techName);
   if (!slot) return {error: 'no open slot found on ' + techName + "'s calendar in the next 6 weeks"};
   var desc = 'Requested via BLP Store Map ('
     + Utilities.formatDate(new Date(), tz, 'MMM d, h:mm a') + ')'
@@ -173,12 +187,11 @@ function scheduleTuning_(req) {
   desc += '\n\nPiano Log: https://pianologapp.netlify.app/#piano=' +
     encodeURIComponent(req.serial);
   if (!req.dryrun) {
-    cal.createEvent(title, slot.start, slot.end, {description: desc});
-    if (techId !== MASTER_TUNING_CAL) {
-      var master = CalendarApp.getCalendarById(MASTER_TUNING_CAL);
-      if (master) master.createEvent(title + ' — ' + techName, slot.start, slot.end,
-                                     {description: desc});
-    }
+    // the master tuning calendar is the record: the event is created THERE
+    // first, and the technician is invited to it (it lands on their own
+    // calendar as an invitation)
+    master.createEvent(title + ' — ' + techName, slot.start, slot.end,
+      {description: desc, guests: techId, sendInvites: true});
     try { CacheService.getScriptCache().remove('tunings'); } catch (ig) {}
   }
   return {ok: true, scheduled: true, dryrun: !!req.dryrun, tech: techName,
@@ -203,7 +216,9 @@ function korbanSlot_(cal, tz) {
     });
     if (blocked) continue;
     for (var s = 0; s < TUNING_SLOTS.length; s++) {
-      var start = new Date(y + 'T' + ('0' + TUNING_SLOTS[s]).slice(-2) + ':00:00');
+      var hh = Math.floor(TUNING_SLOTS[s]);
+      var mm = TUNING_SLOTS[s] % 1 ? '30' : '00';
+      var start = new Date(y + 'T' + ('0' + hh).slice(-2) + ':' + mm + ':00');
       var end = new Date(start.getTime() + TUNING_MINUTES * 60000);
       var clash = dayEvents.some(function (ev) {
         return !ev.isAllDayEvent() && ev.getStartTime() < end && ev.getEndTime() > start;
@@ -244,30 +259,13 @@ function openGap_(cal, tz, techName) {
 }
 
 /**
- * Technician list for the tuning-request form: every technician calendar
- * shared with this account (the NN-Name .blp@gmail.com calendars), Korban
- * first as the default. The master tuning + moving calendars are excluded.
+ * Technician list for the tuning-request form — the fixed Brigham-approved
+ * roster in TUNING_TECHS (Korban first as the default).
  */
 function techs_() {
-  var cache = CacheService.getScriptCache();
-  var hit = cache.get('techs');
-  if (hit) return JSON.parse(hit);
-  var out = [];
-  CalendarApp.getAllCalendars().forEach(function (c) {
-    var id = c.getId(), name = c.getName();
-    if (id === MASTER_TUNING_CAL) return;
-    if (/moving/i.test(id) || /moving/i.test(name)) return;
-    if (!/\.blp@gmail\.com$/.test(id) && !/^\d{2}\s*-/.test(name)) return;
-    out.push({id: id, name: name.replace(/^\d+\s*-\s*/, '').trim(),
-              isDefault: id === TUNING_CAL});
-  });
-  out.sort(function (a, b) {
-    return (b.isDefault ? 1 : 0) - (a.isDefault ? 1 : 0)
-      || (a.name < b.name ? -1 : 1);
-  });
-  var res = {techs: out};
-  try { cache.put('techs', JSON.stringify(res), 3600); } catch (ig) {}
-  return res;
+  return {techs: TUNING_TECHS.map(function (t) {
+    return {id: t.id, name: t.name, isDefault: t.id === TUNING_CAL};
+  })};
 }
 
 function findPiano_(sh, serial, rowOverride) {
