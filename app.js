@@ -853,15 +853,8 @@ function popHTML(p) {
          <button class="mvgo">Move</button>
        </div><div class="mvmsg"></div>`
     : `<div class="mvmsg">No serial # — change location in the Piano Log.</div>`;
-  const tuner = p.serial && p.serial.length >= 5
-    ? (ti.next
-       ? `<div class="row tunerow">🎵 Tuning <b>${esc(fmtDay(ti.next.date))} · ${esc(ti.next.time)}</b></div>`
-       : `<button class="tunebtn">🎵 Request Tuning</button>
-          <div class="tunebox" hidden>
-            <textarea class="tunenotes" rows="2"
-              placeholder="notes for Korban — repairs, prep work… (optional)"></textarea>
-            <button class="tunego">Schedule next open slot</button>
-          </div><div class="tunemsg"></div>`)
+  const tuner = p.serial && p.serial.length >= 5 && !ti.next
+    ? `<button class="tunebtn">🎵 Request Tuning</button>`
     : '';
   const photo = p.serial
     ? `<button class="photobtn">📸 Add progress photo</button>
@@ -887,6 +880,7 @@ function popHTML(p) {
     <div class="row">Owner <b>${esc(p.owner || '—')}</b></div>
     ${priceLabel(p) ? `<div class="row">Price <b class="pricecard">${esc(priceLabel(p))}</b></div>` : ''}
     <div class="row">Last tuned <b>${ti.last ? esc(fmtDayYear(ti.last)) : '—'}</b></div>
+    ${ti.next ? `<div class="row">Tuning scheduled <b class="tunesched">🎵 ${esc(fmtDay(ti.next.date))} · ${esc(ti.next.time)}</b></div>` : ''}
     ${mediaCard(p)}
     ${phaser}
     ${tuner}
@@ -908,8 +902,9 @@ function wirePop(p) {
   const pop = $('#pop');
   pop.onclick = ev => {
     if (ev.target.classList.contains('x')) { pop.hidden = true; popPinned = false; return; }
-    if (ev.target.closest('.movebox') || ev.target.closest('.mvmsg')) return;
-    if (ev.target.classList.contains('mvin')) return;
+    // only the explicit "Open Piano Log" button navigates — every other
+    // control on the card (tuning, phases, media, tags, move) stays put
+    if (!ev.target.closest('.btn')) return;
     window.open(logLink(p), '_blank', 'noopener');
   };
   const go = pop.querySelector('.mvgo');
@@ -919,15 +914,7 @@ function wirePop(p) {
     if (e.key === 'Enter') movePiano(p, inp.value.trim(), pop);
   };
   const tb = pop.querySelector('.tunebtn');
-  if (tb) tb.onclick = () => {
-    popPinned = true;
-    tb.hidden = true;
-    pop.querySelector('.tunebox').hidden = false;
-    place(pop, S.popAnchor);   // card grew — keep it fully on screen
-    pop.querySelector('.tunenotes').focus();
-  };
-  const tg = pop.querySelector('.tunego');
-  if (tg) tg.onclick = () => requestTuning(p, pop);
+  if (tb) tb.onclick = ev => { ev.stopPropagation(); openTuneModal(p); };
   const ps = pop.querySelector('.phsel');
   if (ps) {
     ps.onclick = ev => ev.stopPropagation();
@@ -1040,38 +1027,90 @@ function revertPhase(p, was, sel, edit) {
   renderMap();
 }
 
-async function requestTuning(p, pop) {
-  const msg = pop.querySelector('.tunemsg');
-  const notes = pop.querySelector('.tunenotes').value.trim();
+/* ---------- tuning request modal ---------- */
+const KORBAN_CAL = 'korbangreenhalgh.blp@gmail.com';
+function openTuneModal(p) {
   popPinned = true;
+  let ov = $('#tunemodal');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.id = 'tunemodal';
+    document.body.appendChild(ov);
+  }
+  const nm = [(p.year || ''), p.make, p.model].filter(Boolean).join(' ') || p.summary || 'Piano';
+  ov.innerHTML = `<div class="tmcard">
+    <span class="x">✕</span>
+    <h3>🎵 Request a Tuning</h3>
+    <div class="tmpiano"><b>${esc(nm)}</b>
+      <span>Serial ${esc(p.serial)}${p.location ? ' · Spot ' + esc(p.location) : ''}</span></div>
+    <label>Assign to technician</label>
+    <select class="tmtech"><option value="${KORBAN_CAL}">Korban Greenhalgh</option></select>
+    <label>Additional repair requests <small>(optional)</small></label>
+    <textarea class="tmrepairs" rows="2" placeholder="sticky keys, buzzing damper, pedal squeak…"></textarea>
+    <label>Notes <small>(optional)</small></label>
+    <textarea class="tmnotes" rows="2" placeholder="anything the technician should know"></textarea>
+    <button class="tmgo">Schedule next open slot</button>
+    <div class="tmmsg"></div>
+  </div>`;
+  ov.hidden = false;
+  ov.onclick = ev => {
+    if (ev.target === ov || ev.target.classList.contains('x')) ov.hidden = true;
+  };
+  fillTechs(ov);
+  ov.querySelector('.tmgo').onclick = () => submitTune(p, ov);
+}
+// technician dropdown, from the bridge's calendar list (Korban preselected)
+async function fillTechs(ov) {
+  if (!S.techs) {
+    try {
+      const j = await (await fetch(BRIDGE_URL + '?fn=techs', {redirect: 'follow'})).json();
+      if (j.techs && j.techs.length) S.techs = j.techs;
+    } catch (e) { /* dropdown falls back to Korban only */ }
+  }
+  const sel = ov.querySelector('.tmtech');
+  if (!S.techs || !sel) return;
+  sel.innerHTML = S.techs.map(t =>
+    `<option value="${esc(t.id)}" ${t.isDefault || t.id === KORBAN_CAL ? 'selected' : ''}>${esc(t.name)}</option>`).join('');
+}
+async function submitTune(p, ov) {
+  const msg = ov.querySelector('.tmmsg');
+  const btn = ov.querySelector('.tmgo');
   const pin = teamPin(false);
-  if (!pin) { msg.textContent = 'A team PIN is required to schedule tunings.'; return; }
-  msg.textContent = 'Finding Korban’s next open slot…';
+  if (!pin) { msg.className = 'tmmsg err'; msg.textContent = 'A team PIN is required to schedule tunings.'; return; }
+  const sel = ov.querySelector('.tmtech');
+  const techId = sel.value;
+  const techName = sel.options[sel.selectedIndex].text;
+  btn.disabled = true;
+  msg.className = 'tmmsg';
+  msg.textContent = `Finding ${techName}’s next open slot…`;
   try {
     const r = await fetch(BRIDGE_URL, {
       method: 'POST', redirect: 'follow',
       headers: {'content-type': 'text/plain;charset=utf-8'},
-      body: JSON.stringify({pin, serial: p.serial, action: 'tune', notes, ...authFields()}),
+      body: JSON.stringify({pin, serial: p.serial, action: 'tune', techId, techName,
+        repairs: ov.querySelector('.tmrepairs').value.trim(),
+        notes: ov.querySelector('.tmnotes').value.trim(),
+        row: p.row, ...authFields()}),
     });
     const j = await r.json();
     if (j.error === 'unauthorized') {
       localStorage.removeItem('blpPin');
-      msg.textContent = '✗ Wrong PIN — click Schedule to try again.';
-      return;
+      throw new Error('Wrong PIN — click Schedule to try again.');
     }
-    if (j.scheduled) {
-      msg.textContent = `✓ On the tuning cal: ${j.date} at ${j.time}`;
-      // reflect immediately: add to local tunings so the piano turns blue
-      S.data.tunings = S.data.tunings || {upcoming: [], past: []};
-      S.data.tunings.upcoming.push([j.iso || localDay(), j.hhmm || j.time,
-        `${j.title || 'Tuning'} SN ${p.serial}`]);
-      pop.querySelector('.tunebox').hidden = true;
-      renderMap(); renderKpis();
-    } else {
-      msg.textContent = '✗ ' + (j.error || 'scheduling failed');
-    }
+    if (!j.scheduled) throw new Error(j.error || 'scheduling failed');
+    msg.className = 'tmmsg ok';
+    msg.textContent = `✓ Scheduled with ${j.tech || techName}: ${j.date} at ${j.time} — `
+      + `on their calendar and the master tuning calendar.`;
+    // reflect immediately: piano turns blue, card gains its scheduled row
+    S.data.tunings = S.data.tunings || {upcoming: [], past: []};
+    S.data.tunings.upcoming.push([j.iso || localDay(), j.hhmm || j.time,
+      `${j.title || 'Tuning'} SN ${p.serial}`]);
+    renderMap(); renderKpis();
+    setTimeout(() => { ov.hidden = true; openPop(p.row, null, true); }, 2200);
   } catch (e) {
+    msg.className = 'tmmsg err';
     msg.textContent = '✗ ' + e.message;
+    btn.disabled = false;
   }
 }
 
