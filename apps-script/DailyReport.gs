@@ -271,6 +271,7 @@ function doPost(e) {
         (ph.previous || '(none)') + ' → ' + (ph.phase || '(none)'));
       return json_(ph);
     }
+    if (req.action === 'fixtabs') return json_(fixTabs_());
     if (req.action === 'setmedia') {
       var md = setMedia_(req, who);
       if (md.ok && md.detail) logAct_(who, 'Media done', md.summary || req.serial, md.detail);
@@ -345,7 +346,7 @@ function savePhoto_(req, who) {
 
   var log = ss.getSheetByName(PHOTO_LOG_TAB);
   if (!log) {
-    log = ss.insertSheet(PHOTO_LOG_TAB);
+    log = ss.insertSheet(PHOTO_LOG_TAB, ss.getSheets().length);   // LAST tab — the apps read the first tab's CSV
     log.appendRow(['When', 'Serial', 'Piano', 'Stage', 'By', 'File', 'Link']);
     log.setFrozenRows(1);
   }
@@ -608,7 +609,7 @@ function logAct_(who, action, piano, detail) {
     var ss = SpreadsheetApp.openById(PIANO_LOG_ID);
     var sh = ss.getSheetByName('ACTIVITY LOG');
     if (!sh) {
-      sh = ss.insertSheet('ACTIVITY LOG');
+      sh = ss.insertSheet('ACTIVITY LOG', ss.getSheets().length);   // LAST tab — the apps read the first tab's CSV
       sh.appendRow(['When', 'Who', 'Action', 'Piano', 'Details']);
       sh.setFrozenRows(1);
     }
@@ -659,4 +660,23 @@ function setMedia_(req, who) {
   cell.setValue(stamp);
   return {ok: true, row: found.row, summary: found.summary, field: req.field,
           detail: MEDIA_NAMES[req.field] + ' marked done'};
+}
+
+// One-shot repair: helper tabs (ACTIVITY LOG / PHOTO LOG) must never sit at
+// index 0 — the Store Map, Piano Log app, and Shop app all read the
+// spreadsheet's FIRST tab via CSV export. Moves them to the end.
+function fixTabs_() {
+  var ss = SpreadsheetApp.openById(PIANO_LOG_ID);
+  var moved = [];
+  ['ACTIVITY LOG', PHOTO_LOG_TAB].forEach(function (name) {
+    var sh = ss.getSheetByName(name);
+    if (sh) {
+      ss.setActiveSheet(sh);
+      ss.moveActiveSheet(ss.getSheets().length);
+      moved.push(name);
+    }
+  });
+  var main = pianoSheet_(ss);
+  return {ok: true, moved: moved, firstTab: ss.getSheets()[0].getName(),
+          pianoGid: main.getSheetId()};
 }

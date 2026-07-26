@@ -89,20 +89,48 @@ async function fetchSlots() {
   } catch (e) { /* fall through */ }
   return fetch('data/slots.json', {cache: 'no-cache'}).then(r => r.json());
 }
+// last-known map + pianos, remembered on this device so repeat visits paint
+// instantly; the sidebar shows "⚠ offline snapshot" until fresh data lands
+const CACHE_KEY = 'blpMapCache';
+function readCache() {
+  try {
+    const c = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
+    if (c && c.map && c.map.floors && c.data && c.data.pianos) return c;
+  } catch (e) { /* corrupt cache — ignore */ }
+  return null;
+}
+function writeCache() {
+  try {
+    localStorage.setItem(CACHE_KEY,
+      JSON.stringify({map: S.map, data: S.data, at: Date.now()}));
+  } catch (e) { /* quota / private mode — caching is best-effort */ }
+}
+
 async function boot() {
+  const cached = readCache();
+  if (cached) {                     // repeat visit: full map on screen instantly
+    S.map = cached.map;
+    S.data = {...cached.data, stale: true};
+    index(); renderAll();
+  }
   // kick both requests off together, and draw the floor plan the moment
   // the geometry lands — pianos pop in as soon as their data arrives
-  const dataP = fetchData().catch(() => EMPTY);
-  S.map = await fetchSlots();
-  S.data = EMPTY;
-  index(); renderAll();           // empty plan on screen immediately
-  S.data = await dataP;
+  const dataP = fetchData().catch(() => null);
+  try {
+    const m = await fetchSlots();
+    if (m && m.floors) S.map = m;
+  } catch (e) { if (!cached) throw e; }   // cached geometry keeps us alive
+  if (!cached) { S.data = EMPTY; index(); renderAll(); }
+  const d = await dataP;
+  if (d && d.pianos) S.data = d;
   index(); renderAll();
+  if (!S.data.stale && S.data.pianos.length) writeCache();
   setInterval(async () => {
     try {
       const [m, d2] = await Promise.all([fetchSlots(), fetchData()]);
       S.map = m; S.data = d2;
       index(); renderAll();
+      if (!d2.stale && d2.pianos.length) writeCache();
     } catch (e) { /* keep last */ }
   }, 150000);
 }
