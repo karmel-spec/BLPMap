@@ -35,6 +35,14 @@ the weekday 6 AM Mountain trigger is installed and the web-app bridge
 code changes: edit Code.gs, then Deploy → Manage deployments → ✏️ →
 New version → Deploy. Rerun `setup()` only to reinstall the trigger.
 
+**PENDING REDEPLOY — progress photos (July 2026):** the `photo` action
+(one-tap progress photos from the piano popup → the piano's "Tech" Drive
+subfolder + a PHOTO LOG tab on the Piano Log) was added to
+`apps-script/DailyReport.gs`. Paste the file into the Apps Script project
+and deploy a new version; until then the app shows "the bridge needs an
+update" when a photo is taken. The Apps Script account must have edit
+access to the piano photo folders (root `1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ`).
+
 ## Local dev
 `python3 server.py` still works exactly as before (port 8641) and needs
 `config.json` for the calendar. The local 6 AM scheduler is now just a
