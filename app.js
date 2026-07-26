@@ -1,21 +1,29 @@
 /* BLP Store Map — front-end */
 const PIANOLOG_URL = 'https://pianologapp.netlify.app/';
 // shop pipeline phases (shared with the BLP Shop app via the Piano Log's
-// CURRENT PHASE column). Q/P are the parking states.
-const PHASES = ['New Arrival', 'Assessment', 'Teardown', 'PRSB', 'CAP',
-  'Refinishing', 'Final Assembly', 'DHRT', 'Tuning', 'QC',
-  'Admin Exit Prep', 'Delivered'];
+// CURRENT PHASE column). Q/P are the parking states. Brigham's July 2026
+// rework — 14 phases.
+const PHASES = ['New Arrival - Admin', 'Assessment', 'CAP',
+  'PRSB & Plate Refinishing', 'Lacquer Soundboard', 'Restringing',
+  'Chip Tuning', 'DHRT', '1st Tuning', 'Refinishing', 'QC & Assembly',
+  '2nd Tuning', 'Exit Prep - Admin', 'Delivered'];
 const PHASE_STATES = ['In Queue', 'Paused', 'For Sale'];   // unnumbered states; For Sale turns the icon green
-// first-letter code for each numbered phase (10 = QC gets two letters)
+// icon letter for each numbered phase (QC & Assembly gets two letters)
 const PHASE_ABBR = {
-  'New Arrival': 'N', 'Assessment': 'A', 'Teardown': 'T', 'PRSB': 'P', 'CAP': 'C',
-  'Refinishing': 'R', 'Final Assembly': 'F', 'DHRT': 'D', 'Tuning': 'T',
-  'QC': 'QC', 'Admin Exit Prep': 'A',
+  'New Arrival - Admin': 'N', 'Assessment': 'A', 'CAP': 'C',
+  'PRSB & Plate Refinishing': 'P', 'Lacquer Soundboard': 'L',
+  'Restringing': 'R', 'Chip Tuning': 'C', 'DHRT': 'D', '1st Tuning': 'T',
+  'Refinishing': 'R', 'QC & Assembly': 'QC', '2nd Tuning': 'T',
+  'Exit Prep - Admin': 'E',
 };
-// what an icon should read: {full:'6R', short:'6'} — or null for none
-function phaseLabels(phase) {
+// what an icon should read: {full:'6R', short:'6'} — or null for none.
+// In Queue shows the queue position ("Q-7") when the piano has one.
+function phaseLabels(phase, p) {
   if (!phase) return null;
-  if (phase === 'In Queue') return {full: 'Q', short: 'Q'};
+  if (phase === 'In Queue') {
+    const q = p && p.queuePos ? 'Q-' + p.queuePos : 'Q';
+    return {full: q, short: 'Q'};
+  }
   if (phase === 'Paused') return {full: 'P', short: 'P'};
   if (phase === 'Delivered' || phase === 'For Sale') return null;
   const i = PHASES.indexOf(phase);
@@ -384,7 +392,7 @@ function renderMoves() {
 // phase number/letter drawn dead-center on the icon (always upright,
 // even when the piano glyph itself is rotated against a wall)
 function phaseText(p, cx, cy, sc) {
-  const lab = phaseLabels(effectivePhase(p));
+  const lab = phaseLabels(effectivePhase(p), p);
   if (!lab) return '';
   // fit the full "6R"/"10QC" label to the icon width; shrink font as needed,
   // and if it would get too tiny fall back to the number/letter only
@@ -396,20 +404,20 @@ function phaseText(p, cx, cy, sc) {
 }
 
 // ---- media (before/after photos + videos) --------------------------------
-// after-media only becomes relevant once a piano reaches Tuning (phase 9),
-// i.e. it's essentially finished — through Tuning & QC
-const AFTER_MIN = PHASES.indexOf('Tuning') + 1;   // 9
+// after-media only becomes relevant once a piano reaches QC & Assembly
+// (phase 11), i.e. it looks finished
+const AFTER_MIN = PHASES.indexOf('QC & Assembly') + 1;   // 11 — piano looks final from here
 function phaseNum(p) { const i = PHASES.indexOf(effectivePhase(p)); return i >= 0 ? i + 1 : 0; }
 function effectivePhase(p) {
   if (p.phase) return p.phase;
-  return (p.isNew && !comingSoon(p)) ? 'New Arrival' : '';   // not-yet-arrived stays unphased
+  return (p.isNew && !comingSoon(p)) ? 'New Arrival - Admin' : '';   // not-yet-arrived stays unphased
 }
 // four media lines for the data card (✓ have it / mark-done button / — n/a).
 // "mark done" writes a dated ✓ into the Piano Log and clears the red icon.
 function mediaCard(p) {
   const late = isLate(p);
   const line = (label, field, have, active) => {
-    const mark = !active ? '<b class="mna">— after Tuning/QC</b>'
+    const mark = !active ? '<b class="mna">— after QC &amp; Assembly</b>'
       : have ? '<b class="myes">✓ have</b>'
       : (p.serial ? `<button class="mmark" data-f="${field}">✗ needed — mark done</button>`
                   : '<b class="mno">✗ needed</b>');

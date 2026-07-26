@@ -360,6 +360,12 @@ function doPost(e) {
       return json_(ph);
     }
     if (req.action === 'fixtabs') return json_(fixTabs_());
+    if (req.action === 'migratephases') {
+      var mg = migratePhases_();
+      if (mg.changed) logAct_(who, 'Phase migration', 'all pianos',
+        mg.changed + ' cells: ' + JSON.stringify(mg.counts).slice(0, 300));
+      return json_(mg);
+    }
     if (req.action === 'setmedia') {
       var md = setMedia_(req, who);
       if (md.ok && md.detail) logAct_(who, 'Media done', md.summary || req.serial, md.detail);
@@ -639,9 +645,43 @@ function authorizeCalendar() {
  * row 2, and found by name so column shuffles can't break it).
  */
 var PHASE_HEADER = 'CURRENT PHASE';
-var PHASE_VALUES = ['New Arrival', 'Assessment', 'Teardown', 'PRSB', 'CAP',
-  'Refinishing', 'Final Assembly', 'DHRT', 'Tuning', 'QC',
-  'Admin Exit Prep', 'Delivered', 'In Queue', 'Paused', 'For Sale'];
+var PHASE_VALUES = ['New Arrival - Admin', 'Assessment', 'CAP',
+  'PRSB & Plate Refinishing', 'Lacquer Soundboard', 'Restringing',
+  'Chip Tuning', 'DHRT', '1st Tuning', 'Refinishing', 'QC & Assembly',
+  '2nd Tuning', 'Exit Prep - Admin', 'Delivered',
+  'In Queue', 'Paused', 'For Sale'];
+
+// July 2026 phase rework: how the old phase names translate to the new
+// 14-phase pipeline. Used once by the 'migratephases' action to update
+// every CURRENT PHASE cell in the Piano Log.
+var PHASE_MIGRATE = {
+  'New Arrival': 'New Arrival - Admin',
+  'Teardown': 'CAP',
+  'PRSB': 'PRSB & Plate Refinishing',
+  'Final Assembly': 'QC & Assembly',
+  'Tuning': '1st Tuning',
+  'QC': 'QC & Assembly',
+  'Admin Exit Prep': 'Exit Prep - Admin',
+};
+
+function migratePhases_() {
+  var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+  var col = phaseCol_(sh);
+  var last = sh.getLastRow();
+  var rng = sh.getRange(1, col, last, 1);
+  var vals = rng.getValues();
+  var changed = 0, counts = {};
+  for (var i = 0; i < vals.length; i++) {
+    var v = String(vals[i][0] || '').trim();
+    if (v && PHASE_MIGRATE[v]) {
+      vals[i][0] = PHASE_MIGRATE[v];
+      counts[v + ' → ' + PHASE_MIGRATE[v]] = (counts[v + ' → ' + PHASE_MIGRATE[v]] || 0) + 1;
+      changed++;
+    }
+  }
+  if (changed) rng.setValues(vals);
+  return {ok: true, changed: changed, counts: counts};
+}
 
 function phaseCol_(sh) {
   var last = sh.getLastColumn();
