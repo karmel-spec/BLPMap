@@ -4,7 +4,7 @@
 // committed. Without it the app still works, just with no move events.
 
 const PIANO_LOG_CSV =
-  'https://docs.google.com/spreadsheets/d/1ZunbPKygpQlcXfTyPowDHdUE9spJ3uV1XA4iX1eoKRc/export?format=csv';
+  'https://docs.google.com/spreadsheets/d/1ZunbPKygpQlcXfTyPowDHdUE9spJ3uV1XA4iX1eoKRc/export?format=csv&gid=970727205';
 // Apps Script bridge: serves calendar events via public GET (the secret
 // iCal address lives inside the script, not here) and takes PIN-gated
 // move requests. URL is not sensitive — writes require the PIN.

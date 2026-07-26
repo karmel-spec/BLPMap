@@ -24,7 +24,7 @@ BASE = os.path.dirname(os.path.abspath(__file__))
 
 PORT = 8641
 PIANO_LOG_CSV = ('https://docs.google.com/spreadsheets/d/'
-                 '1ZunbPKygpQlcXfTyPowDHdUE9spJ3uV1XA4iX1eoKRc/export?format=csv')
+                 '1ZunbPKygpQlcXfTyPowDHdUE9spJ3uV1XA4iX1eoKRc/export?format=csv&gid=970727205')
 
 # The moving calendar's *secret* iCal URL lives in config.json (gitignored)
 # or the BLP_MOVING_ICS env var — never in the repo.
