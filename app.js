@@ -886,7 +886,7 @@ function popHTML(p) {
     <div class="row">Status <b>${esc(p.status || '—')}</b></div>
     <div class="row">Owner <b>${esc(p.owner || '—')}</b></div>
     ${priceLabel(p) ? `<div class="row">Price <b class="pricecard">${esc(priceLabel(p))}</b></div>` : ''}
-    <div class="row">Last tuned <b>${ti.last ? esc(fmtDay(ti.last)) : '—'}</b></div>
+    <div class="row">Last tuned <b>${ti.last ? esc(fmtDayYear(ti.last)) : '—'}</b></div>
     ${mediaCard(p)}
     ${phaser}
     ${tuner}
@@ -901,6 +901,9 @@ function popHTML(p) {
 }
 const fmtDay = iso => new Date(iso + 'T12:00')
   .toLocaleDateString('en-US', {weekday: 'short', month: 'short', day: 'numeric'});
+// last-tuned dates can be a year+ back, so they always carry the year
+const fmtDayYear = iso => new Date(iso + 'T12:00')
+  .toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'});
 function wirePop(p) {
   const pop = $('#pop');
   pop.onclick = ev => {
