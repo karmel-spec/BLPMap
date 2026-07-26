@@ -90,9 +90,13 @@ async function fetchSlots() {
   return fetch('data/slots.json', {cache: 'no-cache'}).then(r => r.json());
 }
 async function boot() {
+  // kick both requests off together, and draw the floor plan the moment
+  // the geometry lands — pianos pop in as soon as their data arrives
+  const dataP = fetchData().catch(() => EMPTY);
   S.map = await fetchSlots();
-  try { S.data = await fetchData(); }
-  catch (e) { S.data = EMPTY; }   // draw the floor plan even with no data
+  S.data = EMPTY;
+  index(); renderAll();           // empty plan on screen immediately
+  S.data = await dataP;
   index(); renderAll();
   setInterval(async () => {
     try {
