@@ -22,7 +22,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 
-PORT = 8641
+PORT = int(os.environ.get('PORT', 8641))
 PIANO_LOG_CSV = ('https://docs.google.com/spreadsheets/d/'
                  '1ZunbPKygpQlcXfTyPowDHdUE9spJ3uV1XA4iX1eoKRc/export?format=csv&gid=970727205')
 
@@ -105,7 +105,6 @@ def parse_pianos(raw):
                 q_hdr = idx
         elif q_end is None and not b and not c and not d:
             q_end = idx
-    q_total = (q_end - q_hdr - 1) if (q_hdr and q_end) else 0
     section = ''
     sold_zone = False   # True once the "SOLD" divider row passes: rows below
                         # it are exited pianos (year archives + WEB galleries)
@@ -154,11 +153,18 @@ def parse_pianos(raw):
             'price': col(price_idx) if price_idx >= 0 else '',
             'bphoto': bool(col(13)), 'aphoto': bool(col(15)),
             'bvideo': bool(col(16)), 'avideo': bool(col(17)),
-            'queuePos': (i - q_hdr) if (q_hdr and q_end and q_hdr < i < q_end) else 0,
-            'queueTotal': q_total,
+            'queuePos': 0,
+            'queueTotal': 0,
             'isNew': is_new,
             'active': active,
         })
+    # Queue numbers count PIANOS in row order (not raw row offsets), so they
+    # stay a contiguous 1..N even if a label or junk row sits inside the
+    # section — and match the Piano Log app's queue numbering.
+    q = [p for p in pianos if q_hdr and q_end and q_hdr < p['row'] < q_end]
+    for k, p in enumerate(q, 1):
+        p['queuePos'] = k
+        p['queueTotal'] = len(q)
     return pianos
 
 

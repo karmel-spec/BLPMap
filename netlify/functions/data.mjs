@@ -72,7 +72,6 @@ function parsePianos(text) {
     if (!qHdr) { if (b.toUpperCase() === 'CUSTOM SHOPWORK' && !c && !d) qHdr = k + 1; }
     else if (!qEnd && !b && !c && !d) qEnd = k + 1;
   }
-  const qTotal = (qHdr && qEnd) ? qEnd - qHdr - 1 : 0;
   const todayUTC = new Date(denverDay() + 'T00:00:00Z');
   let section = '', soldZone = false;
   for (let i = 2; i < rows.length; i++) {
@@ -108,11 +107,15 @@ function parsePianos(text) {
       phase: phaseIdx >= 0 ? col(phaseIdx) : '',
       price: priceIdx >= 0 ? col(priceIdx) : '',
       bphoto: !!col(13), aphoto: !!col(15), bvideo: !!col(16), avideo: !!col(17),
-      queuePos: (qHdr && qEnd && (i + 1) > qHdr && (i + 1) < qEnd) ? (i + 1) - qHdr : 0,
-      queueTotal: qTotal,
+      queuePos: 0, queueTotal: 0,
       isNew, active,
     });
   }
+  // Queue numbers count PIANOS in row order (not raw row offsets), so they
+  // stay a contiguous 1..N even if a label or junk row sits inside the
+  // section — and match the Piano Log app's queue numbering.
+  const q = pianos.filter(p => qHdr && qEnd && p.row > qHdr && p.row < qEnd);
+  q.forEach((p, k) => { p.queuePos = k + 1; p.queueTotal = q.length; });
   return pianos;
 }
 

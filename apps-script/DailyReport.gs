@@ -373,6 +373,14 @@ function doPost(e) {
         (req.stage || '(no phase)') + ' → ' + pt.name);
       return json_(pt);
     }
+    if (req.action === 'queue') {
+      var qm = queueMove_(req);
+      if (qm.ok && qm.moved) logAct_(who, 'Queue change', qm.summary || req.serial,
+        (req.from_pos && req.to_pos)
+          ? 'queue #' + req.from_pos + ' → #' + req.to_pos
+          : 'moved ' + (req.where === 'after' ? 'after' : 'before') + ' s/n ' + req.anchor_serial);
+      return json_(qm);
+    }
     var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
     var last = sh.getLastRow();
     var serials = sh.getRange(1, 3, last, 1).getValues();  // col C
@@ -769,4 +777,53 @@ function fixTabs_() {
   var main = pianoSheet_(ss);
   return {ok: true, moved: moved, firstTab: ss.getSheets()[0].getName(),
           pianoGid: main.getSheetId()};
+}
+
+/* ---------- shop queue reorder (Custom Shopwork row order = the queue) ----
+   Serial-anchored: "move piano S before/after piano T". Both rows are located
+   by exact serial match above the SOLD divider at execution time — never by
+   remembered row numbers, which shift constantly as pianos come and go. The
+   map app computes the anchor from live queue positions; all other queue
+   numbers adjust organically because they derive from row order. */
+function queueMove_(req) {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+    var last = sh.getLastRow();
+    var serials = sh.getRange(1, 3, last, 1).getValues();
+    var owners = sh.getRange(1, 2, last, 1).getValues();
+    var soldRow = last + 1;
+    for (var i = 0; i < last; i++) {
+      if (String(owners[i][0] || '').trim().toUpperCase() === 'SOLD'
+          && !String(serials[i][0] || '').trim()) { soldRow = i + 1; break; }
+    }
+    var findUnique = function (serial) {
+      var want = String(serial || '').trim().toLowerCase();
+      if (!want) return {error: 'serial required'};
+      var m = [];
+      for (var r = 1; r < soldRow; r++) {
+        if (String(serials[r - 1][0] || '').trim().toLowerCase() === want) m.push(r);
+      }
+      if (!m.length) return {error: 'serial ' + serial + ' not found above the SOLD section'};
+      if (m.length > 1) return {error: 'serial ' + serial + ' appears in rows ' + m.join(', ') + ' — fix in the Piano Log first'};
+      return {row: m[0]};
+    };
+    if (String(req.serial || '').trim().toLowerCase() ===
+        String(req.anchor_serial || '').trim().toLowerCase()) {
+      return {ok: true, moved: false};
+    }
+    var src = findUnique(req.serial);
+    if (src.error) return src;
+    var anc = findUnique(req.anchor_serial);
+    if (anc.error) return {error: 'anchor piano: ' + anc.error};
+    var summary = String(sh.getRange(src.row, 4).getValue() || '');
+    var dest = anc.row + (req.where === 'after' ? 1 : 0);
+    sh.moveRows(sh.getRange(src.row, 1), dest);
+    SpreadsheetApp.flush();
+    return {ok: true, moved: true, summary: summary,
+            from_row: src.row, anchor_row: anc.row};
+  } finally {
+    lock.releaseLock();
+  }
 }

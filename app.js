@@ -853,6 +853,17 @@ function popHTML(p) {
          <button class="mvgo">Move</button>
        </div><div class="mvmsg"></div>`
     : `<div class="mvmsg">No serial # — change location in the Piano Log.</div>`;
+  // shop queue reorder: row order in Custom Shopwork IS the queue, so setting
+  // a new number physically moves the piano's row in the Piano Log
+  const queuer = p.queuePos
+    ? (p.serial
+      ? `<div class="movebox">
+           <input class="mvin qin" type="number" min="1" max="${p.queueTotal}" step="1"
+                  value="${p.queuePos}" title="Shop queue position (1 = next up)">
+           <button class="mvgo qgo">Set queue #</button>
+         </div><div class="mvmsg qmsg"></div>`
+      : `<div class="mvmsg">No serial # — reorder the queue in the Piano Log.</div>`)
+    : '';
   const tuner = p.serial && p.serial.length >= 5 && !ti.next
     ? `<button class="tunebtn">🎵 Request Tuning</button>`
     : '';
@@ -886,6 +897,7 @@ function popHTML(p) {
     ${tuner}
     ${photo}
     ${mover}
+    ${queuer}
     <div class="tagbtns">
       ${priceLabel(p) ? `<a class="tagbtn" target="_blank" rel="noopener"
         href="${priceTagUrl(p)}">🏷 Price tag ↗</a>` : ''}
@@ -907,12 +919,19 @@ function wirePop(p) {
     if (!ev.target.closest('.btn')) return;
     window.open(logLink(p), '_blank', 'noopener');
   };
-  const go = pop.querySelector('.mvgo');
-  if (go) go.onclick = () => movePiano(p, pop.querySelector('.mvin').value.trim(), pop);
-  const inp = pop.querySelector('.mvin');
+  const go = pop.querySelector('.mvgo:not(.qgo)');
+  if (go) go.onclick = () => movePiano(p, pop.querySelector('.mvin:not(.qin)').value.trim(), pop);
+  const inp = pop.querySelector('.mvin:not(.qin)');
   if (inp) inp.onkeydown = e => {
     if (e.key === 'Enter') movePiano(p, inp.value.trim(), pop);
   };
+  const qgo = pop.querySelector('.qgo');
+  if (qgo) qgo.onclick = () => queuePiano(p, parseInt(pop.querySelector('.qin').value, 10), pop);
+  const qin = pop.querySelector('.qin');
+  if (qin) {
+    qin.onclick = ev => ev.stopPropagation();
+    qin.onkeydown = e => { if (e.key === 'Enter') queuePiano(p, parseInt(qin.value, 10), pop); };
+  }
   const tb = pop.querySelector('.tunebtn');
   if (tb) tb.onclick = ev => { ev.stopPropagation(); openTuneModal(p); };
   const ps = pop.querySelector('.phsel');
@@ -1285,6 +1304,73 @@ async function movePiano(p, dest, pop) {
     }
   } catch (e) {
     msg.className = 'mvmsg err'; msg.textContent = '✗ ' + e.message + ' — not saved';
+  }
+}
+/* Shop queue reorder. The queue is the row order of the Custom Shopwork
+   section, so the bridge physically moves the piano's row — anchored by the
+   SERIAL of the piano currently at the target position ("put S before/after
+   T"), never by row numbers, which shift constantly. Every other queue
+   number adjusts organically because they all derive from row order. */
+async function queuePiano(p, newPos, pop) {
+  const msg = pop.querySelector('.qmsg');
+  const members = S.data.pianos.filter(x => x.queuePos > 0)
+    .sort((a, b) => a.queuePos - b.queuePos);
+  const total = members.length;
+  if (!Number.isInteger(newPos) || newPos < 1 || newPos > total) {
+    msg.className = 'mvmsg qmsg err';
+    msg.textContent = `Queue number must be 1–${total}.`;
+    return;
+  }
+  if (newPos === p.queuePos) {
+    msg.className = 'mvmsg qmsg ok';
+    msg.textContent = `Already queue #${newPos}.`;
+    return;
+  }
+  const anchor = members[newPos - 1];
+  if (!anchor || !anchor.serial) {
+    msg.className = 'mvmsg qmsg err';
+    msg.textContent = `The piano at #${newPos} has no serial — reorder in the Piano Log.`;
+    return;
+  }
+  popPinned = true;
+  const pin = teamPin(false);
+  if (!pin) { msg.textContent = 'A team PIN is required to reorder the queue.'; return; }
+  msg.className = 'mvmsg qmsg';
+  msg.textContent = 'Reordering the shop queue…';
+  try {
+    const r = await fetch(BRIDGE_URL, {
+      method: 'POST', redirect: 'follow',
+      headers: {'content-type': 'text/plain;charset=utf-8'},
+      body: JSON.stringify({pin, action: 'queue', serial: p.serial,
+        anchor_serial: anchor.serial,
+        where: newPos > p.queuePos ? 'after' : 'before',
+        from_pos: p.queuePos, to_pos: newPos, ...authFields()}),
+    });
+    const j = await r.json();
+    if (j.error === 'unauthorized') {
+      localStorage.removeItem('blpPin');
+      msg.className = 'mvmsg qmsg err';
+      msg.textContent = '✗ Wrong PIN — click Set queue # to try again.';
+      return;
+    }
+    if (!j.ok) {
+      msg.className = 'mvmsg qmsg err';
+      msg.textContent = '✗ ' + (j.error || 'queue update failed');
+      return;
+    }
+    // renumber locally so the map reflects the new order before the next poll
+    members.splice(p.queuePos - 1, 1);
+    members.splice(newPos - 1, 0, p);
+    members.forEach((x, k) => { x.queuePos = k + 1; });
+    msg.className = 'mvmsg qmsg ok';
+    msg.textContent = `✓ Now queue #${newPos} of ${total}`;
+    const chip = pop.querySelector('.qchip');
+    if (chip) chip.textContent = `Queue #${p.queuePos}/${p.queueTotal}`;
+    const qin = pop.querySelector('.qin');
+    if (qin) qin.value = p.queuePos;
+  } catch (e) {
+    msg.className = 'mvmsg qmsg err';
+    msg.textContent = '✗ ' + e.message + ' — not saved';
   }
 }
 function openPop(row, el, pinned) {
