@@ -28,7 +28,7 @@ var TUNING_CAL = 'korbangreenhalgh.blp@gmail.com';  // 09-Korban Greenhalgh
 var TUNING_CALS = [TUNING_CAL, 'pianotuning.blp@gmail.com'];
 // OAuth web client for "Sign in with Google" in the map app — used only to
 // verify who made a change for the activity log. Client IDs are public.
-var GOOGLE_CLIENT_ID = '118454775893-17u7t3glh8eu4kffhe7b42jl71apre4f.apps.googleusercontent.com';
+var GOOGLE_CLIENT_ID = '110628682621-v65mkaoanv87sp75ggdfcrglfr7bkr8p.apps.googleusercontent.com';
 var TUNING_SLOTS = [8, 10];                // weekday tuning start hours (Denver)
 var TUNING_MINUTES = 90;                   // block length, matches Korban's bookings
 var KNOWN_AREAS = ['showroom', 'pre-sale showroom', 'third floor', 'storage',

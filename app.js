@@ -28,8 +28,9 @@ function phaseLabels(phase) {
 const BRIDGE_URL =
   'https://script.google.com/macros/s/AKfycbxY4BKnr_Tr0iCTc9itCWhNYLvgszmkI1IoYSkbBWpyAqRtWI-yaUkJQjcVdgG58KXt/exec';
 // "Sign in with Google" (identity for the activity log — who changed what).
-// Same public web client the BLP Shop app uses; empty string hides the UI.
-const GOOGLE_CLIENT_ID = '118454775893-17u7t3glh8eu4kffhe7b42jl71apre4f.apps.googleusercontent.com';
+// Public web client in karmel@'s "BLP Store Map" Google Cloud project;
+// empty string hides the sign-in UI entirely.
+const GOOGLE_CLIENT_ID = '110628682621-v65mkaoanv87sp75ggdfcrglfr7bkr8p.apps.googleusercontent.com';
 const PRICETAGS_URL = 'https://blppricetags.netlify.app/';
 const SLOT_RE = /^\d+[a-zA-Z]?$/;
 // named areas in col U that are legitimate (not "unplaced") even though
