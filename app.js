@@ -170,8 +170,13 @@ async function boot() {
    Log's "Task Status" tab via the piano-tasks bridge. */
 const PIANO_TASKS_API = 'https://blpsalesapp.netlify.app/.netlify/functions/piano-tasks';
 let TRACKDEFS = null;
-fetch('data/tracks.json', {cache: 'no-cache'}).then(r => r.json())
-  .then(d => { TRACKDEFS = d; }).catch(() => {});
+// live from the Sequence sheet (10-min server cache) so Brigham's tab edits
+// apply automatically; the committed snapshot is the offline fallback
+fetch('https://blpsalesapp.netlify.app/.netlify/functions/track-defs')
+  .then(r => r.json())
+  .then(d => { if (d && d.tracks) { TRACKDEFS = d; return; } throw 0; })
+  .catch(() => fetch('data/tracks.json', {cache: 'no-cache'}).then(r => r.json())
+    .then(d => { TRACKDEFS = d; }).catch(() => {}));
 
 // track-tab phase wording -> the master PHASES vocabulary (order matters:
 // "chip tuning if new strings" must hit Chip Tuning before the string test)
@@ -1479,7 +1484,7 @@ async function setPhase(p, phase, pop, extra) {
   popPinned = true;
   const {pin, ok} = writeAuth();   // signed-in users skip the PIN
   if (!ok) {
-    msg.className = 'phmsg err'; msg.textContent = 'A team PIN is required — nothing saved.';
+    msg.className = 'phmsg err'; msg.textContent = 'Sign in with Google (☰ menu) to make changes — actions are logged under your name.';
     if (sel) sel.value = was;   // revert the dropdown so it matches reality
     return;
   }
@@ -1529,7 +1534,7 @@ async function setMedia(p, field, pop, skip) {
   const msg = pop.querySelector('.mdmsg');
   popPinned = true;
   const {pin, ok} = writeAuth();
-  if (!ok) { msg.className = 'mdmsg err'; msg.textContent = 'A team PIN is required — nothing saved.'; return; }
+  if (!ok) { msg.className = 'mdmsg err'; msg.textContent = 'Sign in with Google (☰ menu) to make changes — actions are logged under your name.'; return; }
   p[field] = skip ? 'skip' : true;
   const edit = pendingEdits.get(p.row) || {};
   edit[field] = p[field]; pendingEdits.set(p.row, edit);
@@ -1574,7 +1579,7 @@ async function toggleTrack(p, track, pop, miscNote) {
   const msg = pop.querySelector('.trkmsg');
   popPinned = true;
   const {pin, ok} = writeAuth();
-  if (!ok) { msg.className = 'trkmsg phmsg err'; msg.textContent = 'Sign in or enter the team PIN first.'; return; }
+  if (!ok) { msg.className = 'trkmsg phmsg err'; msg.textContent = 'Sign in with Google (☰ menu) to make changes — actions are logged under your name.'; return; }
   const was = p.track || '';
   const parts = trackParts(was);
   let list = parts.list;
@@ -1642,7 +1647,7 @@ async function toggleDone(p, phase, pop) {
   const msg = pop.querySelector('.dnmsg');
   popPinned = true;
   const {pin, ok} = writeAuth();
-  if (!ok) { msg.className = 'dnmsg phmsg err'; msg.textContent = 'Sign in or enter the team PIN first.'; return; }
+  if (!ok) { msg.className = 'dnmsg phmsg err'; msg.textContent = 'Sign in with Google (☰ menu) to make changes — actions are logged under your name.'; return; }
   const was = p.phasesDone || '';
   let list = was.split(',').map(t => t.trim()).filter(Boolean);
   list = list.includes(phase) ? list.filter(t => t !== phase) : list.concat(phase);
@@ -1680,7 +1685,7 @@ async function setClientReports(p, enabled, pop) {
   const msg = pop.querySelector('.crmsg');
   popPinned = true;
   const {pin, ok} = writeAuth();
-  if (!ok) { msg.className = 'crmsg phmsg err'; msg.textContent = 'Sign in or enter the PIN first.'; return; }
+  if (!ok) { msg.className = 'crmsg phmsg err'; msg.textContent = 'Sign in with Google (☰ menu) to make changes — actions are logged under your name.'; return; }
   const was = p.clientReports || '';
   p.clientReports = enabled ? 'Yes' : 'No';
   const edit = pendingEdits.get(p.row) || {};
@@ -1712,7 +1717,7 @@ async function setSnooze(p, date, pop) {
   const msg = pop.querySelector('.snzmsg');
   popPinned = true;
   const {pin, ok} = writeAuth();
-  if (!ok) { msg.className = 'snzmsg phmsg err'; msg.textContent = 'Sign in or enter the PIN first.'; return; }
+  if (!ok) { msg.className = 'snzmsg phmsg err'; msg.textContent = 'Sign in with Google (☰ menu) to make changes — actions are logged under your name.'; return; }
   const was = p.checkBack || '';
   p.checkBack = date;
   const edit = pendingEdits.get(p.row) || {};
@@ -1812,7 +1817,7 @@ async function submitAssign(slotId, ov) {
   const serial = ov.querySelector('.asserial').value.trim();
   if (!serial) { msg.className = 'tmmsg err'; msg.textContent = 'Type a serial number first.'; return; }
   const {pin, ok} = writeAuth();
-  if (!ok) { msg.className = 'tmmsg err'; msg.textContent = 'Sign in (☰ menu) or enter the team PIN first.'; return; }
+  if (!ok) { msg.className = 'tmmsg err'; msg.textContent = 'Sign in with Google (☰ menu) to make changes — actions are logged under your name.'; return; }
   btn.disabled = true;
   msg.className = 'tmmsg'; msg.textContent = 'Looking it up in the Piano Log…';
   try {
@@ -1824,7 +1829,7 @@ async function submitAssign(slotId, ov) {
     const j = await r.json();
     if (j.error === 'unauthorized') {
       lsDel('blpPin');
-      throw new Error('Not authorized — sign in or re-enter the PIN.');
+      throw new Error('Not authorized — sign in again from the ☰ menu.');
     }
     if (j.error && /not found/i.test(j.error)) {
       msg.className = 'tmmsg err';
@@ -1912,7 +1917,7 @@ async function submitAdd(slotId, ov) {
   const serial = v('.adserial');
   if (!serial) { msg.className = 'tmmsg err'; msg.textContent = 'A serial number is required.'; return; }
   const {pin, ok} = writeAuth();
-  if (!ok) { msg.className = 'tmmsg err'; msg.textContent = 'Sign in (☰ menu) or enter the team PIN to add pianos.'; return; }
+  if (!ok) { msg.className = 'tmmsg err'; msg.textContent = 'Sign in with Google (☰ menu) to make changes — actions are logged under your name.'; return; }
   btn.disabled = true;
   msg.className = 'tmmsg'; msg.textContent = 'Adding to the Piano Log…';
   const fields = {serial, year: v('.adyear'), make: v('.admake'), model: v('.admodel'),
@@ -1926,7 +1931,7 @@ async function submitAdd(slotId, ov) {
     const j = await r.json();
     if (j.error === 'unauthorized') {
       lsDel('blpPin');
-      throw new Error('Not authorized — sign in or re-enter the PIN, then try again.');
+      throw new Error('Not authorized — sign in again from the ☰ menu, then retry.');
     }
     if (j.duplicate) {
       // same serial already in the log — offer to move it here instead
@@ -2045,7 +2050,7 @@ async function submitMoveReq(p, ov) {
   const msg = ov.querySelector('.tmmsg');
   const btn = ov.querySelector('.mvgo2');
   const {pin, ok} = writeAuth();
-  if (!ok) { msg.className = 'tmmsg err'; msg.textContent = 'Sign in or enter the team PIN first.'; return; }
+  if (!ok) { msg.className = 'tmmsg err'; msg.textContent = 'Sign in with Google (☰ menu) to make changes — actions are logged under your name.'; return; }
   btn.disabled = true;
   msg.className = 'tmmsg'; msg.textContent = 'Adding to the Monday move list…';
   try {
@@ -2057,7 +2062,7 @@ async function submitMoveReq(p, ov) {
         notes: ov.querySelector('.mvnotes').value.trim(), ...authFields()}),
     });
     const j = await r.json();
-    if (j.error === 'unauthorized') { lsDel('blpPin'); throw new Error('Not authorized — sign in or re-enter the PIN.'); }
+    if (j.error === 'unauthorized') { lsDel('blpPin'); throw new Error('Not authorized — sign in again from the ☰ menu.'); }
     if (!j.scheduled) throw new Error(j.error || 'request failed');
     msg.className = 'tmmsg ok';
     msg.textContent = `✓ On the moving calendar: grouped into the ${j.date} 7:00 AM in-store moves.`;
@@ -2106,7 +2111,7 @@ async function submitService(p, ov) {
   const msg = ov.querySelector('.tmmsg');
   const btn = ov.querySelector('.svgo');
   const {pin, ok} = writeAuth();
-  if (!ok) { msg.className = 'tmmsg err'; msg.textContent = 'Sign in or enter the team PIN first.'; return; }
+  if (!ok) { msg.className = 'tmmsg err'; msg.textContent = 'Sign in with Google (☰ menu) to make changes — actions are logged under your name.'; return; }
   const sel = ov.querySelector('.svtech');
   const techName = sel.options[sel.selectedIndex].text;
   btn.disabled = true;
@@ -2121,7 +2126,7 @@ async function submitService(p, ov) {
         notes: ov.querySelector('.svnotes').value.trim(), ...authFields()}),
     });
     const j = await r.json();
-    if (j.error === 'unauthorized') { lsDel('blpPin'); throw new Error('Not authorized — sign in or re-enter the PIN.'); }
+    if (j.error === 'unauthorized') { lsDel('blpPin'); throw new Error('Not authorized — sign in again from the ☰ menu.'); }
     if (!j.scheduled) throw new Error(j.error || 'scheduling failed');
     msg.className = 'tmmsg ok';
     msg.textContent = `✓ Scheduled with ${j.tech}: ${j.date} at ${j.time} (${j.minutes} min) — on the QC & Showroom repairs calendar, invite sent to ${j.tech.split(' ')[0]}.`;
@@ -2157,7 +2162,7 @@ async function submitCurtis(p, ov) {
   const msg = ov.querySelector('.tmmsg');
   const btn = ov.querySelector('.chgo');
   const {pin, ok} = writeAuth();
-  if (!ok) { msg.className = 'tmmsg err'; msg.textContent = 'Sign in or enter the team PIN first.'; return; }
+  if (!ok) { msg.className = 'tmmsg err'; msg.textContent = 'Sign in with Google (☰ menu) to make changes — actions are logged under your name.'; return; }
   btn.disabled = true;
   msg.className = 'tmmsg'; msg.textContent = 'Adding to the work orders sheet…';
   try {
@@ -2169,7 +2174,7 @@ async function submitCurtis(p, ov) {
         notes: ov.querySelector('.chnotes').value.trim(), ...authFields()}),
     });
     const j = await r.json();
-    if (j.error === 'unauthorized') { lsDel('blpPin'); throw new Error('Not authorized — sign in or re-enter the PIN.'); }
+    if (j.error === 'unauthorized') { lsDel('blpPin'); throw new Error('Not authorized — sign in again from the ☰ menu.'); }
     if (!j.ok) throw new Error(j.error || 'request failed');
     msg.className = 'tmmsg ok';
     msg.textContent = `✓ Added to Curtis Harper's work orders (${j.tab || 'Requested'} tab) and the activity log.`;
@@ -2209,7 +2214,7 @@ async function submitAdmin(p, ov) {
   const notes = ov.querySelector('.amnotes').value.trim();
   if (!notes) { msg.className = 'tmmsg err'; msg.textContent = 'Describe the request first.'; return; }
   const {pin, ok} = writeAuth();
-  if (!ok) { msg.className = 'tmmsg err'; msg.textContent = 'Sign in or enter the team PIN first.'; return; }
+  if (!ok) { msg.className = 'tmmsg err'; msg.textContent = 'Sign in with Google (☰ menu) to make changes — actions are logged under your name.'; return; }
   const sel = ov.querySelector('.amwho');
   const when = ov.querySelector('input[name=amwhen]:checked').value;
   btn.disabled = true;
@@ -2223,7 +2228,7 @@ async function submitAdmin(p, ov) {
         notes, when, ...authFields()}),
     });
     const j = await r.json();
-    if (j.error === 'unauthorized') { lsDel('blpPin'); throw new Error('Not authorized — sign in or re-enter the PIN.'); }
+    if (j.error === 'unauthorized') { lsDel('blpPin'); throw new Error('Not authorized — sign in again from the ☰ menu.'); }
     if (!j.ok) throw new Error(j.error || 'request failed');
     msg.className = 'tmmsg ok';
     msg.textContent = j.batched
@@ -2256,7 +2261,7 @@ async function submitGeneric(p, kind, ov) {
   const msg = ov.querySelector('.tmmsg');
   const btn = ov.querySelector('.ggo');
   const {pin, ok} = writeAuth();
-  if (!ok) { msg.className = 'tmmsg err'; msg.textContent = 'Sign in or enter the team PIN first.'; return; }
+  if (!ok) { msg.className = 'tmmsg err'; msg.textContent = 'Sign in with Google (☰ menu) to make changes — actions are logged under your name.'; return; }
   btn.disabled = true;
   msg.className = 'tmmsg'; msg.textContent = 'Sending…';
   try {
@@ -2267,7 +2272,7 @@ async function submitGeneric(p, kind, ov) {
         kind, notes: ov.querySelector('.gnotes').value.trim(), ...authFields()}),
     });
     const j = await r.json();
-    if (j.error === 'unauthorized') { lsDel('blpPin'); throw new Error('Not authorized — sign in or re-enter the PIN.'); }
+    if (j.error === 'unauthorized') { lsDel('blpPin'); throw new Error('Not authorized — sign in again from the ☰ menu.'); }
     if (!j.ok) throw new Error(j.error || 'request failed');
     msg.className = 'tmmsg ok';
     msg.textContent = `✓ ${kind} request emailed to Brigham and logged.`;
@@ -2347,7 +2352,7 @@ async function submitPrice(p, ov) {
   const raw = ov.querySelector('.prin').value.trim();
   if (!raw) { ov.hidden = true; return; }   // empty = same as skip
   const {pin, ok} = writeAuth();
-  if (!ok) { msg.className = 'tmmsg err'; msg.textContent = 'Sign in or enter the team PIN first.'; return; }
+  if (!ok) { msg.className = 'tmmsg err'; msg.textContent = 'Sign in with Google (☰ menu) to make changes — actions are logged under your name.'; return; }
   btn.disabled = true;
   msg.className = 'tmmsg'; msg.textContent = 'Saving the price…';
   try {
@@ -2358,7 +2363,7 @@ async function submitPrice(p, ov) {
         price: raw, ...authFields()}),
     });
     const j = await r.json();
-    if (j.error === 'unauthorized') { lsDel('blpPin'); throw new Error('Not authorized — sign in or re-enter the PIN.'); }
+    if (j.error === 'unauthorized') { lsDel('blpPin'); throw new Error('Not authorized — sign in again from the ☰ menu.'); }
     if (!j.ok) throw new Error(j.error || 'save failed');
     p.price = j.price;
     const edit = pendingEdits.get(p.row) || {};
@@ -2378,7 +2383,7 @@ async function submitPriceRequest(p, ov) {
   const msg = ov.querySelector('.tmmsg');
   const btn = ov.querySelector('.prskip');
   const {pin, ok} = writeAuth();
-  if (!ok) { msg.className = 'tmmsg err'; msg.textContent = 'Sign in or enter the team PIN first.'; return; }
+  if (!ok) { msg.className = 'tmmsg err'; msg.textContent = 'Sign in with Google (☰ menu) to make changes — actions are logged under your name.'; return; }
   btn.disabled = true;
   msg.className = 'tmmsg'; msg.textContent = 'Emailing Brigham…';
   try {
@@ -2388,7 +2393,7 @@ async function submitPriceRequest(p, ov) {
       body: JSON.stringify({pin, serial: p.serial, action: 'requestprice', row: p.row, ...authFields()}),
     });
     const j = await r.json();
-    if (j.error === 'unauthorized') { lsDel('blpPin'); throw new Error('Not authorized — sign in or re-enter the PIN.'); }
+    if (j.error === 'unauthorized') { lsDel('blpPin'); throw new Error('Not authorized — sign in again from the ☰ menu.'); }
     if (!j.ok) throw new Error(j.error || 'request failed');
     msg.className = 'tmmsg ok';
     msg.textContent = '✓ Price request emailed to Brigham.';
@@ -2448,7 +2453,7 @@ async function submitTune(p, ov) {
   const msg = ov.querySelector('.tmmsg');
   const btn = ov.querySelector('.tmgo');
   const {pin, ok} = writeAuth();
-  if (!ok) { msg.className = 'tmmsg err'; msg.textContent = 'A team PIN is required to schedule tunings.'; return; }
+  if (!ok) { msg.className = 'tmmsg err'; msg.textContent = 'Sign in with Google (☰ menu) to make changes — actions are logged under your name.'; return; }
   const sel = ov.querySelector('.tmtech');
   const techId = sel.value;
   const techName = sel.options[sel.selectedIndex].text;
@@ -2467,7 +2472,7 @@ async function submitTune(p, ov) {
     const j = await r.json();
     if (j.error === 'unauthorized') {
       lsDel('blpPin');
-      throw new Error('Wrong PIN — click Schedule to try again.');
+      throw new Error('Not authorized — sign in again (☰ menu), then click Schedule.');
     }
     if (!j.scheduled) throw new Error(j.error || 'scheduling failed');
     msg.className = 'tmmsg ok';
@@ -2515,10 +2520,9 @@ async function submitBrigham(p, ov) {
   const af = authFields();
   const keyIn = ov.querySelector('.brigkey');
   const key = (lsGet('blp.appkey') || '').trim() || keyIn.value.trim();
-  if (!af.idToken && !key) {
-    keyIn.hidden = false; keyIn.focus();
+  if (!af.idToken) {
     msg.className = 'tmmsg err';
-    msg.textContent = 'Sign in with Google, or enter the BLP app passcode.';
+    msg.textContent = 'Sign in with Google (☰ menu) first — requests are logged under your name.';
     return;
   }
   btn.disabled = true;
@@ -2561,7 +2565,7 @@ async function uploadPhoto(p, input, pop) {
   const msg = pop.querySelector('.photomsg');
   popPinned = true;
   const {pin, ok} = writeAuth();
-  if (!ok) { msg.className = 'photomsg err'; msg.textContent = 'A team PIN is required — photo not sent.'; return; }
+  if (!ok) { msg.className = 'photomsg err'; msg.textContent = 'Sign in with Google (☰ menu) to make changes — actions are logged under your name.'; return; }
   try {
     msg.className = 'photomsg'; msg.textContent = 'Preparing photo…';
     const dataUrl = await downscalePhoto(f, 1800, 0.85);
@@ -2576,7 +2580,7 @@ async function uploadPhoto(p, input, pop) {
     const j = await r.json();
     if (j.error === 'unauthorized') {
       lsDel('blpPin');
-      msg.className = 'photomsg err'; msg.textContent = '✗ Wrong PIN — tap the button to try again.';
+      msg.className = 'photomsg err'; msg.textContent = '✗ Not authorized — sign in again (☰ menu), then retry.';
     } else if (j.error) {
       msg.className = 'photomsg err'; msg.textContent = '✗ ' + j.error;
     } else if (!j.saved) {
@@ -2616,12 +2620,20 @@ function teamPin(forceAsk) {
   }
   return pin;
 }
-// signed-in Google users write without a PIN (the bridge verifies their
-// token); everyone else gets the classic PIN prompt
+// Changes REQUIRE a Google sign-in so every action is logged by name —
+// the PIN alone no longer unlocks writes (it still rides along for the
+// bridge's legacy check). Signed-out users are pointed at the menu.
 function writeAuth() {
-  if (authUser()) return {pin: lsGet('blpPin') || '', ok: true};
-  const pin = teamPin(false);
-  return {pin, ok: !!pin};
+  const u = authUser();
+  if (u) return {pin: lsGet('blpPin') || '', ok: true};
+  try {
+    // surface the sign-in box so "why can't I edit?" answers itself
+    $('#side').classList.add('open');
+    $('#scrim').classList.add('show');
+    const box = $('#authbox');
+    if (box) box.scrollIntoView({block: 'nearest'});
+  } catch (e) {}
+  return {pin: '', ok: false};
 }
 
 /* ---------- Google sign-in (identity + PIN-free writes) ---------------- */
