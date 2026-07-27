@@ -1012,11 +1012,13 @@ function popHTML(p) {
           `<button class="trk dn ${dl.includes(ph) ? 'on' : ''}" data-ph="${esc(ph)}" title="${esc(ph)}">${i + 1}${dl.includes(ph) ? '✓' : ''}</button>`).join('')}
         </span></div><div class="dnmsg phmsg"></div>`;
     })() : ''}
-    ${(p.phase || '').startsWith('Waiting') && p.waitNote ? `<div class="row waitnote">Waiting on <b>${esc(p.waitNote)}</b></div>` : ''}
-    ${(p.phase || '').startsWith('Waiting') && p.serial ? `<div class="row rowflex snzrow"><span>Check back
-        <b class="snzcur">${p.checkBack ? esc(p.checkBack) : '—'}</b></span>
-      <span class="snzbtns"><button class="snz" data-d="3">+3d</button><button class="snz" data-d="7">+1w</button><button class="snz" data-d="14">+2w</button><button class="snz" data-d="30">+1m</button></span>
-    </div><div class="snzmsg phmsg"></div>` : ''}
+    ${(p.phase || '').startsWith('Waiting') ? `<div class="row waitnote">Waiting on
+        <b>${esc(p.waitNote || p.phase.replace('Waiting on ', ''))}</b>
+        ${p.checkBack ? `<span class="wncb">· check back <b class="snzcur">${esc(p.checkBack)}</b></span>` : ''}
+      </div>
+      ${p.serial ? `<div class="row rowflex snzrow"><span class="snzlbl">${p.checkBack ? 'Re-snooze' : 'Check back in'}</span>
+        <span class="snzbtns"><button class="snz" data-d="3">+3d</button><button class="snz" data-d="7">+1w</button><button class="snz" data-d="14">+2w</button><button class="snz" data-d="30">+1m</button></span>
+      </div><div class="snzmsg phmsg"></div>` : ''}` : ''}
     ${p.serial ? `<button class="tunebtn reqbtn">📨 Request… ▾</button>
       <div class="reqmenu" hidden>
         <button data-req="move">🚚 Move</button>
@@ -1138,15 +1140,17 @@ function wirePop(p) {
   if (pt) pt.onclick = ev => ev.stopPropagation();
 }
 
-async function setPhase(p, phase, pop, note) {
+async function setPhase(p, phase, pop, extra) {
   const msg = pop.querySelector('.phmsg');
   const sel = pop.querySelector('.phsel');
   const was = p.phase || '';
   if (phase === was) return;
-  if (phase === 'Waiting on OTHER' && note == null) {
-    openWaitNoteModal(p, phase, pop);   // ask what we're waiting on first
+  if (phase.startsWith('Waiting') && extra == null) {
+    openWaitNoteModal(p, phase, pop);   // ask for details + check-back first
     return;
   }
+  const note = extra && extra.note;
+  const checkBack = extra && extra.checkBack;
   popPinned = true;
   const {pin, ok} = writeAuth();   // signed-in users skip the PIN
   if (!ok) {
@@ -1165,7 +1169,8 @@ async function setPhase(p, phase, pop, note) {
     const r = await fetch(BRIDGE_URL, {
       method: 'POST', redirect: 'follow',
       headers: {'content-type': 'text/plain;charset=utf-8'},
-      body: JSON.stringify({pin, serial: p.serial, action: 'setphase', phase, note: note || '', row: p.row, ...authFields()}),
+      body: JSON.stringify({pin, serial: p.serial, action: 'setphase', phase,
+        note: note || '', checkBack: checkBack || '', row: p.row, ...authFields()}),
     });
     const j = await r.json();
     if (j.error === 'unauthorized') {
@@ -1180,6 +1185,8 @@ async function setPhase(p, phase, pop, note) {
       renderMap();
       if (p.phase === 'For Sale') openPriceModal(p);
       if (j.note != null) p.waitNote = j.note;
+      if (j.checkBack != null) p.checkBack = j.checkBack;
+      openPop(p.row, S.popAnchor, true);   // refresh the card rows
     } else {
       revertPhase(p, was, sel, edit);
       msg.className = 'phmsg err'; msg.textContent = '✗ ' + (j.error || 'update failed');
@@ -1352,7 +1359,7 @@ async function setSnooze(p, date, pop) {
   p.checkBack = date;
   const edit = pendingEdits.get(p.row) || {};
   edit.checkBack = date; pendingEdits.set(p.row, edit);
-  const cur = pop.querySelector('.snzcur');
+  let cur = pop.querySelector('.snzcur');
   if (cur) cur.textContent = date;
   msg.className = 'snzmsg phmsg'; msg.textContent = 'Saving…';
   try {
@@ -1915,13 +1922,23 @@ async function submitGeneric(p, kind, ov) {
 
 /* ---------- Waiting-on-OTHER note popup ---------- */
 function openWaitNoteModal(p, phase, pop) {
+  const who = phase.replace('Waiting on ', '');
+  const other = who === 'OTHER';
   const ov = modalShell('waitmodal', `
     <span class="x">✕</span>
-    <h3>⏳ Waiting on OTHER — what are we waiting for?</h3>
+    <h3>⏳ ${esc(phase)} — details</h3>
     ${pianoHeader(p)}
-    <label>What is being waited on?</label>
-    <textarea class="wnotes" rows="3" placeholder="parts from supplier, customer decision, insurance…"></textarea>
-    <button class="tmgo wgo">Set phase to Waiting on OTHER</button>
+    <label>${other ? 'What is being waited on?' : `Notes <small>(optional — what are we waiting on ${esc(who)} for?)</small>`}</label>
+    <textarea class="wnotes" rows="3" placeholder="${other ? 'parts from supplier, customer decision, insurance…' : 'decision, approval, parts…'}"></textarea>
+    <label>Check back on this piano in…</label>
+    <select class="wsnooze">
+      <option value="3">3 days</option>
+      <option value="7" selected>1 week</option>
+      <option value="14">2 weeks</option>
+      <option value="30">1 month</option>
+      <option value="">no reminder date</option>
+    </select>
+    <button class="tmgo wgo">Set phase to ${esc(phase)}</button>
     <div class="tmmsg"></div>`);
   const sel = pop.querySelector('.phsel');
   ov.onclick = ev => {
@@ -1932,13 +1949,19 @@ function openWaitNoteModal(p, phase, pop) {
   };
   ov.querySelector('.wgo').onclick = () => {
     const note = ov.querySelector('.wnotes').value.trim();
-    if (!note) {
+    if (other && !note) {
       ov.querySelector('.tmmsg').className = 'tmmsg err';
       ov.querySelector('.tmmsg').textContent = 'Say what is being waited on first.';
       return;
     }
+    const days = ov.querySelector('.wsnooze').value;
+    let checkBack = '';
+    if (days) {
+      const d = new Date(Date.now() + (+days) * 86400000);
+      checkBack = `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`;
+    }
     ov.hidden = true;
-    setPhase(p, phase, pop, note);
+    setPhase(p, phase, pop, {note, checkBack});
   };
   ov.querySelector('.wnotes').focus();
 }

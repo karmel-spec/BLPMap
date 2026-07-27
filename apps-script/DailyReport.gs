@@ -969,8 +969,31 @@ function setPhase_(req) {
       sh.getRange(found.row, ncol).setValue('');
     }
   }
+  // check-back date chosen in the Waiting popup rides the same write
+  var cb = '';
+  var cbcol = -1;
+  hdr = sh.getRange(2, 1, 1, sh.getLastColumn()).getValues()[0];
+  for (var cc = 0; cc < hdr.length; cc++) {
+    if (String(hdr[cc] || '').trim().toUpperCase() === 'CHECK BACK') { cbcol = cc + 1; break; }
+  }
+  if (cbcol < 0 && req.checkBack) {
+    sh.getRange(2, sh.getLastColumn() + 1).setValue('CHECK BACK');
+    cbcol = sh.getLastColumn();
+  }
+  if (cbcol > 0) {
+    if (phase.indexOf('Waiting') === 0) {
+      if (req.checkBack != null && String(req.checkBack).trim()) {
+        cb = String(req.checkBack).trim();
+        sh.getRange(found.row, cbcol).setValue(cb);
+      } else {
+        cb = String(sh.getRange(found.row, cbcol).getValue() || '');
+      }
+    } else {
+      sh.getRange(found.row, cbcol).setValue('');
+    }
+  }
   return {ok: true, row: found.row, summary: found.summary,
-          previous: prev, phase: phase, note: note};
+          previous: prev, phase: phase, note: note, checkBack: cb};
 }
 
 /**
