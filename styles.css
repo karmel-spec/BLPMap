@@ -149,12 +149,6 @@ body{background:#f7f8f9;color:#121212;display:flex;flex-direction:column;overflo
 .pop .tag.coming{background:#fdf3cf;color:#8a6a00}
 .tunebtn{width:100%;margin-top:8px;background:#fff;color:#3a6ea5;border:1.5px solid #3a6ea5;border-radius:7px;padding:8px;font-weight:700;font-size:12.5px;cursor:pointer}
 .photobtn{width:100%;margin-top:8px;background:#fff;color:#2e7d4f;border:1.5px solid #2e7d4f;border-radius:7px;padding:8px;font-weight:700;font-size:12.5px;cursor:pointer}
-.brigbtn{width:100%;margin-top:8px;background:#fff;color:#8a5a00;border:1.5px solid #c9942e;border-radius:7px;padding:8px;font-weight:700;font-size:12.5px;cursor:pointer}
-.brigbtn:hover{background:#faf3e3}
-.brigbox{margin-top:7px;display:flex;flex-direction:column;gap:6px}
-.brignotes,.brigkey{width:100%;border:1px solid #d9dde1;border-radius:7px;padding:7px 9px;font-size:12.5px;font-family:inherit;resize:vertical}
-.briggo{width:100%;background:#c9942e;color:#fff;border:none;border-radius:7px;padding:8px;font-weight:700;font-size:12.5px;cursor:pointer}
-.brigmsg{font-size:12px;margin-top:5px;min-height:14px;color:#6b7480}
 .photobtn:hover{background:#e8f4ec}
 .photomsg{font-size:12px;margin-top:5px;min-height:14px;color:#6b7480}
 .photomsg.ok{color:#2e7d4f;font-weight:700}
@@ -254,6 +248,10 @@ td a{color:#9e2020}
 .creports:hover{border-color:#3a6ea5;color:#3a6ea5}
 .crtog{display:inline-flex;gap:6px;align-items:center;font-size:10.5px;color:#5a626a;font-weight:600;margin:1px 0 3px;cursor:pointer}
 .crmsg{font-size:10.5px;margin-left:6px}
+.snzbtns{display:flex;gap:4px}
+.snz{border:1px solid #cfd6dc;background:#fff;color:#5a626a;border-radius:6px;font-size:10px;font-weight:700;padding:2px 6px;cursor:pointer}
+.snz:hover{border-color:#9e2020;color:#9e2020}
+.snzcur{color:#3a6ea5}
 .predit{border:1px solid #cfd6dc;background:#fff;color:#2e7d4f;border-radius:6px;font-size:10.5px;font-weight:700;padding:2px 8px;cursor:pointer;white-space:nowrap}
 .predit:hover{background:#2e7d4f;border-color:#2e7d4f;color:#fff}
 .addplus{fill:#aab3bb;font-weight:700;cursor:pointer}

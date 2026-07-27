@@ -77,6 +77,8 @@ function parsePianos(text) {
     ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'WAITING NOTE') : -1;
   const crIdx = rows[1]
     ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'CLIENT REPORTS') : -1;
+  const cbIdx = rows[1]
+    ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'CHECK BACK') : -1;
   // CUSTOM SHOPWORK queue bounds (1-based rows)
   let qHdr = 0, qEnd = 0;
   for (let k = 0; k < rows.length; k++) {
@@ -124,6 +126,7 @@ function parsePianos(text) {
       phasesDone: doneIdx >= 0 ? col(doneIdx) : '',
       waitNote: waitIdx >= 0 ? col(waitIdx) : '',
       clientReports: crIdx >= 0 ? col(crIdx) : '',
+      checkBack: cbIdx >= 0 ? col(cbIdx) : '',
       bphoto: med(13), aphoto: med(15), bvideo: med(16), avideo: med(17),
       queuePos: 0, queueTotal: 0,
       isNew, active,

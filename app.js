@@ -192,6 +192,10 @@ function applyPending() {
       if ((p.clientReports || '') === edit.clientReports) delete edit.clientReports;
       else { p.clientReports = edit.clientReports; stillPending = true; }
     }
+    if ('checkBack' in edit) {
+      if ((p.checkBack || '') === edit.checkBack) delete edit.checkBack;
+      else { p.checkBack = edit.checkBack; stillPending = true; }
+    }
     if (!stillPending) pendingEdits.delete(row);
   }
 }
@@ -960,12 +964,6 @@ function popHTML(p) {
        <input type="file" class="photoin" accept="image/*" capture="environment" hidden>
        <div class="photomsg"></div>`
     : '';
-  const brig = `<button class="brigbtn">🗒 Request Brigham Task</button>
-    <div class="brigbox" hidden>
-      <textarea class="brignotes" rows="2" placeholder="what does Brigham need to do on this piano?"></textarea>
-      <input class="brigkey" type="password" placeholder="BLP app passcode (once on this device)" hidden>
-      <button class="briggo">Add to Brigham's list</button>
-    </div><div class="brigmsg"></div>`;
   const effPh = effectivePhase(p);
   const cur = (p.track || '').split(',').map(t => t.trim()).filter(Boolean);
   const tracker = p.serial
@@ -1004,6 +1002,10 @@ function popHTML(p) {
     <div class="row">Last tuned <b>${ti.last ? esc(fmtDayYear(ti.last)) : '—'}</b></div>
     ${ti.next ? `<div class="row">Tuning scheduled <b class="tunesched">🎵 ${esc(fmtDay(ti.next.date))} · ${esc(ti.next.time)}</b></div>` : ''}
     ${(p.phase || '').startsWith('Waiting') && p.waitNote ? `<div class="row">Waiting on <b>${esc(p.waitNote)}</b></div>` : ''}
+    ${(p.phase || '').startsWith('Waiting') && p.serial ? `<div class="row rowflex snzrow"><span>Check back
+        <b class="snzcur">${p.checkBack ? esc(p.checkBack) : '—'}</b></span>
+      <span class="snzbtns"><button class="snz" data-d="3">+3d</button><button class="snz" data-d="7">+1w</button><button class="snz" data-d="14">+2w</button><button class="snz" data-d="30">+1m</button></span>
+    </div><div class="snzmsg phmsg"></div>` : ''}
     ${mediaCard(p)}
     ${tracker}
     ${phaser}
@@ -1024,6 +1026,7 @@ function popHTML(p) {
         <button data-req="touchup">🖌 Touch Up</button>
         <button data-req="price">💲 Price Change</button>
         <button data-req="priority">⚡ Priority Scheduling</button>
+        <button data-req="brigham">🗒 Brigham Task</button>
       </div>` : ''}
     ${photo}
     ${mover}
@@ -1088,6 +1091,11 @@ function wirePop(p) {
     window.open('https://blpshop.netlify.app/#history=' + encodeURIComponent(p.serial),
       '_blank', 'noopener');
   };
+  pop.querySelectorAll('.snz').forEach(b => b.onclick = ev => {
+    ev.stopPropagation();
+    const d = new Date(Date.now() + (+b.dataset.d) * 86400000);
+    setSnooze(p, `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`, pop);
+  });
   const ck = pop.querySelector('.crchk');
   if (ck) ck.onchange = ev => { ev.stopPropagation(); setClientReports(p, ck.checked, pop); };
   const cr = pop.querySelector('.creports');
@@ -1114,19 +1122,8 @@ function wirePop(p) {
     else if (kind === 'admin') openAdminModal(p);
     else if (kind === 'touchup') openGenericModal(p, 'Touch Up');
     else if (kind === 'priority') openGenericModal(p, 'Priority Scheduling');
+    else if (kind === 'brigham') openBrighamModal(p);
   });
-  const bb = pop.querySelector('.brigbtn');
-  if (bb) bb.onclick = ev => {
-    ev.stopPropagation(); popPinned = true;
-    bb.hidden = true;
-    pop.querySelector('.brigbox').hidden = false;
-    place(pop, S.popAnchor);
-    pop.querySelector('.brignotes').focus();
-  };
-  const bg = pop.querySelector('.briggo');
-  if (bg) bg.onclick = ev => { ev.stopPropagation(); requestBrigTask(p, pop); };
-  const bx = pop.querySelector('.brigbox');
-  if (bx) bx.onclick = ev => ev.stopPropagation();
   const pb = pop.querySelector('.photobtn');
   const pi = pop.querySelector('.photoin');
   if (pb) pb.onclick = ev => { ev.stopPropagation(); popPinned = true; pi.click(); };
@@ -1334,8 +1331,45 @@ async function setClientReports(p, enabled, pop) {
   } catch (e) {
     p.clientReports = was;
     delete edit.clientReports; if (!Object.keys(edit).length) pendingEdits.delete(p.row);
-    const ck = pop.querySelector('.crchk'); if (ck) ck.checked = !enabled;
+    pop.querySelectorAll('.snz').forEach(b => b.onclick = ev => {
+    ev.stopPropagation();
+    const d = new Date(Date.now() + (+b.dataset.d) * 86400000);
+    setSnooze(p, `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`, pop);
+  });
+  const ck = pop.querySelector('.crchk'); if (ck) ck.checked = !enabled;
     msg.className = 'crmsg phmsg err'; msg.textContent = '✗ ' + e.message;
+  }
+}
+
+// snooze: when to check whether this piano's wait is over
+async function setSnooze(p, date, pop) {
+  const msg = pop.querySelector('.snzmsg');
+  popPinned = true;
+  const {pin, ok} = writeAuth();
+  if (!ok) { msg.className = 'snzmsg phmsg err'; msg.textContent = 'Sign in or enter the PIN first.'; return; }
+  const was = p.checkBack || '';
+  p.checkBack = date;
+  const edit = pendingEdits.get(p.row) || {};
+  edit.checkBack = date; pendingEdits.set(p.row, edit);
+  const cur = pop.querySelector('.snzcur');
+  if (cur) cur.textContent = date;
+  msg.className = 'snzmsg phmsg'; msg.textContent = 'Saving…';
+  try {
+    const r = await fetch(BRIDGE_URL, {
+      method: 'POST', redirect: 'follow',
+      headers: {'content-type': 'text/plain;charset=utf-8'},
+      body: JSON.stringify({pin, serial: p.serial, action: 'setsnooze',
+        date, row: p.row, ...authFields()}),
+    });
+    const j = await r.json();
+    if (j.error === 'unauthorized') { localStorage.removeItem('blpPin'); throw new Error('Not authorized'); }
+    if (!j.ok) throw new Error(j.error || 'save failed');
+    msg.className = 'snzmsg phmsg ok'; msg.textContent = `✓ Check back ${j.checkBack}`;
+  } catch (e) {
+    p.checkBack = was;
+    delete edit.checkBack; if (!Object.keys(edit).length) pendingEdits.delete(p.row);
+    if (cur) cur.textContent = was || '—';
+    msg.className = 'snzmsg phmsg err'; msg.textContent = '✗ ' + e.message;
   }
 }
 
@@ -2070,47 +2104,70 @@ async function submitTune(p, ov) {
   }
 }
 
-// "Request Brigham Task": note → the Brigham Tasks tab (Shop Manager "Brigham"
-// view). Auth: the map's Google sign-in when it's a company account, else the
-// BLP app passcode (asked once, stored on this device).
-async function requestBrigTask(p, pop) {
-  const msg = pop.querySelector('.brigmsg');
-  const note = pop.querySelector('.brignotes').value.trim();
-  if (!note) { msg.textContent = 'Write the task first.'; return; }
-  popPinned = true;
+// "Request Brigham Task": note → the Brigham Tasks tab on the report sheet,
+// which the Shop Manager's "Brigham" view renders as his priority list.
+// Auth: the map's Google sign-in (company account), else the BLP app
+// passcode (asked once, stored on this device).
+function openBrighamModal(p) {
+  popPinned = false; $('#pop').hidden = true;
+  serialDatalist();
+  const ov = modalShell('brigmodal', `
+    <span class="x">✕</span>
+    <h3>🗒 Brigham Task</h3>
+    ${pianoHeader(p)}
+    <label>Note for Brigham <small>— lands on his priority list (Shop Manager → Brigham)</small></label>
+    <textarea class="gnotes" rows="3" placeholder="what does Brigham need to do?"></textarea>
+    <input class="brigkey" type="password" placeholder="BLP app passcode (once on this device)" hidden
+      style="width:100%;border:1px solid #d9dde1;border-radius:7px;padding:7px 9px;font-size:12.5px;margin-top:6px">
+    <button class="tmgo bgo">Add to Brigham's priority list</button>
+    <div class="tmmsg"></div>`);
+  ov.querySelector('.bgo').onclick = () => submitBrigham(p, ov);
+  ov.querySelector('.gnotes').focus();
+}
+
+async function submitBrigham(p, ov) {
+  const msg = ov.querySelector('.tmmsg');
+  const btn = ov.querySelector('.bgo');
+  const note = ov.querySelector('.gnotes').value.trim();
+  if (!note) { msg.className = 'tmmsg err'; msg.textContent = 'Write the task first.'; return; }
   const af = authFields();
-  const keyIn = pop.querySelector('.brigkey');
-  const storedKey = (localStorage.getItem('blp.appkey') || '').trim() || keyIn.value.trim();
-  if (!af.idToken && !storedKey) {
+  const keyIn = ov.querySelector('.brigkey');
+  const key = (localStorage.getItem('blp.appkey') || '').trim() || keyIn.value.trim();
+  if (!af.idToken && !key) {
     keyIn.hidden = false; keyIn.focus();
-    msg.textContent = 'Enter the BLP app passcode (or sign in with Google) to send.';
+    msg.className = 'tmmsg err';
+    msg.textContent = 'Sign in with Google, or enter the BLP app passcode.';
     return;
   }
-  msg.textContent = 'Sending…';
-  const piano = [p.make, p.model].filter(Boolean).join(' ') || p.summary || '';
-  const label = (piano + (p.serial ? ' SN ' + p.serial : '') + (p.location ? ' @ ' + p.location : '')).trim();
+  btn.disabled = true;
+  msg.className = 'tmmsg'; msg.textContent = 'Sending…';
+  const gp = ov.querySelector('.gpiano');
+  const nm = p ? ([p.make, p.model].filter(Boolean).join(' ') || p.summary || '') : ((gp && gp.value.trim()) || '');
+  const label = (nm + (p && p.serial ? ' SN ' + p.serial : '') + (p && p.location ? ' @ ' + p.location : '')).trim();
   try {
     const headers = {'content-type': 'application/json'};
     if (af.idToken) headers.authorization = 'Bearer ' + af.idToken;
     const r = await fetch(BRIGHAM_API, {method: 'POST', headers,
-      body: JSON.stringify({key: storedKey, add: {piano: label.slice(0, 80), note,
+      body: JSON.stringify({key, add: {piano: label.slice(0, 80), note,
         from: (af.user && (af.user.name || af.user.email)) || 'Store Map'}})});
     const j = await r.json();
     if (j.ok) {
       if (keyIn.value.trim()) localStorage.setItem('blp.appkey', keyIn.value.trim());
-      msg.textContent = '✓ Added to Brigham’s priority list';
-      pop.querySelector('.brignotes').value = '';
-      pop.querySelector('.brigbox').hidden = true;
-      pop.querySelector('.brigbtn').hidden = false;
+      msg.className = 'tmmsg ok';
+      msg.textContent = '✓ On Brigham’s priority list.';
+      setTimeout(() => { ov.hidden = true; }, 1800);
     } else if (r.status === 401) {
       localStorage.removeItem('blp.appkey');
       keyIn.hidden = false; keyIn.value = ''; keyIn.focus();
-      msg.textContent = '✗ ' + (j.error || 'not authorized');
+      msg.className = 'tmmsg err'; msg.textContent = '✗ ' + (j.error || 'not authorized');
+      btn.disabled = false;
     } else {
-      msg.textContent = '✗ ' + (j.error || 'failed');
+      msg.className = 'tmmsg err'; msg.textContent = '✗ ' + (j.error || 'failed');
+      btn.disabled = false;
     }
   } catch (e) {
-    msg.textContent = '✗ ' + (e.message || e);
+    msg.className = 'tmmsg err'; msg.textContent = '✗ ' + (e.message || e);
+    btn.disabled = false;
   }
 }
 
@@ -2460,6 +2517,31 @@ function mediaTable() {
       <td><a target="_blank" rel="noopener" href="${logLink(p)}">log ↗</a></td></tr>`).join('')
      || '<tr><td colspan="6" class="empty">Every active piano has its media. 🎉</td></tr>') + '</table>';
 }
+function waitingPianos() {
+  return S.data.pianos.filter(p => p.active && (p.phase || '').startsWith('Waiting'));
+}
+function parseCheck(d) {
+  const m = /(\d{1,2})\/(\d{1,2})\/(\d{2,4})/.exec(d || '');
+  if (!m) return null;
+  let y = +m[3]; if (y < 100) y += 2000;
+  return `${y}-${String(m[1]).padStart(2, '0')}-${String(m[2]).padStart(2, '0')}`;
+}
+function waitingTable() {
+  const today = localDay();
+  const ws = waitingPianos().map(p => {
+    const iso = parseCheck(p.checkBack);
+    return {p, iso, overdue: !iso || iso <= today};
+  }).sort((a, b) => (a.iso || '0') < (b.iso || '0') ? -1 : 1);
+  return `<table><tr><th>PIANO</th><th>SERIAL</th><th>SPOT</th><th>WAITING ON</th><th>NOTE</th><th>CHECK BACK</th><th></th></tr>` +
+    (ws.map(({p, iso, overdue}) => `<tr class="mrow" data-row="${p.row}">
+      <td>${esc(pianoName(p))}</td><td>${esc(p.serial)}</td>
+      <td class="locraw">${esc(p.location || '—')}</td>
+      <td>${esc((p.phase || '').replace('Waiting on ', ''))}</td>
+      <td>${esc(p.waitNote || '—')}</td>
+      <td>${overdue ? `<b style="color:#c03636">${p.checkBack ? esc(p.checkBack) + ' — check now' : 'no date — set one'}</b>` : esc(p.checkBack)}</td>
+      <td><a target="_blank" rel="noopener" href="${logLink(p)}">log ↗</a></td></tr>`).join('')
+     || '<tr><td colspan="7" class="empty">No pianos are waiting on anything. 🎉</td></tr>') + '</table>';
+}
 function activityTable(rows) {
   if (!rows) return '<div class="empty">Loading the activity log…</div>';
   return `<table><tr><th>WHEN</th><th>WHO</th><th>ACTION</th><th>PIANO</th><th>DETAILS</th></tr>` +
@@ -2482,6 +2564,9 @@ const REPORT_DEFS = () => [
      p.active && (mediaNeeds(p).photo || mediaNeeds(p).video)).length,
    desc: 'Before photos/video for every active piano; after photos/video once it reaches Tuning or later.',
    html: mediaTable},
+  {id: 'waiting', icon: '⏳', title: 'WAITING ON', count: waitingPianos().length,
+   desc: 'Every piano parked in a Waiting phase — what it’s waiting on, and when to check whether the wait is over (set with the card’s +3d/+1w/+2w/+1m snooze buttons). Overdue or dateless waits show in red.',
+   html: waitingTable},
   {id: 'activity', icon: '📝', title: 'ACTIVITY LOG', count: null,
    desc: 'Who changed what — every move, phase change, media checkoff, and tuning request made through the map.',
    html: () => activityTable(S.activityRows)},
@@ -2646,6 +2731,7 @@ if (topReqBtn) {
     else if (kind === 'admin') openAdminModal(null);
     else if (kind === 'touchup') openGenericModal(null, 'Touch Up');
     else if (kind === 'priority') openGenericModal(null, 'Priority Scheduling');
+    else if (kind === 'brigham') openBrighamModal(null);
   });
 }
 

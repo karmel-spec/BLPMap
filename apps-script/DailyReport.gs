@@ -540,6 +540,12 @@ function doPost(e) {
         String(req.notes || '').slice(0, 200));
       return json_(tr);
     }
+    if (req.action === 'setsnooze') {
+      var sz = setSnooze_(req);
+      if (sz.ok) logAct_(who, 'Waiting check-back set', sz.summary || req.serial,
+        sz.checkBack || '(cleared)');
+      return json_(sz);
+    }
     if (req.action === 'setclientreports') {
       var cr = setClientReports_(req);
       if (cr.ok) logAct_(who, 'Client reports ' + (req.enabled ? 'ON' : 'OFF'),
@@ -1346,6 +1352,24 @@ function setupAdminDigest_() {
  */
 // per-piano client-reports switch — 'No' hides the piano from client
 // reporting everywhere (map card button + Shop manager Client Reports)
+// snooze for Waiting pianos: when to check whether the wait is over.
+// Stored in a CHECK BACK column (header row 2). req: {serial,row?,date}
+function setSnooze_(req) {
+  var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+  var found = findPiano_(sh, req.serial, req.row);
+  if (found.error) return found;
+  var last = sh.getLastColumn();
+  var hdr = sh.getRange(2, 1, 1, last).getValues()[0];
+  var col = -1;
+  for (var c = 0; c < hdr.length; c++) {
+    if (String(hdr[c] || '').trim().toUpperCase() === 'CHECK BACK') { col = c + 1; break; }
+  }
+  if (col < 0) { sh.getRange(2, last + 1).setValue('CHECK BACK'); col = last + 1; }
+  var val = String(req.date || '').trim();
+  sh.getRange(found.row, col).setValue(val);
+  return {ok: true, row: found.row, summary: found.summary, checkBack: val};
+}
+
 function setClientReports_(req) {
   var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
   var found = findPiano_(sh, req.serial, req.row);
