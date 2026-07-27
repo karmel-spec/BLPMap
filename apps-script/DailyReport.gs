@@ -933,8 +933,32 @@ function setPhase_(req) {
   var col = phaseCol_(sh);
   var prev = String(sh.getRange(found.row, col).getValue() || '');
   sh.getRange(found.row, col).setValue(phase);
+  // waiting note: why we're waiting — stored in a WAITING NOTE column,
+  // written with Waiting phases and cleared when the piano moves on
+  var last = sh.getLastColumn();
+  var hdr = sh.getRange(2, 1, 1, last).getValues()[0];
+  var ncol = -1;
+  for (var c = 0; c < hdr.length; c++) {
+    if (String(hdr[c] || '').trim().toUpperCase() === 'WAITING NOTE') { ncol = c + 1; break; }
+  }
+  if (ncol < 0 && (req.note || phase.indexOf('Waiting') === 0)) {
+    sh.getRange(2, last + 1).setValue('WAITING NOTE'); ncol = last + 1;
+  }
+  var note = '';
+  if (ncol > 0) {
+    if (phase.indexOf('Waiting') === 0) {
+      if (req.note != null && String(req.note).trim()) {
+        note = String(req.note).trim();
+        sh.getRange(found.row, ncol).setValue(note);
+      } else {
+        note = String(sh.getRange(found.row, ncol).getValue() || '');
+      }
+    } else {
+      sh.getRange(found.row, ncol).setValue('');
+    }
+  }
   return {ok: true, row: found.row, summary: found.summary,
-          previous: prev, phase: phase};
+          previous: prev, phase: phase, note: note};
 }
 
 /**

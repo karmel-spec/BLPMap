@@ -941,6 +941,7 @@ function popHTML(p) {
       : (priceLabel(p) ? `<div class="row">Price <b class="pricecard">${esc(priceLabel(p))}</b></div>` : '')}
     <div class="row">Last tuned <b>${ti.last ? esc(fmtDayYear(ti.last)) : '—'}</b></div>
     ${ti.next ? `<div class="row">Tuning scheduled <b class="tunesched">🎵 ${esc(fmtDay(ti.next.date))} · ${esc(ti.next.time)}</b></div>` : ''}
+    ${(p.phase || '').startsWith('Waiting') && p.waitNote ? `<div class="row">Waiting on <b>${esc(p.waitNote)}</b></div>` : ''}
     ${mediaCard(p)}
     ${tracker}
     ${phaser}
@@ -1057,11 +1058,15 @@ function wirePop(p) {
   if (pt) pt.onclick = ev => ev.stopPropagation();
 }
 
-async function setPhase(p, phase, pop) {
+async function setPhase(p, phase, pop, note) {
   const msg = pop.querySelector('.phmsg');
   const sel = pop.querySelector('.phsel');
   const was = p.phase || '';
   if (phase === was) return;
+  if (phase === 'Waiting on OTHER' && note == null) {
+    openWaitNoteModal(p, phase, pop);   // ask what we're waiting on first
+    return;
+  }
   popPinned = true;
   const {pin, ok} = writeAuth();   // signed-in users skip the PIN
   if (!ok) {
@@ -1080,7 +1085,7 @@ async function setPhase(p, phase, pop) {
     const r = await fetch(BRIDGE_URL, {
       method: 'POST', redirect: 'follow',
       headers: {'content-type': 'text/plain;charset=utf-8'},
-      body: JSON.stringify({pin, serial: p.serial, action: 'setphase', phase, row: p.row, ...authFields()}),
+      body: JSON.stringify({pin, serial: p.serial, action: 'setphase', phase, note: note || '', row: p.row, ...authFields()}),
     });
     const j = await r.json();
     if (j.error === 'unauthorized') {
@@ -1094,6 +1099,7 @@ async function setPhase(p, phase, pop) {
       msg.textContent = p.phase ? `✓ Saved — ${p.phase}` : '✓ Phase cleared';
       renderMap();
       if (p.phase === 'For Sale') openPriceModal(p);
+      if (j.note != null) p.waitNote = j.note;
     } else {
       revertPhase(p, was, sel, edit);
       msg.className = 'phmsg err'; msg.textContent = '✗ ' + (j.error || 'update failed');
@@ -1754,6 +1760,36 @@ async function submitGeneric(p, kind, ov) {
     msg.className = 'tmmsg err'; msg.textContent = '✗ ' + e.message;
     btn.disabled = false;
   }
+}
+
+/* ---------- Waiting-on-OTHER note popup ---------- */
+function openWaitNoteModal(p, phase, pop) {
+  const ov = modalShell('waitmodal', `
+    <span class="x">✕</span>
+    <h3>⏳ Waiting on OTHER — what are we waiting for?</h3>
+    ${pianoHeader(p)}
+    <label>What is being waited on?</label>
+    <textarea class="wnotes" rows="3" placeholder="parts from supplier, customer decision, insurance…"></textarea>
+    <button class="tmgo wgo">Set phase to Waiting on OTHER</button>
+    <div class="tmmsg"></div>`);
+  const sel = pop.querySelector('.phsel');
+  ov.onclick = ev => {
+    if (ev.target === ov || ev.target.classList.contains('x')) {
+      ov.hidden = true;
+      if (sel) sel.value = p.phase || '';   // cancelled — revert the dropdown
+    }
+  };
+  ov.querySelector('.wgo').onclick = () => {
+    const note = ov.querySelector('.wnotes').value.trim();
+    if (!note) {
+      ov.querySelector('.tmmsg').className = 'tmmsg err';
+      ov.querySelector('.tmmsg').textContent = 'Say what is being waited on first.';
+      return;
+    }
+    ov.hidden = true;
+    setPhase(p, phase, pop, note);
+  };
+  ov.querySelector('.wnotes').focus();
 }
 
 /* ---------- For Sale price popup ---------- */
