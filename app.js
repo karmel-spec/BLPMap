@@ -1169,6 +1169,21 @@ function applyBumps(bumped) {
     be.location = bp.location; pendingEdits.set(bp.row, be);
   });
 }
+// suggestion list for serial inputs: every active piano's serial, with its
+// name and spot as the hint — typing "189" offers every 189… serial
+function serialDatalist() {
+  let dl = document.getElementById('serialList');
+  if (!dl) {
+    dl = document.createElement('datalist');
+    dl.id = 'serialList';
+    document.body.appendChild(dl);
+  }
+  dl.innerHTML = S.data.pianos
+    .filter(p => p.active && p.serial)
+    .map(p => `<option value="${esc(p.serial)}">${esc(pianoName(p))}${p.location ? ' · ' + esc(p.location) : ''}</option>`)
+    .join('');
+}
+
 /* the ＋ on an empty spot: type a serial, the piano is found in the Piano
    Log and moved to this spot (existing occupants get bumped to the attic).
    Unknown serials fall back to the full add-a-piano form. */
@@ -1178,9 +1193,10 @@ function openAssignModal(slotId) {
     <span class="x">✕</span>
     <h3>＋ Put a Piano at Spot ${esc(slotId)}</h3>
     <label>Serial number</label>
-    <input class="asserial" maxlength="20" placeholder="type the piano's serial #">
+    <input class="asserial" maxlength="20" list="serialList" placeholder="type the piano's serial #">
     <button class="tmgo asgo">Find it and move it to spot ${esc(slotId)}</button>
     <div class="tmmsg"></div>`);
+  serialDatalist();
   const go = () => submitAssign(slotId, ov);
   ov.querySelector('.asgo').onclick = go;
   const inp = ov.querySelector('.asserial');
@@ -1261,7 +1277,7 @@ function openAddModal(slotId, prefillSerial) {
     <span class="x">✕</span>
     <h3>＋ Add a Piano — Spot ${esc(slotId)}</h3>
     <label>Serial number <small>(required)</small></label>
-    <input class="adserial" maxlength="20" placeholder="e.g. 546310"${''}
+    <input class="adserial" maxlength="20" list="serialList" placeholder="e.g. 546310"${''}
       value="${esc(prefillSerial || '')}">
     <div class="adgrid">
       <div><label>Year</label><input class="adyear" maxlength="4" placeholder="1996"></div>
@@ -1282,6 +1298,7 @@ function openAddModal(slotId, prefillSerial) {
   ov.onclick = ev => {
     if (ev.target === ov || ev.target.classList.contains('x')) ov.hidden = true;
   };
+  serialDatalist();
   ov.querySelector('.adgo').onclick = () => submitAdd(slotId, ov);
   ov.querySelector('.adserial').focus();
 }
