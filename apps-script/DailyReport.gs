@@ -458,6 +458,12 @@ function doPost(e) {
         (pr.previous || '(none)') + ' → ' + pr.price);
       return json_(pr);
     }
+    if (req.action === 'settrack') {
+      var tk = setTrack_(req);
+      if (tk.ok) logAct_(who, 'Track change', tk.summary || req.serial,
+        (tk.previous || '(none)') + ' → ' + (tk.track || '(none)'));
+      return json_(tk);
+    }
     if (req.action === 'photo') {
       var pt = savePhoto_(req, who);
       if (pt.saved) logAct_(who, 'Progress photo', pt.summary || req.serial,
@@ -768,6 +774,42 @@ function migratePhases_() {
   }
   if (changed) rng.setValues(vals);
   return {ok: true, changed: changed, counts: counts};
+}
+
+/**
+ * Work TRACK(s) — multi-select (Rebuild, Hybrid, Refurbish, Refinish,
+ * Technology, Old Player), stored comma-separated in a TRACK column
+ * (header row 2, created at the first free column like CURRENT PHASE).
+ */
+var TRACK_HEADER = 'TRACK';
+var TRACK_VALUES = ['Rebuild', 'Hybrid', 'Refurbish', 'Refinish',
+                    'Technology', 'Old Player'];
+
+function trackCol_(sh) {
+  var last = sh.getLastColumn();
+  var hdr = sh.getRange(2, 1, 1, last).getValues()[0];
+  for (var c = 0; c < hdr.length; c++) {
+    if (String(hdr[c] || '').trim().toUpperCase() === TRACK_HEADER) return c + 1;
+  }
+  sh.getRange(2, last + 1).setValue(TRACK_HEADER);
+  return last + 1;
+}
+
+function setTrack_(req) {
+  var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+  var found = findPiano_(sh, req.serial, req.row);
+  if (found.error) return found;
+  var tracks = [];
+  (req.tracks || []).forEach(function (t) {
+    t = String(t).trim();
+    if (TRACK_VALUES.indexOf(t) >= 0 && tracks.indexOf(t) < 0) tracks.push(t);
+  });
+  var col = trackCol_(sh);
+  var prev = String(sh.getRange(found.row, col).getValue() || '');
+  var val = tracks.join(', ');
+  sh.getRange(found.row, col).setValue(val);
+  return {ok: true, row: found.row, summary: found.summary,
+          previous: prev, track: val};
 }
 
 function phaseCol_(sh) {

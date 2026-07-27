@@ -7,7 +7,9 @@ const PHASES = ['New Arrival - Admin', 'Assessment', 'CAP',
   'PRSB & Plate Refinishing', 'Lacquer Soundboard', 'Restringing',
   'Chip Tuning', 'DHRT', '1st Tuning', 'Refinishing', 'QC & Assembly',
   '2nd Tuning', 'Exit Prep - Admin', 'Delivered'];
-const PHASE_STATES = ['In Queue', 'Paused', 'For Sale'];   // unnumbered states; For Sale turns the icon green
+const PHASE_STATES = ['In Queue', 'Paused', 'For Sale'];
+// work tracks (multi-select, stored comma-separated in the TRACK column)
+const TRACKS = ['Rebuild', 'Hybrid', 'Refurbish', 'Refinish', 'Technology', 'Old Player'];   // unnumbered states; For Sale turns the icon green
 // icon letter for each numbered phase (QC & Assembly gets two letters)
 const PHASE_ABBR = {
   'New Arrival - Admin': 'N', 'Assessment': 'A', 'CAP': 'C',
@@ -171,6 +173,10 @@ function applyPending() {
     if ('price' in edit) {
       if ((p.price || '') === edit.price) delete edit.price;
       else { p.price = edit.price; stillPending = true; }
+    }
+    if ('track' in edit) {
+      if ((p.track || '') === edit.track) delete edit.track;
+      else { p.track = edit.track; stillPending = true; }
     }
     if (!stillPending) pendingEdits.delete(row);
   }
@@ -899,6 +905,13 @@ function popHTML(p) {
        <div class="photomsg"></div>`
     : '';
   const effPh = effectivePhase(p);
+  const cur = (p.track || '').split(',').map(t => t.trim()).filter(Boolean);
+  const tracker = p.serial
+    ? `<div class="row trkrow">Track
+         <span class="trkchips">${TRACKS.map(t =>
+           `<button class="trk ${cur.includes(t) ? 'on' : ''}" data-t="${esc(t)}">${esc(t)}</button>`).join('')}
+         </span></div><div class="trkmsg phmsg"></div>`
+    : '';
   const phaser = p.serial
     ? `<div class="row phrow">Shop phase
          <select class="phsel">
@@ -919,6 +932,7 @@ function popHTML(p) {
     <div class="row">Last tuned <b>${ti.last ? esc(fmtDayYear(ti.last)) : '—'}</b></div>
     ${ti.next ? `<div class="row">Tuning scheduled <b class="tunesched">🎵 ${esc(fmtDay(ti.next.date))} · ${esc(ti.next.time)}</b></div>` : ''}
     ${mediaCard(p)}
+    ${tracker}
     ${phaser}
     ${p.serial ? `<button class="tunebtn movebtn">🚚 Request Move</button>` : ''}
     ${tuner}
@@ -970,6 +984,10 @@ function wirePop(p) {
   pop.querySelectorAll('.mmark').forEach(b => b.onclick = ev => {
     ev.stopPropagation();
     setMedia(p, b.dataset.f, pop, !!b.dataset.skip);
+  });
+  pop.querySelectorAll('.trk').forEach(b => b.onclick = ev => {
+    ev.stopPropagation();
+    toggleTrack(p, b.dataset.t, pop);
   });
   const mvb = pop.querySelector('.movebtn');
   if (mvb) mvb.onclick = ev => { ev.stopPropagation(); openMoveModal(p); };
@@ -1071,6 +1089,43 @@ async function setMedia(p, field, pop, skip) {
     if (btn) { btn.disabled = false; btn.textContent = skip ? 'skip' : '✓ done'; }
     msg.className = 'mdmsg err'; msg.textContent = '✗ ' + e.message + ' — not saved';
     renderMap(); renderKpis();
+  }
+}
+
+// toggle one track chip on/off; the full list is saved to the TRACK column
+async function toggleTrack(p, track, pop) {
+  const msg = pop.querySelector('.trkmsg');
+  popPinned = true;
+  const {pin, ok} = writeAuth();
+  if (!ok) { msg.className = 'trkmsg phmsg err'; msg.textContent = 'Sign in or enter the team PIN first.'; return; }
+  const was = p.track || '';
+  let list = was.split(',').map(t => t.trim()).filter(Boolean);
+  list = list.includes(track) ? list.filter(t => t !== track) : list.concat(track);
+  list = TRACKS.filter(t => list.includes(t));   // canonical order
+  p.track = list.join(', ');
+  const edit = pendingEdits.get(p.row) || {};
+  edit.track = p.track; pendingEdits.set(p.row, edit);
+  const btn = pop.querySelector(`.trk[data-t="${track}"]`);
+  if (btn) btn.classList.toggle('on');
+  msg.className = 'trkmsg phmsg'; msg.textContent = 'Saving…';
+  try {
+    const r = await fetch(BRIDGE_URL, {
+      method: 'POST', redirect: 'follow',
+      headers: {'content-type': 'text/plain;charset=utf-8'},
+      body: JSON.stringify({pin, serial: p.serial, action: 'settrack',
+        tracks: list, row: p.row, ...authFields()}),
+    });
+    const j = await r.json();
+    if (j.error === 'unauthorized') { localStorage.removeItem('blpPin'); throw new Error('Not authorized'); }
+    if (!j.ok) throw new Error(j.error || 'save failed');
+    p.track = j.track; edit.track = j.track;
+    msg.className = 'trkmsg phmsg ok';
+    msg.textContent = j.track ? `✓ Track: ${j.track}` : '✓ Tracks cleared';
+  } catch (e) {
+    p.track = was;
+    delete edit.track; if (!Object.keys(edit).length) pendingEdits.delete(p.row);
+    if (btn) btn.classList.toggle('on');
+    msg.className = 'trkmsg phmsg err'; msg.textContent = '✗ ' + e.message + ' — not saved';
   }
 }
 

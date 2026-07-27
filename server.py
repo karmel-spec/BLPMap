@@ -60,7 +60,7 @@ def _fetch(url):
         return r.read()
 
 
-def piano_type(category):
+def piano_type(category, name=''):
     c = (category or '').lower()
     if c.startswith('grand') or ', grand' in c:
         return 'grand'
@@ -68,6 +68,12 @@ def piano_type(category):
         return 'digital'
     if 'upright' in c or 'console' in c or 'spinet' in c or 'studio' in c:
         return 'upright'
+    # category blank/unhelpful: fall back to the piano's own name text
+    n = (name or '').lower()
+    if any(w in n for w in ('upright', 'console', 'spinet', 'studio', 'vertical')):
+        return 'upright'
+    if 'grand' in n:
+        return 'grand'
     return 'other'
 
 
@@ -93,6 +99,8 @@ def parse_pianos(raw):
                       if h.strip().upper() == 'CURRENT PHASE'), -1)
     price_idx = next((i for i, h in enumerate(hdr)
                       if h.strip().upper() == 'PRICE'), -1)
+    track_idx = next((i for i, h in enumerate(hdr)
+                      if h.strip().upper() == 'TRACK'), -1)
     # CUSTOM SHOPWORK queue bounds (1-based rows). Queue position = row - header;
     # total = rows from just after the header down to the first fully-blank row.
     q_hdr = q_end = None
@@ -151,13 +159,14 @@ def parse_pianos(raw):
             'serial': serial,
             'summary': summary or f"{col(4)} {col(5)} {col(6)}".strip(),
             'year': col(4), 'make': col(5), 'model': col(6), 'size': col(7),
-            'type': piano_type(col(9)),
+            'type': piano_type(col(9), summary + ' ' + col(6)),
             'status': status,
             'location': loc,
             'isSlot': bool(SLOT_RE.match(loc)),
             'entered': entered.isoformat() if entered else None,
             'phase': col(phase_idx) if phase_idx >= 0 else '',
             'price': col(price_idx) if price_idx >= 0 else '',
+            'track': col(track_idx) if track_idx >= 0 else '',
             'bphoto': med(13), 'aphoto': med(15),
             'bvideo': med(16), 'avideo': med(17),
             'queuePos': 0,

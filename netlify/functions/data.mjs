@@ -48,11 +48,15 @@ function parseDates(s) {
   return out;
 }
 
-function pianoType(cat) {
+function pianoType(cat, name) {
   const c = (cat || '').toLowerCase();
   if (c.startsWith('grand') || c.includes(', grand')) return 'grand';
   if (c.includes('digital')) return 'digital';
   if (/(upright|console|spinet|studio)/.test(c)) return 'upright';
+  // category blank/unhelpful: fall back to the piano's own name text
+  const n = (name || '').toLowerCase();
+  if (/(upright|console|spinet|studio|vertical)/.test(n)) return 'upright';
+  if (/grand/.test(n)) return 'grand';
   return 'other';
 }
 
@@ -65,6 +69,8 @@ function parsePianos(text) {
     ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'CURRENT PHASE') : -1;
   const priceIdx = rows[1]
     ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'PRICE') : -1;
+  const trackIdx = rows[1]
+    ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'TRACK') : -1;
   // CUSTOM SHOPWORK queue bounds (1-based rows)
   let qHdr = 0, qEnd = 0;
   for (let k = 0; k < rows.length; k++) {
@@ -103,11 +109,12 @@ function parsePianos(text) {
       row: i + 1, section, owner: col(1), serial,
       summary: summary || [col(4), col(5), col(6)].filter(Boolean).join(' '),
       year: col(4), make: col(5), model: col(6), size: col(7),
-      type: pianoType(col(9)), status, location: loc,
+      type: pianoType(col(9), summary + ' ' + col(6)), status, location: loc,
       isSlot: SLOT_RE.test(loc),
       entered: entered ? entered.toISOString().slice(0, 10) : null,
       phase: phaseIdx >= 0 ? col(phaseIdx) : '',
       price: priceIdx >= 0 ? col(priceIdx) : '',
+      track: trackIdx >= 0 ? col(trackIdx) : '',
       bphoto: med(13), aphoto: med(15), bvideo: med(16), avideo: med(17),
       queuePos: 0, queueTotal: 0,
       isNew, active,
