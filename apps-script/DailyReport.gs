@@ -504,6 +504,8 @@ function doPost(e) {
       var ph = setPhase_(req);
       if (ph.ok) logAct_(who, 'Phase change', ph.summary || req.serial,
         (ph.previous || '(none)') + ' → ' + (ph.phase || '(none)'));
+      if (ph.ok && ph.movedToSold) logAct_(who, 'Moved to SOLD section', ph.summary || req.serial,
+        'delivered — row relocated below the SOLD divider, off the map');
       return json_(ph);
     }
     if (req.action === 'fixtabs') return json_(fixTabs_());
@@ -1030,8 +1032,38 @@ function setPhase_(req) {
       sh.getRange(found.row, cbcol).setValue('');
     }
   }
-  return {ok: true, row: found.row, summary: found.summary,
-          previous: prev, phase: phase, note: note, checkBack: cb};
+  var movedTo = null;
+  // Delivered pianos exit the map: physically relocate the row into the
+  // SOLD section (right after the divider) so the parsers' soldZone skip
+  // takes it off the live map on the next fetch
+  if (phase === 'Delivered' && found.row < soldDividerRow_(sh)) {
+    var lock = LockService.getScriptLock();
+    lock.waitLock(20000);
+    try {
+      var sd = soldDividerRow_(sh);
+      if (found.row < sd) {
+        sh.moveRows(sh.getRange(found.row, 1), sd + 1);
+        SpreadsheetApp.flush();
+        movedTo = sd + 1;
+      }
+    } finally { lock.releaseLock(); }
+  }
+  return {ok: true, row: movedTo || found.row, summary: found.summary,
+          previous: prev, phase: phase, note: note, checkBack: cb,
+          movedToSold: !!movedTo};
+}
+
+// the row number of the "SOLD" divider (col B = SOLD, blank serial) —
+// rows at or after this index are exited/sold, not on the live map
+function soldDividerRow_(sh) {
+  var last = sh.getLastRow();
+  var owners = sh.getRange(1, 2, last, 1).getValues();
+  var serials = sh.getRange(1, 3, last, 1).getValues();
+  for (var i = 0; i < last; i++) {
+    if (String(owners[i][0] || '').trim().toUpperCase() === 'SOLD'
+        && !String(serials[i][0] || '').trim()) return i + 1;
+  }
+  return last + 1;
 }
 
 /**
