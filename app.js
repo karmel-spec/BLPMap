@@ -12,7 +12,7 @@ const PHASES = ['New Arrival - Admin', 'Assessment', 'CAP',
 const PHASE_STATES = ['In Queue', 'Paused', 'For Sale',
   'Waiting on Brigham', 'Waiting on Curtis Harper', 'Waiting on OTHER'];
 // work tracks (multi-select, stored comma-separated in the TRACK column)
-const TRACKS = ['Rebuild', 'Hybrid', 'Refurbish', 'Refinish', 'Technology', 'Old Player'];   // unnumbered states; For Sale turns the icon green
+const TRACKS = ['Rebuild', 'Hybrid', 'Refurbish', 'Refinish', 'Technology', 'Old Player', 'Misc'];   // unnumbered states; For Sale turns the icon green
 // icon letter for each numbered phase (QC & Assembly gets two letters)
 const PHASE_ABBR = {
   'New Arrival - Admin': 'N', 'Assessment': 'A', 'CAP': 'C',
@@ -965,12 +965,14 @@ function popHTML(p) {
        <div class="photomsg"></div>`
     : '';
   const effPh = effectivePhase(p);
-  const cur = (p.track || '').split(',').map(t => t.trim()).filter(Boolean);
+  const tp = trackParts(p.track);
+  const cur = tp.list;
   const tracker = p.serial
     ? `<div class="row trkrow">Track
          <span class="trkchips">${TRACKS.map(t =>
            `<button class="trk ${cur.includes(t) ? 'on' : ''}" data-t="${esc(t)}">${esc(t)}</button>`).join('')}
-         </span></div><div class="trkmsg phmsg"></div>`
+         </span></div>${cur.includes('Misc') ? `<div class="miscsum">Misc: ${esc(tp.miscNote || '—')}
+           <button class="miscedit" title="edit">✎</button></div>` : ''}<div class="trkmsg phmsg"></div>`
     : '';
   const phaser = p.serial
     ? `<div class="row phrow">Shop phase
@@ -1089,8 +1091,11 @@ function wirePop(p) {
   });
   pop.querySelectorAll('.trk:not(.dn)').forEach(b => b.onclick = ev => {
     ev.stopPropagation();
+    if (b.dataset.t === 'Misc' && !b.classList.contains('on')) { openMiscModal(p, pop); return; }
     toggleTrack(p, b.dataset.t, pop);
   });
+  const me = pop.querySelector('.miscedit');
+  if (me) me.onclick = ev => { ev.stopPropagation(); openMiscModal(p, pop); };
   pop.querySelectorAll('.trk.dn').forEach(b => b.onclick = ev => {
     ev.stopPropagation();
     toggleDone(p, b.dataset.ph, pop);
@@ -1248,16 +1253,30 @@ async function setMedia(p, field, pop, skip) {
 }
 
 // toggle one track chip on/off; the full list is saved to the TRACK column
-async function toggleTrack(p, track, pop) {
+
+// TRACK col entries are comma-separated; Misc carries its write-in summary
+// as "Misc (summary)" — commas in the summary are stored as ';'
+function trackParts(str) {
+  const raw = (str || '').split(',').map(t => t.trim()).filter(Boolean);
+  const m = raw.map(t => t.match(/^Misc\s*\((.*)\)$/)).find(Boolean);
+  return {list: raw.map(t => (/^Misc\b/.test(t) ? 'Misc' : t)), miscNote: m ? m[1] : ''};
+}
+async function toggleTrack(p, track, pop, miscNote) {
   const msg = pop.querySelector('.trkmsg');
   popPinned = true;
   const {pin, ok} = writeAuth();
   if (!ok) { msg.className = 'trkmsg phmsg err'; msg.textContent = 'Sign in or enter the team PIN first.'; return; }
   const was = p.track || '';
-  let list = was.split(',').map(t => t.trim()).filter(Boolean);
-  list = list.includes(track) ? list.filter(t => t !== track) : list.concat(track);
+  const parts = trackParts(was);
+  let list = parts.list;
+  if (track === 'Misc' && miscNote != null) {
+    if (!list.includes('Misc')) list = list.concat('Misc');   // (re)saving the summary keeps it on
+  } else {
+    list = list.includes(track) ? list.filter(t => t !== track) : list.concat(track);
+  }
   list = TRACKS.filter(t => list.includes(t));   // canonical order
-  p.track = list.join(', ');
+  const note = (miscNote != null ? miscNote : parts.miscNote).replace(/,/g, ';');
+  p.track = list.map(t => (t === 'Misc' && note ? `Misc (${note})` : t)).join(', ');
   const edit = pendingEdits.get(p.row) || {};
   edit.track = p.track; pendingEdits.set(p.row, edit);
   const btn = pop.querySelector(`.trk[data-t="${track}"]`);
@@ -1268,7 +1287,7 @@ async function toggleTrack(p, track, pop) {
       method: 'POST', redirect: 'follow',
       headers: {'content-type': 'text/plain;charset=utf-8'},
       body: JSON.stringify({pin, serial: p.serial, action: 'settrack',
-        tracks: list, row: p.row, ...authFields()}),
+        tracks: list, miscNote: note, row: p.row, ...authFields()}),
     });
     const j = await r.json();
     if (j.error === 'unauthorized') { localStorage.removeItem('blpPin'); throw new Error('Not authorized'); }
@@ -1276,12 +1295,37 @@ async function toggleTrack(p, track, pop) {
     p.track = j.track; edit.track = j.track;
     msg.className = 'trkmsg phmsg ok';
     msg.textContent = j.track ? `✓ Track: ${j.track}` : '✓ Tracks cleared';
+    if (track === 'Misc') openPop(p.row, S.popAnchor, true);   // summary line appears/disappears
   } catch (e) {
     p.track = was;
     delete edit.track; if (!Object.keys(edit).length) pendingEdits.delete(p.row);
     if (btn) btn.classList.toggle('on');
     msg.className = 'trkmsg phmsg err'; msg.textContent = '✗ ' + e.message + ' — not saved';
   }
+}
+
+// Misc is a one-off track: ask what it is when it's switched on
+function openMiscModal(p, pop) {
+  const cur = trackParts(p.track).miscNote;
+  const ov = modalShell('miscmodal', `
+    <span class="x">\u2715</span>
+    <h3>Misc track — what is it?</h3>
+    ${pianoHeader(p)}
+    <label>Summary of this track</label>
+    <textarea class="miscnotes" rows="2" placeholder="one-of-a-kind work\u2026">${esc(cur)}</textarea>
+    <button class="tmgo miscgo">Save Misc track</button>
+    <div class="tmmsg"></div>`);
+  ov.querySelector('.miscgo').onclick = () => {
+    const note = ov.querySelector('.miscnotes').value.trim();
+    if (!note) {
+      ov.querySelector('.tmmsg').className = 'tmmsg err';
+      ov.querySelector('.tmmsg').textContent = 'Describe the track first.';
+      return;
+    }
+    ov.hidden = true;
+    toggleTrack(p, 'Misc', pop, note);
+  };
+  ov.querySelector('.miscnotes').focus();
 }
 
 // toggle a completed-phase checkmark; the list is saved to PHASES DONE
@@ -2334,7 +2378,20 @@ function renderAuth() {
   if (!GOOGLE_CLIENT_ID) { box.hidden = true; return; }
   box.hidden = false;
   const u = authUser();
-  if (u) {
+  const expired = u && u.exp * 1000 < Date.now();
+  if (u && expired) {
+    // hourly Google token ran out and the silent refresh didn't come back —
+    // surface it instead of looking "stuck" on Signed in
+    box.innerHTML = `<b>Session expired</b>
+      <div class="authhint">${esc(u.name)} — sign in again so changes save under your name</div>
+      <div id="gsiBtn"></div>
+      <button class="authout" id="authOut">sign out</button>`;
+    $('#authOut').onclick = signOut;
+    if (window.google?.accounts?.id) {
+      google.accounts.id.renderButton($('#gsiBtn'),
+        {theme: 'outline', size: 'medium', text: 'signin_with', width: 190});
+    }
+  } else if (u) {
     box.innerHTML = `<b>Signed in</b>
       <span class="authname">${u.pic ? `<img class="authpic" src="${esc(u.pic)}" alt="">` : '👤 '}${esc(u.name)}</span>
       <button class="authout" id="authOut">sign out</button>`;
@@ -2359,9 +2416,16 @@ function initAuth() {
       auto_select: true, use_fedcm_for_prompt: true,
     });
     renderAuth();
-    // silently refresh the hourly token for already-signed-in users
-    const u = authUser();
-    if (u && u.exp * 1000 < Date.now() + 600000) google.accounts.id.prompt();
+    // silently refresh the hourly token for already-signed-in users —
+    // on load and every 5 minutes while the page stays open
+    const refresh = () => {
+      const u = authUser();
+      if (!u) return;
+      if (u.exp * 1000 < Date.now() + 600000) { try { google.accounts.id.prompt(); } catch (ig) {} }
+      if (u.exp * 1000 < Date.now()) renderAuth();   // flip the box to "Session expired"
+    };
+    refresh();
+    setInterval(refresh, 300000);
   };
   document.head.appendChild(s);
   renderAuth();

@@ -931,7 +931,7 @@ function migratePhases_() {
  */
 var TRACK_HEADER = 'TRACK';
 var TRACK_VALUES = ['Rebuild', 'Hybrid', 'Refurbish', 'Refinish',
-                    'Technology', 'Old Player'];
+                    'Technology', 'Old Player', 'Misc'];
 
 function trackCol_(sh) {
   var last = sh.getLastColumn();
@@ -954,7 +954,11 @@ function setTrack_(req) {
   });
   var col = trackCol_(sh);
   var prev = String(sh.getRange(found.row, col).getValue() || '');
-  var val = tracks.join(', ');
+  // Misc is unique work — its write-in summary rides along as "Misc (…)"
+  var misc = String(req.miscNote || '').trim().replace(/,/g, ';');
+  var val = tracks.map(function (t) {
+    return (t === 'Misc' && misc) ? 'Misc (' + misc + ')' : t;
+  }).join(', ');
   sh.getRange(found.row, col).setValue(val);
   return {ok: true, row: found.row, summary: found.summary,
           previous: prev, track: val};
