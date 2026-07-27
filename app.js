@@ -929,7 +929,10 @@ function popHTML(p) {
     ${p.serial ? `<button class="rreports">📋 Read Reports — full Friday-report history</button>` : ''}
     <div class="row">Status <b>${esc(p.status || '—')}</b></div>
     <div class="row">Owner <b>${esc(p.owner || '—')}</b></div>
-    ${priceLabel(p) ? `<div class="row">Price <b class="pricecard">${esc(priceLabel(p))}</b></div>` : ''}
+    ${effectivePhase(p) === 'For Sale'
+      ? `<div class="row rowflex"><span>Price <b class="pricecard">${priceLabel(p) ? esc(priceLabel(p)) : '—'}</b></span>
+           ${p.serial ? `<button class="predit">${p.price ? '✎ Edit price' : '＋ Add price'}</button>` : ''}</div>`
+      : (priceLabel(p) ? `<div class="row">Price <b class="pricecard">${esc(priceLabel(p))}</b></div>` : '')}
     <div class="row">Last tuned <b>${ti.last ? esc(fmtDayYear(ti.last)) : '—'}</b></div>
     ${ti.next ? `<div class="row">Tuning scheduled <b class="tunesched">🎵 ${esc(fmtDay(ti.next.date))} · ${esc(ti.next.time)}</b></div>` : ''}
     ${mediaCard(p)}
@@ -990,6 +993,8 @@ function wirePop(p) {
     ev.stopPropagation();
     toggleTrack(p, b.dataset.t, pop);
   });
+  const pe = pop.querySelector('.predit');
+  if (pe) pe.onclick = ev => { ev.stopPropagation(); openPriceModal(p); };
   const rr = pop.querySelector('.rreports');
   if (rr) rr.onclick = ev => {
     ev.stopPropagation();
@@ -1515,10 +1520,10 @@ function openPriceModal(p) {
     <input class="prin" inputmode="decimal" placeholder="e.g. 14998" ${p.price ? `value="${esc(String(p.price).replace(/[^0-9.]/g, ''))}"` : ''}>
     <div class="prbtns">
       <button class="tmgo prgo">Save price</button>
-      <button class="prskip">Skip for now</button>
+      <button class="prskip">📧 Request Price</button>
     </div>
     <div class="tmmsg"></div>`);
-  ov.querySelector('.prskip').onclick = () => { ov.hidden = true; };
+  ov.querySelector('.prskip').onclick = () => submitPriceRequest(p, ov);
   ov.querySelector('.prgo').onclick = () => submitPrice(p, ov);
   ov.querySelector('.prin').focus();
 }
@@ -1545,8 +1550,35 @@ async function submitPrice(p, ov) {
     const edit = pendingEdits.get(p.row) || {};
     edit.price = j.price; pendingEdits.set(p.row, edit);
     renderMap();
-    msg.className = 'tmmsg ok'; msg.textContent = `✓ Price saved: ${j.price}`;
-    setTimeout(() => { ov.hidden = true; }, 1500);
+    msg.className = 'tmmsg ok';
+    msg.textContent = `✓ Price saved: ${j.price} — a printable tag was emailed to info@ to put on the piano.`;
+    setTimeout(() => { ov.hidden = true; }, 2600);
+  } catch (e) {
+    msg.className = 'tmmsg err'; msg.textContent = '✗ ' + e.message;
+    btn.disabled = false;
+  }
+}
+
+// "Request Price" on the For Sale popup: emails Brigham to price this piano
+async function submitPriceRequest(p, ov) {
+  const msg = ov.querySelector('.tmmsg');
+  const btn = ov.querySelector('.prskip');
+  const {pin, ok} = writeAuth();
+  if (!ok) { msg.className = 'tmmsg err'; msg.textContent = 'Sign in or enter the team PIN first.'; return; }
+  btn.disabled = true;
+  msg.className = 'tmmsg'; msg.textContent = 'Emailing Brigham…';
+  try {
+    const r = await fetch(BRIDGE_URL, {
+      method: 'POST', redirect: 'follow',
+      headers: {'content-type': 'text/plain;charset=utf-8'},
+      body: JSON.stringify({pin, serial: p.serial, action: 'requestprice', row: p.row, ...authFields()}),
+    });
+    const j = await r.json();
+    if (j.error === 'unauthorized') { localStorage.removeItem('blpPin'); throw new Error('Not authorized — sign in or re-enter the PIN.'); }
+    if (!j.ok) throw new Error(j.error || 'request failed');
+    msg.className = 'tmmsg ok';
+    msg.textContent = '✓ Price request emailed to Brigham.';
+    setTimeout(() => { ov.hidden = true; }, 1800);
   } catch (e) {
     msg.className = 'tmmsg err'; msg.textContent = '✗ ' + e.message;
     btn.disabled = false;

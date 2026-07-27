@@ -50,6 +50,10 @@ var SERVICE_CAL = 'qualitycontrol.blp@gmail.com';   // 20-QC & Showroom repairs
 // in-store move requests batch into one Monday-7am event on the moving cal
 var MOVING_CAL = 'pianomoving.blp@gmail.com';
 var MOVE_EVENT_TITLE = 'In-store moves — Store Map requests';
+// price workflow: who gets "please set a price" requests, and who gets the
+// printable tag whenever a price is added or changed
+var PRICE_REQUEST_TO = 'brigham@brighamlarsonpianos.com';
+var TAG_ALERT_TO = 'info@brighamlarsonpianos.com';
 var TUNING_SLOTS = [8, 9.5];               // Korban's weekday starts: 8:00 + 9:30 (Denver)
 var TUNING_MINUTES = 90;                   // block length, matches Korban's bookings
 var KNOWN_AREAS = ['showroom', 'pre-sale showroom', 'third floor', 'storage',
@@ -484,10 +488,16 @@ function doPost(e) {
       return json_(mv);
     }
     if (req.action === 'setprice') {
-      var pr = setPrice_(req);
+      var pr = setPrice_(req, who);
       if (pr.ok) logAct_(who, 'Price set', pr.summary || req.serial,
         (pr.previous || '(none)') + ' → ' + pr.price);
       return json_(pr);
+    }
+    if (req.action === 'requestprice') {
+      var rq = requestPrice_(req, who);
+      if (rq.ok) logAct_(who, 'Price requested', rq.summary || req.serial,
+        'email sent to ' + PRICE_REQUEST_TO);
+      return json_(rq);
     }
     if (req.action === 'settrack') {
       var tk = setTrack_(req);
@@ -1073,7 +1083,7 @@ function requestMove_(req, who) {
  * Sale price — written into the Piano Log's PRICE column (found by header
  * name on row 2). Used by the For Sale popup on the map's data card.
  */
-function setPrice_(req) {
+function setPrice_(req, who) {
   var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
   var found = findPiano_(sh, req.serial, req.row);
   if (found.error) return found;
@@ -1092,8 +1102,74 @@ function setPrice_(req) {
   var prev = String(cell.getValue() || '');
   var pretty = '$' + num.toLocaleString('en-US');
   cell.setValue(pretty);
+  // every added/changed price alerts info@ with a printable tag attached
+  if (!req.silent && prev !== pretty) {
+    try { sendTagEmail_(found, String(req.serial || ''), prev, pretty, who); }
+    catch (mailErr) { /* the price is saved either way */ }
+  }
   return {ok: true, row: found.row, summary: found.summary,
           previous: prev, price: pretty};
+}
+
+// "please set a price" email to Brigham, from the For Sale popup
+function requestPrice_(req, who) {
+  var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+  var found = findPiano_(sh, req.serial, req.row);
+  if (found.error) return found;
+  var name = String(who || '').replace(/\s*<[^>]*>\s*/, '').replace(/\s*\(.*\)\s*$/, '');
+  var logUrl = 'https://pianologapp.netlify.app/#piano=' + encodeURIComponent(req.serial);
+  MailApp.sendEmail({
+    to: PRICE_REQUEST_TO,
+    subject: '💲 Price needed: ' + (found.summary || 'piano') + ' — SN ' + req.serial,
+    htmlBody: '<div style="font-family:Helvetica,Arial,sans-serif;max-width:560px">'
+      + '<h2 style="margin:0 0 8px">A piano was set to <span style="color:#2e7d4f">For Sale</span> and needs a price</h2>'
+      + '<p style="font-size:15px;margin:6px 0"><b>' + esc_(found.summary || 'Piano') + '</b><br>'
+      + 'Serial ' + esc_(req.serial) + (found.location ? ' · Spot ' + esc_(found.location) : '') + '</p>'
+      + '<p style="font-size:13px;color:#555">Requested by ' + esc_(name || 'the team') + ' via the Store Map.</p>'
+      + '<p style="font-size:14px">Set it from the piano’s card on the '
+      + '<a href="' + APP_URL + '" style="color:#9e2020">Store Map</a> (Add price button) '
+      + 'or in the <a href="' + logUrl + '" style="color:#9e2020">Piano Log</a> PRICE column.</p></div>',
+    body: 'Price needed: ' + (found.summary || 'piano') + ' SN ' + req.serial
+      + (found.location ? ' at spot ' + found.location : '')
+      + '. Set it on ' + APP_URL + ' or in the Piano Log.',
+    name: 'BLP Store Map',
+  });
+  return {ok: true, summary: found.summary, sentTo: PRICE_REQUEST_TO};
+}
+
+// printable price tag → PDF attachment → info@ ("please print and swap it")
+function sendTagEmail_(found, serial, prev, price, who) {
+  var name = String(who || '').replace(/\s*<[^>]*>\s*/, '').replace(/\s*\(.*\)\s*$/, '');
+  var day = Utilities.formatDate(new Date(), 'America/Denver', 'MMMM d, yyyy');
+  var tagHtml = '<html><body style="margin:0;padding:0">'
+    + '<div style="width:5in;border:3px solid #0d0d0d;font-family:Georgia,serif;text-align:center">'
+    + '<div style="background:#0d0d0d;color:#fff;padding:14px;letter-spacing:5px;font-size:20px">BRIGHAM LARSON PIANOS</div>'
+    + '<div style="padding:26px 20px 8px;font-size:26px;font-weight:bold">' + esc_(found.summary || 'Piano') + '</div>'
+    + '<div style="font-family:Helvetica,Arial,sans-serif;font-size:13px;color:#555;letter-spacing:2px">SERIAL ' + esc_(serial) + '</div>'
+    + '<div style="font-size:64px;font-weight:bold;color:#9e2020;padding:22px 0 6px">' + esc_(price) + '</div>'
+    + '<div style="font-family:Helvetica,Arial,sans-serif;font-size:11px;color:#888;padding-bottom:20px;letter-spacing:1px">'
+    + esc_(day) + ' · brighamlarsonpianos.com</div></div></body></html>';
+  var pdf = Utilities.newBlob(tagHtml, 'text/html', 'tag.html')
+    .getAs('application/pdf').setName('Price Tag — SN ' + serial + '.pdf');
+  var verb = prev ? 'updated' : 'added';
+  MailApp.sendEmail({
+    to: TAG_ALERT_TO,
+    subject: '🏷 Price ' + verb + ': ' + (found.summary || 'piano') + ' — now ' + price,
+    htmlBody: '<div style="font-family:Helvetica,Arial,sans-serif;max-width:560px">'
+      + '<h2 style="margin:0 0 8px">A sale price was ' + verb + '</h2>'
+      + '<p style="font-size:15px;margin:6px 0"><b>' + esc_(found.summary || 'Piano') + '</b><br>'
+      + 'Serial ' + esc_(serial) + (found.location ? ' · Spot ' + esc_(found.location) : '') + '<br>'
+      + (prev ? esc_(prev) + ' → ' : '') + '<b style="color:#2e7d4f;font-size:17px">' + esc_(price) + '</b></p>'
+      + '<p style="font-size:14px"><b>Please print the attached price tag and put it on the piano</b> '
+      + '(or make a fancy one at <a href="https://blppricetags.netlify.app/?serial='
+      + encodeURIComponent(serial) + '&price=' + encodeURIComponent(price.replace(/[^0-9]/g, ''))
+      + '&model=' + encodeURIComponent(found.summary || '') + '" style="color:#9e2020">the Price Tag Maker</a>).</p>'
+      + '<p style="font-size:12px;color:#777">Changed by ' + esc_(name || 'the team') + ' via the Store Map · ' + esc_(day) + '</p></div>',
+    body: 'Price ' + verb + ' for ' + (found.summary || 'piano') + ' SN ' + serial + ': ' + price
+      + '. Please print the attached tag and update the piano.',
+    attachments: [pdf],
+    name: 'BLP Store Map',
+  });
 }
 
 // One-shot repair: helper tabs (ACTIVITY LOG / PHOTO LOG) must never sit at
