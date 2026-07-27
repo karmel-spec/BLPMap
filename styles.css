@@ -342,3 +342,10 @@ td a{color:#9e2020}
   .kpi .n{font-size:15px}
   .pop{width:min(240px,80vw)}
 }
+
+/* client-reports opt in/out row */
+.crask{margin:6px 0 2px;font-size:11.5px;color:#5a636b;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.crbtn{font:inherit;font-size:11px;padding:2px 10px;border:1px solid #c9d0d6;border-radius:10px;background:#fff;cursor:pointer}
+.crbtn:hover{border-color:#9e2020;color:#9e2020}
+.croff{font-size:11px;color:#8a939b;cursor:pointer;text-decoration:underline dotted}
+.croff:hover{color:#9e2020}

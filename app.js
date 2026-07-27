@@ -987,13 +987,20 @@ function popHTML(p) {
     <h3>${esc(makeModel)}</h3>
     <div class="row rowflex"><span>Serial # <b>${esc(p.serial || '—')}</b></span>${queueChip}</div>
     ${p.serial ? (() => {
-      const crOn = /^yes$/i.test((p.clientReports || '').trim());   // opt-IN: blank = off
+      // opt-IN: blank asks, Yes shows the history button, No shows nothing at all
+      const crVal = (p.clientReports || '').trim().toLowerCase();
+      let crAsk = '';
+      if (crVal === 'yes') {
+        crAsk = `<div class="crask"><span class="croff">✕ no client reports</span><span class="crmsg"></span></div>`;
+      } else if (crVal !== 'no') {
+        crAsk = `<div class="crask">Client reports for this piano?
+          <button class="crbtn cryes">Yes</button><button class="crbtn crno">No</button>
+          <span class="crmsg"></span></div>`;
+      }
       return `<div class="tagbtns histbtns">
         <button class="tagbtn rreports">📄 Tech Reports History</button>
-        ${crOn ? `<button class="tagbtn creports">🤝 Client Reports History</button>` : ''}
-      </div>
-      <label class="crtog"><input type="checkbox" class="crchk" ${crOn ? 'checked' : ''}>
-        this piano gets client reports</label><span class="crmsg"></span>`;
+        ${crVal === 'yes' ? `<button class="tagbtn creports">🤝 Client Reports History</button>` : ''}
+      </div>${crAsk}`;
     })() : ''}
     <div class="row">Status <b>${esc(p.status || '—')}</b></div>
     <div class="row">Owner <b>${esc(p.owner || '—')}</b></div>
@@ -1101,8 +1108,10 @@ function wirePop(p) {
     const d = new Date(Date.now() + (+b.dataset.d) * 86400000);
     setSnooze(p, `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`, pop);
   });
-  const ck = pop.querySelector('.crchk');
-  if (ck) ck.onchange = ev => { ev.stopPropagation(); setClientReports(p, ck.checked, pop); };
+  const cy = pop.querySelector('.cryes');
+  if (cy) cy.onclick = ev => { ev.stopPropagation(); setClientReports(p, true, pop); };
+  pop.querySelectorAll('.crno, .croff').forEach(b =>
+    b.onclick = ev => { ev.stopPropagation(); setClientReports(p, false, pop); });
   const cr = pop.querySelector('.creports');
   if (cr) cr.onclick = ev => {
     ev.stopPropagation();
@@ -1341,12 +1350,6 @@ async function setClientReports(p, enabled, pop) {
   } catch (e) {
     p.clientReports = was;
     delete edit.clientReports; if (!Object.keys(edit).length) pendingEdits.delete(p.row);
-    pop.querySelectorAll('.snz').forEach(b => b.onclick = ev => {
-    ev.stopPropagation();
-    const d = new Date(Date.now() + (+b.dataset.d) * 86400000);
-    setSnooze(p, `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`, pop);
-  });
-  const ck = pop.querySelector('.crchk'); if (ck) ck.checked = !enabled;
     msg.className = 'crmsg phmsg err'; msg.textContent = '✗ ' + e.message;
   }
 }
