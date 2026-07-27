@@ -1532,6 +1532,7 @@ async function submitMoveReq(p, ov) {
 
 /* ---------- showroom service / repair request ---------- */
 const ADMINS = [
+  {name: 'Melissa', email: 'melissa@brighamlarsonpianos.com'},
   {name: 'Brigham', email: 'brigham@brighamlarsonpianos.com'},
   {name: 'Karmel', email: 'karmel@brighamlarsonpianos.com'},
   {name: 'Alisa', email: 'alisa@brighamlarsonpianos.com'},

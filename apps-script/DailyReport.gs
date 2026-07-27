@@ -60,6 +60,7 @@ var CURTIS_TAB = 'Requested';
 // Admin requests: who can be picked, where Monday-batch requests collect,
 // and where the Monday-8am digest goes
 var ADMINS = [
+  {name: 'Melissa', email: 'melissa@brighamlarsonpianos.com'},
   {name: 'Brigham', email: 'brigham@brighamlarsonpianos.com'},
   {name: 'Karmel', email: 'karmel@brighamlarsonpianos.com'},
   {name: 'Alisa', email: 'alisa@brighamlarsonpianos.com'},
