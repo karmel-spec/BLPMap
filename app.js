@@ -2366,7 +2366,8 @@ function authGate() {
                placeholder="or enter the team PIN">
         <button id="agPinGo">Enter</button>
       </div>
-      <div id="agPinMsg" class="agpinmsg"></div></div>`;
+      <div id="agPinMsg" class="agpinmsg"></div>
+      <div class="agver">v65</div></div>`;
     document.body.appendChild(ov);
   }
   const dev = ['localhost', '127.0.0.1'].includes(location.hostname);
@@ -2375,25 +2376,38 @@ function authGate() {
   const on = !authUser() && !localStorage.getItem('blpPin') && !dev;
   ov.hidden = !on;
   if (!on) return;
+  const checkPin = async pin => {
+    // any bridge call answers "unauthorized" for a wrong PIN — a cheap
+    // lookup with no serial validates the PIN without changing anything
+    const r = await fetch(BRIDGE_URL, {
+      method: 'POST', redirect: 'follow',
+      headers: {'content-type': 'text/plain;charset=utf-8'},
+      body: JSON.stringify({pin, action: 'lookup', serial: ''}),
+    });
+    return (await r.json()).error !== 'unauthorized';
+  };
   const tryPin = async () => {
-    const pin = $('#agPinIn').value.trim();
+    let pin = $('#agPinIn').value.trim();
     const msg = $('#agPinMsg');
     if (!pin) { msg.textContent = 'Type the team PIN first.'; return; }
     msg.textContent = 'Checking…';
     try {
-      // any bridge call answers "unauthorized" for a wrong PIN — a cheap
-      // lookup with no serial validates the PIN without changing anything
-      const r = await fetch(BRIDGE_URL, {
-        method: 'POST', redirect: 'follow',
-        headers: {'content-type': 'text/plain;charset=utf-8'},
-        body: JSON.stringify({pin, action: 'lookup', serial: ''}),
-      });
-      const j = await r.json();
-      if (j.error === 'unauthorized') { msg.textContent = '✗ Wrong PIN.'; return; }
+      let ok = await checkPin(pin);
+      if (!ok && pin !== pin.toLowerCase()) {   // forgive CAPS/autocapitalize
+        ok = await checkPin(pin.toLowerCase());
+        if (ok) pin = pin.toLowerCase();
+      }
+      if (!ok) { msg.textContent = '✗ Wrong PIN.'; return; }
       localStorage.setItem('blpPin', pin);
       msg.textContent = '';
       renderAuth();
-    } catch (e) { msg.textContent = '✗ ' + e.message; }
+    } catch (e) {
+      // couldn't reach the bridge to check — let the PIN through; every
+      // write is validated server-side anyway
+      localStorage.setItem('blpPin', pin);
+      msg.textContent = '';
+      renderAuth();
+    }
   };
   $('#agPinGo').onclick = tryPin;
   $('#agPinIn').onkeydown = ev => { if (ev.key === 'Enter') tryPin(); };
