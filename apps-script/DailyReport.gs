@@ -321,8 +321,39 @@ function addPiano_(req) {
   if (req.location) sh.getRange(row, 21).setValue(String(req.location).trim());  // U
   sh.getRange(row, 22).setValue(
     Utilities.formatDate(new Date(), 'America/Denver', 'M/d/yyyy'));        // V arrival
+  var bumped = req.location ? bumpOthers_(sh, req.location, row) : [];
   return {ok: true, added: true, row: row, summary: summary,
-          location: String(req.location || '').trim()};
+          location: String(req.location || '').trim(), bumped: bumped};
+}
+
+/**
+ * One piano per numbered spot: when `spot` is (re)assigned to keepRow,
+ * every other piano row claiming that spot is sent to the attic holding
+ * zone ("Attic — bumped from N") to await correct reassignment.
+ */
+function bumpOthers_(sh, spot, keepRow) {
+  spot = String(spot || '').trim();
+  if (!/^\d+[a-zA-Z]?$/.test(spot)) return [];   // only numbered map spots
+  var last = sh.getLastRow();
+  var serials = sh.getRange(1, 3, last, 1).getValues();
+  var owners = sh.getRange(1, 2, last, 1).getValues();
+  var soldRow = last + 1;
+  for (var i = 0; i < last; i++) {
+    if (String(owners[i][0] || '').trim().toUpperCase() === 'SOLD'
+        && !String(serials[i][0] || '').trim()) { soldRow = i + 1; break; }
+  }
+  var locs = sh.getRange(1, 21, soldRow - 1, 1).getValues();
+  var bumped = [];
+  for (var r = 1; r < soldRow; r++) {
+    if (r === keepRow) continue;
+    if (String(locs[r - 1][0] || '').trim().toLowerCase() !== spot.toLowerCase()) continue;
+    if (!String(serials[r - 1][0] || '').trim()
+        && !String(sh.getRange(r, 4).getValue() || '').trim()) continue;   // not a piano row
+    sh.getRange(r, 21).setValue('Attic — bumped from ' + spot);
+    bumped.push({row: r, summary: String(sh.getRange(r, 4).getValue() || ''),
+                 serial: String(serials[r - 1][0] || '').trim()});
+  }
+  return bumped;
 }
 
 function findPiano_(sh, serial, rowOverride) {
@@ -501,11 +532,19 @@ function doPost(e) {
     var summary = String(sh.getRange(row, 4).getValue() || '');
     var current = String(sh.getRange(row, 21).getValue() || '');
     if (req.action === 'move' && req.newLocation != null && String(req.newLocation).trim()) {
-      sh.getRange(row, 21).setValue(String(req.newLocation).trim());
+      var dest = String(req.newLocation).trim();
+      sh.getRange(row, 21).setValue(dest);
       logAct_(who, 'Moved', summary || req.serial,
-        (current || '(blank)') + ' → ' + String(req.newLocation).trim());
+        (current || '(blank)') + ' → ' + dest);
+      // one piano per spot: whoever was already there gets bumped to the
+      // attic (newest assignment is the accurate one)
+      var bumped = bumpOthers_(sh, dest, row);
+      bumped.forEach(function (b) {
+        logAct_(who, 'Bumped to attic', b.summary,
+          'spot ' + dest + ' reassigned; awaiting a new spot');
+      });
       return json_({ok: true, moved: true, row: row, summary: summary,
-                    previous: current, location: String(req.newLocation).trim()});
+                    previous: current, location: dest, bumped: bumped});
     }
     return json_({ok: true, row: row, summary: summary, location: current});
   } catch (err) {

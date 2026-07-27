@@ -1150,6 +1150,18 @@ function applyAdds() {
     }
   }
 }
+// spot collision: the bridge bumped prior occupants to the attic — mirror
+// that locally so the map updates without waiting for the next poll
+function applyBumps(bumped) {
+  (bumped || []).forEach(b => {
+    const bp = S.data.pianos.find(x => x.row === b.row);
+    if (!bp) return;
+    bp.location = 'Attic — bumped from ' + (bp.location || '');
+    bp.isSlot = false;
+    const be = pendingEdits.get(bp.row) || {};
+    be.location = bp.location; pendingEdits.set(bp.row, be);
+  });
+}
 function openAddModal(slotId) {
   popPinned = false;
   $('#pop').hidden = true;
@@ -1250,6 +1262,7 @@ async function submitAdd(slotId, ov) {
     if (!j.added) throw new Error(j.error || 'add failed');
     msg.className = 'tmmsg ok';
     msg.textContent = `✓ Added to the Piano Log (row ${j.row}) at spot ${slotId}.`;
+    applyBumps(j.bumped);
     const nu = {row: j.row, section: '', owner: fields.owner, serial,
       summary: j.summary, year: fields.year, make: fields.make, model: fields.model,
       size: '', type: fields.category.toLowerCase(), status: '', location: slotId,
@@ -1692,6 +1705,10 @@ async function movePiano(p, dest, pop) {
       msg.className = 'mvmsg ok';
       msg.textContent = `✓ Moved from ${j.previous || '—'} to ${j.location}`
         + (known ? '' : ' (not a numbered map spot — it will show in reports)');
+      applyBumps(j.bumped);
+      if (j.bumped && j.bumped.length) {
+        msg.textContent += ` — bumped ${j.bumped.map(b => b.summary || 'a piano').join(', ')} to the attic`;
+      }
       p.location = j.location;
       p.isSlot = SLOT_RE.test(j.location);
       const edit = pendingEdits.get(p.row) || {};
