@@ -900,9 +900,7 @@ function popHTML(p) {
          </div><div class="mvmsg qmsg"></div>`
       : `<div class="mvmsg">No serial # — reorder the queue in the Piano Log.</div>`)
     : '';
-  const tuner = p.serial && p.serial.length >= 5 && !ti.next
-    ? `<button class="tunebtn">🎵 Request Tuning</button>`
-    : '';
+  const tuner = '';   // tuning now lives in the Request menu
   const photo = p.serial
     ? `<button class="photobtn">📸 Add progress photo</button>
        <input type="file" class="photoin" accept="image/*" capture="environment" hidden>
@@ -942,9 +940,17 @@ function popHTML(p) {
     ${mediaCard(p)}
     ${tracker}
     ${phaser}
-    ${p.serial ? `<button class="tunebtn movebtn">🚚 Request Move</button>` : ''}
-    ${tuner}
-    ${p.serial ? `<button class="tunebtn svcbtn">🔧 Request Service</button>` : ''}
+    ${p.serial ? `<button class="tunebtn reqbtn">📨 Request… ▾</button>
+      <div class="reqmenu" hidden>
+        <button data-req="move">🚚 Move</button>
+        <button data-req="tune">🎵 Tuning</button>
+        <button data-req="service">🔧 Service</button>
+        <button data-req="curtis">🎨 Curtis Harper</button>
+        <button data-req="admin">📋 Admin</button>
+        <button data-req="touchup">🖌 Touch Up</button>
+        <button data-req="price">💲 Price Change</button>
+        <button data-req="priority">⚡ Priority Scheduling</button>
+      </div>` : ''}
     ${photo}
     ${mover}
     ${queuer}
@@ -982,8 +988,7 @@ function wirePop(p) {
     qin.onclick = ev => ev.stopPropagation();
     qin.onkeydown = e => { if (e.key === 'Enter') queuePiano(p, parseInt(qin.value, 10), pop); };
   }
-  const tb = pop.querySelector('.tunebtn');
-  if (tb) tb.onclick = ev => { ev.stopPropagation(); openTuneModal(p); };
+
   const ps = pop.querySelector('.phsel');
   if (ps) {
     ps.onclick = ev => ev.stopPropagation();
@@ -1005,10 +1010,25 @@ function wirePop(p) {
     window.open('https://blpshop.netlify.app/#history=' + encodeURIComponent(p.serial),
       '_blank', 'noopener');
   };
-  const mvb = pop.querySelector('.movebtn');
-  if (mvb) mvb.onclick = ev => { ev.stopPropagation(); openMoveModal(p); };
-  const svb = pop.querySelector('.svcbtn');
-  if (svb) svb.onclick = ev => { ev.stopPropagation(); openServiceModal(p); };
+  const rqb = pop.querySelector('.reqbtn');
+  if (rqb) rqb.onclick = ev => {
+    ev.stopPropagation();
+    const m = pop.querySelector('.reqmenu');
+    m.hidden = !m.hidden;
+    if (!m.hidden) place(pop, S.popAnchor);   // card grew
+  };
+  pop.querySelectorAll('.reqmenu button').forEach(b => b.onclick = ev => {
+    ev.stopPropagation();
+    const kind = b.dataset.req;
+    if (kind === 'move') openMoveModal(p);
+    else if (kind === 'tune') openTuneModal(p);
+    else if (kind === 'service') openServiceModal(p);
+    else if (kind === 'curtis') openCurtisModal(p);
+    else if (kind === 'price') openPriceModal(p);
+    else if (kind === 'admin') openGenericModal(p, 'Admin');
+    else if (kind === 'touchup') openGenericModal(p, 'Touch Up');
+    else if (kind === 'priority') openGenericModal(p, 'Priority Scheduling');
+  });
   const pb = pop.querySelector('.photobtn');
   const pi = pop.querySelector('.photoin');
   if (pb) pb.onclick = ev => { ev.stopPropagation(); popPinned = true; pi.click(); };
@@ -1508,6 +1528,94 @@ async function submitService(p, ov) {
     msg.className = 'tmmsg ok';
     msg.textContent = `✓ Scheduled with ${j.tech}: ${j.date} at ${j.time} (${j.minutes} min) — on the QC & Showroom repairs calendar, invite sent to ${j.tech.split(' ')[0]}.`;
     setTimeout(() => { ov.hidden = true; }, 3000);
+  } catch (e) {
+    msg.className = 'tmmsg err'; msg.textContent = '✗ ' + e.message;
+    btn.disabled = false;
+  }
+}
+
+/* ---------- Curtis Harper request (work-orders spreadsheet) ---------- */
+function openCurtisModal(p) {
+  popPinned = false; $('#pop').hidden = true;
+  const ov = modalShell('curtismodal', `
+    <span class="x">✕</span>
+    <h3>🎨 Curtis Harper Request</h3>
+    ${pianoHeader(p)}
+    <label>What is it?</label>
+    <select class="chtype">
+      <option value="Plate" selected>Plate</option>
+      <option value="Touch up">Touch up</option>
+      <option value="Decal">Decal</option>
+      <option value="Other">Other</option>
+    </select>
+    <label>Notes</label>
+    <textarea class="chnotes" rows="3" placeholder="what needs doing — refinish plate, gold decal, chip on the lid…"></textarea>
+    <button class="tmgo chgo">Add to Curtis Harper's work orders</button>
+    <div class="tmmsg"></div>`);
+  ov.querySelector('.chgo').onclick = () => submitCurtis(p, ov);
+}
+async function submitCurtis(p, ov) {
+  const msg = ov.querySelector('.tmmsg');
+  const btn = ov.querySelector('.chgo');
+  const {pin, ok} = writeAuth();
+  if (!ok) { msg.className = 'tmmsg err'; msg.textContent = 'Sign in or enter the team PIN first.'; return; }
+  btn.disabled = true;
+  msg.className = 'tmmsg'; msg.textContent = 'Adding to the work orders sheet…';
+  try {
+    const r = await fetch(BRIDGE_URL, {
+      method: 'POST', redirect: 'follow',
+      headers: {'content-type': 'text/plain;charset=utf-8'},
+      body: JSON.stringify({pin, serial: p.serial, action: 'curtis', row: p.row,
+        ctype: ov.querySelector('.chtype').value,
+        notes: ov.querySelector('.chnotes').value.trim(), ...authFields()}),
+    });
+    const j = await r.json();
+    if (j.error === 'unauthorized') { localStorage.removeItem('blpPin'); throw new Error('Not authorized — sign in or re-enter the PIN.'); }
+    if (!j.ok) throw new Error(j.error || 'request failed');
+    msg.className = 'tmmsg ok';
+    msg.textContent = `✓ Added to Curtis Harper's work orders (${j.tab || 'Requested'} tab) and the activity log.`;
+    setTimeout(() => { ov.hidden = true; }, 2200);
+  } catch (e) {
+    msg.className = 'tmmsg err'; msg.textContent = '✗ ' + e.message;
+    btn.disabled = false;
+  }
+}
+
+/* ---------- generic team requests (Admin / Touch Up / Priority) -------- */
+function openGenericModal(p, kind) {
+  popPinned = false; $('#pop').hidden = true;
+  const icons = {'Admin': '📋', 'Touch Up': '🖌', 'Priority Scheduling': '⚡'};
+  const ov = modalShell('genmodal', `
+    <span class="x">✕</span>
+    <h3>${icons[kind] || '📌'} ${esc(kind)} Request</h3>
+    ${pianoHeader(p)}
+    <label>What do you need?</label>
+    <textarea class="gnotes" rows="3" placeholder="describe the ${esc(kind.toLowerCase())} request…"></textarea>
+    <button class="tmgo ggo">Send to Brigham</button>
+    <div class="tmmsg"></div>`);
+  ov.querySelector('.ggo').onclick = () => submitGeneric(p, kind, ov);
+  ov.querySelector('.gnotes').focus();
+}
+async function submitGeneric(p, kind, ov) {
+  const msg = ov.querySelector('.tmmsg');
+  const btn = ov.querySelector('.ggo');
+  const {pin, ok} = writeAuth();
+  if (!ok) { msg.className = 'tmmsg err'; msg.textContent = 'Sign in or enter the team PIN first.'; return; }
+  btn.disabled = true;
+  msg.className = 'tmmsg'; msg.textContent = 'Sending…';
+  try {
+    const r = await fetch(BRIDGE_URL, {
+      method: 'POST', redirect: 'follow',
+      headers: {'content-type': 'text/plain;charset=utf-8'},
+      body: JSON.stringify({pin, serial: p.serial, action: 'teamreq', row: p.row,
+        kind, notes: ov.querySelector('.gnotes').value.trim(), ...authFields()}),
+    });
+    const j = await r.json();
+    if (j.error === 'unauthorized') { localStorage.removeItem('blpPin'); throw new Error('Not authorized — sign in or re-enter the PIN.'); }
+    if (!j.ok) throw new Error(j.error || 'request failed');
+    msg.className = 'tmmsg ok';
+    msg.textContent = `✓ ${kind} request emailed to Brigham and logged.`;
+    setTimeout(() => { ov.hidden = true; }, 2000);
   } catch (e) {
     msg.className = 'tmmsg err'; msg.textContent = '✗ ' + e.message;
     btn.disabled = false;

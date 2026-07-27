@@ -54,6 +54,9 @@ var MOVE_EVENT_TITLE = 'In-store moves — Store Map requests';
 // printable tag whenever a price is added or changed
 var PRICE_REQUEST_TO = 'brigham@brighamlarsonpianos.com';
 var TAG_ALERT_TO = 'info@brighamlarsonpianos.com';
+// Curtis Harper work orders spreadsheet — "Requested" tab gets new rows
+var CURTIS_SHEET_ID = '1DxvDQ9WlhxXfiZaKGpdJLOOPNMBfVA9PsHGuLe55pmc';
+var CURTIS_TAB = 'Requested';
 var TUNING_SLOTS = [8, 9.5];               // Korban's weekday starts: 8:00 + 9:30 (Denver)
 var TUNING_MINUTES = 90;                   // block length, matches Korban's bookings
 var KNOWN_AREAS = ['showroom', 'pre-sale showroom', 'third floor', 'storage',
@@ -498,6 +501,18 @@ function doPost(e) {
       if (rq.ok) logAct_(who, 'Price requested', rq.summary || req.serial,
         'email sent to ' + PRICE_REQUEST_TO);
       return json_(rq);
+    }
+    if (req.action === 'curtis') {
+      var ch = curtisRequest_(req, who);
+      if (ch.ok && !ch.dryrun) logAct_(who, 'Curtis Harper request', ch.summary || req.serial,
+        (req.ctype || 'Other') + (req.notes ? ' — ' + String(req.notes).slice(0, 150) : ''));
+      return json_(ch);
+    }
+    if (req.action === 'teamreq') {
+      var tr = teamRequest_(req, who);
+      if (tr.ok) logAct_(who, String(req.kind || 'Team') + ' request', tr.summary || req.serial,
+        String(req.notes || '').slice(0, 200));
+      return json_(tr);
     }
     if (req.action === 'settrack') {
       var tk = setTrack_(req);
@@ -1110,6 +1125,70 @@ function setPrice_(req, who) {
   }
   return {ok: true, row: found.row, summary: found.summary,
           previous: prev, price: pretty};
+}
+
+/**
+ * Curtis Harper request — appends a row to the "Requested" tab of the
+ * Curtis Harper work orders spreadsheet, matching its columns:
+ * Ownership | Priority | DATE REQUESTED | location | PIANO/SERIAL # |
+ * Issue | Pic | TYPE OF FINISH | ... req: {serial, row?, ctype
+ * (Plate/Touch up/Decal/Other), notes?, dryrun?}
+ */
+function curtisRequest_(req, who) {
+  var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+  var found = findPiano_(sh, req.serial, req.row);
+  if (found.error) return found;
+  var owner = String(sh.getRange(found.row, 2).getValue() || '');
+  var ownership = /consign/i.test(owner) ? 'Consignment'
+    : (!owner || /blp|reno|brigham/i.test(owner)) ? 'BLP' : 'Client';
+  var ctype = String(req.ctype || 'Other').trim();
+  var issue = ctype + (req.notes && String(req.notes).trim()
+    ? ' — ' + String(req.notes).trim() : '');
+  var name = String(who || '').replace(/\s*<[^>]*>\s*/, '').replace(/\s*\(.*\)\s*$/, '');
+  if (req.dryrun) return {ok: true, dryrun: true, summary: found.summary, ownership: ownership};
+  var css;
+  try { css = SpreadsheetApp.openById(CURTIS_SHEET_ID); }
+  catch (e) { return {error: 'the Curtis Harper work orders sheet is not shared with the bridge account (brigham@)'}; }
+  var tab = css.getSheetByName(CURTIS_TAB) || css.getSheets()[0];
+  tab.appendRow([
+    ownership, '',                                                        // Ownership, Priority
+    Utilities.formatDate(new Date(), 'America/Denver', 'M/d/yy'),         // DATE REQUESTED
+    String(found.location || ''),                                         // location
+    (found.summary || 'Piano') + ' ' + String(req.serial || ''),          // PIANO/SERIAL #
+    issue + (name && name.indexOf('Team') !== 0 ? ' [' + name + ']' : ''),// Issue
+  ]);
+  return {ok: true, summary: found.summary, tab: tab.getName()};
+}
+
+/**
+ * Generic team request (Admin / Touch Up / Priority Scheduling …) —
+ * emails Brigham with the piano + notes and lands in the activity log.
+ */
+function teamRequest_(req, who) {
+  var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+  var found = findPiano_(sh, req.serial, req.row);
+  if (found.error) return found;
+  var kind = String(req.kind || 'Team').slice(0, 40);
+  var name = String(who || '').replace(/\s*<[^>]*>\s*/, '').replace(/\s*\(.*\)\s*$/, '');
+  var logUrl = 'https://pianologapp.netlify.app/#piano=' + encodeURIComponent(req.serial);
+  MailApp.sendEmail({
+    to: PRICE_REQUEST_TO,
+    subject: '📌 ' + kind + ' request: ' + (found.summary || 'piano') + ' — SN ' + req.serial,
+    htmlBody: '<div style="font-family:Helvetica,Arial,sans-serif;max-width:560px">'
+      + '<h2 style="margin:0 0 8px">' + esc_(kind) + ' request from the Store Map</h2>'
+      + '<p style="font-size:15px;margin:6px 0"><b>' + esc_(found.summary || 'Piano') + '</b><br>'
+      + 'Serial ' + esc_(req.serial) + (found.location ? ' · Spot ' + esc_(found.location) : '') + '</p>'
+      + (req.notes && String(req.notes).trim()
+         ? '<p style="font-size:14px;white-space:pre-wrap;border-left:3px solid #9e2020;padding-left:10px">'
+           + esc_(String(req.notes).trim()) + '</p>' : '')
+      + '<p style="font-size:13px;color:#555">Requested by ' + esc_(name || 'the team') + '.</p>'
+      + '<p style="font-size:13px"><a href="' + APP_URL + '" style="color:#9e2020">Store Map</a> · '
+      + '<a href="' + logUrl + '" style="color:#9e2020">Piano Log</a></p></div>',
+    body: kind + ' request: ' + (found.summary || 'piano') + ' SN ' + req.serial
+      + (req.notes ? '\n\n' + String(req.notes).trim() : '') + '\n\nRequested by ' + (name || 'the team'),
+    name: 'BLP Store Map',
+  });
+  return {ok: true, summary: found.summary, sentTo: PRICE_REQUEST_TO};
 }
 
 // "please set a price" email to Brigham, from the For Sale popup
