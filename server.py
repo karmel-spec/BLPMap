@@ -157,9 +157,9 @@ def parse_pianos(raw):
         # section-header/status-note rows with no serial (room labels, "go to X
         # section" pointers, "Piano is [not] at BLP..." shop-follow-up notes) -
         # not a piano, just a divider or note row that slipped a summary in
-        if not serial.strip() and not col(4) and not col(5) and (
+        if not col(4) and not col(5) and (
                 re.match(r'^haydn room$', summary.strip(), re.I)
-                or re.search(r'go to .* section', summary, re.I)
+                or re.search(r'go to .* section', summary + ' ' + serial, re.I)
                 or re.match(r'^piano is ', summary.strip(), re.I)):
             continue
         dates = parse_dates(col(21))
