@@ -252,6 +252,7 @@ td a{color:#9e2020}
 .snz{border:1px solid #cfd6dc;background:#fff;color:#5a626a;border-radius:6px;font-size:10px;font-weight:700;padding:2px 6px;cursor:pointer}
 .snz:hover{border-color:#9e2020;color:#9e2020}
 .snzcur{color:#3a6ea5}
+.waitnote{background:#fdf7ec;border-left:3px solid #e8b47e;padding:4px 8px;border-radius:4px;margin:3px 0}
 .predit{border:1px solid #cfd6dc;background:#fff;color:#2e7d4f;border-radius:6px;font-size:10.5px;font-weight:700;padding:2px 8px;cursor:pointer;white-space:nowrap}
 .predit:hover{background:#2e7d4f;border-color:#2e7d4f;color:#fff}
 .addplus{fill:#aab3bb;font-weight:700;cursor:pointer}

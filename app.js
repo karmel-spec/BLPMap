@@ -1001,11 +1001,7 @@ function popHTML(p) {
       : (priceLabel(p) ? `<div class="row">Price <b class="pricecard">${esc(priceLabel(p))}</b></div>` : '')}
     <div class="row">Last tuned <b>${ti.last ? esc(fmtDayYear(ti.last)) : '—'}</b></div>
     ${ti.next ? `<div class="row">Tuning scheduled <b class="tunesched">🎵 ${esc(fmtDay(ti.next.date))} · ${esc(ti.next.time)}</b></div>` : ''}
-    ${(p.phase || '').startsWith('Waiting') && p.waitNote ? `<div class="row">Waiting on <b>${esc(p.waitNote)}</b></div>` : ''}
-    ${(p.phase || '').startsWith('Waiting') && p.serial ? `<div class="row rowflex snzrow"><span>Check back
-        <b class="snzcur">${p.checkBack ? esc(p.checkBack) : '—'}</b></span>
-      <span class="snzbtns"><button class="snz" data-d="3">+3d</button><button class="snz" data-d="7">+1w</button><button class="snz" data-d="14">+2w</button><button class="snz" data-d="30">+1m</button></span>
-    </div><div class="snzmsg phmsg"></div>` : ''}
+
     ${mediaCard(p)}
     ${tracker}
     ${phaser}
@@ -1016,6 +1012,11 @@ function popHTML(p) {
           `<button class="trk dn ${dl.includes(ph) ? 'on' : ''}" data-ph="${esc(ph)}" title="${esc(ph)}">${i + 1}${dl.includes(ph) ? '✓' : ''}</button>`).join('')}
         </span></div><div class="dnmsg phmsg"></div>`;
     })() : ''}
+    ${(p.phase || '').startsWith('Waiting') && p.waitNote ? `<div class="row waitnote">Waiting on <b>${esc(p.waitNote)}</b></div>` : ''}
+    ${(p.phase || '').startsWith('Waiting') && p.serial ? `<div class="row rowflex snzrow"><span>Check back
+        <b class="snzcur">${p.checkBack ? esc(p.checkBack) : '—'}</b></span>
+      <span class="snzbtns"><button class="snz" data-d="3">+3d</button><button class="snz" data-d="7">+1w</button><button class="snz" data-d="14">+2w</button><button class="snz" data-d="30">+1m</button></span>
+    </div><div class="snzmsg phmsg"></div>` : ''}
     ${p.serial ? `<button class="tunebtn reqbtn">📨 Request… ▾</button>
       <div class="reqmenu" hidden>
         <button data-req="move">🚚 Move</button>
