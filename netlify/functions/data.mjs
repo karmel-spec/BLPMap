@@ -105,6 +105,8 @@ function parsePianos(text) {
         || ['ADMIN', 'LOCATION / STATUS'].includes(col(20).toUpperCase())
         || col(21).includes('Arrival Date')) continue;
     const status = col(18), loc = col(20), ol = col(1).toLowerCase();
+    // keyboard stands are inventory, not pianos — keep them off the map
+    if (/\bstand\b/i.test(summary) || serial.trim().toLowerCase() === 'stand') continue;
     // media cells: empty=needed, "Skipped ..."=deliberately skipped, else have
     const med = j => { const v = col(j); return v ? (/^skip/i.test(v) ? 'skip' : true) : false; };
     const dates = parseDates(col(21)).filter(d => d <= todayUTC);

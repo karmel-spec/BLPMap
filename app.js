@@ -163,6 +163,22 @@ async function boot() {
 // cached /api/data — re-applied after every poll so a refresh can't revert
 // a just-saved change. Keyed by piano row. {phase, location}
 const pendingEdits = new Map();
+// survive reloads: a fresh edit outranks the server's 2-minute-stale cache,
+// so what you just saved never LOOKS reverted after a refresh
+const EDITS_KEY = 'blpPendingEdits';
+const _pset = pendingEdits.set.bind(pendingEdits);
+const _pdel = pendingEdits.delete.bind(pendingEdits);
+function persistEdits() {
+  lsSet(EDITS_KEY, JSON.stringify({t: Date.now(), edits: [...pendingEdits.entries()]}));
+}
+pendingEdits.set = (k, v) => { const r = _pset(k, v); persistEdits(); return r; };
+pendingEdits.delete = k => { const r = _pdel(k); persistEdits(); return r; };
+(() => {
+  try {
+    const saved = JSON.parse(lsGet(EDITS_KEY) || 'null');
+    if (saved && Date.now() - saved.t < 360000) saved.edits.forEach(([k, v]) => _pset(k, v));
+  } catch (e) { /* corrupted cache — start clean */ }
+})();
 function applyPending() {
   if (!pendingEdits.size) return;
   const byRow = new Map(S.data.pianos.map(p => [p.row, p]));
@@ -206,6 +222,7 @@ function applyPending() {
     }
     if (!stillPending) pendingEdits.delete(row);
   }
+  persistEdits();
 }
 
 function index() {
@@ -482,6 +499,10 @@ function mediaCard(p) {
   </div>`;
 }
 function isLate(p) { return phaseNum(p) >= AFTER_MIN; }
+// on the books but physically not in the building yet — no media possible
+function notYetArrived(p) {
+  return /coming soon|not here|on order|ordered|never came|in moving truck/i.test(p.location || '');
+}
 function mediaNeeds(p) {
   // not-yet-arrived pianos aren't photographed until they're here (NEW / 1N)
   if (comingSoon(p)) return {needBP: false, needBV: false, needAP: false, needAV: false, photo: false, video: false};
@@ -2629,7 +2650,7 @@ function missingStageTable() {
      || '<tr><td colspan="5" class="empty">None — every arrived piano has a shop stage. 🎉</td></tr>') + '</table>';
 }
 function mediaTable() {
-  const act = S.data.pianos.filter(p => p.active)
+  const act = S.data.pianos.filter(p => p.active && !notYetArrived(p))
     .map(p => ({p, m: mediaNeeds(p)})).filter(x => x.m.photo || x.m.video);
   const need = m => [m.needBP && 'before 📷', m.needBV && 'before 🎥',
                      m.needAP && 'AFTER 📷', m.needAV && 'AFTER 🎥'].filter(Boolean).join(' · ');
@@ -2684,8 +2705,8 @@ const REPORT_DEFS = () => [
    desc: 'Arrived pianos with no CURRENT PHASE in the Piano Log. Click a row to jump to the piano.',
    html: missingStageTable},
   {id: 'media', icon: '📸', title: 'MEDIA NEEDED', count: S.data.pianos.filter(p =>
-     p.active && (mediaNeeds(p).photo || mediaNeeds(p).video)).length,
-   desc: 'Before photos/video for every active piano; after photos/video once it reaches Tuning or later.',
+     p.active && !notYetArrived(p) && (mediaNeeds(p).photo || mediaNeeds(p).video)).length,
+   desc: 'Before photos/video for every arrived piano; after photos/video once it reaches Tuning or later. Pianos that haven\'t arrived yet join once they\'re here.',
    html: mediaTable},
   {id: 'waiting', icon: '⏳', title: 'WAITING ON', count: waitingPianos().length,
    desc: 'Every piano parked in a Waiting phase — what it’s waiting on, and when to check whether the wait is over (set with the card’s +3d/+1w/+2w/+1m snooze buttons). Overdue or dateless waits show in red.',

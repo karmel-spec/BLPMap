@@ -151,6 +151,9 @@ def parse_pianos(raw):
             continue
         status = col(18)
         loc = col(20)
+        # keyboard stands are inventory, not pianos - keep them off the map
+        if re.search(r'\bstand\b', summary, re.I) or serial.strip().lower() == 'stand':
+            continue
         dates = parse_dates(col(21))
         entered = max((d for d in dates if d <= today), default=None)
         is_new = bool(entered and (today - entered).days <= 7)
