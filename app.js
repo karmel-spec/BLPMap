@@ -854,7 +854,7 @@ function renderMap() {
   svg.querySelectorAll('.slot').forEach(el =>
     el.addEventListener('click', () => openSlotPop(el.dataset.slot)));
   svg.querySelectorAll('.addplus').forEach(el =>
-    el.addEventListener('click', ev => { ev.stopPropagation(); openAddModal(el.dataset.slot); }));
+    el.addEventListener('click', ev => { ev.stopPropagation(); openAssignModal(el.dataset.slot); }));
 }
 
 /* ---------- hover / tap card ---------- */
@@ -1169,7 +1169,86 @@ function applyBumps(bumped) {
     be.location = bp.location; pendingEdits.set(bp.row, be);
   });
 }
-function openAddModal(slotId) {
+/* the ＋ on an empty spot: type a serial, the piano is found in the Piano
+   Log and moved to this spot (existing occupants get bumped to the attic).
+   Unknown serials fall back to the full add-a-piano form. */
+function openAssignModal(slotId) {
+  popPinned = false; $('#pop').hidden = true;
+  const ov = modalShell('assignmodal', `
+    <span class="x">✕</span>
+    <h3>＋ Put a Piano at Spot ${esc(slotId)}</h3>
+    <label>Serial number</label>
+    <input class="asserial" maxlength="20" placeholder="type the piano's serial #">
+    <button class="tmgo asgo">Find it and move it to spot ${esc(slotId)}</button>
+    <div class="tmmsg"></div>`);
+  const go = () => submitAssign(slotId, ov);
+  ov.querySelector('.asgo').onclick = go;
+  const inp = ov.querySelector('.asserial');
+  inp.onkeydown = e => { if (e.key === 'Enter') go(); };
+  inp.focus();
+}
+async function submitAssign(slotId, ov) {
+  const msg = ov.querySelector('.tmmsg');
+  const btn = ov.querySelector('.asgo');
+  const serial = ov.querySelector('.asserial').value.trim();
+  if (!serial) { msg.className = 'tmmsg err'; msg.textContent = 'Type a serial number first.'; return; }
+  const {pin, ok} = writeAuth();
+  if (!ok) { msg.className = 'tmmsg err'; msg.textContent = 'Sign in (☰ menu) or enter the team PIN first.'; return; }
+  btn.disabled = true;
+  msg.className = 'tmmsg'; msg.textContent = 'Looking it up in the Piano Log…';
+  try {
+    const r = await fetch(BRIDGE_URL, {
+      method: 'POST', redirect: 'follow',
+      headers: {'content-type': 'text/plain;charset=utf-8'},
+      body: JSON.stringify({pin, serial, action: 'move', newLocation: slotId, ...authFields()}),
+    });
+    const j = await r.json();
+    if (j.error === 'unauthorized') {
+      localStorage.removeItem('blpPin');
+      throw new Error('Not authorized — sign in or re-enter the PIN.');
+    }
+    if (j.error && /not found/i.test(j.error)) {
+      msg.className = 'tmmsg err';
+      msg.innerHTML = `That serial isn't in the Piano Log.`;
+      btn.outerHTML = `<button class="tmgo asnew">＋ Add it as a NEW piano at spot ${esc(slotId)}</button>`;
+      ov.querySelector('.asnew').onclick = () => { ov.hidden = true; openAddModal(slotId, serial); };
+      return;
+    }
+    if (j.error && j.rows) {   // several active rows share the serial — take the first
+      const r2 = await fetch(BRIDGE_URL, {
+        method: 'POST', redirect: 'follow',
+        headers: {'content-type': 'text/plain;charset=utf-8'},
+        body: JSON.stringify({pin, serial, action: 'move', newLocation: slotId, row: j.rows[0], ...authFields()}),
+      });
+      const j2 = await r2.json();
+      if (!j2.moved) throw new Error(j2.error || 'move failed');
+      finishAssign(j2, serial, slotId, ov, msg);
+      return;
+    }
+    if (!j.moved) throw new Error(j.error || 'move failed');
+    finishAssign(j, serial, slotId, ov, msg);
+  } catch (e) {
+    msg.className = 'tmmsg err'; msg.textContent = '✗ ' + e.message;
+    const b = ov.querySelector('.asgo'); if (b) b.disabled = false;
+  }
+}
+function finishAssign(j, serial, slotId, ov, msg) {
+  const p = S.data.pianos.find(x => x.row === j.row)
+    || S.data.pianos.find(x => (x.serial || '').toLowerCase() === serial.toLowerCase());
+  if (p) {
+    p.location = j.location; p.isSlot = SLOT_RE.test(j.location);
+    const edit = pendingEdits.get(p.row) || {};
+    edit.location = j.location; pendingEdits.set(p.row, edit);
+  }
+  applyBumps(j.bumped);
+  index(); renderAll();
+  msg.className = 'tmmsg ok';
+  msg.textContent = `✓ ${j.summary || 'Piano'} moved from ${j.previous || '—'} to spot ${j.location}`
+    + (j.bumped && j.bumped.length ? ` — bumped ${j.bumped.map(b => b.summary || 'a piano').join(', ')} to the attic` : '');
+  setTimeout(() => { ov.hidden = true; if (p) focusPiano(p); }, 2000);
+}
+
+function openAddModal(slotId, prefillSerial) {
   popPinned = false;
   $('#pop').hidden = true;
   let ov = $('#addmodal');
@@ -1182,7 +1261,8 @@ function openAddModal(slotId) {
     <span class="x">✕</span>
     <h3>＋ Add a Piano — Spot ${esc(slotId)}</h3>
     <label>Serial number <small>(required)</small></label>
-    <input class="adserial" maxlength="20" placeholder="e.g. 546310">
+    <input class="adserial" maxlength="20" placeholder="e.g. 546310"${''}
+      value="${esc(prefillSerial || '')}">
     <div class="adgrid">
       <div><label>Year</label><input class="adyear" maxlength="4" placeholder="1996"></div>
       <div><label>Make</label><input class="admake" maxlength="30" placeholder="Yamaha"></div>
@@ -1821,10 +1901,10 @@ function openSlotPop(id) {
     pop.innerHTML = `<span class="x">✕</span>
       <span class="tag">SPOT ${esc(id)}</span><h3>Empty</h3>
       <div class="row">No piano assigned in the Piano Log.</div>
-      <button class="tagbtn addhere">＋ Add a piano here</button>`;
+      <button class="tagbtn addhere">＋ Put a piano here</button>`;
     pop.onclick = ev => {
       if (ev.target.classList.contains('x')) { pop.hidden = true; popPinned = false; return; }
-      if (ev.target.classList.contains('addhere')) { pop.hidden = true; openAddModal(id); } };
+      if (ev.target.classList.contains('addhere')) { pop.hidden = true; openAssignModal(id); } };
   }
   const el = document.querySelector(`.slot[data-slot="${CSS.escape(id)}"]`);
   place(pop, el);
