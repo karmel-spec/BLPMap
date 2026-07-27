@@ -2361,19 +2361,42 @@ function authGate() {
       <p>Team members sign in with Google — moves, phase changes, photos and
       requests are logged under your name.</p>
       <div id="agBtn"></div>
-      <button class="agpin" id="agPin">use the team PIN instead</button></div>`;
+      <div class="agpinrow">
+        <input id="agPinIn" type="password" inputmode="numeric" autocomplete="off"
+               placeholder="or enter the team PIN">
+        <button id="agPinGo">Enter</button>
+      </div>
+      <div id="agPinMsg" class="agpinmsg"></div></div>`;
     document.body.appendChild(ov);
   }
   const dev = ['localhost', '127.0.0.1'].includes(location.hostname);
   // a stored team PIN also opens the gate, so a blocked/broken Google
-  // button is never a dead end (the bridge validates it on first write)
+  // button is never a dead end
   const on = !authUser() && !localStorage.getItem('blpPin') && !dev;
   ov.hidden = !on;
   if (!on) return;
-  $('#agPin').onclick = () => {
-    const pin = (prompt('Team PIN:') || '').trim();
-    if (pin) { localStorage.setItem('blpPin', pin); renderAuth(); }
+  const tryPin = async () => {
+    const pin = $('#agPinIn').value.trim();
+    const msg = $('#agPinMsg');
+    if (!pin) { msg.textContent = 'Type the team PIN first.'; return; }
+    msg.textContent = 'Checking…';
+    try {
+      // any bridge call answers "unauthorized" for a wrong PIN — a cheap
+      // lookup with no serial validates the PIN without changing anything
+      const r = await fetch(BRIDGE_URL, {
+        method: 'POST', redirect: 'follow',
+        headers: {'content-type': 'text/plain;charset=utf-8'},
+        body: JSON.stringify({pin, action: 'lookup', serial: ''}),
+      });
+      const j = await r.json();
+      if (j.error === 'unauthorized') { msg.textContent = '✗ Wrong PIN.'; return; }
+      localStorage.setItem('blpPin', pin);
+      msg.textContent = '';
+      renderAuth();
+    } catch (e) { msg.textContent = '✗ ' + e.message; }
   };
+  $('#agPinGo').onclick = tryPin;
+  $('#agPinIn').onkeydown = ev => { if (ev.key === 'Enter') tryPin(); };
   renderGateButton();
 }
 // keep trying until the GIS script is ready — the gate must never sit

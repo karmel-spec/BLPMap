@@ -362,3 +362,8 @@ td a{color:#9e2020}
 
 .agpin{margin-top:14px;border:none;background:none;cursor:pointer;font-size:12px;color:#8a939b;text-decoration:underline dotted}
 .agpin:hover{color:#9e2020}
+
+.agpinrow{margin-top:16px;display:flex;gap:6px;justify-content:center}
+.agpinrow input{padding:7px 10px;border:1px solid #c9d0d6;border-radius:8px;font:inherit;font-size:13px;width:170px}
+.agpinrow button{padding:7px 14px;border:1px solid #9e2020;border-radius:8px;background:#9e2020;color:#fff;font:inherit;font-size:13px;cursor:pointer}
+.agpinmsg{margin-top:8px;font-size:12px;color:#9e2020;min-height:15px}
