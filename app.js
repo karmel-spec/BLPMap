@@ -676,22 +676,30 @@ function wrapCap(text, w, fs, maxLines) {
   return lines;
 }
 function zoneLabelSVG(z, cls) {
-  let fs = Math.min(13, Math.max(9, z.h * 0.5));
-  const cx = z.x + (z.w || 0) / 2;
-  const fits = t => t.length * (fs * 0.58 + 1.4) + 8 <= z.w;
-  if (!z.w || fits(z.text)) {
-    return `<text x="${cx}" y="${z.y + (z.h ? z.h / 2 + fs * 0.35 : 0)}" text-anchor="middle"
-            class="zlabel ${cls}" font-size="${fs}">${esc(z.text)}</text>`;
+  const cx = z.x + (z.w || 0) / 2, cy = z.y + (z.h || 0) / 2;
+  // tall narrow zones (rebuilding-line tables etc.) read better rotated
+  // 90° — swap which dimension wraps/caps the text, then rotate the <text>
+  // about the box's own center so it still sits inside the rect.
+  const vertical = z.w && z.h && z.h > z.w * 1.35 && z.w < 90;
+  const boxW = vertical ? z.h : z.w;
+  const boxH = vertical ? z.w : z.h;
+
+  let fs = Math.min(13, Math.max(9, boxH * 0.5));
+  const fits = t => t.length * (fs * 0.58 + 1.4) + 8 <= boxW;
+  const rot = vertical ? ` transform="rotate(-90 ${cx} ${cy})"` : '';
+  if (!boxW || fits(z.text)) {
+    return `<text x="${cx}" y="${cy + (boxH ? fs * 0.35 : 0)}" text-anchor="middle"
+            class="zlabel ${cls}" font-size="${fs}"${rot}>${esc(z.text)}</text>`;
   }
-  let lines = wrapWords(z.text, z.w, fs);
-  while ((lines.length > 3 || lines.length * fs * 1.2 > z.h + 6) && fs > 7.5) {
+  let lines = wrapWords(z.text, boxW, fs);
+  while ((lines.length > 3 || lines.length * fs * 1.2 > boxH + 6) && fs > 7.5) {
     fs -= 0.75;
-    lines = wrapWords(z.text, z.w, fs);
+    lines = wrapWords(z.text, boxW, fs);
   }
   lines = lines.slice(0, 3);
   const lh = fs * 1.2;
-  const y0 = z.y + z.h / 2 - ((lines.length - 1) / 2) * lh + fs * 0.35;
-  return `<text x="${cx}" y="${y0}" text-anchor="middle" class="zlabel ${cls}" font-size="${fs}">`
+  const y0 = cy - ((lines.length - 1) / 2) * lh + fs * 0.35;
+  return `<text x="${cx}" y="${y0}" text-anchor="middle" class="zlabel ${cls}" font-size="${fs}"${rot}>`
     + lines.map((L, i) => `<tspan x="${cx}" dy="${i ? lh : 0}">${esc(L)}</tspan>`).join('')
     + '</text>';
 }
