@@ -42,6 +42,9 @@ var TUNING_TECHS = [
 // OAuth web client for "Sign in with Google" in the map app — used only to
 // verify who made a change for the activity log. Client IDs are public.
 var GOOGLE_CLIENT_ID = '110628682621-v65mkaoanv87sp75ggdfcrglfr7bkr8p.apps.googleusercontent.com';
+// personal-gmail team accounts allowed to write without the PIN when
+// signed in with Google (BLP domain + .blp@gmail.com accounts always are)
+var TEAM_EMAILS = ['brighamlarson@gmail.com'];
 var TUNING_SLOTS = [8, 9.5];               // Korban's weekday starts: 8:00 + 9:30 (Denver)
 var TUNING_MINUTES = 90;                   // block length, matches Korban's bookings
 var KNOWN_AREAS = ['showroom', 'pre-sale showroom', 'third floor', 'storage',
@@ -268,6 +271,54 @@ function techs_() {
   })};
 }
 
+/**
+ * Add a brand-new piano to the Piano Log from the map's "+" button.
+ * Inserts a row just above the SOLD divider with owner/serial/summary/
+ * year/make/model/size/category, location (the clicked spot), today's
+ * arrival date, and phase "New Arrival - Admin". If the serial already
+ * exists, returns {duplicate:true} with the existing piano's row/summary/
+ * location so the app can offer "move it here instead". dryrun supported.
+ */
+function addPiano_(req) {
+  var serial = String(req.serial || '').trim();
+  if (!serial) return {error: 'serial required'};
+  var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+  var last = sh.getLastRow();
+  var serials = sh.getRange(1, 3, last, 1).getValues();
+  var owners = sh.getRange(1, 2, last, 1).getValues();
+  var soldRow = last + 1;
+  for (var i = 0; i < last; i++) {
+    if (String(owners[i][0] || '').trim().toUpperCase() === 'SOLD'
+        && !String(serials[i][0] || '').trim()) { soldRow = i + 1; break; }
+  }
+  for (var r = 1; r < soldRow; r++) {
+    if (String(serials[r - 1][0] || '').trim().toLowerCase() === serial.toLowerCase()) {
+      return {duplicate: true, row: r,
+              summary: String(sh.getRange(r, 4).getValue() || ''),
+              location: String(sh.getRange(r, 21).getValue() || '')};
+    }
+  }
+  var summary = [req.year, req.make, req.model].filter(function (x) { return x; })
+    .join(' ').trim() || ('Piano SN ' + serial);
+  if (req.dryrun) return {ok: true, added: false, dryrun: true, soldRow: soldRow, summary: summary};
+  var row = soldRow;                       // just above the SOLD divider
+  sh.insertRowBefore(row);
+  sh.getRange(row, 2).setValue(String(req.owner || 'BLP'));                 // B owner
+  sh.getRange(row, 3).setValue(serial);                                     // C serial
+  sh.getRange(row, 4).setValue(summary);                                    // D summary
+  if (req.year) sh.getRange(row, 5).setValue(String(req.year));             // E
+  if (req.make) sh.getRange(row, 6).setValue(String(req.make));             // F
+  if (req.model) sh.getRange(row, 7).setValue(String(req.model));           // G
+  if (req.size) sh.getRange(row, 8).setValue(String(req.size));             // H
+  if (req.category) sh.getRange(row, 10).setValue(String(req.category));    // J
+  sh.getRange(row, phaseCol_(sh)).setValue('New Arrival - Admin');
+  if (req.location) sh.getRange(row, 21).setValue(String(req.location).trim());  // U
+  sh.getRange(row, 22).setValue(
+    Utilities.formatDate(new Date(), 'America/Denver', 'M/d/yyyy'));        // V arrival
+  return {ok: true, added: true, row: row, summary: summary,
+          location: String(req.location || '').trim()};
+}
+
 function findPiano_(sh, serial, rowOverride) {
   var last = sh.getLastRow();
   var serials = sh.getRange(1, 3, last, 1).getValues();
@@ -341,12 +392,18 @@ function fetchEvents_() {
 function doPost(e) {
   try {
     var req = JSON.parse(e.postData.contents);
-    // team members authenticate with the PIN (typed once in the map app);
-    // BRIDGE_SECRET remains for optional server-to-server use
-    if (req.secret !== BRIDGE_SECRET && req.pin !== TEAM_PIN) {
+    // three ways in: the team PIN, the server-to-server secret, or a
+    // verified Google sign-in from a BLP account (no PIN needed once
+    // signed into the map)
+    var g = verifyGoogle_(req.idToken);
+    var gOk = g && g.email && (/@brighamlarsonpianos\.com$/i.test(g.email)
+      || /\.blp@gmail\.com$/i.test(g.email)
+      || TEAM_EMAILS.indexOf(g.email.toLowerCase()) >= 0);
+    if (req.secret !== BRIDGE_SECRET && req.pin !== TEAM_PIN && !gOk) {
       return json_({error: 'unauthorized'});
     }
-    var who = who_(req);
+    var who = g ? ((g.name || g.email) + (g.email ? ' <' + g.email + '>' : ''))
+                : who_(req);
     if (req.action === 'tune') {
       var t = scheduleTuning_(req);
       if (t.scheduled) logAct_(who, 'Tuning scheduled', t.summary || req.serial,
@@ -370,6 +427,12 @@ function doPost(e) {
       var md = setMedia_(req, who);
       if (md.ok && md.detail) logAct_(who, 'Media done', md.summary || req.serial, md.detail);
       return json_(md);
+    }
+    if (req.action === 'addpiano') {
+      var ap = addPiano_(req);
+      if (ap.added) logAct_(who, 'Added piano', ap.summary || req.serial,
+        'new row ' + ap.row + ' at spot ' + (req.location || '(none)'));
+      return json_(ap);
     }
     if (req.action === 'photo') {
       var pt = savePhoto_(req, who);

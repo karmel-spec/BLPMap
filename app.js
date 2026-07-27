@@ -174,6 +174,7 @@ function applyPending() {
 
 function index() {
   applyPending();
+  applyAdds();
   S.bySlot.clear(); S.slotFloor.clear();
   S.map.floors.forEach((f, fi) =>
     f.slots.forEach(sl => S.slotFloor.set(sl.id.toLowerCase(), fi)));
@@ -733,6 +734,10 @@ function renderMap() {
                 data-slot="${esc(sl.id)}" data-row="${p.row}">
                 <g transform="rotate(90 ${cx} ${cy})">${glyph(p.type, cx, cy, sc)}</g>${phaseText(p, cx, cy, sc)}${mediaBadge(p, cx, cy, sc)}${priceText(p, cx, cy, sc)}</g>`;
         });
+      } else {
+        const pfs = Math.max(10, Math.min(20, sl.w * 0.4));
+        s += `<text x="${sl.x + sl.w / 2}" y="${(sl.y + fs + 2 + sl.y + sl.h) / 2 + pfs * 0.36}"
+              text-anchor="middle" class="addplus" data-slot="${esc(sl.id)}" font-size="${pfs}">＋</text>`;
       }
     } else {
       // wide slot: number on the left, pianos in a row. Rack rows (short
@@ -760,6 +765,10 @@ function renderMap() {
           s += `<g class="piano ${st} own-${ownerClass(p)} ${q && !matches(p, q) ? 'dim' : ''} ${hl ? 'hl' : ''}"
                 data-slot="${esc(sl.id)}" data-row="${p.row}">${glyph(p.type, cx, cy, sc)}${phaseText(p, cx, cy, sc)}${mediaBadge(p, cx, cy, sc)}${priceText(p, cx, cy, sc)}</g>`;
         });
+      } else if (!thin) {
+        const pfs = Math.max(9, Math.min(20, sl.h * 0.45));
+        s += `<text x="${sl.x + numW + (sl.w - numW) / 2}" y="${sl.y + sl.h / 2 + pfs * 0.36}"
+              text-anchor="middle" class="addplus" data-slot="${esc(sl.id)}" font-size="${pfs}">＋</text>`;
       }
     }
   }
@@ -831,6 +840,8 @@ function renderMap() {
   });
   svg.querySelectorAll('.slot').forEach(el =>
     el.addEventListener('click', () => openSlotPop(el.dataset.slot)));
+  svg.querySelectorAll('.addplus').forEach(el =>
+    el.addEventListener('click', ev => { ev.stopPropagation(); openAddModal(el.dataset.slot); }));
 }
 
 /* ---------- hover / tap card ---------- */
@@ -970,8 +981,8 @@ async function setPhase(p, phase, pop) {
   const was = p.phase || '';
   if (phase === was) return;
   popPinned = true;
-  const pin = teamPin(false);   // prompts on first use of this device
-  if (!pin) {
+  const {pin, ok} = writeAuth();   // signed-in users skip the PIN
+  if (!ok) {
     msg.className = 'phmsg err'; msg.textContent = 'A team PIN is required — nothing saved.';
     if (sel) sel.value = was;   // revert the dropdown so it matches reality
     return;
@@ -1016,8 +1027,8 @@ async function setPhase(p, phase, pop) {
 async function setMedia(p, field, pop) {
   const msg = pop.querySelector('.mdmsg');
   popPinned = true;
-  const pin = teamPin(false);
-  if (!pin) { msg.className = 'mdmsg err'; msg.textContent = 'A team PIN is required — nothing saved.'; return; }
+  const {pin, ok} = writeAuth();
+  if (!ok) { msg.className = 'mdmsg err'; msg.textContent = 'A team PIN is required — nothing saved.'; return; }
   p[field] = true;
   const edit = pendingEdits.get(p.row) || {};
   edit[field] = true; pendingEdits.set(p.row, edit);
@@ -1052,6 +1063,137 @@ function revertPhase(p, was, sel, edit) {
   if (edit) { delete edit.phase; if (!Object.keys(edit).length) pendingEdits.delete(p.row); }
   if (sel) sel.value = was;
   renderMap();
+}
+
+/* ---------- add-a-piano modal (the ＋ on empty spots) ---------- */
+// freshly added pianos, re-inserted after every poll until the cached
+// /api/data catches up and serves them itself
+const pendingAdds = [];
+function applyAdds() {
+  for (let i = pendingAdds.length - 1; i >= 0; i--) {
+    const pa = pendingAdds[i];
+    if (S.data.pianos.some(p => (p.serial || '').toLowerCase() === pa.serial.toLowerCase())) {
+      pendingAdds.splice(i, 1);          // server caught up
+    } else {
+      S.data.pianos.push(pa);
+    }
+  }
+}
+function openAddModal(slotId) {
+  popPinned = false;
+  $('#pop').hidden = true;
+  let ov = $('#addmodal');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.id = 'addmodal';
+    document.body.appendChild(ov);
+  }
+  ov.innerHTML = `<div class="tmcard">
+    <span class="x">✕</span>
+    <h3>＋ Add a Piano — Spot ${esc(slotId)}</h3>
+    <label>Serial number <small>(required)</small></label>
+    <input class="adserial" maxlength="20" placeholder="e.g. 546310">
+    <div class="adgrid">
+      <div><label>Year</label><input class="adyear" maxlength="4" placeholder="1996"></div>
+      <div><label>Make</label><input class="admake" maxlength="30" placeholder="Yamaha"></div>
+    </div>
+    <div class="adgrid">
+      <div><label>Model</label><input class="admodel" maxlength="30" placeholder="C3"></div>
+      <div><label>Type</label><select class="adtype">
+        <option value="Grand">Grand</option><option value="Upright">Upright</option>
+        <option value="Digital">Digital</option></select></div>
+    </div>
+    <label>Owner</label>
+    <input class="adowner" maxlength="60" value="BLP">
+    <button class="adgo">Add to the Piano Log at spot ${esc(slotId)}</button>
+    <div class="tmmsg admsg"></div>
+  </div>`;
+  ov.hidden = false;
+  ov.onclick = ev => {
+    if (ev.target === ov || ev.target.classList.contains('x')) ov.hidden = true;
+  };
+  ov.querySelector('.adgo').onclick = () => submitAdd(slotId, ov);
+  ov.querySelector('.adserial').focus();
+}
+async function submitAdd(slotId, ov) {
+  const msg = ov.querySelector('.admsg');
+  const btn = ov.querySelector('.adgo');
+  const v = c => ov.querySelector(c).value.trim();
+  const serial = v('.adserial');
+  if (!serial) { msg.className = 'tmmsg err'; msg.textContent = 'A serial number is required.'; return; }
+  const {pin, ok} = writeAuth();
+  if (!ok) { msg.className = 'tmmsg err'; msg.textContent = 'Sign in (☰ menu) or enter the team PIN to add pianos.'; return; }
+  btn.disabled = true;
+  msg.className = 'tmmsg'; msg.textContent = 'Adding to the Piano Log…';
+  const fields = {serial, year: v('.adyear'), make: v('.admake'), model: v('.admodel'),
+                  category: v('.adtype'), owner: v('.adowner') || 'BLP', location: slotId};
+  try {
+    const r = await fetch(BRIDGE_URL, {
+      method: 'POST', redirect: 'follow',
+      headers: {'content-type': 'text/plain;charset=utf-8'},
+      body: JSON.stringify({pin, action: 'addpiano', ...fields, ...authFields()}),
+    });
+    const j = await r.json();
+    if (j.error === 'unauthorized') {
+      localStorage.removeItem('blpPin');
+      throw new Error('Not authorized — sign in or re-enter the PIN, then try again.');
+    }
+    if (j.duplicate) {
+      // same serial already in the log — offer to move it here instead
+      msg.className = 'tmmsg err';
+      msg.innerHTML = `⚠️ That serial appears to be a <b>duplicate</b> — the log already has
+        <b>${esc(j.summary || 'a piano')}</b> (SN ${esc(serial)}) at
+        <b>${esc(j.location || 'no spot')}</b>.<br>Update its map location to
+        <b>spot ${esc(slotId)}</b> instead?`;
+      btn.outerHTML = `<button class="adgo admove">Yes — move it to spot ${esc(slotId)}</button>`;
+      ov.querySelector('.admove').onclick = async () => {
+        const mbtn = ov.querySelector('.admove');
+        mbtn.disabled = true; msg.className = 'tmmsg'; msg.textContent = 'Moving it…';
+        try {
+          const r2 = await fetch(BRIDGE_URL, {
+            method: 'POST', redirect: 'follow',
+            headers: {'content-type': 'text/plain;charset=utf-8'},
+            body: JSON.stringify({pin, action: 'move', serial, row: j.row,
+              newLocation: slotId, ...authFields()}),
+          });
+          const j2 = await r2.json();
+          if (!j2.moved) throw new Error(j2.error || 'move failed');
+          const p = S.data.pianos.find(x => x.row === j.row)
+            || S.data.pianos.find(x => (x.serial || '').toLowerCase() === serial.toLowerCase());
+          if (p) {
+            p.location = j2.location; p.isSlot = SLOT_RE.test(j2.location);
+            const edit = pendingEdits.get(p.row) || {};
+            edit.location = j2.location; pendingEdits.set(p.row, edit);
+          }
+          index(); renderAll();
+          msg.className = 'tmmsg ok';
+          msg.textContent = `✓ Moved from ${j2.previous || '—'} to spot ${j2.location}.`;
+          setTimeout(() => { ov.hidden = true; }, 1800);
+        } catch (e2) {
+          msg.className = 'tmmsg err'; msg.textContent = '✗ ' + e2.message;
+          mbtn.disabled = false;
+        }
+      };
+      return;
+    }
+    if (!j.added) throw new Error(j.error || 'add failed');
+    msg.className = 'tmmsg ok';
+    msg.textContent = `✓ Added to the Piano Log (row ${j.row}) at spot ${slotId}.`;
+    const nu = {row: j.row, section: '', owner: fields.owner, serial,
+      summary: j.summary, year: fields.year, make: fields.make, model: fields.model,
+      size: '', type: fields.category.toLowerCase(), status: '', location: slotId,
+      isSlot: SLOT_RE.test(slotId), entered: localDay(),
+      phase: 'New Arrival - Admin', price: '', bphoto: false, aphoto: false,
+      bvideo: false, avideo: false, queuePos: 0, queueTotal: 0,
+      isNew: true, active: true};
+    pendingAdds.push(nu);
+    applyAdds(); index(); renderAll();
+    setTimeout(() => { ov.hidden = true; focusPiano(nu); }, 1600);
+  } catch (e) {
+    msg.className = 'tmmsg err';
+    msg.textContent = '✗ ' + e.message;
+    if (ov.querySelector('.adgo')) ov.querySelector('.adgo').disabled = false;
+  }
 }
 
 /* ---------- tuning request modal ---------- */
@@ -1102,8 +1244,8 @@ async function fillTechs(ov) {
 async function submitTune(p, ov) {
   const msg = ov.querySelector('.tmmsg');
   const btn = ov.querySelector('.tmgo');
-  const pin = teamPin(false);
-  if (!pin) { msg.className = 'tmmsg err'; msg.textContent = 'A team PIN is required to schedule tunings.'; return; }
+  const {pin, ok} = writeAuth();
+  if (!ok) { msg.className = 'tmmsg err'; msg.textContent = 'A team PIN is required to schedule tunings.'; return; }
   const sel = ov.querySelector('.tmtech');
   const techId = sel.value;
   const techName = sel.options[sel.selectedIndex].text;
@@ -1148,8 +1290,8 @@ async function uploadPhoto(p, input, pop) {
   if (!f) return;
   const msg = pop.querySelector('.photomsg');
   popPinned = true;
-  const pin = teamPin(false);
-  if (!pin) { msg.className = 'photomsg err'; msg.textContent = 'A team PIN is required — photo not sent.'; return; }
+  const {pin, ok} = writeAuth();
+  if (!ok) { msg.className = 'photomsg err'; msg.textContent = 'A team PIN is required — photo not sent.'; return; }
   try {
     msg.className = 'photomsg'; msg.textContent = 'Preparing photo…';
     const dataUrl = await downscalePhoto(f, 1800, 0.85);
@@ -1204,10 +1346,18 @@ function teamPin(forceAsk) {
   }
   return pin;
 }
+// signed-in Google users write without a PIN (the bridge verifies their
+// token); everyone else gets the classic PIN prompt
+function writeAuth() {
+  if (authUser()) return {pin: localStorage.getItem('blpPin') || '', ok: true};
+  const pin = teamPin(false);
+  return {pin, ok: !!pin};
+}
 
-/* ---------- Google sign-in (who-changed-what for the activity log) ------ */
-// The PIN stays the write gate; signing in just attaches a verified name to
-// every change. Tokens expire hourly, so GIS auto-refreshes on page load.
+/* ---------- Google sign-in (identity + PIN-free writes) ---------------- */
+// Signing in attaches a verified name to every change AND replaces the
+// team PIN (the bridge trusts verified BLP accounts). Tokens expire
+// hourly, so GIS auto-refreshes on page load.
 function authUser() {
   try { return JSON.parse(localStorage.getItem('blpUser') || 'null'); }
   catch (e) { return null; }
@@ -1250,7 +1400,7 @@ function renderAuth() {
     $('#authOut').onclick = signOut;
   } else {
     box.innerHTML = `<b>Team member</b>
-      <div class="authhint">Sign in so changes are logged under your name</div>
+      <div class="authhint">Sign in so changes are logged under your name — no team PIN needed</div>
       <div id="gsiBtn"></div>`;
     if (window.google?.accounts?.id) {
       google.accounts.id.renderButton($('#gsiBtn'),
@@ -1282,8 +1432,8 @@ async function movePiano(p, dest, pop) {
   if (!dest) { msg.textContent = 'Type a spot number or area name first.'; return; }
   const known = S.slotFloor.has(dest.toLowerCase());
   popPinned = true;
-  const pin = teamPin(false);
-  if (!pin) { msg.textContent = 'A team PIN is required to move pianos.'; return; }
+  const {pin, ok} = writeAuth();
+  if (!ok) { msg.textContent = 'A team PIN is required to move pianos.'; return; }
   msg.textContent = 'Updating Piano Log…';
   try {
     // straight to the Apps Script bridge; text/plain avoids CORS preflight
@@ -1341,8 +1491,8 @@ async function queuePiano(p, newPos, pop) {
     return;
   }
   popPinned = true;
-  const pin = teamPin(false);
-  if (!pin) { msg.textContent = 'A team PIN is required to reorder the queue.'; return; }
+  const {pin, ok} = writeAuth();
+  if (!ok) { msg.textContent = 'A team PIN is required to reorder the queue.'; return; }
   msg.className = 'mvmsg qmsg';
   msg.textContent = 'Reordering the shop queue…';
   try {
@@ -1406,9 +1556,11 @@ function openSlotPop(id) {
   } else {
     pop.innerHTML = `<span class="x">✕</span>
       <span class="tag">SPOT ${esc(id)}</span><h3>Empty</h3>
-      <div class="row">No piano assigned in the Piano Log.</div>`;
+      <div class="row">No piano assigned in the Piano Log.</div>
+      <button class="tagbtn addhere">＋ Add a piano here</button>`;
     pop.onclick = ev => {
-      if (ev.target.classList.contains('x')) { pop.hidden = true; popPinned = false; } };
+      if (ev.target.classList.contains('x')) { pop.hidden = true; popPinned = false; return; }
+      if (ev.target.classList.contains('addhere')) { pop.hidden = true; openAddModal(id); } };
   }
   const el = document.querySelector(`.slot[data-slot="${CSS.escape(id)}"]`);
   place(pop, el);
