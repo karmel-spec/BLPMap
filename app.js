@@ -52,7 +52,7 @@ const SLOT_RE = /^\d+[a-zA-Z]?$/;
 const KNOWN_AREAS = ['showroom', 'pre-sale showroom', 'third floor', 'storage',
   'shop', 'vestibule', 'wing room', 'holding room', 'attic', 'sold floor',
   'rebuilding line', 'refinishing', 'back shop', 'middle shop', 'basement',
-  'warehouse', 'rental', 'out for delivery', 'customer', 'sanding', 'coming soon'];
+  'warehouse', 'rental', 'rented', 'out for delivery', 'customer', 'sanding', 'coming soon'];
 
 // pianos parked in a named work area are drawn INSIDE that zone on the map
 // (not in the holding grid). location text -> map zone label to place them in.
@@ -229,7 +229,11 @@ function duplicates() {
 function unplacedPianos() {
   return S.data.pianos.filter(p => p.active
     && !(p.isSlot && S.slotFloor.has((p.location || '').toLowerCase()))
-    && !areaBinFor(p));   // area-bin pianos are drawn in their zone instead
+    && !areaBinFor(p)     // area-bin pianos are drawn in their zone instead
+    && !isRented(p));     // rented pianos live in the rented zone
+}
+function rentedPianos() {
+  return S.data.pianos.filter(p => p.active && isRented(p));
 }
 const localDay = () => new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD local
 function todaysMoves() {
@@ -247,12 +251,18 @@ function tuningInfo(p) {
           last: past ? past[0] : null};
 }
 
+// out on rental: accounted for on the map (recital-seating rented zone)
+// but physically out of the building
+function isRented(p) {
+  return /rent/i.test((p.location || '').trim());
+}
 function comingSoon(p) {
   return (p.location || '').trim().replace(/\s+/g, ' ').toLowerCase().startsWith('coming soon');
 }
 function pianoStatus(p) {
   const today = localDay();
   if (comingSoon(p)) return 'coming';   // not yet at the store — yellow
+  if (isRented(p)) return 'rented';     // out on rental — orange
   if (p.serial && p.serial.length > 4) {
     // note: the calendar's "x " prefix is admin bookkeeping (reminder
     // calls), NOT completion — so any mention today counts as in transit
@@ -344,13 +354,13 @@ function focusPiano(p) {
   S.focusRow = p.row;
   const placed = p.isSlot && S.slotFloor.has(p.location.toLowerCase());
   const inBin = areaBinFor(p);   // parked in a named work-area zone (floor 0)
-  const fi = placed ? S.slotFloor.get(p.location.toLowerCase()) : (inBin ? 0 : 1);
+  const fi = placed ? S.slotFloor.get(p.location.toLowerCase()) : (inBin ? 0 : 1);   // rented + attic both live on floor 1
   if (fi !== S.floor) { S.floor = fi; renderTabs(); }
   renderMap();
   const f = S.map.floors[S.floor];
   const sl = placed ? f.slots.find(x => x.id.toLowerCase() === p.location.toLowerCase()) : null;
   const target = sl ? {x: sl.x + sl.w / 2, y: sl.y + sl.h / 2}
-    : (S.binXY || {})[p.row] || (S.holdingXY || {})[p.row];
+    : (S.binXY || {})[p.row] || (S.rentXY || {})[p.row] || (S.holdingXY || {})[p.row];
   if (target) {
     S.zoom = Math.max(S.zoom, 2.4); sizePlan();
     const sc = $('#mapscroll');
@@ -793,6 +803,40 @@ function renderMap() {
       }
     }
   }
+  // ---- RENTED zone (2nd floor): pianos out on rental, parked virtually in
+  // the recital-hall seating area so they stay accounted for
+  S.rentXY = {};
+  if (S.floor === 1) {
+    const rl = rentedPianos();
+    if (rl.length) {
+      const RZ = {x: 80, y: 875, x2: 1050, y2: 1115};
+      const zw = RZ.x2 - RZ.x, zh = RZ.y2 - RZ.y;
+      s += `<rect x="${RZ.x}" y="${RZ.y}" width="${zw}" height="${zh}" rx="8" class="rentzone"/>`;
+      s += `<text x="${RZ.x + zw / 2}" y="${RZ.y + 26}" text-anchor="middle" class="renttitle" font-size="19">RENTED — OUT ON RENTAL (${rl.length})</text>`;
+      const headH = 38, cols = 6;
+      const rrows = Math.ceil(rl.length / cols);
+      const rcw = (zw - 12) / cols;
+      const rch = Math.min(105, (zh - headH - 10) / rrows);
+      rl.forEach((p, idx) => {
+        const cx0 = RZ.x + 6 + (idx % cols) * rcw;
+        const cy0 = RZ.y + headH + Math.floor(idx / cols) * rch;
+        const cx = cx0 + rcw / 2;
+        const hl = S.focusRow === p.row || (q && matches(p, q));
+        const dim = q && !matches(p, q);
+        const nm = (p.year ? p.year + ' ' : '')
+          + ([p.make, p.model].filter(Boolean).join(' ') || p.summary || '');
+        const nameLines = wrapCap(nm, rcw - 8, 9.5, 1);
+        const iconCy = cy0 + (rch - 16) / 2;
+        const sc = Math.max(0.9, Math.min(1.6, (rch - 22) / 22));
+        S.rentXY[p.row] = {x: cx, y: cy0 + rch / 2};
+        s += `<g class="piano rented own-${ownerClass(p)} ${dim ? 'dim' : ''} ${hl ? 'hl' : ''}"
+              data-row="${p.row}">${glyph(p.type, cx, iconCy, sc)}${phaseText(p, cx, iconCy, sc)}</g>`;
+        s += `<text x="${cx}" y="${cy0 + rch - 5}" text-anchor="middle" class="rentname" font-size="9.5">`
+          + nameLines.map(L => esc(L)).join('') + `</text>`;
+      });
+    }
+  }
+
   // ---- ATTIC holding zone (2nd floor): every active piano not on a spot,
   // drawn inside the map's empty lower-right region as a full rectangle
   // flush with the map's right and bottom edges
@@ -879,7 +923,7 @@ function popHTML(p) {
   const st = pianoStatus(p);
   const ti = tuningInfo(p);
   const tags = {in: 'IN PLACE', new: 'NEW', sched: 'SCHEDULED', move: 'IN TRANSIT',
-                coming: 'COMING SOON',
+                coming: 'COMING SOON', rented: 'RENTED',
                 tune: 'TUNING CAL', sale: 'FOR SALE'};
   // title: year (col E) then make/model; fall back to the summary as-is
   const base = [p.make, p.model].filter(Boolean).join(' ');

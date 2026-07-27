@@ -86,6 +86,11 @@ body{background:#f7f8f9;color:#121212;display:flex;flex-direction:column;overflo
 .piano.tune .pbody{fill:#3a6ea5}
 .piano.coming .pbody{fill:#f4c20d}   /* not yet at the store */
 .piano.coming .pk{fill:#8a6a00}
+.piano.rented .pbody{fill:#e8871e}   /* out on rental — orange */
+.piano.rented .pk{fill:#7a4708}
+.rentzone{fill:#fdf5ec;stroke:#e8b47e;stroke-width:2;stroke-dasharray:10 6}
+.renttitle{fill:#c26a10;font-weight:800;letter-spacing:2px}
+.rentname{fill:#7a4708;font-weight:600;pointer-events:none}
 .piano.move .pbody{fill:#c03636}
 .piano.move{filter:drop-shadow(0 0 5px rgba(192,54,54,.65))}
 .piano.dim{opacity:.15}

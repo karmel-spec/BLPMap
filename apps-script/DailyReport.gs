@@ -74,7 +74,7 @@ var TUNING_MINUTES = 90;                   // block length, matches Korban's boo
 var KNOWN_AREAS = ['showroom', 'pre-sale showroom', 'third floor', 'storage',
   'shop', 'vestibule', 'wing room', 'holding room', 'attic', 'sold floor',
   'rebuilding line', 'refinishing', 'back shop', 'middle shop', 'basement',
-  'warehouse', 'rental', 'out for delivery', 'customer'];
+  'warehouse', 'rental', 'rented', 'out for delivery', 'customer'];
 
 function setup() {
   ScriptApp.getProjectTriggers().forEach(function (t) { ScriptApp.deleteTrigger(t); });
