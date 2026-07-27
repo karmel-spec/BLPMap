@@ -160,6 +160,230 @@ async function boot() {
   }, 150000);
 }
 
+
+/* ================= TRACK PLANS & CONCURRENT TASKS =================
+   data/tracks.json (scripts/fetch_tracks.py) mirrors the track tabs of the
+   "Sequence by Piano technician" sheet: each track's phase list plus its
+   concurrent tasks and the phase window each task must happen within.
+   A piano's card loads the phases for ITS track(s) (union, in order) and
+   lists the tasks with mark-off pills; per-piano marks live on the Piano
+   Log's "Task Status" tab via the piano-tasks bridge. */
+const PIANO_TASKS_API = 'https://blpsalesapp.netlify.app/.netlify/functions/piano-tasks';
+let TRACKDEFS = null;
+fetch('data/tracks.json', {cache: 'no-cache'}).then(r => r.json())
+  .then(d => { TRACKDEFS = d; }).catch(() => {});
+
+// track-tab phase wording -> the master PHASES vocabulary (order matters:
+// "chip tuning if new strings" must hit Chip Tuning before the string test)
+function normTrackPhase(s) {
+  const t = String(s || '').toLowerCase();
+  if (t.includes('new arrival')) return 'New Arrival - Admin';
+  if (t.includes('assessment')) return 'Assessment';
+  if (t.startsWith('add-ons')) return 'Add-ons';
+  if (t.includes('chip tuning')) return 'Chip Tuning';
+  if (t.includes('string')) return 'Restringing';
+  if (t.includes('cap')) return 'CAP';
+  if (t.includes('prsb')) return 'PRSB & Plate Refinishing';
+  if (t.includes('lacquer')) return 'Lacquer Soundboard';
+  if (t.includes('dhrt')) return 'DHRT';
+  if (t.includes('1st tuning')) return '1st Tuning';
+  if (t.includes('2nd tuning')) return '2nd Tuning';
+  if (t.startsWith('(refinishing')) return 'Refinishing';
+  if (t.includes('qc')) return 'QC & Assembly';
+  if (t.includes('exit prep')) return 'Exit Prep - Admin';
+  if (t.includes('delivered')) return 'Delivered';
+  if (t === 'tuning') return '1st Tuning';
+  return String(s).trim().replace(/\s+/g, ' ').replace(/^./, c => c.toUpperCase());
+}
+function trackKeysFor(p) {
+  if (!TRACKDEFS) return [];
+  const have = trackParts(p.track).list.map(t => t.toLowerCase());
+  const alias = {rebuild: 'rebuild', hybrid: 'hybrid', refurbish: 'refurbishing',
+                 refurbishing: 'refurbishing', repair: 'repair'};
+  const keys = [];
+  for (const t of have) {
+    const k = alias[t];
+    if (k && TRACKDEFS.tracks[k] && !keys.includes(k)) keys.push(k);
+  }
+  return keys;
+}
+// union of the piano's tracks' phases, keeping each track's order (extra
+// tracks merge in after their nearest shared predecessor)
+function pianoPhases(p) {
+  const keys = trackKeysFor(p);
+  if (!keys.length) return null;
+  const lists = keys.map(k => TRACKDEFS.tracks[k].phases.map(normTrackPhase));
+  const seq = lists[0].filter((x, i, a) => a.indexOf(x) === i);
+  for (const list of lists.slice(1)) {
+    let anchor = -1;
+    for (const ph of list) {
+      const at = seq.indexOf(ph);
+      if (at >= 0) { anchor = at; continue; }
+      seq.splice(anchor + 1, 0, ph);
+      anchor += 1;
+    }
+  }
+  return seq;
+}
+function phaseOptions(p, effPh) {
+  const list = pianoPhases(p) || PHASES;
+  return (effPh && !list.includes(effPh) && !PHASE_STATES.includes(effPh))
+    ? list.concat(effPh) : list;
+}
+
+/* ---- concurrent tasks ---- */
+const taskId = n => String(n).toLowerCase().replace(/\s*\(.*?\)\s*/g, ' ').replace(/\s+/g, ' ').trim();
+function taskSteps(name) {
+  const t = name.toLowerCase();
+  if (t.includes('decal')) return ['Ordered', 'Received'];
+  if (t.includes('electroplat')) return ['Mailed', 'Received'];
+  if (t.includes('order parts')) return ['Ordered', 'Received'];  // per part
+  return [null, 'Done'];
+}
+function pianoTaskDefs(p) {
+  const keys = trackKeysFor(p);
+  const plist = pianoPhases(p) || [];
+  const byId = new Map();
+  for (const k of keys) for (const task of TRACKDEFS.tracks[k].tasks) {
+    const id = taskId(task.name);
+    const s = plist.indexOf(normTrackPhase(task.startPhase));
+    const e = plist.indexOf(normTrackPhase(task.endPhase));
+    const got = byId.get(id);
+    if (!got) byId.set(id, {id, name: task.name.replace(/\s*\(if applicable\)/i, '').trim(), s, e});
+    else { got.s = Math.min(got.s, s); got.e = Math.max(got.e, e < 0 ? got.e : e); }
+  }
+  return [...byId.values()];
+}
+function tasksBox(p) {
+  if (!p.serial || !trackKeysFor(p).length) return '';
+  return `<div class="taskbox"><div class="taskhead">Concurrent tasks
+      <span class="taskmsg"></span></div><div class="taskbody">loading…</div></div>`;
+}
+async function loadTasks(p, pop) {
+  const body = pop.querySelector('.taskbody');
+  if (!body) return;
+  let state = [];
+  try {
+    const r = await fetch(PIANO_TASKS_API + '?serial=' + encodeURIComponent(p.serial));
+    const j = await r.json();
+    if (j.error) throw new Error(j.error);
+    state = j.rows || [];
+  } catch (e) {
+    body.innerHTML = `<span class="mno">task status unavailable: ${esc(String(e.message || e).slice(0, 90))}</span>`;
+    return;
+  }
+  renderTasksInto(p, pop, state);
+}
+function renderTasksInto(p, pop, state) {
+  const body = pop.querySelector('.taskbody');
+  if (!body) return;
+  const plist = pianoPhases(p) || [];
+  const curIdx = plist.indexOf(effectivePhase(p));
+  const find = (id, part) => state.find(r => taskId(r.task) === id &&
+    String(r.part || '').toLowerCase() === String(part || '').toLowerCase());
+  const pill = (t, part, step, label, stamp) =>
+    `<button class="tpill ${stamp ? 'on' : ''}" data-task="${esc(t)}" data-part="${esc(part || '')}"
+      data-step="${step}" data-label="${esc(label)}" title="${esc(stamp || '')}">${esc(label)}${stamp ? ' ✓' : ''}</button>`;
+  let html = '';
+  for (const def of pianoTaskDefs(p)) {
+    const isParts = def.id.includes('order parts');
+    const [s1, s2] = taskSteps(def.name);
+    const win = (def.s >= 0 && def.e >= 0)
+      ? `${plist[def.s]} – ${plist[def.e]}` : '';
+    const row = find(def.id, '');
+    const complete = isParts
+      ? state.filter(r => taskId(r.task) === def.id && r.part).every(r => r.step2At) &&
+        state.some(r => taskId(r.task) === def.id && r.part)
+      : !!(row && row.step2At);
+    let cls = '';
+    if (curIdx >= 0 && def.e >= 0 && curIdx > def.e && !complete) cls = 'overdue';
+    else if (curIdx >= 0 && def.s >= 0 && curIdx < def.s) cls = 'tdim';
+    html += `<div class="taskrow ${cls}"><div class="tname">${esc(def.name)}
+        ${win ? `<span class="twin">${esc(win)}</span>` : ''}${cls === 'overdue' ? '<span class="tdue">due!</span>' : ''}</div>`;
+    if (isParts) {
+      for (const r of state.filter(x => taskId(x.task) === def.id && x.part)) {
+        html += `<div class="tpart"><span>${esc(r.part)}</span><span class="tpills">
+          ${pill(def.id, r.part, 1, s1 || 'Ordered', r.step1At)}${pill(def.id, r.part, 2, s2, r.step2At)}</span></div>`;
+      }
+      html += `<div class="tpart partadd"><input placeholder="+ part to order (e.g. Abel Hammers)" maxlength="60">
+        <button class="tpill padd" data-task="${esc(def.id)}">+ add</button></div>`;
+    } else {
+      html += `<div class="tpills">${s1 ? pill(def.id, '', 1, s1, row && row.step1At) : ''}${pill(def.id, '', 2, s2, row && row.step2At)}</div>`;
+    }
+    html += `</div>`;
+  }
+  body.innerHTML = html || '<span class="mna">no concurrent tasks for this track</span>';
+  body.querySelectorAll('.tpill:not(.padd)').forEach(b => b.onclick = ev => {
+    ev.stopPropagation(); markTask(p, b, pop);
+  });
+  const addBtn = body.querySelector('.padd');
+  if (addBtn) addBtn.onclick = async ev => {
+    ev.stopPropagation();
+    const inp = addBtn.parentElement.querySelector('input');
+    const part = inp.value.trim();
+    if (!part) { inp.focus(); return; }
+    addBtn.disabled = true;
+    const ok = await postTask(p, pop, {task: addBtn.dataset.task, part, step: 1, label: 'Ordered', on: false});
+    addBtn.disabled = false;
+    if (ok) loadTasks(p, pop);
+  };
+  body.querySelectorAll('.partadd input').forEach(i => i.onclick = ev => ev.stopPropagation());
+}
+async function markTask(p, btn, pop) {
+  const on = !btn.classList.contains('on');
+  btn.disabled = true;
+  const ok = await postTask(p, pop, {task: btn.dataset.task, part: btn.dataset.part || '',
+    step: +btn.dataset.step, label: btn.dataset.label, on});
+  btn.disabled = false;
+  if (ok) {
+    btn.classList.toggle('on', on);
+    btn.textContent = btn.dataset.label + (on ? ' ✓' : '');
+  }
+}
+async function postTask(p, pop, fields) {
+  const msg = pop.querySelector('.taskmsg');
+  const af = authFields();
+  const key = (localStorage.getItem('blp.appkey') || '').trim();
+  if (!af.idToken && !key) {
+    msg.textContent = '— sign in (menu) so marks are saved under your name';
+    return false;
+  }
+  msg.textContent = '…';
+  try {
+    const headers = {'content-type': 'application/json'};
+    if (af.idToken) headers.authorization = 'Bearer ' + af.idToken;
+    const r = await fetch(PIANO_TASKS_API, {method: 'POST', headers,
+      body: JSON.stringify({key, serial: p.serial,
+        by: (af.user && (af.user.name || af.user.email)) || 'Team', ...fields})});
+    const j = await r.json();
+    if (j.ok) { msg.textContent = ''; return true; }
+    if (r.status === 401) localStorage.removeItem('blp.appkey');
+    msg.textContent = '✗ ' + (j.error || ('HTTP ' + r.status));
+  } catch (e) { msg.textContent = '✗ ' + (e.message || e); }
+  return false;
+}
+
+/* ---- tech specialties: who to assign for the current phase ---- */
+const PHASE_TO_AREA = {
+  'CAP': 'CAP', 'PRSB & Plate Refinishing': 'PRSB', 'Lacquer Soundboard': 'lacquer soundboard',
+  'Restringing': 'restringing', 'Chip Tuning': 'chip tuning', '1st Tuning': 'tuning',
+  '2nd Tuning': 'tuning', 'Refinishing': 'refinishing', 'QC & Assembly': 'QC and assembly',
+  'Key service': 'keys', 'Refurb checklist': 'refurbishing', 'Repair work': 'repairs',
+};
+function gotoLine(p, effPh) {
+  if (!TRACKDEFS || !effPh) return '';
+  let area = PHASE_TO_AREA[effPh];
+  if (effPh === 'DHRT') area = p.type === 'grand' ? 'DHRT for grands' : 'DHRT for uprights';
+  if (!area) return '';
+  const folks = (TRACKDEFS.specialties.people || [])
+    .filter(x => x.role !== 'intern' && (x.skills[area] || 0) >= 2)
+    .sort((a, b) => (b.skills[area] || 0) - (a.skills[area] || 0)).slice(0, 4);
+  if (!folks.length) return '';
+  return `<div class="gotoline" title="tech specialties (★ = go-to expert)">Go-to: ${
+    folks.map(x => esc(x.name) + ((x.skills[area] === 3) ? ' ★' : '')).join(', ')}</div>`;
+}
+
+
 // edits confirmed by the bridge but maybe not yet reflected in the 2-min
 // cached /api/data — re-applied after every poll so a refresh can't revert
 // a just-saved change. Keyed by piano row. {phase, location}
@@ -1061,11 +1285,11 @@ function popHTML(p) {
     ? `<div class="row phrow">Shop phase
          <select class="phsel">
            <option value="">— none —</option>
-           ${PHASES.map((ph, i) =>
+           ${phaseOptions(p, effPh).map((ph, i) =>
              `<option value="${esc(ph)}" ${effPh === ph ? 'selected' : ''}>${i + 1} · ${esc(ph)}</option>`).join('')}
            ${PHASE_STATES.map(ph =>
              `<option value="${esc(ph)}" ${effPh === ph ? 'selected' : ''}>${esc(ph)}</option>`).join('')}
-         </select></div><div class="phmsg"></div>`
+         </select></div>${gotoLine(p, effPh)}<div class="phmsg"></div>`
     : '';
   return `<span class="x">✕</span>
     <span class="tag ${st}">${tags[st]} · SPOT ${esc(p.location)}</span>
@@ -1102,10 +1326,11 @@ function popHTML(p) {
     ${p.serial ? (() => {
       const dl = (p.phasesDone || '').split(',').map(t => t.trim()).filter(Boolean);
       return `<div class="row trkrow" title="phases already completed — tap to toggle">Done
-        <span class="trkchips">${PHASES.filter(ph => ph !== 'Delivered').map((ph, i) =>
+        <span class="trkchips">${(pianoPhases(p) || PHASES).filter(ph => ph !== 'Delivered').map((ph, i) =>
           `<button class="trk dn ${dl.includes(ph) ? 'on' : ''}" data-ph="${esc(ph)}" title="${esc(ph)}">${i + 1}${dl.includes(ph) ? '✓' : ''}</button>`).join('')}
         </span></div><div class="dnmsg phmsg"></div>`;
     })() : ''}
+    ${tasksBox(p)}
     ${(p.phase || '').startsWith('Waiting') ? `<div class="row waitnote">Waiting on
         <b>${esc(p.waitNote || p.phase.replace('Waiting on ', ''))}</b>
         ${p.checkBack ? `<span class="wncb">· check back <b class="snzcur">${esc(p.checkBack)}</b></span>` : ''}
@@ -1226,6 +1451,7 @@ function wirePop(p) {
     else if (kind === 'priority') openGenericModal(p, 'Priority Scheduling');
     else if (kind === 'brigham') openBrighamModal(p);
   });
+  if (pop.querySelector('.taskbox')) loadTasks(p, pop);
   const pb = pop.querySelector('.photobtn');
   const pi = pop.querySelector('.photoin');
   if (pb) pb.onclick = ev => { ev.stopPropagation(); popPinned = true; pi.click(); };

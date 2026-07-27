@@ -1,0 +1,712 @@
+{
+ "generated": "2026-07-27",
+ "source": "https://docs.google.com/spreadsheets/d/1k9ToAeueEg5WOtaY91xXzL-a0l_AJsSZWw23tcAWECU/edit",
+ "tracks": {
+  "rebuild": {
+   "phases": [
+    "new arrival - admin",
+    "assessment",
+    "full restoration level CAP",
+    "PRSB (concurrently with Plate refinishing)",
+    "Lacquer soundboard",
+    "Restringing",
+    "chip tuning",
+    "DHRT",
+    "1st tuning",
+    "(Refinishing, technology/player install/rebuild/upgrade here if included)",
+    "QC and assembly",
+    "2nd tuning",
+    "admin exit prep",
+    "delivered"
+   ],
+   "tasks": [
+    {
+     "name": "key service",
+     "start": 1,
+     "end": 6,
+     "startPhase": "assessment",
+     "endPhase": "chip tuning"
+    },
+    {
+     "name": "plate refinishing (Curtis Harper)",
+     "start": 1,
+     "end": 4,
+     "startPhase": "assessment",
+     "endPhase": "Lacquer soundboard"
+    },
+    {
+     "name": "plate bolts/screws buffing",
+     "start": 1,
+     "end": 4,
+     "startPhase": "assessment",
+     "endPhase": "Lacquer soundboard"
+    },
+    {
+     "name": "pedals/cabinetry hardware electroplating and polishing",
+     "start": 1,
+     "end": 6,
+     "startPhase": "assessment",
+     "endPhase": "chip tuning"
+    },
+    {
+     "name": "order decal (if applicable)",
+     "start": 2,
+     "end": 3,
+     "startPhase": "full restoration level CAP",
+     "endPhase": "PRSB (concurrently with Plate refinishing)"
+    },
+    {
+     "name": "order parts",
+     "start": 2,
+     "end": 6,
+     "startPhase": "full restoration level CAP",
+     "endPhase": "chip tuning"
+    },
+    {
+     "name": "pinblock",
+     "start": 3,
+     "end": 4,
+     "startPhase": "PRSB (concurrently with Plate refinishing)",
+     "endPhase": "Lacquer soundboard"
+    },
+    {
+     "name": "soundboard",
+     "start": 3,
+     "end": 4,
+     "startPhase": "PRSB (concurrently with Plate refinishing)",
+     "endPhase": "Lacquer soundboard"
+    }
+   ]
+  },
+  "hybrid": {
+   "phases": [
+    "new arrival - admin",
+    "assessment",
+    "hybrid level CAP",
+    "optional add-on: replace bass strings only/replace all strings",
+    "(chip tuning if new strings included)",
+    "DHRT",
+    "tuning",
+    "(Refinishing, technology/player install/rebuild/upgrade here if included)",
+    "QC and assembly",
+    "admin exit prep",
+    "delivered"
+   ],
+   "tasks": [
+    {
+     "name": "key service",
+     "start": 1,
+     "end": 4,
+     "startPhase": "assessment",
+     "endPhase": "(chip tuning if new strings included)"
+    },
+    {
+     "name": "plate bolts/screws buffing",
+     "start": 1,
+     "end": 2,
+     "startPhase": "assessment",
+     "endPhase": "hybrid level CAP"
+    },
+    {
+     "name": "pedals/cabinetry hardware electroplating and polishing",
+     "start": 1,
+     "end": 4,
+     "startPhase": "assessment",
+     "endPhase": "(chip tuning if new strings included)"
+    },
+    {
+     "name": "order decal (if applicable)",
+     "start": 2,
+     "end": 6,
+     "startPhase": "hybrid level CAP",
+     "endPhase": "tuning"
+    },
+    {
+     "name": "order parts (if applicable)",
+     "start": 2,
+     "end": 4,
+     "startPhase": "hybrid level CAP",
+     "endPhase": "(chip tuning if new strings included)"
+    }
+   ]
+  },
+  "refurbishing": {
+   "phases": [
+    "new arrival - admin",
+    "assessment",
+    "key service",
+    "refurb checklist",
+    "tuning",
+    "(Refinishing, technology/player install/rebuild/upgrade here if included)",
+    "QC and assembly",
+    "admin exit prep",
+    "delivered"
+   ],
+   "tasks": [
+    {
+     "name": "plate bolts/screws buffing",
+     "start": 1,
+     "end": 2,
+     "startPhase": "assessment",
+     "endPhase": "key service"
+    },
+    {
+     "name": "pedals/cabinetry hardware electroplating and polishing",
+     "start": 1,
+     "end": 2,
+     "startPhase": "assessment",
+     "endPhase": "key service"
+    },
+    {
+     "name": "order decal (if applicable)",
+     "start": 1,
+     "end": 4,
+     "startPhase": "assessment",
+     "endPhase": "tuning"
+    },
+    {
+     "name": "order parts (if applicable)",
+     "start": 1,
+     "end": 2,
+     "startPhase": "assessment",
+     "endPhase": "key service"
+    }
+   ]
+  },
+  "repair": {
+   "phases": [
+    "new arrival - admin",
+    "assessment",
+    "repair work",
+    "add-ons: keys, tech, player, refinishing, if applicable",
+    "tuning",
+    "QC and assembly",
+    "admin exit prep",
+    "delivered"
+   ],
+   "tasks": [
+    {
+     "name": "plate bolts/screws buffing",
+     "start": 1,
+     "end": 2,
+     "startPhase": "assessment",
+     "endPhase": "repair work"
+    },
+    {
+     "name": "pedals/cabinetry hardware electroplating and polishing",
+     "start": 1,
+     "end": 2,
+     "startPhase": "assessment",
+     "endPhase": "repair work"
+    },
+    {
+     "name": "order decal (if applicable)",
+     "start": 1,
+     "end": 2,
+     "startPhase": "assessment",
+     "endPhase": "repair work"
+    },
+    {
+     "name": "order parts (if applicable)",
+     "start": 1,
+     "end": 1,
+     "startPhase": "assessment",
+     "endPhase": "assessment"
+    }
+   ]
+  }
+ },
+ "specialties": {
+  "areas": [
+   "CAP",
+   "PRSB",
+   "lacquer soundboard",
+   "restringing",
+   "chip tuning",
+   "tuning",
+   "DHRT for uprights",
+   "DHRT for grands",
+   "refurbishing",
+   "voicing",
+   "repairs",
+   "QC and assembly",
+   "old player restoration",
+   "QRS installation",
+   "QRS upgrade",
+   "MIDI/silent play installation",
+   "keys",
+   "ivory",
+   "refinishing",
+   "plate refinishing",
+   "VT decal installation",
+   "touch up",
+   "versatility score"
+  ],
+  "people": [
+   {
+    "name": "Courtney",
+    "role": "team member",
+    "skills": {
+     "CAP": 3,
+     "PRSB": 1,
+     "lacquer soundboard": 0,
+     "restringing": 1,
+     "chip tuning": 0,
+     "tuning": 0,
+     "DHRT for uprights": 1,
+     "DHRT for grands": 0,
+     "refurbishing": 2,
+     "voicing": 0,
+     "repairs": 1,
+     "QC and assembly": 0,
+     "old player restoration": 0,
+     "QRS installation": 0,
+     "QRS upgrade": 0,
+     "MIDI/silent play installation": 0,
+     "keys": 0,
+     "ivory": 0,
+     "refinishing": 0,
+     "plate refinishing": 0,
+     "VT decal installation": 0,
+     "touch up": 0
+    }
+   },
+   {
+    "name": "Curtis",
+    "role": "team member",
+    "skills": {
+     "CAP": 1,
+     "PRSB": 2,
+     "lacquer soundboard": 0,
+     "restringing": 1,
+     "chip tuning": 1,
+     "tuning": 1,
+     "DHRT for uprights": 2,
+     "DHRT for grands": 3,
+     "refurbishing": 1,
+     "voicing": 3,
+     "repairs": 2,
+     "QC and assembly": 2,
+     "old player restoration": 0,
+     "QRS installation": 0,
+     "QRS upgrade": 0,
+     "MIDI/silent play installation": 0,
+     "keys": 0,
+     "ivory": 0,
+     "refinishing": 0,
+     "plate refinishing": 0,
+     "VT decal installation": 0,
+     "touch up": 0
+    }
+   },
+   {
+    "name": "Doris",
+    "role": "team member",
+    "skills": {
+     "CAP": 0,
+     "PRSB": 0,
+     "lacquer soundboard": 3,
+     "restringing": 0,
+     "chip tuning": 0,
+     "tuning": 0,
+     "DHRT for uprights": 0,
+     "DHRT for grands": 0,
+     "refurbishing": 0,
+     "voicing": 0,
+     "repairs": 0,
+     "QC and assembly": 0,
+     "old player restoration": 0,
+     "QRS installation": 0,
+     "QRS upgrade": 0,
+     "MIDI/silent play installation": 0,
+     "keys": 0,
+     "ivory": 0,
+     "refinishing": 3,
+     "plate refinishing": 0,
+     "VT decal installation": 0,
+     "touch up": 3
+    }
+   },
+   {
+    "name": "Garrett",
+    "role": "team member",
+    "skills": {
+     "CAP": 1,
+     "PRSB": 1,
+     "lacquer soundboard": 0,
+     "restringing": 1,
+     "chip tuning": 1,
+     "tuning": 0,
+     "DHRT for uprights": 3,
+     "DHRT for grands": 1,
+     "refurbishing": 1,
+     "voicing": 0,
+     "repairs": 1,
+     "QC and assembly": 1,
+     "old player restoration": 0,
+     "QRS installation": 0,
+     "QRS upgrade": 0,
+     "MIDI/silent play installation": 0,
+     "keys": 0,
+     "ivory": 0,
+     "refinishing": 0,
+     "plate refinishing": 0,
+     "VT decal installation": 0,
+     "touch up": 0
+    }
+   },
+   {
+    "name": "Jacob",
+    "role": "team member",
+    "skills": {
+     "CAP": 2,
+     "PRSB": 1,
+     "lacquer soundboard": 0,
+     "restringing": 1,
+     "chip tuning": 0,
+     "tuning": 0,
+     "DHRT for uprights": 1,
+     "DHRT for grands": 1,
+     "refurbishing": 3,
+     "voicing": 0,
+     "repairs": 2,
+     "QC and assembly": 1,
+     "old player restoration": 0,
+     "QRS installation": 0,
+     "QRS upgrade": 0,
+     "MIDI/silent play installation": 0,
+     "keys": 0,
+     "ivory": 0,
+     "refinishing": 0,
+     "plate refinishing": 0,
+     "VT decal installation": 0,
+     "touch up": 0
+    }
+   },
+   {
+    "name": "Jake Pulver",
+    "role": "team member",
+    "skills": {
+     "CAP": 1,
+     "PRSB": 1,
+     "lacquer soundboard": 0,
+     "restringing": 1,
+     "chip tuning": 1,
+     "tuning": 1,
+     "DHRT for uprights": 2,
+     "DHRT for grands": 3,
+     "refurbishing": 1,
+     "voicing": 0,
+     "repairs": 2,
+     "QC and assembly": 2,
+     "old player restoration": 1,
+     "QRS installation": 0,
+     "QRS upgrade": 0,
+     "MIDI/silent play installation": 0,
+     "keys": 0,
+     "ivory": 0,
+     "refinishing": 0,
+     "plate refinishing": 0,
+     "VT decal installation": 0,
+     "touch up": 0
+    }
+   },
+   {
+    "name": "Korban",
+    "role": "team member",
+    "skills": {
+     "CAP": 0,
+     "PRSB": 0,
+     "lacquer soundboard": 0,
+     "restringing": 0,
+     "chip tuning": 3,
+     "tuning": 3,
+     "DHRT for uprights": 0,
+     "DHRT for grands": 0,
+     "refurbishing": 0,
+     "voicing": 0,
+     "repairs": 0,
+     "QC and assembly": 0,
+     "old player restoration": 0,
+     "QRS installation": 0,
+     "QRS upgrade": 0,
+     "MIDI/silent play installation": 0,
+     "keys": 0,
+     "ivory": 0,
+     "refinishing": 0,
+     "plate refinishing": 0,
+     "VT decal installation": 0,
+     "touch up": 0
+    }
+   },
+   {
+    "name": "Lupita",
+    "role": "team member",
+    "skills": {
+     "CAP": 1,
+     "PRSB": 0,
+     "lacquer soundboard": 0,
+     "restringing": 3,
+     "chip tuning": 0,
+     "tuning": 0,
+     "DHRT for uprights": 0,
+     "DHRT for grands": 0,
+     "refurbishing": 0,
+     "voicing": 0,
+     "repairs": 0,
+     "QC and assembly": 0,
+     "old player restoration": 0,
+     "QRS installation": 0,
+     "QRS upgrade": 0,
+     "MIDI/silent play installation": 0,
+     "keys": 0,
+     "ivory": 0,
+     "refinishing": 0,
+     "plate refinishing": 0,
+     "VT decal installation": 0,
+     "touch up": 0
+    }
+   },
+   {
+    "name": "Marcelo",
+    "role": "team member",
+    "skills": {
+     "CAP": 0,
+     "PRSB": 0,
+     "lacquer soundboard": 0,
+     "restringing": 0,
+     "chip tuning": 0,
+     "tuning": 0,
+     "DHRT for uprights": 0,
+     "DHRT for grands": 0,
+     "refurbishing": 0,
+     "voicing": 0,
+     "repairs": 0,
+     "QC and assembly": 0,
+     "old player restoration": 0,
+     "QRS installation": 0,
+     "QRS upgrade": 0,
+     "MIDI/silent play installation": 0,
+     "keys": 3,
+     "ivory": 1,
+     "refinishing": 0,
+     "plate refinishing": 0,
+     "VT decal installation": 0,
+     "touch up": 0
+    }
+   },
+   {
+    "name": "Mark",
+    "role": "team member",
+    "skills": {
+     "CAP": 1,
+     "PRSB": 1,
+     "lacquer soundboard": 0,
+     "restringing": 1,
+     "chip tuning": 1,
+     "tuning": 1,
+     "DHRT for uprights": 1,
+     "DHRT for grands": 1,
+     "refurbishing": 1,
+     "voicing": 1,
+     "repairs": 1,
+     "QC and assembly": 1,
+     "old player restoration": 0,
+     "QRS installation": 0,
+     "QRS upgrade": 0,
+     "MIDI/silent play installation": 0,
+     "keys": 0,
+     "ivory": 0,
+     "refinishing": 0,
+     "plate refinishing": 0,
+     "VT decal installation": 0,
+     "touch up": 0
+    }
+   },
+   {
+    "name": "Matthew",
+    "role": "team member",
+    "skills": {
+     "CAP": 0,
+     "PRSB": 3,
+     "lacquer soundboard": 1,
+     "restringing": 1,
+     "chip tuning": 0,
+     "tuning": 1,
+     "DHRT for uprights": 1,
+     "DHRT for grands": 1,
+     "refurbishing": 1,
+     "voicing": 0,
+     "repairs": 1,
+     "QC and assembly": 1,
+     "old player restoration": 3,
+     "QRS installation": 0,
+     "QRS upgrade": 1,
+     "MIDI/silent play installation": 3,
+     "keys": 0,
+     "ivory": 0,
+     "refinishing": 0,
+     "plate refinishing": 0,
+     "VT decal installation": 0,
+     "touch up": 0
+    }
+   },
+   {
+    "name": "Mckinly",
+    "role": "team member",
+    "skills": {
+     "CAP": 1,
+     "PRSB": 2,
+     "lacquer soundboard": 0,
+     "restringing": 1,
+     "chip tuning": 1,
+     "tuning": 1,
+     "DHRT for uprights": 1,
+     "DHRT for grands": 2,
+     "refurbishing": 1,
+     "voicing": 2,
+     "repairs": 2,
+     "QC and assembly": 3,
+     "old player restoration": 0,
+     "QRS installation": 0,
+     "QRS upgrade": 0,
+     "MIDI/silent play installation": 0,
+     "keys": 0,
+     "ivory": 0,
+     "refinishing": 0,
+     "plate refinishing": 0,
+     "VT decal installation": 0,
+     "touch up": 0
+    }
+   },
+   {
+    "name": "Victoria",
+    "role": "subcontractor",
+    "skills": {
+     "CAP": 0,
+     "PRSB": 0,
+     "lacquer soundboard": 0,
+     "restringing": 0,
+     "chip tuning": 0,
+     "tuning": 0,
+     "DHRT for uprights": 0,
+     "DHRT for grands": 0,
+     "refurbishing": 0,
+     "voicing": 0,
+     "repairs": 0,
+     "QC and assembly": 0,
+     "old player restoration": 0,
+     "QRS installation": 0,
+     "QRS upgrade": 0,
+     "MIDI/silent play installation": 0,
+     "keys": 0,
+     "ivory": 3,
+     "refinishing": 0,
+     "plate refinishing": 0,
+     "VT decal installation": 0,
+     "touch up": 0
+    }
+   },
+   {
+    "name": "Curtis Harper",
+    "role": "subcontractor",
+    "skills": {
+     "CAP": 0,
+     "PRSB": 0,
+     "lacquer soundboard": 0,
+     "restringing": 0,
+     "chip tuning": 0,
+     "tuning": 0,
+     "DHRT for uprights": 0,
+     "DHRT for grands": 0,
+     "refurbishing": 0,
+     "voicing": 0,
+     "repairs": 0,
+     "QC and assembly": 0,
+     "old player restoration": 0,
+     "QRS installation": 0,
+     "QRS upgrade": 0,
+     "MIDI/silent play installation": 0,
+     "keys": 0,
+     "ivory": 0,
+     "refinishing": 0,
+     "plate refinishing": 3,
+     "VT decal installation": 0,
+     "touch up": 2
+    }
+   },
+   {
+    "name": "Dave Hyde",
+    "role": "subcontractor",
+    "skills": {
+     "CAP": 0,
+     "PRSB": 0,
+     "lacquer soundboard": 0,
+     "restringing": 0,
+     "chip tuning": 0,
+     "tuning": 0,
+     "DHRT for uprights": 0,
+     "DHRT for grands": 0,
+     "refurbishing": 0,
+     "voicing": 0,
+     "repairs": 0,
+     "QC and assembly": 0,
+     "old player restoration": 0,
+     "QRS installation": 3,
+     "QRS upgrade": 0,
+     "MIDI/silent play installation": 0,
+     "keys": 0,
+     "ivory": 0,
+     "refinishing": 0,
+     "plate refinishing": 0,
+     "VT decal installation": 0,
+     "touch up": 0
+    }
+   },
+   {
+    "name": "Mike Earnhart",
+    "role": "subcontractor",
+    "skills": {
+     "CAP": 0,
+     "PRSB": 0,
+     "lacquer soundboard": 0,
+     "restringing": 0,
+     "chip tuning": 0,
+     "tuning": 0,
+     "DHRT for uprights": 0,
+     "DHRT for grands": 0,
+     "refurbishing": 0,
+     "voicing": 0,
+     "repairs": 0,
+     "QC and assembly": 0,
+     "old player restoration": 0,
+     "QRS installation": 0,
+     "QRS upgrade": 3,
+     "MIDI/silent play installation": 0,
+     "keys": 0,
+     "ivory": 0,
+     "refinishing": 0,
+     "plate refinishing": 0,
+     "VT decal installation": 0,
+     "touch up": 0
+    }
+   },
+   {
+    "name": "Avery",
+    "role": "intern",
+    "skills": {}
+   },
+   {
+    "name": "Myrrhanda",
+    "role": "intern",
+    "skills": {}
+   },
+   {
+    "name": "Sadie",
+    "role": "intern",
+    "skills": {}
+   }
+  ],
+  "internNote": "intern guidelines\ninterns are working solely for the opportunity of learning the trade. Accordingly, I like to give them a variety of tasks so they can learn. I find it beneficial for them to do each task twice, back-to-back if possible in order to learn through repetition. CAP is always first. Usually upright restoration CAP (twice, as mentioned), then they can move on to refurbishing, restringing, grand CAP, and possibly PRSB, though PRSB requires a lot of tutoring and supervision. DHRT (grand or upright) is usually the last task they generally have before the end of their 520 hours."
+ }
+}
