@@ -2366,10 +2366,19 @@ function authGate() {
   const dev = ['localhost', '127.0.0.1'].includes(location.hostname);
   const on = !authUser() && !dev;
   ov.hidden = !on;
-  if (on && window.google && google.accounts && google.accounts.id) {
-    google.accounts.id.renderButton($('#agBtn'),
-      {theme: 'filled_black', size: 'large', shape: 'pill'});
+  if (on) renderGateButton();
+}
+// keep trying until the GIS script is ready — the gate must never sit
+// buttonless (fresh render each time; GIS tolerates re-rendering)
+function renderGateButton(attempt) {
+  const slot = $('#agBtn');
+  if (!slot) return;
+  if (!(window.google && google.accounts && google.accounts.id)) {
+    if ((attempt || 0) < 40) setTimeout(() => renderGateButton((attempt || 0) + 1), 500);
+    return;
   }
+  slot.innerHTML = '';
+  google.accounts.id.renderButton(slot, {theme: 'filled_black', size: 'large', shape: 'pill'});
 }
 function renderAuth() {
   authGate();
@@ -2414,6 +2423,9 @@ function initAuth() {
     google.accounts.id.initialize({
       client_id: GOOGLE_CLIENT_ID, callback: onGoogleCred,
       auto_select: true, use_fedcm_for_prompt: true,
+      // popup windows get blocked in many browsers (the sign-in "loop");
+      // FedCM uses the browser's native account dialog instead
+      use_fedcm_for_button: true, itp_support: true,
     });
     renderAuth();
     // silently refresh the hourly token for already-signed-in users —
