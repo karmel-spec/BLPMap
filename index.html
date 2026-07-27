@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Store Map — Brigham Larson Pianos</title>
 <link rel="icon" href="assets/blp-logo.png">
-<link rel="stylesheet" href="styles.css?v=47">
+<link rel="stylesheet" href="styles.css?v=49">
 </head>
 <body>
 
@@ -13,6 +13,15 @@
   <img class="logo" src="assets/blp-logo.png" alt="Brigham Larson Pianos">
   <div class="tabs" id="floorTabs"></div>
   <input class="search" id="search" placeholder="🔍 piano, serial, or spot">
+  <div class="topreq">
+    <button class="iconbtn" id="reqTopBtn">📨 Request ▾</button>
+    <div class="reqmenu topmenu" id="reqTopMenu" hidden>
+      <button data-req="admin">📋 Admin</button>
+      <button data-req="curtis">🎨 Curtis Harper</button>
+      <button data-req="touchup">🖌 Touch Up</button>
+      <button data-req="priority">⚡ Priority Scheduling</button>
+    </div>
+  </div>
   <button class="iconbtn drawerbtn" id="movesBtn">🚚 <b id="movesBadge">0</b></button>
   <button class="iconbtn" id="menuBtn" aria-label="Menu">☰</button>
 </header>
@@ -117,6 +126,6 @@
   </div>
 </div>
 
-<script src="app.js?v=48"></script>
+<script src="app.js?v=49"></script>
 </body>
 </html>

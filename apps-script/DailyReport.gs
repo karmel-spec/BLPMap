@@ -1162,9 +1162,12 @@ function setPrice_(req, who) {
  */
 function curtisRequest_(req, who) {
   var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
-  var found = findPiano_(sh, req.serial, req.row);
+  // serial optional: top-bar requests aren't tied to a piano
+  var found = String(req.serial || '').trim()
+    ? findPiano_(sh, req.serial, req.row)
+    : {summary: String(req.pianoText || '').trim() || '(no specific piano)', location: '', row: 0};
   if (found.error) return found;
-  var owner = String(sh.getRange(found.row, 2).getValue() || '');
+  var owner = found.row ? String(sh.getRange(found.row, 2).getValue() || '') : '';
   var ownership = /consign/i.test(owner) ? 'Consignment'
     : (!owner || /blp|reno|brigham/i.test(owner)) ? 'BLP' : 'Client';
   var ctype = String(req.ctype || 'Other').trim();
@@ -1194,7 +1197,10 @@ function curtisRequest_(req, who) {
  */
 function adminRequest_(req, who) {
   var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
-  var found = findPiano_(sh, req.serial, req.row);
+  // serial optional: top-bar requests aren't tied to a piano
+  var found = String(req.serial || '').trim()
+    ? findPiano_(sh, req.serial, req.row)
+    : {summary: String(req.pianoText || '').trim() || '(no specific piano)', location: '', row: 0};
   if (found.error) return found;
   var name = String(who || '').replace(/\s*<[^>]*>\s*/, '').replace(/\s*\(.*\)\s*$/, '');
   var adminName = String(req.adminName || 'Admin');
@@ -1250,29 +1256,41 @@ function mondayAdminDigest() {
     if (!String(vals[i][7] || '').trim()) pending.push({i: i, r: vals[i]});
   }
   if (!pending.length) return;
-  var rows = pending.map(function (p) {
-    var when = p.r[0] instanceof Date ? Utilities.formatDate(p.r[0], tz, 'EEE MMM d, h:mm a') : String(p.r[0]);
-    return '<tr><td style="padding:5px 10px 5px 0;border-bottom:1px solid #eee;white-space:nowrap">' + esc_(when) + '</td>'
-      + '<td style="padding:5px 10px 5px 0;border-bottom:1px solid #eee"><b>' + esc_(String(p.r[1])) + '</b></td>'
-      + '<td style="padding:5px 10px 5px 0;border-bottom:1px solid #eee">' + esc_(String(p.r[2])) + ' (SN ' + esc_(String(p.r[3])) + (p.r[4] ? ' · spot ' + esc_(String(p.r[4])) : '') + ')</td>'
-      + '<td style="padding:5px 10px 5px 0;border-bottom:1px solid #eee">' + esc_(String(p.r[5])) + '</td>'
-      + '<td style="padding:5px 0;border-bottom:1px solid #eee;color:#777">' + esc_(String(p.r[6])) + '</td></tr>';
-  }).join('');
-  MailApp.sendEmail({
-    to: ADMIN_DIGEST_TO,
-    subject: '📋 Monday admin requests — ' + pending.length + ' from the Store Map walk-around',
-    htmlBody: '<div style="font-family:Helvetica,Arial,sans-serif;max-width:720px">'
-      + '<h2 style="margin:0 0 10px">Admin requests collected since last Monday</h2>'
-      + '<table style="border-collapse:collapse;font-size:13px;width:100%">'
-      + '<tr><th style="text-align:left;padding:4px 10px 4px 0;font-size:10px;color:#8a929a">WHEN</th>'
-      + '<th style="text-align:left;padding:4px 10px 4px 0;font-size:10px;color:#8a929a">FOR</th>'
-      + '<th style="text-align:left;padding:4px 10px 4px 0;font-size:10px;color:#8a929a">PIANO</th>'
-      + '<th style="text-align:left;padding:4px 10px 4px 0;font-size:10px;color:#8a929a">REQUEST</th>'
-      + '<th style="text-align:left;padding:4px 0;font-size:10px;color:#8a929a">BY</th></tr>'
-      + rows + '</table>'
-      + '<p style="font-size:12px;color:#8a929a;margin-top:14px">Collected on the WALK AROUND ADMIN NOTES tab of the Piano Log. Sent every Monday at 8 AM.</p></div>',
-    body: pending.length + ' admin requests collected — see the WALK AROUND ADMIN NOTES tab of the Piano Log.',
-    name: 'BLP Store Map',
+  // one digest PER ADMIN — each admin gets only their own requests
+  var byAdmin = {};
+  pending.forEach(function (p) {
+    var k = String(p.r[1] || 'Admin');
+    (byAdmin[k] = byAdmin[k] || []).push(p);
+  });
+  Object.keys(byAdmin).forEach(function (adminName) {
+    var admin = null;
+    for (var a = 0; a < ADMINS.length; a++) {
+      if (ADMINS[a].name === adminName) { admin = ADMINS[a]; break; }
+    }
+    var to = admin ? admin.email : ADMIN_DIGEST_TO;
+    var list = byAdmin[adminName];
+    var rows = list.map(function (p) {
+      var when = p.r[0] instanceof Date ? Utilities.formatDate(p.r[0], tz, 'EEE MMM d, h:mm a') : String(p.r[0]);
+      return '<tr><td style="padding:5px 10px 5px 0;border-bottom:1px solid #eee;white-space:nowrap">' + esc_(when) + '</td>'
+        + '<td style="padding:5px 10px 5px 0;border-bottom:1px solid #eee">' + esc_(String(p.r[2])) + (p.r[3] ? ' (SN ' + esc_(String(p.r[3])) + ')' : '') + (p.r[4] ? ' · spot ' + esc_(String(p.r[4])) : '') + '</td>'
+        + '<td style="padding:5px 10px 5px 0;border-bottom:1px solid #eee">' + esc_(String(p.r[5])) + '</td>'
+        + '<td style="padding:5px 0;border-bottom:1px solid #eee;color:#777">' + esc_(String(p.r[6])) + '</td></tr>';
+    }).join('');
+    MailApp.sendEmail({
+      to: to,
+      subject: '📋 Your Monday admin requests — ' + list.length + ' from the Store Map',
+      htmlBody: '<div style="font-family:Helvetica,Arial,sans-serif;max-width:720px">'
+        + '<h2 style="margin:0 0 10px">' + esc_(adminName) + ' — requests collected for you since last Monday</h2>'
+        + '<table style="border-collapse:collapse;font-size:13px;width:100%">'
+        + '<tr><th style="text-align:left;padding:4px 10px 4px 0;font-size:10px;color:#8a929a">WHEN</th>'
+        + '<th style="text-align:left;padding:4px 10px 4px 0;font-size:10px;color:#8a929a">PIANO</th>'
+        + '<th style="text-align:left;padding:4px 10px 4px 0;font-size:10px;color:#8a929a">REQUEST</th>'
+        + '<th style="text-align:left;padding:4px 0;font-size:10px;color:#8a929a">BY</th></tr>'
+        + rows + '</table>'
+        + '<p style="font-size:12px;color:#8a929a;margin-top:14px">Collected on the WALK AROUND ADMIN NOTES tab of the Piano Log. Sent every Monday at 8 AM.</p></div>',
+      body: list.length + ' admin requests for ' + adminName + ' — see the WALK AROUND ADMIN NOTES tab of the Piano Log.',
+      name: 'BLP Store Map',
+    });
   });
   var stamp = Utilities.formatDate(new Date(), tz, 'M/d/yyyy');
   pending.forEach(function (p) { tab.getRange(p.i + 2, 8).setValue(stamp); });
@@ -1325,7 +1343,10 @@ function setDone_(req) {
  */
 function teamRequest_(req, who) {
   var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
-  var found = findPiano_(sh, req.serial, req.row);
+  // serial optional: top-bar requests aren't tied to a piano
+  var found = String(req.serial || '').trim()
+    ? findPiano_(sh, req.serial, req.row)
+    : {summary: String(req.pianoText || '').trim() || '(no specific piano)', location: '', row: 0};
   if (found.error) return found;
   var kind = String(req.kind || 'Team').slice(0, 40);
   var name = String(who || '').replace(/\s*<[^>]*>\s*/, '').replace(/\s*\(.*\)\s*$/, '');

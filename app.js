@@ -1482,9 +1482,25 @@ function modalShell(id, inner) {
   return ov;
 }
 function pianoHeader(p) {
+  if (!p) {
+    return `<div class="tmpiano"><b>General request</b>
+      <span>not tied to a specific piano</span></div>
+      <label>Piano / area <small>(optional)</small></label>
+      <input class="gpiano" maxlength="60" list="serialList" placeholder="serial, spot, or area — if it applies">`;
+  }
   const nm = [(p.year || ''), p.make, p.model].filter(Boolean).join(' ') || p.summary || 'Piano';
   return `<div class="tmpiano"><b>${esc(nm)}</b>
     <span>Serial ${esc(p.serial)}${p.location ? ' · Spot ' + esc(p.location) : ''}</span></div>`;
+}
+// request fields shared by every submitter: works with or without a piano
+function reqIdent(p, ov) {
+  const out = {serial: p ? p.serial : ''};
+  if (p) out.row = p.row;
+  else {
+    const g = ov.querySelector('.gpiano');
+    if (g && g.value.trim()) out.pianoText = g.value.trim();
+  }
+  return out;
 }
 
 /* ---------- in-store move request (batched Monday 7am) ---------- */
@@ -1597,6 +1613,7 @@ async function submitService(p, ov) {
 /* ---------- Curtis Harper request (work-orders spreadsheet) ---------- */
 function openCurtisModal(p) {
   popPinned = false; $('#pop').hidden = true;
+  serialDatalist();
   const ov = modalShell('curtismodal', `
     <span class="x">✕</span>
     <h3>🎨 Curtis Harper Request</h3>
@@ -1625,7 +1642,7 @@ async function submitCurtis(p, ov) {
     const r = await fetch(BRIDGE_URL, {
       method: 'POST', redirect: 'follow',
       headers: {'content-type': 'text/plain;charset=utf-8'},
-      body: JSON.stringify({pin, serial: p.serial, action: 'curtis', row: p.row,
+      body: JSON.stringify({pin, action: 'curtis', ...reqIdent(p, ov),
         ctype: ov.querySelector('.chtype').value,
         notes: ov.querySelector('.chnotes').value.trim(), ...authFields()}),
     });
@@ -1644,6 +1661,7 @@ async function submitCurtis(p, ov) {
 /* ---------- admin request (pick an admin; now or Monday batch) --------- */
 function openAdminModal(p) {
   popPinned = false; $('#pop').hidden = true;
+  serialDatalist();
   const ov = modalShell('adminmodal', `
     <span class="x">✕</span>
     <h3>📋 Admin Request</h3>
@@ -1678,7 +1696,7 @@ async function submitAdmin(p, ov) {
     const r = await fetch(BRIDGE_URL, {
       method: 'POST', redirect: 'follow',
       headers: {'content-type': 'text/plain;charset=utf-8'},
-      body: JSON.stringify({pin, serial: p.serial, action: 'adminreq', row: p.row,
+      body: JSON.stringify({pin, action: 'adminreq', ...reqIdent(p, ov),
         adminEmail: sel.value, adminName: sel.options[sel.selectedIndex].text,
         notes, when, ...authFields()}),
     });
@@ -1699,6 +1717,7 @@ async function submitAdmin(p, ov) {
 /* ---------- generic team requests (Touch Up / Priority) -------- */
 function openGenericModal(p, kind) {
   popPinned = false; $('#pop').hidden = true;
+  serialDatalist();
   const icons = {'Admin': '📋', 'Touch Up': '🖌', 'Priority Scheduling': '⚡'};
   const ov = modalShell('genmodal', `
     <span class="x">✕</span>
@@ -1722,7 +1741,7 @@ async function submitGeneric(p, kind, ov) {
     const r = await fetch(BRIDGE_URL, {
       method: 'POST', redirect: 'follow',
       headers: {'content-type': 'text/plain;charset=utf-8'},
-      body: JSON.stringify({pin, serial: p.serial, action: 'teamreq', row: p.row,
+      body: JSON.stringify({pin, action: 'teamreq', ...reqIdent(p, ov),
         kind, notes: ov.querySelector('.gnotes').value.trim(), ...authFields()}),
     });
     const j = await r.json();
@@ -2414,6 +2433,25 @@ $('#movesBtn').onclick = () => { S.feedOpen = !S.feedOpen; if (S.view !== 'map')
 $('#movesClose').onclick = () => { S.feedOpen = false; syncFeed(); };
 
 $('#legendBtn').onclick = () => { const p = $('#legendPanel'); p.hidden = !p.hidden; };
+
+// top-bar 📨 Request menu — general requests, no piano required
+const topReqBtn = $('#reqTopBtn');
+if (topReqBtn) {
+  topReqBtn.onclick = () => { const m = $('#reqTopMenu'); m.hidden = !m.hidden; };
+  document.addEventListener('click', e => {
+    if (!e.target.closest('#reqTopBtn') && !e.target.closest('#reqTopMenu')) {
+      $('#reqTopMenu').hidden = true;
+    }
+  });
+  document.querySelectorAll('#reqTopMenu button').forEach(b => b.onclick = () => {
+    $('#reqTopMenu').hidden = true;
+    const kind = b.dataset.req;
+    if (kind === 'curtis') openCurtisModal(null);
+    else if (kind === 'admin') openAdminModal(null);
+    else if (kind === 'touchup') openGenericModal(null, 'Touch Up');
+    else if (kind === 'priority') openGenericModal(null, 'Priority Scheduling');
+  });
+}
 
 let searchTimer = null;
 $('#search').addEventListener('input', e => {
