@@ -1,5 +1,7 @@
 /* BLP Store Map — front-end */
 const PIANOLOG_URL = 'https://pianologapp.netlify.app/';
+// Brigham priority list (Shop Manager "Brigham" tab) — task requests land there
+const BRIGHAM_API = 'https://blpsalesapp.netlify.app/.netlify/functions/brigham-tasks';
 // shop pipeline phases (shared with the BLP Shop app via the Piano Log's
 // CURRENT PHASE column). Q/P are the parking states. Brigham's July 2026
 // rework — 14 phases.
@@ -185,6 +187,10 @@ function applyPending() {
     if ('phasesDone' in edit) {
       if ((p.phasesDone || '') === edit.phasesDone) delete edit.phasesDone;
       else { p.phasesDone = edit.phasesDone; stillPending = true; }
+    }
+    if ('clientReports' in edit) {
+      if ((p.clientReports || '') === edit.clientReports) delete edit.clientReports;
+      else { p.clientReports = edit.clientReports; stillPending = true; }
     }
     if (!stillPending) pendingEdits.delete(row);
   }
@@ -954,6 +960,12 @@ function popHTML(p) {
        <input type="file" class="photoin" accept="image/*" capture="environment" hidden>
        <div class="photomsg"></div>`
     : '';
+  const brig = `<button class="brigbtn">🗒 Request Brigham Task</button>
+    <div class="brigbox" hidden>
+      <textarea class="brignotes" rows="2" placeholder="what does Brigham need to do on this piano?"></textarea>
+      <input class="brigkey" type="password" placeholder="BLP app passcode (once on this device)" hidden>
+      <button class="briggo">Add to Brigham's list</button>
+    </div><div class="brigmsg"></div>`;
   const effPh = effectivePhase(p);
   const cur = (p.track || '').split(',').map(t => t.trim()).filter(Boolean);
   const tracker = p.serial
@@ -978,8 +990,11 @@ function popHTML(p) {
     <div class="row rowflex"><span>Serial # <b>${esc(p.serial || '—')}</b></span>${queueChip}</div>
     ${p.serial ? `<div class="tagbtns histbtns">
       <button class="tagbtn rreports">📄 Tech Reports History</button>
-      <button class="tagbtn creports">🤝 Client Reports History</button>
-    </div>` : ''}
+      ${/^no$/i.test((p.clientReports || '').trim()) ? '' : `<button class="tagbtn creports">🤝 Client Reports History</button>`}
+    </div>
+    <label class="crtog"><input type="checkbox" class="crchk"
+      ${/^no$/i.test((p.clientReports || '').trim()) ? '' : 'checked'}>
+      this piano gets client reports</label><span class="crmsg"></span>` : ''}
     <div class="row">Status <b>${esc(p.status || '—')}</b></div>
     <div class="row">Owner <b>${esc(p.owner || '—')}</b></div>
     ${effectivePhase(p) === 'For Sale'
@@ -1073,6 +1088,8 @@ function wirePop(p) {
     window.open('https://blpshop.netlify.app/#history=' + encodeURIComponent(p.serial),
       '_blank', 'noopener');
   };
+  const ck = pop.querySelector('.crchk');
+  if (ck) ck.onchange = ev => { ev.stopPropagation(); setClientReports(p, ck.checked, pop); };
   const cr = pop.querySelector('.creports');
   if (cr) cr.onclick = ev => {
     ev.stopPropagation();
@@ -1098,6 +1115,18 @@ function wirePop(p) {
     else if (kind === 'touchup') openGenericModal(p, 'Touch Up');
     else if (kind === 'priority') openGenericModal(p, 'Priority Scheduling');
   });
+  const bb = pop.querySelector('.brigbtn');
+  if (bb) bb.onclick = ev => {
+    ev.stopPropagation(); popPinned = true;
+    bb.hidden = true;
+    pop.querySelector('.brigbox').hidden = false;
+    place(pop, S.popAnchor);
+    pop.querySelector('.brignotes').focus();
+  };
+  const bg = pop.querySelector('.briggo');
+  if (bg) bg.onclick = ev => { ev.stopPropagation(); requestBrigTask(p, pop); };
+  const bx = pop.querySelector('.brigbox');
+  if (bx) bx.onclick = ev => ev.stopPropagation();
   const pb = pop.querySelector('.photobtn');
   const pi = pop.querySelector('.photoin');
   if (pb) pb.onclick = ev => { ev.stopPropagation(); popPinned = true; pi.click(); };
@@ -1273,6 +1302,40 @@ async function toggleDone(p, phase, pop) {
     delete edit.phasesDone; if (!Object.keys(edit).length) pendingEdits.delete(p.row);
     if (btn) btn.classList.toggle('on');
     msg.className = 'dnmsg phmsg err'; msg.textContent = '✗ ' + e.message + ' — not saved';
+  }
+}
+
+// per-piano client-reports switch — hides/shows the Client Reports History
+// button and removes the piano from the Shop manager's Client Reports list
+async function setClientReports(p, enabled, pop) {
+  const msg = pop.querySelector('.crmsg');
+  popPinned = true;
+  const {pin, ok} = writeAuth();
+  if (!ok) { msg.className = 'crmsg phmsg err'; msg.textContent = 'Sign in or enter the PIN first.'; return; }
+  const was = p.clientReports || '';
+  p.clientReports = enabled ? 'Yes' : 'No';
+  const edit = pendingEdits.get(p.row) || {};
+  edit.clientReports = p.clientReports; pendingEdits.set(p.row, edit);
+  msg.className = 'crmsg phmsg'; msg.textContent = 'Saving…';
+  try {
+    const r = await fetch(BRIDGE_URL, {
+      method: 'POST', redirect: 'follow',
+      headers: {'content-type': 'text/plain;charset=utf-8'},
+      body: JSON.stringify({pin, serial: p.serial, action: 'setclientreports',
+        enabled, row: p.row, ...authFields()}),
+    });
+    const j = await r.json();
+    if (j.error === 'unauthorized') { localStorage.removeItem('blpPin'); throw new Error('Not authorized'); }
+    if (!j.ok) throw new Error(j.error || 'save failed');
+    p.clientReports = j.clientReports; edit.clientReports = j.clientReports;
+    msg.className = 'crmsg phmsg ok';
+    msg.textContent = enabled ? '✓ Client reports on' : '✓ Client reports off';
+    openPop(p.row, S.popAnchor, true);   // re-render so the button appears/disappears
+  } catch (e) {
+    p.clientReports = was;
+    delete edit.clientReports; if (!Object.keys(edit).length) pendingEdits.delete(p.row);
+    const ck = pop.querySelector('.crchk'); if (ck) ck.checked = !enabled;
+    msg.className = 'crmsg phmsg err'; msg.textContent = '✗ ' + e.message;
   }
 }
 
@@ -2004,6 +2067,50 @@ async function submitTune(p, ov) {
     msg.className = 'tmmsg err';
     msg.textContent = '✗ ' + e.message;
     btn.disabled = false;
+  }
+}
+
+// "Request Brigham Task": note → the Brigham Tasks tab (Shop Manager "Brigham"
+// view). Auth: the map's Google sign-in when it's a company account, else the
+// BLP app passcode (asked once, stored on this device).
+async function requestBrigTask(p, pop) {
+  const msg = pop.querySelector('.brigmsg');
+  const note = pop.querySelector('.brignotes').value.trim();
+  if (!note) { msg.textContent = 'Write the task first.'; return; }
+  popPinned = true;
+  const af = authFields();
+  const keyIn = pop.querySelector('.brigkey');
+  const storedKey = (localStorage.getItem('blp.appkey') || '').trim() || keyIn.value.trim();
+  if (!af.idToken && !storedKey) {
+    keyIn.hidden = false; keyIn.focus();
+    msg.textContent = 'Enter the BLP app passcode (or sign in with Google) to send.';
+    return;
+  }
+  msg.textContent = 'Sending…';
+  const piano = [p.make, p.model].filter(Boolean).join(' ') || p.summary || '';
+  const label = (piano + (p.serial ? ' SN ' + p.serial : '') + (p.location ? ' @ ' + p.location : '')).trim();
+  try {
+    const headers = {'content-type': 'application/json'};
+    if (af.idToken) headers.authorization = 'Bearer ' + af.idToken;
+    const r = await fetch(BRIGHAM_API, {method: 'POST', headers,
+      body: JSON.stringify({key: storedKey, add: {piano: label.slice(0, 80), note,
+        from: (af.user && (af.user.name || af.user.email)) || 'Store Map'}})});
+    const j = await r.json();
+    if (j.ok) {
+      if (keyIn.value.trim()) localStorage.setItem('blp.appkey', keyIn.value.trim());
+      msg.textContent = '✓ Added to Brigham’s priority list';
+      pop.querySelector('.brignotes').value = '';
+      pop.querySelector('.brigbox').hidden = true;
+      pop.querySelector('.brigbtn').hidden = false;
+    } else if (r.status === 401) {
+      localStorage.removeItem('blp.appkey');
+      keyIn.hidden = false; keyIn.value = ''; keyIn.focus();
+      msg.textContent = '✗ ' + (j.error || 'not authorized');
+    } else {
+      msg.textContent = '✗ ' + (j.error || 'failed');
+    }
+  } catch (e) {
+    msg.textContent = '✗ ' + (e.message || e);
   }
 }
 

@@ -105,6 +105,8 @@ def parse_pianos(raw):
                      if h.strip().upper() == 'PHASES DONE'), -1)
     wait_idx = next((i for i, h in enumerate(hdr)
                      if h.strip().upper() == 'WAITING NOTE'), -1)
+    cr_idx = next((i for i, h in enumerate(hdr)
+                   if h.strip().upper() == 'CLIENT REPORTS'), -1)
     # CUSTOM SHOPWORK queue bounds (1-based rows). Queue position = row - header;
     # total = rows from just after the header down to the first fully-blank row.
     q_hdr = q_end = None
@@ -173,6 +175,7 @@ def parse_pianos(raw):
             'track': col(track_idx) if track_idx >= 0 else '',
             'phasesDone': col(done_idx) if done_idx >= 0 else '',
             'waitNote': col(wait_idx) if wait_idx >= 0 else '',
+            'clientReports': col(cr_idx) if cr_idx >= 0 else '',
             'bphoto': med(13), 'aphoto': med(15),
             'bvideo': med(16), 'avideo': med(17),
             'queuePos': 0,

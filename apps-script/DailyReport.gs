@@ -540,6 +540,12 @@ function doPost(e) {
         String(req.notes || '').slice(0, 200));
       return json_(tr);
     }
+    if (req.action === 'setclientreports') {
+      var cr = setClientReports_(req);
+      if (cr.ok) logAct_(who, 'Client reports ' + (req.enabled ? 'ON' : 'OFF'),
+        cr.summary || req.serial, '');
+      return json_(cr);
+    }
     if (req.action === 'settrack') {
       var tk = setTrack_(req);
       if (tk.ok) logAct_(who, 'Track change', tk.summary || req.serial,
@@ -1338,6 +1344,24 @@ function setupAdminDigest_() {
  * can proceed even out of order). Comma-separated names in a PHASES DONE
  * column (header row 2). req: {serial, row?, phases: [...]}
  */
+// per-piano client-reports switch — 'No' hides the piano from client
+// reporting everywhere (map card button + Shop manager Client Reports)
+function setClientReports_(req) {
+  var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+  var found = findPiano_(sh, req.serial, req.row);
+  if (found.error) return found;
+  var last = sh.getLastColumn();
+  var hdr = sh.getRange(2, 1, 1, last).getValues()[0];
+  var col = -1;
+  for (var c = 0; c < hdr.length; c++) {
+    if (String(hdr[c] || '').trim().toUpperCase() === 'CLIENT REPORTS') { col = c + 1; break; }
+  }
+  if (col < 0) { sh.getRange(2, last + 1).setValue('CLIENT REPORTS'); col = last + 1; }
+  var val = req.enabled ? 'Yes' : 'No';
+  sh.getRange(found.row, col).setValue(val);
+  return {ok: true, row: found.row, summary: found.summary, clientReports: val};
+}
+
 function setDone_(req) {
   var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
   var found = findPiano_(sh, req.serial, req.row);
