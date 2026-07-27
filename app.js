@@ -1689,7 +1689,7 @@ function openAdminModal(p) {
     <label>When</label>
     <div class="amwhen">
       <label class="amopt"><input type="radio" name="amwhen" value="now" checked> Email now</label>
-      <label class="amopt"><input type="radio" name="amwhen" value="monday"> Add to Monday morning batch (8 AM digest to info@)</label>
+      <label class="amopt"><input type="radio" name="amwhen" value="monday"> Add to Monday morning batch (emailed to the selected admin, 8 AM)</label>
     </div>
     <button class="tmgo amgo">Send request</button>
     <div class="tmmsg"></div>`);
@@ -1720,7 +1720,7 @@ async function submitAdmin(p, ov) {
     if (!j.ok) throw new Error(j.error || 'request failed');
     msg.className = 'tmmsg ok';
     msg.textContent = j.batched
-      ? '✓ Saved to the Monday batch — it goes to info@ Monday at 8 AM.'
+      ? `✓ Saved to the Monday batch — ${sel.options[sel.selectedIndex].text} gets it Monday at 8 AM.`
       : `✓ Emailed to ${sel.options[sel.selectedIndex].text}.`;
     setTimeout(() => { ov.hidden = true; }, 2200);
   } catch (e) {
