@@ -2481,10 +2481,12 @@ function initAuth() {
   s.onload = () => {
     google.accounts.id.initialize({
       client_id: GOOGLE_CLIENT_ID, callback: onGoogleCred,
-      auto_select: true, use_fedcm_for_prompt: true,
-      // popup windows get blocked in many browsers (the sign-in "loop");
-      // FedCM uses the browser's native account dialog instead
-      use_fedcm_for_button: true, itp_support: true,
+      auto_select: true, use_fedcm_for_prompt: true, itp_support: true,
+      // button clicks do a full-page redirect through Google and back —
+      // no popup windows or FedCM dialogs to be blocked anywhere.
+      // gsi-callback stores the credential; startup code below consumes it.
+      ux_mode: 'redirect',
+      login_uri: location.origin + '/.netlify/functions/gsi-callback',
     });
     renderAuth();
     // silently refresh the hourly token for already-signed-in users —
@@ -2501,6 +2503,11 @@ function initAuth() {
   document.head.appendChild(s);
   renderAuth();
 }
+// finish a redirect sign-in: gsi-callback leaves the credential here
+try {
+  const redirCred = localStorage.getItem('blpGsiCred');
+  if (redirCred) { localStorage.removeItem('blpGsiCred'); onGoogleCred({credential: redirCred}); }
+} catch (e) { /* storage unavailable — sign-in will be offered again */ }
 initAuth();
 
 async function movePiano(p, dest, pop) {
