@@ -2356,87 +2356,11 @@ function signOut() {
   if (window.google?.accounts?.id) google.accounts.id.disableAutoSelect();
   renderAuth();
 }
-// Sign-in is REQUIRED: the map only unlocks with a Google identity, so the
-// activity log always knows who moved / re-phased / photographed what.
-window.addEventListener('error', ev => {
-  const m = document.getElementById('agPinMsg');
-  const g = document.getElementById('authgate');
-  if (m && g && !g.hidden) m.textContent = '⚠ ' + (ev.message || 'script error');
-});
+// Sign-in is OPTIONAL again (mandatory gate removed) — the authbox in the
+// menu still offers Google sign-in so actions are logged under a name.
 function authGate() {
-  let ov = document.getElementById('authgate');
-  if (!ov) {
-    ov = document.createElement('div');
-    ov.id = 'authgate';
-    ov.innerHTML = `<div class="agcard">
-      <img src="assets/blp-logo.png" alt="Brigham Larson Pianos">
-      <h2>STORE MAP</h2>
-      <p>Team members sign in with Google — moves, phase changes, photos and
-      requests are logged under your name.</p>
-      <div id="agBtn"></div>
-      <div class="agpinrow">
-        <input id="agPinIn" type="password" inputmode="numeric" autocomplete="off"
-               placeholder="or enter the team PIN">
-        <button id="agPinGo">Enter</button>
-      </div>
-      <div id="agPinMsg" class="agpinmsg"></div>
-      <div class="agver">v66</div></div>`;
-    document.body.appendChild(ov);
-  }
-  const dev = ['localhost', '127.0.0.1'].includes(location.hostname);
-  // a stored team PIN also opens the gate, so a blocked/broken Google
-  // button is never a dead end
-  const on = !authUser() && !lsGet('blpPin') && !dev;
-  ov.hidden = !on;
-  if (!on) return;
-  const checkPin = async pin => {
-    // any bridge call answers "unauthorized" for a wrong PIN — a cheap
-    // lookup with no serial validates the PIN without changing anything
-    const r = await fetch(BRIDGE_URL, {
-      method: 'POST', redirect: 'follow',
-      headers: {'content-type': 'text/plain;charset=utf-8'},
-      body: JSON.stringify({pin, action: 'lookup', serial: ''}),
-    });
-    return (await r.json()).error !== 'unauthorized';
-  };
-  const tryPin = async () => {
-    let pin = $('#agPinIn').value.trim();
-    const msg = $('#agPinMsg');
-    if (!pin) { msg.textContent = 'Type the team PIN first.'; return; }
-    msg.textContent = 'Checking…';
-    try {
-      let ok = await checkPin(pin);
-      if (!ok && pin !== pin.toLowerCase()) {   // forgive CAPS/autocapitalize
-        ok = await checkPin(pin.toLowerCase());
-        if (ok) pin = pin.toLowerCase();
-      }
-      if (!ok) { msg.textContent = '✗ Wrong PIN.'; return; }
-      lsSet('blpPin', pin);
-      msg.textContent = '';
-      renderAuth();
-    } catch (e) {
-      // couldn't reach the bridge to check — let the PIN through; every
-      // write is validated server-side anyway
-      lsSet('blpPin', pin);
-      msg.textContent = '';
-      renderAuth();
-    }
-  };
-  $('#agPinGo').onclick = tryPin;
-  $('#agPinIn').onkeydown = ev => { if (ev.key === 'Enter') tryPin(); };
-  renderGateButton();
-}
-// keep trying until the GIS script is ready — the gate must never sit
-// buttonless (fresh render each time; GIS tolerates re-rendering)
-function renderGateButton(attempt) {
-  const slot = $('#agBtn');
-  if (!slot) return;
-  if (!(window.google && google.accounts && google.accounts.id)) {
-    if ((attempt || 0) < 40) setTimeout(() => renderGateButton((attempt || 0) + 1), 500);
-    return;
-  }
-  slot.innerHTML = '';
-  google.accounts.id.renderButton(slot, {theme: 'filled_black', size: 'large', shape: 'pill'});
+  const ov = document.getElementById('authgate');
+  if (ov) ov.hidden = true;
 }
 function renderAuth() {
   authGate();
@@ -2482,11 +2406,7 @@ function initAuth() {
     google.accounts.id.initialize({
       client_id: GOOGLE_CLIENT_ID, callback: onGoogleCred,
       auto_select: true, use_fedcm_for_prompt: true, itp_support: true,
-      // button clicks do a full-page redirect through Google and back —
-      // no popup windows or FedCM dialogs to be blocked anywhere.
-      // gsi-callback stores the credential; startup code below consumes it.
-      ux_mode: 'redirect',
-      login_uri: location.origin + '/.netlify/functions/gsi-callback',
+      use_fedcm_for_button: true,
     });
     renderAuth();
     // silently refresh the hourly token for already-signed-in users —
