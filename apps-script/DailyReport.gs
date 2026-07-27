@@ -26,9 +26,9 @@ var MOVING_ICS = 'PASTE_ICS_URL_HERE';     // the moving calendar's SECRET iCal 
 var TUNING_CAL = 'korbangreenhalgh.blp@gmail.com';  // 09-Korban Greenhalgh
 // master record of every tuning in the store — every request lands here
 // in addition to the assigned technician's own calendar
-var MASTER_TUNING_CAL = 'pianotuning.blp@gmail.com';
-// every calendar scanned for scheduled/past tunings
-var TUNING_CALS = [TUNING_CAL, MASTER_TUNING_CAL];
+var MASTER_TUNING_CAL = 'blp.matthewputnam@gmail.com';   // "03-In Store Tuning"
+// every calendar scanned for scheduled/past tunings (old master kept for history)
+var TUNING_CALS = [TUNING_CAL, MASTER_TUNING_CAL, 'pianotuning.blp@gmail.com'];
 var TECH_WORK_START = 8, TECH_WORK_END = 16;   // non-Korban techs: 8am-4pm gap search
 // the tuning-request dropdown (Brigham-approved list, Korban default).
 // Calendar id doubles as the invite email.
@@ -227,6 +227,32 @@ function scheduleTuning_(req) {
           hhmm: Utilities.formatDate(slot.start, tz, 'HH:mm'),
           time: Utilities.formatDate(slot.start, tz, 'h:mm a'),
           summary: found.summary, title: title};
+}
+
+/* cancel upcoming tuning events for a serial across the tuning calendars
+   (master, legacy master, Korban's own) — {serial, dryrun?} */
+function deleteTuning_(req) {
+  var serial = String(req.serial || '').trim();
+  if (!serial) return {error: 'serial required'};
+  var cals = [MASTER_TUNING_CAL, 'pianotuning.blp@gmail.com', TUNING_CAL];
+  var now = new Date();
+  var horizon = new Date(now.getTime() + 90 * 86400000);
+  var removed = [];
+  for (var i = 0; i < cals.length; i++) {
+    var cal = calById_(cals[i]);
+    if (!cal) continue;
+    var evs = cal.getEvents(now, horizon, {search: serial});
+    for (var k = 0; k < evs.length; k++) {
+      var t = evs[k].getTitle();
+      if (t.indexOf('Tuning') !== 0 || t.indexOf(serial) < 0) continue;
+      removed.push({cal: cals[i], title: t,
+        start: Utilities.formatDate(evs[k].getStartTime(), 'America/Denver', 'EEE MMM d h:mm a'),
+        desc: evs[k].getDescription()});
+      if (!req.dryrun) { try { evs[k].deleteEvent(); } catch (ig) {} }
+    }
+  }
+  if (!req.dryrun && removed.length) { try { CacheService.getScriptCache().remove('tunings'); } catch (ig) {} }
+  return {ok: true, dryrun: !!req.dryrun, removed: removed};
 }
 
 // Korban's fixed tuning slots: weekdays 8am + 10am, skipping conflicts
@@ -460,6 +486,13 @@ function doPost(e) {
     }
     var who = g ? ((g.name || g.email) + (g.email ? ' <' + g.email + '>' : ''))
                 : who_(req);
+    if (req.action === 'deltune') {
+      var dt = deleteTuning_(req);
+      if (!dt.dryrun && dt.removed && dt.removed.length) {
+        logAct_(who, 'Tuning cancelled', req.serial, dt.removed.map(function (r) { return r.start; }).join('; '));
+      }
+      return json_(dt);
+    }
     if (req.action === 'tune') {
       var t = scheduleTuning_(req);
       if (t.scheduled) logAct_(who, 'Tuning scheduled', t.summary || req.serial,
