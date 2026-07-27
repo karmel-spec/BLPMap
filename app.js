@@ -926,6 +926,7 @@ function popHTML(p) {
     <span class="tag ${st}">${tags[st]} · SPOT ${esc(p.location)}</span>
     <h3>${esc(makeModel)}</h3>
     <div class="row rowflex"><span>Serial # <b>${esc(p.serial || '—')}</b></span>${queueChip}</div>
+    ${p.serial ? `<button class="rreports">📋 Read Reports — full Friday-report history</button>` : ''}
     <div class="row">Status <b>${esc(p.status || '—')}</b></div>
     <div class="row">Owner <b>${esc(p.owner || '—')}</b></div>
     ${priceLabel(p) ? `<div class="row">Price <b class="pricecard">${esc(priceLabel(p))}</b></div>` : ''}
@@ -989,6 +990,12 @@ function wirePop(p) {
     ev.stopPropagation();
     toggleTrack(p, b.dataset.t, pop);
   });
+  const rr = pop.querySelector('.rreports');
+  if (rr) rr.onclick = ev => {
+    ev.stopPropagation();
+    window.open('https://blpshop.netlify.app/#history=' + encodeURIComponent(p.serial),
+      '_blank', 'noopener');
+  };
   const mvb = pop.querySelector('.movebtn');
   if (mvb) mvb.onclick = ev => { ev.stopPropagation(); openMoveModal(p); };
   const svb = pop.querySelector('.svcbtn');

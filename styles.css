@@ -223,6 +223,8 @@ td a{color:#9e2020}
 .trk{border:1px solid #cfd6dc;background:#fff;color:#5a626a;border-radius:999px;font-size:10px;font-weight:700;padding:2px 8px;cursor:pointer}
 .trk:hover{border-color:#9e2020;color:#9e2020}
 .trk.on{background:#9e2020;border-color:#9e2020;color:#fff}
+.rreports{width:100%;margin:4px 0;border:1px solid #cfd6dc;background:#f7f8f9;color:#3a4046;border-radius:7px;font-size:11.5px;font-weight:700;padding:6px;cursor:pointer;text-align:center}
+.rreports:hover{border-color:#9e2020;color:#9e2020}
 .addplus{fill:#aab3bb;font-weight:700;cursor:pointer}
 .addplus:hover{fill:#9e2020}
 .tmcard input{width:100%;border:1px solid #cfd6dc;border-radius:8px;padding:7px 9px;font:inherit;font-size:13px;box-sizing:border-box;background:#fff}
