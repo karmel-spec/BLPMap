@@ -986,13 +986,15 @@ function popHTML(p) {
     <span class="tag ${st}">${tags[st]} · SPOT ${esc(p.location)}</span>
     <h3>${esc(makeModel)}</h3>
     <div class="row rowflex"><span>Serial # <b>${esc(p.serial || '—')}</b></span>${queueChip}</div>
-    ${p.serial ? `<div class="tagbtns histbtns">
-      <button class="tagbtn rreports">📄 Tech Reports History</button>
-      ${/^no$/i.test((p.clientReports || '').trim()) ? '' : `<button class="tagbtn creports">🤝 Client Reports History</button>`}
-    </div>
-    <label class="crtog"><input type="checkbox" class="crchk"
-      ${/^no$/i.test((p.clientReports || '').trim()) ? '' : 'checked'}>
-      this piano gets client reports</label><span class="crmsg"></span>` : ''}
+    ${p.serial ? (() => {
+      const crOn = /^yes$/i.test((p.clientReports || '').trim());   // opt-IN: blank = off
+      return `<div class="tagbtns histbtns">
+        <button class="tagbtn rreports">📄 Tech Reports History</button>
+        ${crOn ? `<button class="tagbtn creports">🤝 Client Reports History</button>` : ''}
+      </div>
+      <label class="crtog"><input type="checkbox" class="crchk" ${crOn ? 'checked' : ''}>
+        this piano gets client reports</label><span class="crmsg"></span>`;
+    })() : ''}
     <div class="row">Status <b>${esc(p.status || '—')}</b></div>
     <div class="row">Owner <b>${esc(p.owner || '—')}</b></div>
     ${effectivePhase(p) === 'For Sale'
