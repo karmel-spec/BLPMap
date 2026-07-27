@@ -932,7 +932,10 @@ function popHTML(p) {
     <span class="tag ${st}">${tags[st]} · SPOT ${esc(p.location)}</span>
     <h3>${esc(makeModel)}</h3>
     <div class="row rowflex"><span>Serial # <b>${esc(p.serial || '—')}</b></span>${queueChip}</div>
-    ${p.serial ? `<button class="rreports">📋 Read Reports — full Friday-report history</button>` : ''}
+    ${p.serial ? `<div class="tagbtns histbtns">
+      <button class="tagbtn rreports">📄 Tech Reports History</button>
+      <button class="tagbtn creports">🤝 Client Reports History</button>
+    </div>` : ''}
     <div class="row">Status <b>${esc(p.status || '—')}</b></div>
     <div class="row">Owner <b>${esc(p.owner || '—')}</b></div>
     ${effectivePhase(p) === 'For Sale'
@@ -1024,6 +1027,12 @@ function wirePop(p) {
   if (rr) rr.onclick = ev => {
     ev.stopPropagation();
     window.open('https://blpshop.netlify.app/#history=' + encodeURIComponent(p.serial),
+      '_blank', 'noopener');
+  };
+  const cr = pop.querySelector('.creports');
+  if (cr) cr.onclick = ev => {
+    ev.stopPropagation();
+    window.open('https://blpshop.netlify.app/manager.html#client-' + encodeURIComponent(p.serial),
       '_blank', 'noopener');
   };
   const rqb = pop.querySelector('.reqbtn');
