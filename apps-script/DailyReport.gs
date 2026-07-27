@@ -133,7 +133,7 @@ function tunings_() {
   var now = new Date();
   var past = [], upcoming = [], seenCal = 0;
   for (var c = 0; c < TUNING_CALS.length; c++) {
-    var cal = CalendarApp.getCalendarById(TUNING_CALS[c]);
+    var cal = calById_(TUNING_CALS[c]);
     if (!cal) continue;
     seenCal++;
     var evs = cal.getEvents(new Date(now.getTime() - 540 * 86400000),
@@ -148,7 +148,7 @@ function tunings_() {
       (st < now ? past : upcoming).push(rec);
     }
   }
-  if (!seenCal) return {error: 'no tuning calendar shared with ' + Session.getEffectiveUser(), upcoming: [], past: []};
+  if (!seenCal) return {error: 'no tuning calendar shared with ' + 'the bridge account (brigham@)', upcoming: [], past: []};
   var bySt = function (a, b) { return (a[0] + a[1]) < (b[0] + b[1]) ? -1 : 1; };
   past.sort(bySt); upcoming.sort(bySt);
   var out = {upcoming: upcoming, past: past.slice(-800)};
@@ -168,11 +168,11 @@ function tunings_() {
 function scheduleTuning_(req) {
   var tz = 'America/Denver';
   var techId = String(req.techId || TUNING_CAL).trim();
-  var master = CalendarApp.getCalendarById(MASTER_TUNING_CAL);
-  if (!master) return {error: 'the master tuning calendar is not shared with ' + Session.getEffectiveUser()};
+  var master = calById_(MASTER_TUNING_CAL);
+  if (!master) return {error: 'the master tuning calendar is not shared with ' + 'the bridge account (brigham@)'};
   // availability is read from the technician's own calendar; if theirs
   // isn't shared with this account yet, the master calendar stands in
-  var techCal = CalendarApp.getCalendarById(techId);
+  var techCal = calById_(techId);
   var searchCal = techCal || master;
   var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
   var found = findPiano_(sh, req.serial, req.row);
@@ -613,6 +613,17 @@ function pianoSheet_(ss) {
   return ss.getSheetByName('Piano Log') || sheets[0];
 }
 
+
+// getCalendarById only sees calendars in the account's list — a calendar
+// merely SHARED with us returns null until subscribed. Subscribe on demand.
+function calById_(id) {
+  var c = CalendarApp.getCalendarById(id);
+  if (!c) {
+    try { c = CalendarApp.subscribeToCalendar(id); } catch (e) { /* not shared */ }
+  }
+  return c;
+}
+
 function json_(o) {
   return ContentService.createTextOutput(JSON.stringify(o))
     .setMimeType(ContentService.MimeType.JSON);
@@ -727,7 +738,7 @@ function reportHtml_(r) {
 
 // Run once from the editor to grant Calendar access (used by the tuning feature)
 function authorizeCalendar() {
-  var cal = CalendarApp.getCalendarById(TUNING_CAL);
+  var cal = calById_(TUNING_CAL);
   Logger.log(cal ? 'OK: can see ' + cal.getName() : 'Calendar not shared with this account');
 }
 
@@ -939,9 +950,9 @@ function setMedia_(req, who) {
 function scheduleService_(req) {
   var tz = 'America/Denver';
   var techId = String(req.techId || 'jakepulver.blp@gmail.com').trim();
-  var master = CalendarApp.getCalendarById(SERVICE_CAL);
-  if (!master) return {error: 'the QC & Showroom repairs calendar is not shared with ' + Session.getEffectiveUser()};
-  var techCal = CalendarApp.getCalendarById(techId);
+  var master = calById_(SERVICE_CAL);
+  if (!master) return {error: 'the QC & Showroom repairs calendar is not shared with ' + 'the bridge account (brigham@)'};
+  var techCal = calById_(techId);
   var searchCal = techCal || master;
   var minutes = Math.max(30, Math.min(240, Math.round((Number(req.minutes) || 60) / 30) * 30));
   var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
@@ -980,8 +991,8 @@ function scheduleService_(req) {
  */
 function requestMove_(req, who) {
   var tz = 'America/Denver';
-  var cal = CalendarApp.getCalendarById(MOVING_CAL);
-  if (!cal) return {error: 'the moving calendar is not shared with ' + Session.getEffectiveUser()};
+  var cal = calById_(MOVING_CAL);
+  if (!cal) return {error: 'the moving calendar is not shared with ' + 'the bridge account (brigham@)'};
   var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
   var found = findPiano_(sh, req.serial, req.row);
   if (found.error) return found;
@@ -1000,7 +1011,7 @@ function requestMove_(req, who) {
     + (found.location ? ' — from ' + found.location : '')
     + (req.newSpot ? ' → to ' + String(req.newSpot).trim() : '')
     + (req.notes && String(req.notes).trim() ? ' (' + String(req.notes).trim() + ')' : '')
-    + (name && name !== 'Team (PIN)' ? ' [' + name + ']' : '');
+    + (name && name.indexOf('Team') !== 0 ? ' [' + name + ']' : '');
   if (!req.dryrun) {
     var evs = cal.getEvents(new Date(y + 'T00:00:00'), new Date(y + 'T23:59:59'));
     var ev = null;
