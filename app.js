@@ -1,4 +1,12 @@
 /* BLP Store Map — front-end */
+
+// localStorage can be blocked entirely (installed-app mode, strict cookie
+// settings) — every storage touch goes through these, falling back to an
+// in-memory store so the app still works for the session
+const __mem = {};
+function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return k in __mem ? __mem[k] : null; } }
+function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) { __mem[k] = String(v); } }
+function lsDel(k) { try { localStorage.removeItem(k); } catch (e) { delete __mem[k]; } }
 const PIANOLOG_URL = 'https://pianologapp.netlify.app/';
 // Brigham priority list (Shop Manager "Brigham" tab) — task requests land there
 const BRIGHAM_API = 'https://blpsalesapp.netlify.app/.netlify/functions/brigham-tasks';
@@ -110,14 +118,14 @@ async function fetchSlots() {
 const CACHE_KEY = 'blpMapCache';
 function readCache() {
   try {
-    const c = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
+    const c = JSON.parse(lsGet(CACHE_KEY) || 'null');
     if (c && c.map && c.map.floors && c.data && c.data.pianos) return c;
   } catch (e) { /* corrupt cache — ignore */ }
   return null;
 }
 function writeCache() {
   try {
-    localStorage.setItem(CACHE_KEY,
+    lsSet(CACHE_KEY,
       JSON.stringify({map: S.map, data: S.data, at: Date.now()}));
   } catch (e) { /* quota / private mode — caching is best-effort */ }
 }
@@ -1190,7 +1198,7 @@ async function setPhase(p, phase, pop, extra) {
     });
     const j = await r.json();
     if (j.error === 'unauthorized') {
-      localStorage.removeItem('blpPin');
+      lsDel('blpPin');
       revertPhase(p, was, sel, edit);
       msg.className = 'phmsg err'; msg.textContent = '✗ Wrong PIN — change it again to retry.';
     } else if (j.ok) {
@@ -1243,7 +1251,7 @@ async function setMedia(p, field, pop, skip) {
       throw new Error(j.error === 'unauthorized' ? 'Wrong PIN' : (j.error || 'update failed'));
     }
   } catch (e) {
-    if (e.message === 'Wrong PIN') localStorage.removeItem('blpPin');
+    if (e.message === 'Wrong PIN') lsDel('blpPin');
     p[field] = false;
     delete edit[field]; if (!Object.keys(edit).length) pendingEdits.delete(p.row);
     if (btn) { btn.disabled = false; btn.textContent = skip ? 'skip' : '✓ done'; }
@@ -1290,7 +1298,7 @@ async function toggleTrack(p, track, pop, miscNote) {
         tracks: list, miscNote: note, row: p.row, ...authFields()}),
     });
     const j = await r.json();
-    if (j.error === 'unauthorized') { localStorage.removeItem('blpPin'); throw new Error('Not authorized'); }
+    if (j.error === 'unauthorized') { lsDel('blpPin'); throw new Error('Not authorized'); }
     if (!j.ok) throw new Error(j.error || 'save failed');
     p.track = j.track; edit.track = j.track;
     msg.className = 'trkmsg phmsg ok';
@@ -1352,7 +1360,7 @@ async function toggleDone(p, phase, pop) {
         phases: list, row: p.row, ...authFields()}),
     });
     const j = await r.json();
-    if (j.error === 'unauthorized') { localStorage.removeItem('blpPin'); throw new Error('Not authorized'); }
+    if (j.error === 'unauthorized') { lsDel('blpPin'); throw new Error('Not authorized'); }
     if (!j.ok) throw new Error(j.error || 'save failed');
     p.phasesDone = j.done; edit.phasesDone = j.done;
     msg.className = 'dnmsg phmsg ok';
@@ -1385,7 +1393,7 @@ async function setClientReports(p, enabled, pop) {
         enabled, row: p.row, ...authFields()}),
     });
     const j = await r.json();
-    if (j.error === 'unauthorized') { localStorage.removeItem('blpPin'); throw new Error('Not authorized'); }
+    if (j.error === 'unauthorized') { lsDel('blpPin'); throw new Error('Not authorized'); }
     if (!j.ok) throw new Error(j.error || 'save failed');
     p.clientReports = j.clientReports; edit.clientReports = j.clientReports;
     msg.className = 'crmsg phmsg ok';
@@ -1419,7 +1427,7 @@ async function setSnooze(p, date, pop) {
         date, row: p.row, ...authFields()}),
     });
     const j = await r.json();
-    if (j.error === 'unauthorized') { localStorage.removeItem('blpPin'); throw new Error('Not authorized'); }
+    if (j.error === 'unauthorized') { lsDel('blpPin'); throw new Error('Not authorized'); }
     if (!j.ok) throw new Error(j.error || 'save failed');
     msg.className = 'snzmsg phmsg ok'; msg.textContent = `✓ Check back ${j.checkBack}`;
   } catch (e) {
@@ -1514,7 +1522,7 @@ async function submitAssign(slotId, ov) {
     });
     const j = await r.json();
     if (j.error === 'unauthorized') {
-      localStorage.removeItem('blpPin');
+      lsDel('blpPin');
       throw new Error('Not authorized — sign in or re-enter the PIN.');
     }
     if (j.error && /not found/i.test(j.error)) {
@@ -1616,7 +1624,7 @@ async function submitAdd(slotId, ov) {
     });
     const j = await r.json();
     if (j.error === 'unauthorized') {
-      localStorage.removeItem('blpPin');
+      lsDel('blpPin');
       throw new Error('Not authorized — sign in or re-enter the PIN, then try again.');
     }
     if (j.duplicate) {
@@ -1748,7 +1756,7 @@ async function submitMoveReq(p, ov) {
         notes: ov.querySelector('.mvnotes').value.trim(), ...authFields()}),
     });
     const j = await r.json();
-    if (j.error === 'unauthorized') { localStorage.removeItem('blpPin'); throw new Error('Not authorized — sign in or re-enter the PIN.'); }
+    if (j.error === 'unauthorized') { lsDel('blpPin'); throw new Error('Not authorized — sign in or re-enter the PIN.'); }
     if (!j.scheduled) throw new Error(j.error || 'request failed');
     msg.className = 'tmmsg ok';
     msg.textContent = `✓ On the moving calendar: grouped into the ${j.date} 7:00 AM in-store moves.`;
@@ -1812,7 +1820,7 @@ async function submitService(p, ov) {
         notes: ov.querySelector('.svnotes').value.trim(), ...authFields()}),
     });
     const j = await r.json();
-    if (j.error === 'unauthorized') { localStorage.removeItem('blpPin'); throw new Error('Not authorized — sign in or re-enter the PIN.'); }
+    if (j.error === 'unauthorized') { lsDel('blpPin'); throw new Error('Not authorized — sign in or re-enter the PIN.'); }
     if (!j.scheduled) throw new Error(j.error || 'scheduling failed');
     msg.className = 'tmmsg ok';
     msg.textContent = `✓ Scheduled with ${j.tech}: ${j.date} at ${j.time} (${j.minutes} min) — on the QC & Showroom repairs calendar, invite sent to ${j.tech.split(' ')[0]}.`;
@@ -1860,7 +1868,7 @@ async function submitCurtis(p, ov) {
         notes: ov.querySelector('.chnotes').value.trim(), ...authFields()}),
     });
     const j = await r.json();
-    if (j.error === 'unauthorized') { localStorage.removeItem('blpPin'); throw new Error('Not authorized — sign in or re-enter the PIN.'); }
+    if (j.error === 'unauthorized') { lsDel('blpPin'); throw new Error('Not authorized — sign in or re-enter the PIN.'); }
     if (!j.ok) throw new Error(j.error || 'request failed');
     msg.className = 'tmmsg ok';
     msg.textContent = `✓ Added to Curtis Harper's work orders (${j.tab || 'Requested'} tab) and the activity log.`;
@@ -1914,7 +1922,7 @@ async function submitAdmin(p, ov) {
         notes, when, ...authFields()}),
     });
     const j = await r.json();
-    if (j.error === 'unauthorized') { localStorage.removeItem('blpPin'); throw new Error('Not authorized — sign in or re-enter the PIN.'); }
+    if (j.error === 'unauthorized') { lsDel('blpPin'); throw new Error('Not authorized — sign in or re-enter the PIN.'); }
     if (!j.ok) throw new Error(j.error || 'request failed');
     msg.className = 'tmmsg ok';
     msg.textContent = j.batched
@@ -1958,7 +1966,7 @@ async function submitGeneric(p, kind, ov) {
         kind, notes: ov.querySelector('.gnotes').value.trim(), ...authFields()}),
     });
     const j = await r.json();
-    if (j.error === 'unauthorized') { localStorage.removeItem('blpPin'); throw new Error('Not authorized — sign in or re-enter the PIN.'); }
+    if (j.error === 'unauthorized') { lsDel('blpPin'); throw new Error('Not authorized — sign in or re-enter the PIN.'); }
     if (!j.ok) throw new Error(j.error || 'request failed');
     msg.className = 'tmmsg ok';
     msg.textContent = `✓ ${kind} request emailed to Brigham and logged.`;
@@ -2049,7 +2057,7 @@ async function submitPrice(p, ov) {
         price: raw, ...authFields()}),
     });
     const j = await r.json();
-    if (j.error === 'unauthorized') { localStorage.removeItem('blpPin'); throw new Error('Not authorized — sign in or re-enter the PIN.'); }
+    if (j.error === 'unauthorized') { lsDel('blpPin'); throw new Error('Not authorized — sign in or re-enter the PIN.'); }
     if (!j.ok) throw new Error(j.error || 'save failed');
     p.price = j.price;
     const edit = pendingEdits.get(p.row) || {};
@@ -2079,7 +2087,7 @@ async function submitPriceRequest(p, ov) {
       body: JSON.stringify({pin, serial: p.serial, action: 'requestprice', row: p.row, ...authFields()}),
     });
     const j = await r.json();
-    if (j.error === 'unauthorized') { localStorage.removeItem('blpPin'); throw new Error('Not authorized — sign in or re-enter the PIN.'); }
+    if (j.error === 'unauthorized') { lsDel('blpPin'); throw new Error('Not authorized — sign in or re-enter the PIN.'); }
     if (!j.ok) throw new Error(j.error || 'request failed');
     msg.className = 'tmmsg ok';
     msg.textContent = '✓ Price request emailed to Brigham.';
@@ -2157,7 +2165,7 @@ async function submitTune(p, ov) {
     });
     const j = await r.json();
     if (j.error === 'unauthorized') {
-      localStorage.removeItem('blpPin');
+      lsDel('blpPin');
       throw new Error('Wrong PIN — click Schedule to try again.');
     }
     if (!j.scheduled) throw new Error(j.error || 'scheduling failed');
@@ -2205,7 +2213,7 @@ async function submitBrigham(p, ov) {
   if (!note) { msg.className = 'tmmsg err'; msg.textContent = 'Write the task first.'; return; }
   const af = authFields();
   const keyIn = ov.querySelector('.brigkey');
-  const key = (localStorage.getItem('blp.appkey') || '').trim() || keyIn.value.trim();
+  const key = (lsGet('blp.appkey') || '').trim() || keyIn.value.trim();
   if (!af.idToken && !key) {
     keyIn.hidden = false; keyIn.focus();
     msg.className = 'tmmsg err';
@@ -2225,12 +2233,12 @@ async function submitBrigham(p, ov) {
         from: (af.user && (af.user.name || af.user.email)) || 'Store Map'}})});
     const j = await r.json();
     if (j.ok) {
-      if (keyIn.value.trim()) localStorage.setItem('blp.appkey', keyIn.value.trim());
+      if (keyIn.value.trim()) lsSet('blp.appkey', keyIn.value.trim());
       msg.className = 'tmmsg ok';
       msg.textContent = '✓ On Brigham’s priority list.';
       setTimeout(() => { ov.hidden = true; }, 1800);
     } else if (r.status === 401) {
-      localStorage.removeItem('blp.appkey');
+      lsDel('blp.appkey');
       keyIn.hidden = false; keyIn.value = ''; keyIn.focus();
       msg.className = 'tmmsg err'; msg.textContent = '✗ ' + (j.error || 'not authorized');
       btn.disabled = false;
@@ -2266,7 +2274,7 @@ async function uploadPhoto(p, input, pop) {
     });
     const j = await r.json();
     if (j.error === 'unauthorized') {
-      localStorage.removeItem('blpPin');
+      lsDel('blpPin');
       msg.className = 'photomsg err'; msg.textContent = '✗ Wrong PIN — tap the button to try again.';
     } else if (j.error) {
       msg.className = 'photomsg err'; msg.textContent = '✗ ' + j.error;
@@ -2300,17 +2308,17 @@ function downscalePhoto(file, maxDim, quality) {
 }
 
 function teamPin(forceAsk) {
-  let pin = localStorage.getItem('blpPin') || '';
+  let pin = lsGet('blpPin') || '';
   if (!pin || forceAsk) {
     pin = (prompt('BLP team PIN (needed once on this device to move pianos):') || '').trim();
-    if (pin) localStorage.setItem('blpPin', pin);
+    if (pin) lsSet('blpPin', pin);
   }
   return pin;
 }
 // signed-in Google users write without a PIN (the bridge verifies their
 // token); everyone else gets the classic PIN prompt
 function writeAuth() {
-  if (authUser()) return {pin: localStorage.getItem('blpPin') || '', ok: true};
+  if (authUser()) return {pin: lsGet('blpPin') || '', ok: true};
   const pin = teamPin(false);
   return {pin, ok: !!pin};
 }
@@ -2320,7 +2328,7 @@ function writeAuth() {
 // team PIN (the bridge trusts verified BLP accounts). Tokens expire
 // hourly, so GIS auto-refreshes on page load.
 function authUser() {
-  try { return JSON.parse(localStorage.getItem('blpUser') || 'null'); }
+  try { return JSON.parse(lsGet('blpUser') || 'null'); }
   catch (e) { return null; }
 }
 // fields sent with every bridge write: fresh token when we have one,
@@ -2336,7 +2344,7 @@ function onGoogleCred(resp) {
   try {
     const claims = JSON.parse(atob(resp.credential.split('.')[1]
       .replace(/-/g, '+').replace(/_/g, '/')));
-    localStorage.setItem('blpUser', JSON.stringify({
+    lsSet('blpUser', JSON.stringify({
       tok: resp.credential, exp: claims.exp,
       name: claims.name || claims.email, email: claims.email, pic: claims.picture || '',
     }));
@@ -2344,12 +2352,17 @@ function onGoogleCred(resp) {
   renderAuth();
 }
 function signOut() {
-  localStorage.removeItem('blpUser');
+  lsDel('blpUser');
   if (window.google?.accounts?.id) google.accounts.id.disableAutoSelect();
   renderAuth();
 }
 // Sign-in is REQUIRED: the map only unlocks with a Google identity, so the
 // activity log always knows who moved / re-phased / photographed what.
+window.addEventListener('error', ev => {
+  const m = document.getElementById('agPinMsg');
+  const g = document.getElementById('authgate');
+  if (m && g && !g.hidden) m.textContent = '⚠ ' + (ev.message || 'script error');
+});
 function authGate() {
   let ov = document.getElementById('authgate');
   if (!ov) {
@@ -2367,13 +2380,13 @@ function authGate() {
         <button id="agPinGo">Enter</button>
       </div>
       <div id="agPinMsg" class="agpinmsg"></div>
-      <div class="agver">v65</div></div>`;
+      <div class="agver">v66</div></div>`;
     document.body.appendChild(ov);
   }
   const dev = ['localhost', '127.0.0.1'].includes(location.hostname);
   // a stored team PIN also opens the gate, so a blocked/broken Google
   // button is never a dead end
-  const on = !authUser() && !localStorage.getItem('blpPin') && !dev;
+  const on = !authUser() && !lsGet('blpPin') && !dev;
   ov.hidden = !on;
   if (!on) return;
   const checkPin = async pin => {
@@ -2398,13 +2411,13 @@ function authGate() {
         if (ok) pin = pin.toLowerCase();
       }
       if (!ok) { msg.textContent = '✗ Wrong PIN.'; return; }
-      localStorage.setItem('blpPin', pin);
+      lsSet('blpPin', pin);
       msg.textContent = '';
       renderAuth();
     } catch (e) {
       // couldn't reach the bridge to check — let the PIN through; every
       // write is validated server-side anyway
-      localStorage.setItem('blpPin', pin);
+      lsSet('blpPin', pin);
       msg.textContent = '';
       renderAuth();
     }
@@ -2507,7 +2520,7 @@ async function movePiano(p, dest, pop) {
     });
     const j = await r.json();
     if (j.error === 'unauthorized') {
-      localStorage.removeItem('blpPin');
+      lsDel('blpPin');
       msg.className = 'mvmsg err'; msg.textContent = '✗ Wrong PIN — click Move to try again.';
       return;
     }
@@ -2573,7 +2586,7 @@ async function queuePiano(p, newPos, pop) {
     });
     const j = await r.json();
     if (j.error === 'unauthorized') {
-      localStorage.removeItem('blpPin');
+      lsDel('blpPin');
       msg.className = 'mvmsg qmsg err';
       msg.textContent = '✗ Wrong PIN — click Set queue # to try again.';
       return;
