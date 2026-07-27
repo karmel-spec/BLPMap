@@ -182,6 +182,10 @@ function applyPending() {
       if ((p.track || '') === edit.track) delete edit.track;
       else { p.track = edit.track; stillPending = true; }
     }
+    if ('phasesDone' in edit) {
+      if ((p.phasesDone || '') === edit.phasesDone) delete edit.phasesDone;
+      else { p.phasesDone = edit.phasesDone; stillPending = true; }
+    }
     if (!stillPending) pendingEdits.delete(row);
   }
 }
@@ -940,6 +944,13 @@ function popHTML(p) {
     ${mediaCard(p)}
     ${tracker}
     ${phaser}
+    ${p.serial ? (() => {
+      const dl = (p.phasesDone || '').split(',').map(t => t.trim()).filter(Boolean);
+      return `<div class="row trkrow" title="phases already completed — tap to toggle">Done
+        <span class="trkchips">${PHASES.filter(ph => ph !== 'Delivered').map((ph, i) =>
+          `<button class="trk dn ${dl.includes(ph) ? 'on' : ''}" data-ph="${esc(ph)}" title="${esc(ph)}">${i + 1}${dl.includes(ph) ? '✓' : ''}</button>`).join('')}
+        </span></div><div class="dnmsg phmsg"></div>`;
+    })() : ''}
     ${p.serial ? `<button class="tunebtn reqbtn">📨 Request… ▾</button>
       <div class="reqmenu" hidden>
         <button data-req="move">🚚 Move</button>
@@ -998,9 +1009,13 @@ function wirePop(p) {
     ev.stopPropagation();
     setMedia(p, b.dataset.f, pop, !!b.dataset.skip);
   });
-  pop.querySelectorAll('.trk').forEach(b => b.onclick = ev => {
+  pop.querySelectorAll('.trk:not(.dn)').forEach(b => b.onclick = ev => {
     ev.stopPropagation();
     toggleTrack(p, b.dataset.t, pop);
+  });
+  pop.querySelectorAll('.trk.dn').forEach(b => b.onclick = ev => {
+    ev.stopPropagation();
+    toggleDone(p, b.dataset.ph, pop);
   });
   const pe = pop.querySelector('.predit');
   if (pe) pe.onclick = ev => { ev.stopPropagation(); openPriceModal(p); };
@@ -1025,7 +1040,7 @@ function wirePop(p) {
     else if (kind === 'service') openServiceModal(p);
     else if (kind === 'curtis') openCurtisModal(p);
     else if (kind === 'price') openPriceModal(p);
-    else if (kind === 'admin') openGenericModal(p, 'Admin');
+    else if (kind === 'admin') openAdminModal(p);
     else if (kind === 'touchup') openGenericModal(p, 'Touch Up');
     else if (kind === 'priority') openGenericModal(p, 'Priority Scheduling');
   });
@@ -1162,6 +1177,43 @@ async function toggleTrack(p, track, pop) {
     delete edit.track; if (!Object.keys(edit).length) pendingEdits.delete(p.row);
     if (btn) btn.classList.toggle('on');
     msg.className = 'trkmsg phmsg err'; msg.textContent = '✗ ' + e.message + ' — not saved';
+  }
+}
+
+// toggle a completed-phase checkmark; the list is saved to PHASES DONE
+async function toggleDone(p, phase, pop) {
+  const msg = pop.querySelector('.dnmsg');
+  popPinned = true;
+  const {pin, ok} = writeAuth();
+  if (!ok) { msg.className = 'dnmsg phmsg err'; msg.textContent = 'Sign in or enter the team PIN first.'; return; }
+  const was = p.phasesDone || '';
+  let list = was.split(',').map(t => t.trim()).filter(Boolean);
+  list = list.includes(phase) ? list.filter(t => t !== phase) : list.concat(phase);
+  list = PHASES.filter(ph => list.includes(ph));
+  p.phasesDone = list.join(', ');
+  const edit = pendingEdits.get(p.row) || {};
+  edit.phasesDone = p.phasesDone; pendingEdits.set(p.row, edit);
+  const btn = pop.querySelector(`.trk.dn[data-ph="${phase}"]`);
+  if (btn) btn.classList.toggle('on');
+  msg.className = 'dnmsg phmsg'; msg.textContent = 'Saving…';
+  try {
+    const r = await fetch(BRIDGE_URL, {
+      method: 'POST', redirect: 'follow',
+      headers: {'content-type': 'text/plain;charset=utf-8'},
+      body: JSON.stringify({pin, serial: p.serial, action: 'setdone',
+        phases: list, row: p.row, ...authFields()}),
+    });
+    const j = await r.json();
+    if (j.error === 'unauthorized') { localStorage.removeItem('blpPin'); throw new Error('Not authorized'); }
+    if (!j.ok) throw new Error(j.error || 'save failed');
+    p.phasesDone = j.done; edit.phasesDone = j.done;
+    msg.className = 'dnmsg phmsg ok';
+    msg.textContent = j.done ? `✓ Completed: ${j.done}` : '✓ Cleared';
+  } catch (e) {
+    p.phasesDone = was;
+    delete edit.phasesDone; if (!Object.keys(edit).length) pendingEdits.delete(p.row);
+    if (btn) btn.classList.toggle('on');
+    msg.className = 'dnmsg phmsg err'; msg.textContent = '✗ ' + e.message + ' — not saved';
   }
 }
 
@@ -1479,6 +1531,13 @@ async function submitMoveReq(p, ov) {
 }
 
 /* ---------- showroom service / repair request ---------- */
+const ADMINS = [
+  {name: 'Brigham', email: 'brigham@brighamlarsonpianos.com'},
+  {name: 'Karmel', email: 'karmel@brighamlarsonpianos.com'},
+  {name: 'Alisa', email: 'alisa@brighamlarsonpianos.com'},
+  {name: 'Susie', email: 'susie@brighamlarsonpianos.com'},
+  {name: 'Walter', email: 'walter@brighamlarsonpianos.com'},
+];
 const SERVICE_TECHS = [
   {id: 'jakepulver.blp@gmail.com', name: 'Jake Pulver'},
   {id: 'mckinlylopp.blp@gmail.com', name: 'McKinly Lopp'},
@@ -1581,7 +1640,62 @@ async function submitCurtis(p, ov) {
   }
 }
 
-/* ---------- generic team requests (Admin / Touch Up / Priority) -------- */
+/* ---------- admin request (pick an admin; now or Monday batch) --------- */
+function openAdminModal(p) {
+  popPinned = false; $('#pop').hidden = true;
+  const ov = modalShell('adminmodal', `
+    <span class="x">✕</span>
+    <h3>📋 Admin Request</h3>
+    ${pianoHeader(p)}
+    <label>Send to</label>
+    <select class="amwho">${ADMINS.map((a, i) =>
+      `<option value="${esc(a.email)}" ${i === 0 ? 'selected' : ''}>${esc(a.name)}</option>`).join('')}</select>
+    <label>What do you need?</label>
+    <textarea class="amnotes" rows="3" placeholder="describe the admin request…"></textarea>
+    <label>When</label>
+    <div class="amwhen">
+      <label class="amopt"><input type="radio" name="amwhen" value="now" checked> Email now</label>
+      <label class="amopt"><input type="radio" name="amwhen" value="monday"> Add to Monday morning batch (8 AM digest to info@)</label>
+    </div>
+    <button class="tmgo amgo">Send request</button>
+    <div class="tmmsg"></div>`);
+  ov.querySelector('.amgo').onclick = () => submitAdmin(p, ov);
+  ov.querySelector('.amnotes').focus();
+}
+async function submitAdmin(p, ov) {
+  const msg = ov.querySelector('.tmmsg');
+  const btn = ov.querySelector('.amgo');
+  const notes = ov.querySelector('.amnotes').value.trim();
+  if (!notes) { msg.className = 'tmmsg err'; msg.textContent = 'Describe the request first.'; return; }
+  const {pin, ok} = writeAuth();
+  if (!ok) { msg.className = 'tmmsg err'; msg.textContent = 'Sign in or enter the team PIN first.'; return; }
+  const sel = ov.querySelector('.amwho');
+  const when = ov.querySelector('input[name=amwhen]:checked').value;
+  btn.disabled = true;
+  msg.className = 'tmmsg'; msg.textContent = when === 'monday' ? 'Adding to the Monday batch…' : 'Emailing…';
+  try {
+    const r = await fetch(BRIDGE_URL, {
+      method: 'POST', redirect: 'follow',
+      headers: {'content-type': 'text/plain;charset=utf-8'},
+      body: JSON.stringify({pin, serial: p.serial, action: 'adminreq', row: p.row,
+        adminEmail: sel.value, adminName: sel.options[sel.selectedIndex].text,
+        notes, when, ...authFields()}),
+    });
+    const j = await r.json();
+    if (j.error === 'unauthorized') { localStorage.removeItem('blpPin'); throw new Error('Not authorized — sign in or re-enter the PIN.'); }
+    if (!j.ok) throw new Error(j.error || 'request failed');
+    msg.className = 'tmmsg ok';
+    msg.textContent = j.batched
+      ? '✓ Saved to the Monday batch — it goes to info@ Monday at 8 AM.'
+      : `✓ Emailed to ${sel.options[sel.selectedIndex].text}.`;
+    setTimeout(() => { ov.hidden = true; }, 2200);
+  } catch (e) {
+    msg.className = 'tmmsg err'; msg.textContent = '✗ ' + e.message;
+    btn.disabled = false;
+  }
+}
+
+/* ---------- generic team requests (Touch Up / Priority) -------- */
 function openGenericModal(p, kind) {
   popPinned = false; $('#pop').hidden = true;
   const icons = {'Admin': '📋', 'Touch Up': '🖌', 'Priority Scheduling': '⚡'};

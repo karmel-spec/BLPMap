@@ -71,6 +71,8 @@ function parsePianos(text) {
     ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'PRICE') : -1;
   const trackIdx = rows[1]
     ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'TRACK') : -1;
+  const doneIdx = rows[1]
+    ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'PHASES DONE') : -1;
   // CUSTOM SHOPWORK queue bounds (1-based rows)
   let qHdr = 0, qEnd = 0;
   for (let k = 0; k < rows.length; k++) {
@@ -115,6 +117,7 @@ function parsePianos(text) {
       phase: phaseIdx >= 0 ? col(phaseIdx) : '',
       price: priceIdx >= 0 ? col(priceIdx) : '',
       track: trackIdx >= 0 ? col(trackIdx) : '',
+      phasesDone: doneIdx >= 0 ? col(doneIdx) : '',
       bphoto: med(13), aphoto: med(15), bvideo: med(16), avideo: med(17),
       queuePos: 0, queueTotal: 0,
       isNew, active,

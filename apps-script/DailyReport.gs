@@ -57,6 +57,17 @@ var TAG_ALERT_TO = 'info@brighamlarsonpianos.com';
 // Curtis Harper work orders spreadsheet — "Requested" tab gets new rows
 var CURTIS_SHEET_ID = '1DxvDQ9WlhxXfiZaKGpdJLOOPNMBfVA9PsHGuLe55pmc';
 var CURTIS_TAB = 'Requested';
+// Admin requests: who can be picked, where Monday-batch requests collect,
+// and where the Monday-8am digest goes
+var ADMINS = [
+  {name: 'Brigham', email: 'brigham@brighamlarsonpianos.com'},
+  {name: 'Karmel', email: 'karmel@brighamlarsonpianos.com'},
+  {name: 'Alisa', email: 'alisa@brighamlarsonpianos.com'},
+  {name: 'Susie', email: 'susie@brighamlarsonpianos.com'},
+  {name: 'Walter', email: 'walter@brighamlarsonpianos.com'},
+];
+var ADMIN_NOTES_TAB = 'WALK AROUND ADMIN NOTES';
+var ADMIN_DIGEST_TO = 'info@brighamlarsonpianos.com';
 var TUNING_SLOTS = [8, 9.5];               // Korban's weekday starts: 8:00 + 9:30 (Denver)
 var TUNING_MINUTES = 90;                   // block length, matches Korban's bookings
 var KNOWN_AREAS = ['showroom', 'pre-sale showroom', 'third floor', 'storage',
@@ -507,6 +518,20 @@ function doPost(e) {
       if (ch.ok && !ch.dryrun) logAct_(who, 'Curtis Harper request', ch.summary || req.serial,
         (req.ctype || 'Other') + (req.notes ? ' — ' + String(req.notes).slice(0, 150) : ''));
       return json_(ch);
+    }
+    if (req.action === 'adminreq') {
+      var ar = adminRequest_(req, who);
+      if (ar.ok) logAct_(who, 'Admin request', ar.summary || req.serial,
+        'to ' + (req.adminName || 'admin') + ' · ' + (req.when === 'monday' ? 'Monday batch' : 'sent now')
+        + (req.notes ? ' — ' + String(req.notes).slice(0, 120) : ''));
+      return json_(ar);
+    }
+    if (req.action === 'setupadmindigest') return json_(setupAdminDigest_());
+    if (req.action === 'setdone') {
+      var dn = setDone_(req);
+      if (dn.ok) logAct_(who, 'Phases-done change', dn.summary || req.serial,
+        (dn.previous || '(none)') + ' → ' + (dn.done || '(none)'));
+      return json_(dn);
     }
     if (req.action === 'teamreq') {
       var tr = teamRequest_(req, who);
@@ -1161,7 +1186,140 @@ function curtisRequest_(req, who) {
 }
 
 /**
- * Generic team request (Admin / Touch Up / Priority Scheduling …) —
+ * Admin request — either emailed immediately to the chosen admin, or
+ * collected on the WALK AROUND ADMIN NOTES tab and sent as one digest to
+ * info@ every Monday at 8am. req: {serial, row?, adminEmail, adminName,
+ * notes?, when: 'now'|'monday', dryrun?}
+ */
+function adminRequest_(req, who) {
+  var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+  var found = findPiano_(sh, req.serial, req.row);
+  if (found.error) return found;
+  var name = String(who || '').replace(/\s*<[^>]*>\s*/, '').replace(/\s*\(.*\)\s*$/, '');
+  var adminName = String(req.adminName || 'Admin');
+  var adminEmail = String(req.adminEmail || '').trim();
+  var okAdmin = ADMINS.some(function (a) { return a.email === adminEmail; });
+  if (!okAdmin) return {error: 'unknown admin: ' + adminEmail};
+  if (req.dryrun) return {ok: true, dryrun: true, summary: found.summary};
+  if (req.when === 'monday') {
+    var ss = SpreadsheetApp.openById(PIANO_LOG_ID);
+    var tab = ss.getSheetByName(ADMIN_NOTES_TAB);
+    if (!tab) {
+      tab = ss.insertSheet(ADMIN_NOTES_TAB, ss.getSheets().length);   // LAST tab
+      tab.appendRow(['When', 'For', 'Piano', 'Serial', 'Spot', 'Request', 'By', 'Sent']);
+      tab.setFrozenRows(1);
+    }
+    tab.appendRow([new Date(), adminName, found.summary || '', String(req.serial || ''),
+                   String(found.location || ''), String(req.notes || ''), name, '']);
+    return {ok: true, batched: true, summary: found.summary,
+            note: 'in Monday morning batch'};
+  }
+  var logUrl = 'https://pianologapp.netlify.app/#piano=' + encodeURIComponent(req.serial);
+  MailApp.sendEmail({
+    to: adminEmail,
+    subject: '📋 Admin request: ' + (found.summary || 'piano') + ' — SN ' + req.serial,
+    htmlBody: '<div style="font-family:Helvetica,Arial,sans-serif;max-width:560px">'
+      + '<h2 style="margin:0 0 8px">Admin request from the Store Map</h2>'
+      + '<p style="font-size:15px;margin:6px 0"><b>' + esc_(found.summary || 'Piano') + '</b><br>'
+      + 'Serial ' + esc_(req.serial) + (found.location ? ' · Spot ' + esc_(found.location) : '') + '</p>'
+      + (req.notes && String(req.notes).trim()
+         ? '<p style="font-size:14px;white-space:pre-wrap;border-left:3px solid #9e2020;padding-left:10px">'
+           + esc_(String(req.notes).trim()) + '</p>' : '')
+      + '<p style="font-size:13px;color:#555">Requested by ' + esc_(name || 'the team') + '.</p>'
+      + '<p style="font-size:13px"><a href="' + APP_URL + '" style="color:#9e2020">Store Map</a> · '
+      + '<a href="' + logUrl + '" style="color:#9e2020">Piano Log</a></p></div>',
+    body: 'Admin request for ' + (found.summary || 'piano') + ' SN ' + req.serial
+      + (req.notes ? '\n\n' + String(req.notes).trim() : '') + '\n\nRequested by ' + (name || 'the team'),
+    name: 'BLP Store Map',
+  });
+  return {ok: true, sent: true, summary: found.summary, sentTo: adminEmail};
+}
+
+// every Monday 8am (Denver): email all unsent WALK AROUND ADMIN NOTES rows
+// to info@ in one digest, then mark them sent
+function mondayAdminDigest() {
+  var ss = SpreadsheetApp.openById(PIANO_LOG_ID);
+  var tab = ss.getSheetByName(ADMIN_NOTES_TAB);
+  if (!tab || tab.getLastRow() < 2) return;
+  var n = tab.getLastRow() - 1;
+  var vals = tab.getRange(2, 1, n, 8).getValues();
+  var tz = 'America/Denver';
+  var pending = [];
+  for (var i = 0; i < vals.length; i++) {
+    if (!String(vals[i][7] || '').trim()) pending.push({i: i, r: vals[i]});
+  }
+  if (!pending.length) return;
+  var rows = pending.map(function (p) {
+    var when = p.r[0] instanceof Date ? Utilities.formatDate(p.r[0], tz, 'EEE MMM d, h:mm a') : String(p.r[0]);
+    return '<tr><td style="padding:5px 10px 5px 0;border-bottom:1px solid #eee;white-space:nowrap">' + esc_(when) + '</td>'
+      + '<td style="padding:5px 10px 5px 0;border-bottom:1px solid #eee"><b>' + esc_(String(p.r[1])) + '</b></td>'
+      + '<td style="padding:5px 10px 5px 0;border-bottom:1px solid #eee">' + esc_(String(p.r[2])) + ' (SN ' + esc_(String(p.r[3])) + (p.r[4] ? ' · spot ' + esc_(String(p.r[4])) : '') + ')</td>'
+      + '<td style="padding:5px 10px 5px 0;border-bottom:1px solid #eee">' + esc_(String(p.r[5])) + '</td>'
+      + '<td style="padding:5px 0;border-bottom:1px solid #eee;color:#777">' + esc_(String(p.r[6])) + '</td></tr>';
+  }).join('');
+  MailApp.sendEmail({
+    to: ADMIN_DIGEST_TO,
+    subject: '📋 Monday admin requests — ' + pending.length + ' from the Store Map walk-around',
+    htmlBody: '<div style="font-family:Helvetica,Arial,sans-serif;max-width:720px">'
+      + '<h2 style="margin:0 0 10px">Admin requests collected since last Monday</h2>'
+      + '<table style="border-collapse:collapse;font-size:13px;width:100%">'
+      + '<tr><th style="text-align:left;padding:4px 10px 4px 0;font-size:10px;color:#8a929a">WHEN</th>'
+      + '<th style="text-align:left;padding:4px 10px 4px 0;font-size:10px;color:#8a929a">FOR</th>'
+      + '<th style="text-align:left;padding:4px 10px 4px 0;font-size:10px;color:#8a929a">PIANO</th>'
+      + '<th style="text-align:left;padding:4px 10px 4px 0;font-size:10px;color:#8a929a">REQUEST</th>'
+      + '<th style="text-align:left;padding:4px 0;font-size:10px;color:#8a929a">BY</th></tr>'
+      + rows + '</table>'
+      + '<p style="font-size:12px;color:#8a929a;margin-top:14px">Collected on the WALK AROUND ADMIN NOTES tab of the Piano Log. Sent every Monday at 8 AM.</p></div>',
+    body: pending.length + ' admin requests collected — see the WALK AROUND ADMIN NOTES tab of the Piano Log.',
+    name: 'BLP Store Map',
+  });
+  var stamp = Utilities.formatDate(new Date(), tz, 'M/d/yyyy');
+  pending.forEach(function (p) { tab.getRange(p.i + 2, 8).setValue(stamp); });
+}
+
+// one-time: install the Monday 8am digest trigger (idempotent)
+function setupAdminDigest_() {
+  var have = ScriptApp.getProjectTriggers().some(function (t) {
+    return t.getHandlerFunction() === 'mondayAdminDigest';
+  });
+  if (!have) {
+    ScriptApp.newTrigger('mondayAdminDigest').timeBased()
+      .onWeekDay(ScriptApp.WeekDay.MONDAY).atHour(8)
+      .inTimezone('America/Denver').create();
+  }
+  return {ok: true, installed: !have, already: have};
+}
+
+/**
+ * Phases-done checklist — phases a piano has COMPLETED (so later phases
+ * can proceed even out of order). Comma-separated names in a PHASES DONE
+ * column (header row 2). req: {serial, row?, phases: [...]}
+ */
+function setDone_(req) {
+  var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+  var found = findPiano_(sh, req.serial, req.row);
+  if (found.error) return found;
+  var done = [];
+  (req.phases || []).forEach(function (p) {
+    p = String(p).trim();
+    if (PHASE_VALUES.indexOf(p) >= 0 && done.indexOf(p) < 0) done.push(p);
+  });
+  var last = sh.getLastColumn();
+  var hdr = sh.getRange(2, 1, 1, last).getValues()[0];
+  var col = -1;
+  for (var c = 0; c < hdr.length; c++) {
+    if (String(hdr[c] || '').trim().toUpperCase() === 'PHASES DONE') { col = c + 1; break; }
+  }
+  if (col < 0) { sh.getRange(2, last + 1).setValue('PHASES DONE'); col = last + 1; }
+  var prev = String(sh.getRange(found.row, col).getValue() || '');
+  var val = done.join(', ');
+  sh.getRange(found.row, col).setValue(val);
+  return {ok: true, row: found.row, summary: found.summary,
+          previous: prev, done: val};
+}
+
+/**
+ * Generic team request (Touch Up / Priority Scheduling …) —
  * emails Brigham with the piano + notes and lands in the activity log.
  */
 function teamRequest_(req, who) {
