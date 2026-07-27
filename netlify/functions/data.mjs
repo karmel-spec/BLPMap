@@ -107,9 +107,12 @@ function parsePianos(text) {
     const status = col(18), loc = col(20), ol = col(1).toLowerCase();
     // keyboard stands are inventory, not pianos — keep them off the map
     if (/\bstand\b/i.test(summary) || serial.trim().toLowerCase() === 'stand') continue;
-    // section-header rows with no serial (room labels, "go to X section"
-    // pointers) — not a piano, just a divider that slipped a summary in
-    if (!serial.trim() && (/^haydn room$/i.test(summary.trim()) || /go to .* section/i.test(summary))) continue;
+    // section-header/status-note rows with no serial (room labels, "go to X
+    // section" pointers, "Piano is [not] at BLP..." shop-follow-up notes) —
+    // not a piano, just a divider or note row that slipped a summary in
+    if (!serial.trim() && !col(4) && !col(5)
+        && (/^haydn room$/i.test(summary.trim()) || /go to .* section/i.test(summary)
+            || /^piano is /i.test(summary.trim()))) continue;
     // media cells: empty=needed, "Skipped ..."=deliberately skipped, else have
     const med = j => { const v = col(j); return v ? (/^skip/i.test(v) ? 'skip' : true) : false; };
     const dates = parseDates(col(21)).filter(d => d <= todayUTC);

@@ -154,10 +154,13 @@ def parse_pianos(raw):
         # keyboard stands are inventory, not pianos - keep them off the map
         if re.search(r'\bstand\b', summary, re.I) or serial.strip().lower() == 'stand':
             continue
-        # section-header rows with no serial (room labels, "go to X section"
-        # pointers) - not a piano, just a divider that slipped a summary in
-        if not serial.strip() and (re.match(r'^haydn room$', summary.strip(), re.I)
-                                    or re.search(r'go to .* section', summary, re.I)):
+        # section-header/status-note rows with no serial (room labels, "go to X
+        # section" pointers, "Piano is [not] at BLP..." shop-follow-up notes) -
+        # not a piano, just a divider or note row that slipped a summary in
+        if not serial.strip() and not col(4) and not col(5) and (
+                re.match(r'^haydn room$', summary.strip(), re.I)
+                or re.search(r'go to .* section', summary, re.I)
+                or re.match(r'^piano is ', summary.strip(), re.I)):
             continue
         dates = parse_dates(col(21))
         entered = max((d for d in dates if d <= today), default=None)
