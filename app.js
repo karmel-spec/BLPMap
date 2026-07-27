@@ -7,7 +7,8 @@ const PHASES = ['New Arrival - Admin', 'Assessment', 'CAP',
   'PRSB & Plate Refinishing', 'Lacquer Soundboard', 'Restringing',
   'Chip Tuning', 'DHRT', '1st Tuning', 'Refinishing', 'QC & Assembly',
   '2nd Tuning', 'Exit Prep - Admin', 'Delivered'];
-const PHASE_STATES = ['In Queue', 'Paused', 'For Sale'];
+const PHASE_STATES = ['In Queue', 'Paused', 'For Sale',
+  'Waiting on Brigham', 'Waiting on Curtis Harper', 'Waiting on OTHER'];
 // work tracks (multi-select, stored comma-separated in the TRACK column)
 const TRACKS = ['Rebuild', 'Hybrid', 'Refurbish', 'Refinish', 'Technology', 'Old Player'];   // unnumbered states; For Sale turns the icon green
 // icon letter for each numbered phase (QC & Assembly gets two letters)
@@ -27,6 +28,9 @@ function phaseLabels(phase, p) {
     return {full: q, short: 'Q'};
   }
   if (phase === 'Paused') return {full: 'P', short: 'P'};
+  if (phase === 'Waiting on Brigham') return {full: 'WB', short: 'W'};
+  if (phase === 'Waiting on Curtis Harper') return {full: 'WC', short: 'W'};
+  if (phase === 'Waiting on OTHER') return {full: 'WO', short: 'W'};
   if (phase === 'Delivered' || phase === 'For Sale') return null;
   const i = PHASES.indexOf(phase);
   if (i < 0) return null;

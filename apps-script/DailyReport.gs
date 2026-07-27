@@ -802,7 +802,8 @@ var PHASE_VALUES = ['New Arrival - Admin', 'Assessment', 'CAP',
   'PRSB & Plate Refinishing', 'Lacquer Soundboard', 'Restringing',
   'Chip Tuning', 'DHRT', '1st Tuning', 'Refinishing', 'QC & Assembly',
   '2nd Tuning', 'Exit Prep - Admin', 'Delivered',
-  'In Queue', 'Paused', 'For Sale'];
+  'In Queue', 'Paused', 'For Sale',
+  'Waiting on Brigham', 'Waiting on Curtis Harper', 'Waiting on OTHER'];
 
 // July 2026 phase rework: how the old phase names translate to the new
 // 14-phase pipeline. Used once by the 'migratephases' action to update
