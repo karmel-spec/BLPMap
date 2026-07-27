@@ -2304,7 +2304,31 @@ function signOut() {
   if (window.google?.accounts?.id) google.accounts.id.disableAutoSelect();
   renderAuth();
 }
+// Sign-in is REQUIRED: the map only unlocks with a Google identity, so the
+// activity log always knows who moved / re-phased / photographed what.
+function authGate() {
+  let ov = document.getElementById('authgate');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.id = 'authgate';
+    ov.innerHTML = `<div class="agcard">
+      <img src="assets/blp-logo.png" alt="Brigham Larson Pianos">
+      <h2>STORE MAP</h2>
+      <p>Team members sign in with Google — moves, phase changes, photos and
+      requests are logged under your name.</p>
+      <div id="agBtn"></div></div>`;
+    document.body.appendChild(ov);
+  }
+  const dev = ['localhost', '127.0.0.1'].includes(location.hostname);
+  const on = !authUser() && !dev;
+  ov.hidden = !on;
+  if (on && window.google && google.accounts && google.accounts.id) {
+    google.accounts.id.renderButton($('#agBtn'),
+      {theme: 'filled_black', size: 'large', shape: 'pill'});
+  }
+}
 function renderAuth() {
+  authGate();
   const box = $('#authbox');
   if (!box) return;
   if (!GOOGLE_CLIENT_ID) { box.hidden = true; return; }
