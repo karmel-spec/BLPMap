@@ -62,7 +62,8 @@ const SLOT_RE = /^\d+[a-zA-Z]?$/;
 const KNOWN_AREAS = ['showroom', 'pre-sale showroom', 'third floor', 'storage',
   'shop', 'vestibule', 'wing room', 'holding room', 'attic', 'sold floor',
   'rebuilding line', 'refinishing', 'back shop', 'middle shop', 'basement',
-  'warehouse', 'rental', 'rented', 'out for delivery', 'customer', 'sanding', 'coming soon'];
+  'warehouse', 'rental', 'rented', 'out for delivery', 'customer', 'sanding', 'coming soon',
+  'conference room', 'larson home'];
 
 // pianos parked in a named work area are drawn INSIDE that zone on the map
 // (not in the holding grid). location text -> map zone label to place them in.
@@ -265,10 +266,14 @@ function unplacedPianos() {
   return S.data.pianos.filter(p => p.active
     && !(p.isSlot && S.slotFloor.has((p.location || '').toLowerCase()))
     && !areaBinFor(p)     // area-bin pianos are drawn in their zone instead
-    && !isRented(p));     // rented pianos live in the rented zone
+    && !isRented(p)       // rented pianos live in the rented zone
+    && !isConference(p)); // conference/Larson-home pianos live in that zone
 }
 function rentedPianos() {
   return S.data.pianos.filter(p => p.active && isRented(p));
+}
+function conferencePianos() {
+  return S.data.pianos.filter(p => p.active && isConference(p));
 }
 const localDay = () => new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD local
 function todaysMoves() {
@@ -290,6 +295,11 @@ function tuningInfo(p) {
 // but physically out of the building
 function isRented(p) {
   return /rent/i.test((p.location || '').trim());
+}
+// staged in the Conference Room or at the Larson home — accounted for in
+// the virtual Conference Room zone rather than dumped in the attic
+function isConference(p) {
+  return /conference room|larson home/i.test((p.location || '').trim());
 }
 function comingSoon(p) {
   return (p.location || '').trim().replace(/\s+/g, ' ').toLowerCase().startsWith('coming soon');
@@ -395,7 +405,7 @@ function focusPiano(p) {
   const f = S.map.floors[S.floor];
   const sl = placed ? f.slots.find(x => x.id.toLowerCase() === p.location.toLowerCase()) : null;
   const target = sl ? {x: sl.x + sl.w / 2, y: sl.y + sl.h / 2}
-    : (S.binXY || {})[p.row] || (S.rentXY || {})[p.row] || (S.holdingXY || {})[p.row];
+    : (S.binXY || {})[p.row] || (S.rentXY || {})[p.row] || (S.confXY || {})[p.row] || (S.holdingXY || {})[p.row];
   if (target) {
     S.zoom = Math.max(S.zoom, 2.4); sizePlan();
     const sc = $('#mapscroll');
@@ -884,6 +894,42 @@ function renderMap() {
     }
   }
 
+  // ---- CONFERENCE ROOM zone (2nd floor): pianos staged in the conference
+  // room or at the Larson home, parked virtually so they're accounted for
+  // instead of falling into the attic grid
+  S.confXY = {};
+  let atticTop = 2620;
+  if (S.floor === 1) {
+    const cl = conferencePianos();
+    if (cl.length) {
+      const CZ = {x: 1412, y: 2620, x2: 2082, y2: 2620 + 210};
+      const czw = CZ.x2 - CZ.x, czh = CZ.y2 - CZ.y;
+      s += `<rect x="${CZ.x}" y="${CZ.y}" width="${czw}" height="${czh}" rx="8" class="confzone"/>`;
+      s += `<text x="${CZ.x + czw / 2}" y="${CZ.y + 24}" text-anchor="middle" class="conftitle" font-size="17">CONFERENCE ROOM (${cl.length})</text>`;
+      const chH = 34, ccols = 6;
+      const crows = Math.ceil(cl.length / ccols);
+      const ccw = (czw - 12) / ccols;
+      const cch = Math.min(95, (czh - chH - 10) / crows);
+      cl.forEach((p, idx) => {
+        const cx0 = CZ.x + 6 + (idx % ccols) * ccw;
+        const cy0 = CZ.y + chH + Math.floor(idx / ccols) * cch;
+        const cx = cx0 + ccw / 2;
+        const hl = S.focusRow === p.row || (q && matches(p, q));
+        const dim = q && !matches(p, q);
+        const nm = (p.year ? p.year + ' ' : '')
+          + ([p.make, p.model].filter(Boolean).join(' ') || p.summary || '');
+        const nameLines = wrapCap(nm, ccw - 8, 9, 1);
+        const iconCy = cy0 + (cch - 14) / 2;
+        const sc = Math.max(0.8, Math.min(1.4, (cch - 20) / 22));
+        S.confXY[p.row] = {x: cx, y: cy0 + cch / 2};
+        s += `<g class="piano own-${ownerClass(p)} ${dim ? 'dim' : ''} ${hl ? 'hl' : ''}"
+              data-row="${p.row}">${glyph(p.type, cx, iconCy, sc)}${phaseText(p, cx, iconCy, sc)}</g>`;
+        s += `<text x="${cx}" y="${cy0 + cch - 4}" text-anchor="middle" class="confname" font-size="9">`
+          + nameLines.map(L => esc(L)).join('') + `</text>`;
+      });
+      atticTop = CZ.y2 + 16;   // attic zone shrinks to make room, same outer bounds
+    }
+  }
   // ---- ATTIC holding zone (2nd floor): every active piano not on a spot,
   // drawn inside the map's empty lower-right region as a full rectangle
   // flush with the map's right and bottom edges
@@ -892,7 +938,7 @@ function renderMap() {
   if (S.floor === 1) {
     const list = unplacedPianos();
     if (list.length) {
-      const AT = {x: 1412, y: 2620, x2: 2082, y2: 3818};   // attic rectangle
+      const AT = {x: 1412, y: atticTop, x2: 2082, y2: 3818};   // attic rectangle
       const zoneW = AT.x2 - AT.x, zoneH = AT.y2 - AT.y;
       s += `<rect x="${AT.x}" y="${AT.y}" width="${zoneW}" height="${zoneH}" rx="8" class="holdzone"/>`;
       s += `<text x="${AT.x + zoneW / 2}" y="${AT.y + 34}" text-anchor="middle" class="holdtitle" font-size="24">ATTIC — NOT ON THE MAP (${list.length})</text>`;

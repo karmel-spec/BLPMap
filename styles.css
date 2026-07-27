@@ -369,3 +369,7 @@ td a{color:#9e2020}
 .agpinmsg{margin-top:8px;font-size:12px;color:#9e2020;min-height:15px}
 
 .agver{margin-top:10px;font-size:10px;color:#c2c9cf}
+
+.confzone{fill:#f4f0fb;stroke:#8a6fc9;stroke-width:1.5;stroke-dasharray:5 3}
+.conftitle{fill:#5c4a99;font-weight:700;letter-spacing:1px}
+.confname{fill:#3d3040}
