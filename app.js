@@ -166,7 +166,11 @@ function applyPending() {
     for (const f of ['bphoto', 'bvideo', 'aphoto', 'avideo']) {
       if (!(f in edit)) continue;
       if (p[f]) delete edit[f];               // server caught up
-      else { p[f] = true; stillPending = true; }
+      else { p[f] = edit[f]; stillPending = true; }
+    }
+    if ('price' in edit) {
+      if ((p.price || '') === edit.price) delete edit.price;
+      else { p.price = edit.price; stillPending = true; }
     }
     if (!stillPending) pendingEdits.delete(row);
   }
@@ -419,8 +423,11 @@ function mediaCard(p) {
   const late = isLate(p);
   const line = (label, field, have, active) => {
     const mark = !active ? '<b class="mna">— after QC &amp; Assembly</b>'
+      : have === 'skip' ? '<b class="mskip">— skipped</b>'
       : have ? '<b class="myes">✓ have</b>'
-      : (p.serial ? `<button class="mmark" data-f="${field}">✗ needed — mark done</button>`
+      : (p.serial ? `<span class="mopts"><i class="mno">✗</i>
+           <button class="mmark" data-f="${field}">✓ done</button>
+           <button class="mmark mskipbtn" data-f="${field}" data-skip="1">skip</button></span>`
                   : '<b class="mno">✗ needed</b>');
     return `<div class="row rowflex"><span>${label}</span>${mark}</div>`;
   };
@@ -913,7 +920,9 @@ function popHTML(p) {
     ${ti.next ? `<div class="row">Tuning scheduled <b class="tunesched">🎵 ${esc(fmtDay(ti.next.date))} · ${esc(ti.next.time)}</b></div>` : ''}
     ${mediaCard(p)}
     ${phaser}
+    ${p.serial ? `<button class="tunebtn movebtn">🚚 Request Move</button>` : ''}
     ${tuner}
+    ${p.serial ? `<button class="tunebtn svcbtn">🔧 Request Service</button>` : ''}
     ${photo}
     ${mover}
     ${queuer}
@@ -960,8 +969,12 @@ function wirePop(p) {
   }
   pop.querySelectorAll('.mmark').forEach(b => b.onclick = ev => {
     ev.stopPropagation();
-    setMedia(p, b.dataset.f, pop);
+    setMedia(p, b.dataset.f, pop, !!b.dataset.skip);
   });
+  const mvb = pop.querySelector('.movebtn');
+  if (mvb) mvb.onclick = ev => { ev.stopPropagation(); openMoveModal(p); };
+  const svb = pop.querySelector('.svcbtn');
+  if (svb) svb.onclick = ev => { ev.stopPropagation(); openServiceModal(p); };
   const pb = pop.querySelector('.photobtn');
   const pi = pop.querySelector('.photoin');
   if (pb) pb.onclick = ev => { ev.stopPropagation(); popPinned = true; pi.click(); };
@@ -1011,6 +1024,7 @@ async function setPhase(p, phase, pop) {
       msg.className = 'phmsg ok';
       msg.textContent = p.phase ? `✓ Saved — ${p.phase}` : '✓ Phase cleared';
       renderMap();
+      if (p.phase === 'For Sale') openPriceModal(p);
     } else {
       revertPhase(p, was, sel, edit);
       msg.className = 'phmsg err'; msg.textContent = '✗ ' + (j.error || 'update failed');
@@ -1024,27 +1038,29 @@ async function setPhase(p, phase, pop) {
 }
 // mark a media item done: optimistic (icon clears immediately), reverted
 // with a message if the bridge says no
-async function setMedia(p, field, pop) {
+async function setMedia(p, field, pop, skip) {
   const msg = pop.querySelector('.mdmsg');
   popPinned = true;
   const {pin, ok} = writeAuth();
   if (!ok) { msg.className = 'mdmsg err'; msg.textContent = 'A team PIN is required — nothing saved.'; return; }
-  p[field] = true;
+  p[field] = skip ? 'skip' : true;
   const edit = pendingEdits.get(p.row) || {};
-  edit[field] = true; pendingEdits.set(p.row, edit);
+  edit[field] = p[field]; pendingEdits.set(p.row, edit);
   renderMap(); renderKpis();
-  const btn = pop.querySelector(`.mmark[data-f="${field}"]`);
+  const btn = pop.querySelector(`.mmark[data-f="${field}"]${skip ? '.mskipbtn' : ':not(.mskipbtn)'}`);
+  const wrap = btn && btn.closest('.mopts');
   if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
   try {
     const r = await fetch(BRIDGE_URL, {
       method: 'POST', redirect: 'follow',
       headers: {'content-type': 'text/plain;charset=utf-8'},
-      body: JSON.stringify({pin, serial: p.serial, action: 'setmedia', field, row: p.row, ...authFields()}),
+      body: JSON.stringify({pin, serial: p.serial, action: 'setmedia', field, skip: !!skip, row: p.row, ...authFields()}),
     });
     const j = await r.json();
     if (j.ok) {
-      if (btn) btn.outerHTML = '<b class="myes">✓ have</b>';
-      msg.className = 'mdmsg ok'; msg.textContent = '✓ Saved to the Piano Log';
+      if (wrap) wrap.outerHTML = skip ? '<b class="mskip">— skipped</b>' : '<b class="myes">✓ have</b>';
+      msg.className = 'mdmsg ok';
+      msg.textContent = skip ? '✓ Skipped — removed from the media reports' : '✓ Saved to the Piano Log';
     } else {
       throw new Error(j.error === 'unauthorized' ? 'Wrong PIN' : (j.error || 'update failed'));
     }
@@ -1052,7 +1068,7 @@ async function setMedia(p, field, pop) {
     if (e.message === 'Wrong PIN') localStorage.removeItem('blpPin');
     p[field] = false;
     delete edit[field]; if (!Object.keys(edit).length) pendingEdits.delete(p.row);
-    if (btn) { btn.disabled = false; btn.textContent = '✗ needed — mark done'; }
+    if (btn) { btn.disabled = false; btn.textContent = skip ? 'skip' : '✓ done'; }
     msg.className = 'mdmsg err'; msg.textContent = '✗ ' + e.message + ' — not saved';
     renderMap(); renderKpis();
   }
@@ -1193,6 +1209,175 @@ async function submitAdd(slotId, ov) {
     msg.className = 'tmmsg err';
     msg.textContent = '✗ ' + e.message;
     if (ov.querySelector('.adgo')) ov.querySelector('.adgo').disabled = false;
+  }
+}
+
+/* ---------- shared modal helper ---------- */
+function modalShell(id, inner) {
+  let ov = document.getElementById(id);
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.id = id;
+    ov.className = 'blpmodal';
+    document.body.appendChild(ov);
+  }
+  ov.innerHTML = `<div class="tmcard">${inner}</div>`;
+  ov.hidden = false;
+  ov.onclick = ev => {
+    if (ev.target === ov || ev.target.classList.contains('x')) ov.hidden = true;
+  };
+  return ov;
+}
+function pianoHeader(p) {
+  const nm = [(p.year || ''), p.make, p.model].filter(Boolean).join(' ') || p.summary || 'Piano';
+  return `<div class="tmpiano"><b>${esc(nm)}</b>
+    <span>Serial ${esc(p.serial)}${p.location ? ' · Spot ' + esc(p.location) : ''}</span></div>`;
+}
+
+/* ---------- in-store move request (batched Monday 7am) ---------- */
+function openMoveModal(p) {
+  popPinned = false; $('#pop').hidden = true;
+  const ov = modalShell('movemodal', `
+    <span class="x">✕</span>
+    <h3>🚚 Request an In-Store Move</h3>
+    ${pianoHeader(p)}
+    <label>Move to <small>(spot # or area)</small></label>
+    <input class="mvspot" maxlength="24" placeholder="e.g. 123a, Showroom…">
+    <label>Notes for the move crew <small>(optional)</small></label>
+    <textarea class="mvnotes" rows="2" placeholder="careful — fresh lacquer, needs 2 people…"></textarea>
+    <button class="tmgo mvgo2">Add to Monday's 7:00 AM in-store moves</button>
+    <div class="tmmsg"></div>`);
+  ov.querySelector('.mvgo2').onclick = () => submitMoveReq(p, ov);
+  ov.querySelector('.mvspot').focus();
+}
+async function submitMoveReq(p, ov) {
+  const msg = ov.querySelector('.tmmsg');
+  const btn = ov.querySelector('.mvgo2');
+  const {pin, ok} = writeAuth();
+  if (!ok) { msg.className = 'tmmsg err'; msg.textContent = 'Sign in or enter the team PIN first.'; return; }
+  btn.disabled = true;
+  msg.className = 'tmmsg'; msg.textContent = 'Adding to the Monday move list…';
+  try {
+    const r = await fetch(BRIDGE_URL, {
+      method: 'POST', redirect: 'follow',
+      headers: {'content-type': 'text/plain;charset=utf-8'},
+      body: JSON.stringify({pin, serial: p.serial, action: 'movereq', row: p.row,
+        newSpot: ov.querySelector('.mvspot').value.trim(),
+        notes: ov.querySelector('.mvnotes').value.trim(), ...authFields()}),
+    });
+    const j = await r.json();
+    if (j.error === 'unauthorized') { localStorage.removeItem('blpPin'); throw new Error('Not authorized — sign in or re-enter the PIN.'); }
+    if (!j.scheduled) throw new Error(j.error || 'request failed');
+    msg.className = 'tmmsg ok';
+    msg.textContent = `✓ On the moving calendar: grouped into the ${j.date} 7:00 AM in-store moves.`;
+    setTimeout(() => { ov.hidden = true; }, 2200);
+  } catch (e) {
+    msg.className = 'tmmsg err'; msg.textContent = '✗ ' + e.message;
+    btn.disabled = false;
+  }
+}
+
+/* ---------- showroom service / repair request ---------- */
+const SERVICE_TECHS = [
+  {id: 'jakepulver.blp@gmail.com', name: 'Jake Pulver'},
+  {id: 'mckinlylopp.blp@gmail.com', name: 'McKinly Lopp'},
+  {id: 'curtisbiggs.blp@gmail.com', name: 'Curtis Biggs'},
+];
+function openServiceModal(p) {
+  popPinned = false; $('#pop').hidden = true;
+  const durs = [30, 60, 90, 120, 150, 180, 210, 240].map(m =>
+    `<option value="${m}" ${m === 60 ? 'selected' : ''}>${m < 60 ? m + ' minutes'
+      : (m / 60) + (m % 60 ? '½' : '') + (m === 60 ? ' hour' : ' hours')}</option>`).join('');
+  const ov = modalShell('svcmodal', `
+    <span class="x">✕</span>
+    <h3>🔧 Request Service / Repair</h3>
+    ${pianoHeader(p)}
+    <label>Assign to technician</label>
+    <select class="svtech">${SERVICE_TECHS.map((t, i) =>
+      `<option value="${esc(t.id)}" ${i === 0 ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select>
+    <label>What needs service / repair?</label>
+    <textarea class="svnotes" rows="3" placeholder="sticky key in the middle octave, pedal squeak…"></textarea>
+    <label>Time to allot</label>
+    <select class="svmins">${durs}</select>
+    <button class="tmgo svgo">Schedule next open slot</button>
+    <div class="tmmsg"></div>`);
+  ov.querySelector('.svgo').onclick = () => submitService(p, ov);
+}
+async function submitService(p, ov) {
+  const msg = ov.querySelector('.tmmsg');
+  const btn = ov.querySelector('.svgo');
+  const {pin, ok} = writeAuth();
+  if (!ok) { msg.className = 'tmmsg err'; msg.textContent = 'Sign in or enter the team PIN first.'; return; }
+  const sel = ov.querySelector('.svtech');
+  const techName = sel.options[sel.selectedIndex].text;
+  btn.disabled = true;
+  msg.className = 'tmmsg'; msg.textContent = `Finding ${techName}’s next open slot…`;
+  try {
+    const r = await fetch(BRIDGE_URL, {
+      method: 'POST', redirect: 'follow',
+      headers: {'content-type': 'text/plain;charset=utf-8'},
+      body: JSON.stringify({pin, serial: p.serial, action: 'service', row: p.row,
+        techId: sel.value, techName,
+        minutes: +ov.querySelector('.svmins').value,
+        notes: ov.querySelector('.svnotes').value.trim(), ...authFields()}),
+    });
+    const j = await r.json();
+    if (j.error === 'unauthorized') { localStorage.removeItem('blpPin'); throw new Error('Not authorized — sign in or re-enter the PIN.'); }
+    if (!j.scheduled) throw new Error(j.error || 'scheduling failed');
+    msg.className = 'tmmsg ok';
+    msg.textContent = `✓ Scheduled with ${j.tech}: ${j.date} at ${j.time} (${j.minutes} min) — on the QC & Showroom repairs calendar, invite sent to ${j.tech.split(' ')[0]}.`;
+    setTimeout(() => { ov.hidden = true; }, 3000);
+  } catch (e) {
+    msg.className = 'tmmsg err'; msg.textContent = '✗ ' + e.message;
+    btn.disabled = false;
+  }
+}
+
+/* ---------- For Sale price popup ---------- */
+function openPriceModal(p) {
+  const ov = modalShell('pricemodal', `
+    <span class="x">✕</span>
+    <h3>💲 What is the sale price?</h3>
+    ${pianoHeader(p)}
+    <label>Sale price <small>(optional — you can add it later in the Piano Log)</small></label>
+    <input class="prin" inputmode="decimal" placeholder="e.g. 14998" ${p.price ? `value="${esc(String(p.price).replace(/[^0-9.]/g, ''))}"` : ''}>
+    <div class="prbtns">
+      <button class="tmgo prgo">Save price</button>
+      <button class="prskip">Skip for now</button>
+    </div>
+    <div class="tmmsg"></div>`);
+  ov.querySelector('.prskip').onclick = () => { ov.hidden = true; };
+  ov.querySelector('.prgo').onclick = () => submitPrice(p, ov);
+  ov.querySelector('.prin').focus();
+}
+async function submitPrice(p, ov) {
+  const msg = ov.querySelector('.tmmsg');
+  const btn = ov.querySelector('.prgo');
+  const raw = ov.querySelector('.prin').value.trim();
+  if (!raw) { ov.hidden = true; return; }   // empty = same as skip
+  const {pin, ok} = writeAuth();
+  if (!ok) { msg.className = 'tmmsg err'; msg.textContent = 'Sign in or enter the team PIN first.'; return; }
+  btn.disabled = true;
+  msg.className = 'tmmsg'; msg.textContent = 'Saving the price…';
+  try {
+    const r = await fetch(BRIDGE_URL, {
+      method: 'POST', redirect: 'follow',
+      headers: {'content-type': 'text/plain;charset=utf-8'},
+      body: JSON.stringify({pin, serial: p.serial, action: 'setprice', row: p.row,
+        price: raw, ...authFields()}),
+    });
+    const j = await r.json();
+    if (j.error === 'unauthorized') { localStorage.removeItem('blpPin'); throw new Error('Not authorized — sign in or re-enter the PIN.'); }
+    if (!j.ok) throw new Error(j.error || 'save failed');
+    p.price = j.price;
+    const edit = pendingEdits.get(p.row) || {};
+    edit.price = j.price; pendingEdits.set(p.row, edit);
+    renderMap();
+    msg.className = 'tmmsg ok'; msg.textContent = `✓ Price saved: ${j.price}`;
+    setTimeout(() => { ov.hidden = true; }, 1500);
+  } catch (e) {
+    msg.className = 'tmmsg err'; msg.textContent = '✗ ' + e.message;
+    btn.disabled = false;
   }
 }
 

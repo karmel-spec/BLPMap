@@ -111,6 +111,13 @@ def parse_pianos(raw):
     for i, r in enumerate(rows[2:], start=3):
         def col(idx):
             return r[idx].strip() if len(r) > idx else ''
+
+        def med(idx):
+            # media cells: empty=needed, "Skipped ..."=deliberately skipped
+            v = col(idx)
+            if not v:
+                return False
+            return 'skip' if v.lower().startswith('skip') else True
         serial, summary = col(2), col(3)
         if not serial and not summary:
             head = col(1)
@@ -151,8 +158,8 @@ def parse_pianos(raw):
             'entered': entered.isoformat() if entered else None,
             'phase': col(phase_idx) if phase_idx >= 0 else '',
             'price': col(price_idx) if price_idx >= 0 else '',
-            'bphoto': bool(col(13)), 'aphoto': bool(col(15)),
-            'bvideo': bool(col(16)), 'avideo': bool(col(17)),
+            'bphoto': med(13), 'aphoto': med(15),
+            'bvideo': med(16), 'avideo': med(17),
             'queuePos': 0,
             'queueTotal': 0,
             'isNew': is_new,

@@ -91,6 +91,8 @@ function parsePianos(text) {
         || ['ADMIN', 'LOCATION / STATUS'].includes(col(20).toUpperCase())
         || col(21).includes('Arrival Date')) continue;
     const status = col(18), loc = col(20), ol = col(1).toLowerCase();
+    // media cells: empty=needed, "Skipped ..."=deliberately skipped, else have
+    const med = j => { const v = col(j); return v ? (/^skip/i.test(v) ? 'skip' : true) : false; };
     const dates = parseDates(col(21)).filter(d => d <= todayUTC);
     const entered = dates.length ? new Date(Math.max(...dates)) : null;
     const isNew = !!entered && (todayUTC - entered) / 86400000 <= 7;
@@ -106,7 +108,7 @@ function parsePianos(text) {
       entered: entered ? entered.toISOString().slice(0, 10) : null,
       phase: phaseIdx >= 0 ? col(phaseIdx) : '',
       price: priceIdx >= 0 ? col(priceIdx) : '',
-      bphoto: !!col(13), aphoto: !!col(15), bvideo: !!col(16), avideo: !!col(17),
+      bphoto: med(13), aphoto: med(15), bvideo: med(16), avideo: med(17),
       queuePos: 0, queueTotal: 0,
       isNew, active,
     });

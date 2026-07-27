@@ -45,6 +45,11 @@ var GOOGLE_CLIENT_ID = '110628682621-v65mkaoanv87sp75ggdfcrglfr7bkr8p.apps.googl
 // personal-gmail team accounts allowed to write without the PIN when
 // signed in with Google (BLP domain + .blp@gmail.com accounts always are)
 var TEAM_EMAILS = ['brighamlarson@gmail.com'];
+// showroom repairs: master record calendar + who can be assigned
+var SERVICE_CAL = 'qualitycontrol.blp@gmail.com';   // 20-QC & Showroom repairs
+// in-store move requests batch into one Monday-7am event on the moving cal
+var MOVING_CAL = 'pianomoving.blp@gmail.com';
+var MOVE_EVENT_TITLE = 'In-store moves — Store Map requests';
 var TUNING_SLOTS = [8, 9.5];               // Korban's weekday starts: 8:00 + 9:30 (Denver)
 var TUNING_MINUTES = 90;                   // block length, matches Korban's bookings
 var KNOWN_AREAS = ['showroom', 'pre-sale showroom', 'third floor', 'storage',
@@ -232,10 +237,11 @@ function korbanSlot_(cal, tz) {
   return null;
 }
 
-// any other technician: first open 90-minute gap in weekday working hours
-// (8am-4pm, starts on the half hour); days with an all-day NO/OFF/VACATION
-// event are skipped
-function openGap_(cal, tz, techName) {
+// any other technician: first open gap (minutes long, default 90) in
+// weekday working hours (8am-4pm, starts on the half hour); days with an
+// all-day NO/OFF/VACATION event are skipped
+function openGap_(cal, tz, techName, minutes) {
+  minutes = minutes || TUNING_MINUTES;
   for (var d = 1; d <= 42; d++) {
     var day = new Date(Date.now() + d * 86400000);
     var dow = Number(Utilities.formatDate(day, tz, 'u'));
@@ -248,10 +254,10 @@ function openGap_(cal, tz, techName) {
         || new RegExp('NO ' + techName.split(' ')[0], 'i').test(t);
     });
     if (off) continue;
-    for (var h = TECH_WORK_START; h + TUNING_MINUTES / 60 <= TECH_WORK_END; h += 0.5) {
+    for (var h = TECH_WORK_START; h + minutes / 60 <= TECH_WORK_END; h += 0.5) {
       var hh = Math.floor(h), mm = h % 1 ? '30' : '00';
       var start = new Date(y + 'T' + ('0' + hh).slice(-2) + ':' + mm + ':00');
-      var end = new Date(start.getTime() + TUNING_MINUTES * 60000);
+      var end = new Date(start.getTime() + minutes * 60000);
       var clash = dayEvents.some(function (ev) {
         return !ev.isAllDayEvent() && ev.getStartTime() < end && ev.getEndTime() > start;
       });
@@ -433,6 +439,24 @@ function doPost(e) {
       if (ap.added) logAct_(who, 'Added piano', ap.summary || req.serial,
         'new row ' + ap.row + ' at spot ' + (req.location || '(none)'));
       return json_(ap);
+    }
+    if (req.action === 'service') {
+      var sv = scheduleService_(req);
+      if (sv.scheduled && !sv.dryrun) logAct_(who, 'Service scheduled', sv.summary || req.serial,
+        (sv.tech || '') + ' · ' + (sv.date || '') + ' ' + (sv.time || '') + ' · ' + (req.minutes || 60) + ' min');
+      return json_(sv);
+    }
+    if (req.action === 'movereq') {
+      var mv = requestMove_(req, who);
+      if (mv.scheduled && !mv.dryrun) logAct_(who, 'Move requested', mv.summary || req.serial,
+        'Monday ' + (mv.date || '') + (req.newSpot ? ' → spot ' + req.newSpot : ''));
+      return json_(mv);
+    }
+    if (req.action === 'setprice') {
+      var pr = setPrice_(req);
+      if (pr.ok) logAct_(who, 'Price set', pr.summary || req.serial,
+        (pr.previous || '(none)') + ' → ' + pr.price);
+      return json_(pr);
     }
     if (req.action === 'photo') {
       var pt = savePhoto_(req, who);
@@ -853,12 +877,131 @@ function setMedia_(req, who) {
     return {ok: true, row: found.row, summary: found.summary,
             field: req.field, already: true};
   }
-  var stamp = '✓ ' + Utilities.formatDate(new Date(), 'America/Denver', 'MMM d, yyyy');
+  var stamp = (req.skip ? 'Skipped ' : '✓ ')
+    + Utilities.formatDate(new Date(), 'America/Denver', 'MMM d, yyyy');
   var name = String(who || '').replace(/\s*<[^>]*>\s*/, '').replace(/\s*\(.*\)\s*$/, '');
   if (name && name !== 'Team (PIN)') stamp += ' — ' + name;
   cell.setValue(stamp);
   return {ok: true, row: found.row, summary: found.summary, field: req.field,
-          detail: MEDIA_NAMES[req.field] + ' marked done'};
+          skipped: !!req.skip,
+          detail: MEDIA_NAMES[req.field] + (req.skip ? ' skipped' : ' marked done')};
+}
+
+/**
+ * Showroom service/repair request. Availability comes from the assigned
+ * technician's calendar (Jake Pulver default); the event is created on the
+ * QC & Showroom repairs calendar — the permanent service record — with the
+ * technician invited so it reaches their calendar too. req: {serial, row?,
+ * techId, techName, notes?, minutes (30-min increments), dryrun?}
+ */
+function scheduleService_(req) {
+  var tz = 'America/Denver';
+  var techId = String(req.techId || 'jakepulver.blp@gmail.com').trim();
+  var master = CalendarApp.getCalendarById(SERVICE_CAL);
+  if (!master) return {error: 'the QC & Showroom repairs calendar is not shared with ' + Session.getEffectiveUser()};
+  var techCal = CalendarApp.getCalendarById(techId);
+  var searchCal = techCal || master;
+  var minutes = Math.max(30, Math.min(240, Math.round((Number(req.minutes) || 60) / 30) * 30));
+  var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+  var found = findPiano_(sh, req.serial, req.row);
+  if (found.error) return found;
+  var techName = String(req.techName || (techCal ? techCal.getName() : techId))
+    .replace(/^\d+\s*-\s*/, '').trim();
+  var title = 'Service: ' + (found.summary || 'piano') + ' SN ' + req.serial
+    + (found.location ? ' @ spot ' + found.location : '') + ' — ' + techName;
+  var slot = openGap_(searchCal, tz, techName, minutes);
+  if (!slot) return {error: 'no open ' + minutes + '-minute slot found on ' + techName + "'s calendar in the next 6 weeks"};
+  var desc = 'Requested via BLP Store Map ('
+    + Utilities.formatDate(new Date(), tz, 'MMM d, h:mm a') + ')'
+    + '\nAssigned to: ' + techName + '\nTime allotted: ' + minutes + ' minutes';
+  if (req.notes && String(req.notes).trim()) {
+    desc += '\n\nService / repair request:\n' + String(req.notes).trim();
+  }
+  desc += '\n\nPiano Log: https://pianologapp.netlify.app/#piano=' +
+    encodeURIComponent(req.serial);
+  if (!req.dryrun) {
+    master.createEvent(title, slot.start, slot.end,
+      {description: desc, guests: techId, sendInvites: true});
+  }
+  return {ok: true, scheduled: true, dryrun: !!req.dryrun, tech: techName,
+          minutes: minutes,
+          date: Utilities.formatDate(slot.start, tz, 'EEE, MMM d'),
+          time: Utilities.formatDate(slot.start, tz, 'h:mm a'),
+          summary: found.summary, title: title};
+}
+
+/**
+ * In-store move request. All requests batch into ONE event at 7am on the
+ * next Monday on the moving calendar ("In-store moves — Store Map
+ * requests"): the first request each week creates it, later ones append a
+ * line to its description. req: {serial, row?, newSpot?, notes?, dryrun?}
+ */
+function requestMove_(req, who) {
+  var tz = 'America/Denver';
+  var cal = CalendarApp.getCalendarById(MOVING_CAL);
+  if (!cal) return {error: 'the moving calendar is not shared with ' + Session.getEffectiveUser()};
+  var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+  var found = findPiano_(sh, req.serial, req.row);
+  if (found.error) return found;
+  // next Monday, starting tomorrow (requests made ON a Monday go to the
+  // following week's batch — today's 7am move is already underway)
+  var day = null;
+  for (var d = 1; d <= 7; d++) {
+    var cand = new Date(Date.now() + d * 86400000);
+    if (Number(Utilities.formatDate(cand, tz, 'u')) === 1) { day = cand; break; }
+  }
+  var y = Utilities.formatDate(day, tz, 'yyyy-MM-dd');
+  var start = new Date(y + 'T07:00:00');
+  var end = new Date(y + 'T08:00:00');
+  var name = String(who || '').replace(/\s*<[^>]*>\s*/, '').replace(/\s*\(.*\)\s*$/, '');
+  var line = '• ' + (found.summary || 'piano') + ' SN ' + req.serial
+    + (found.location ? ' — from ' + found.location : '')
+    + (req.newSpot ? ' → to ' + String(req.newSpot).trim() : '')
+    + (req.notes && String(req.notes).trim() ? ' (' + String(req.notes).trim() + ')' : '')
+    + (name && name !== 'Team (PIN)' ? ' [' + name + ']' : '');
+  if (!req.dryrun) {
+    var evs = cal.getEvents(new Date(y + 'T00:00:00'), new Date(y + 'T23:59:59'));
+    var ev = null;
+    for (var i = 0; i < evs.length; i++) {
+      if ((evs[i].getTitle() || '').indexOf(MOVE_EVENT_TITLE) === 0) { ev = evs[i]; break; }
+    }
+    if (ev) {
+      ev.setDescription((ev.getDescription() || '') + '\n' + line);
+    } else {
+      cal.createEvent(MOVE_EVENT_TITLE, start, end,
+        {description: 'Grouped in-store move requests from the Store Map app:\n\n' + line});
+    }
+  }
+  return {ok: true, scheduled: true, dryrun: !!req.dryrun,
+          date: Utilities.formatDate(start, tz, 'EEE, MMM d'),
+          iso: y, time: '7:00 AM', summary: found.summary, line: line};
+}
+
+/**
+ * Sale price — written into the Piano Log's PRICE column (found by header
+ * name on row 2). Used by the For Sale popup on the map's data card.
+ */
+function setPrice_(req) {
+  var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+  var found = findPiano_(sh, req.serial, req.row);
+  if (found.error) return found;
+  var last = sh.getLastColumn();
+  var hdr = sh.getRange(2, 1, 1, last).getValues()[0];
+  var col = -1;
+  for (var c = 0; c < hdr.length; c++) {
+    if (String(hdr[c] || '').trim().toUpperCase() === 'PRICE') { col = c + 1; break; }
+  }
+  if (col < 0) return {error: 'no PRICE column found in the Piano Log'};
+  var raw = String(req.price == null ? '' : req.price).replace(/[^0-9.]/g, '');
+  if (!raw) return {error: 'price required'};
+  var num = Number(raw);
+  if (!num || num <= 0) return {error: 'that does not look like a price'};
+  var cell = sh.getRange(found.row, col);
+  var prev = String(cell.getValue() || '');
+  var pretty = '$' + num.toLocaleString('en-US');
+  cell.setValue(pretty);
+  return {ok: true, row: found.row, summary: found.summary,
+          previous: prev, price: pretty};
 }
 
 // One-shot repair: helper tabs (ACTIVITY LOG / PHOTO LOG) must never sit at
