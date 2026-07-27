@@ -198,8 +198,7 @@ function scheduleTuning_(req) {
   if (found.error) return found;
   var techName = String(req.techName || (techCal ? techCal.getName() : techId))
     .replace(/^\d+\s*-\s*/, '').trim();
-  var title = 'Tuning: ' + (found.summary || 'piano') + ' SN ' + req.serial
-    + (found.location ? ' @ spot ' + found.location : '');
+  var title = 'Tuning: ' + (found.summary || 'piano') + ' #' + req.serial;
   var slot = techId === TUNING_CAL ? korbanSlot_(searchCal, tz) : openGap_(searchCal, tz, techName);
   if (!slot) return {error: 'no open slot found on ' + techName + "'s calendar in the next 6 weeks"};
   var desc = 'Requested via BLP Store Map ('
@@ -217,8 +216,10 @@ function scheduleTuning_(req) {
     // the master tuning calendar is the record: the event is created THERE
     // first, and the technician is invited to it (it lands on their own
     // calendar as an invitation)
+    // the map spot number rides in the event's location/address field
     master.createEvent(title + ' — ' + techName, slot.start, slot.end,
-      {description: desc, guests: techId, sendInvites: true});
+      {description: desc, location: String(found.location || ''),
+       guests: techId, sendInvites: true});
     try { CacheService.getScriptCache().remove('tunings'); } catch (ig) {}
   }
   return {ok: true, scheduled: true, dryrun: !!req.dryrun, tech: techName,

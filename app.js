@@ -944,7 +944,7 @@ function popHTML(p) {
   const mover = p.serial
     ? `<div class="movebox">
          <input class="mvin" placeholder="new spot #" maxlength="12">
-         <button class="mvgo">Move</button>
+         <button class="mvgo">Update</button>
        </div><div class="mvmsg"></div>`
     : `<div class="mvmsg">No serial # — change location in the Piano Log.</div>`;
   // shop queue reorder: row order in Custom Shopwork IS the queue, so setting
