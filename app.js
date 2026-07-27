@@ -2360,13 +2360,21 @@ function authGate() {
       <h2>STORE MAP</h2>
       <p>Team members sign in with Google — moves, phase changes, photos and
       requests are logged under your name.</p>
-      <div id="agBtn"></div></div>`;
+      <div id="agBtn"></div>
+      <button class="agpin" id="agPin">use the team PIN instead</button></div>`;
     document.body.appendChild(ov);
   }
   const dev = ['localhost', '127.0.0.1'].includes(location.hostname);
-  const on = !authUser() && !dev;
+  // a stored team PIN also opens the gate, so a blocked/broken Google
+  // button is never a dead end (the bridge validates it on first write)
+  const on = !authUser() && !localStorage.getItem('blpPin') && !dev;
   ov.hidden = !on;
-  if (on) renderGateButton();
+  if (!on) return;
+  $('#agPin').onclick = () => {
+    const pin = (prompt('Team PIN:') || '').trim();
+    if (pin) { localStorage.setItem('blpPin', pin); renderAuth(); }
+  };
+  renderGateButton();
 }
 // keep trying until the GIS script is ready — the gate must never sit
 // buttonless (fresh render each time; GIS tolerates re-rendering)
@@ -2419,6 +2427,7 @@ function initAuth() {
   if (!GOOGLE_CLIENT_ID) { renderAuth(); return; }
   const s = document.createElement('script');
   s.src = 'https://accounts.google.com/gsi/client';
+  s.onerror = () => renderAuth();   // GIS blocked/offline — the gate still offers the PIN
   s.onload = () => {
     google.accounts.id.initialize({
       client_id: GOOGLE_CLIENT_ID, callback: onGoogleCred,
