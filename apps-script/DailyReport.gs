@@ -527,8 +527,9 @@ function doPost(e) {
       return json_(ap);
     }
     if (req.action === 'service') {
-      var sv = scheduleService_(req);
-      if (sv.scheduled && !sv.dryrun) logAct_(who, 'Service scheduled', sv.summary || req.serial,
+      var sv = req.asap ? scheduleServiceAsap_(req) : scheduleService_(req);
+      if (sv.scheduled && !sv.dryrun) logAct_(who, req.asap ? 'ASAP service scheduled' : 'Service scheduled',
+        sv.summary || req.serial,
         (sv.tech || '') + ' · ' + (sv.date || '') + ' ' + (sv.time || '') + ' · ' + (req.minutes || 60) + ' min');
       return json_(sv);
     }
@@ -1200,6 +1201,64 @@ function scheduleService_(req) {
           minutes: minutes,
           date: Utilities.formatDate(slot.start, tz, 'EEE, MMM d'),
           time: Utilities.formatDate(slot.start, tz, 'h:mm a'),
+          summary: found.summary, title: title};
+}
+
+/**
+ * ASAP showroom service/repair — same request as scheduleService_ but skips
+ * the "next open slot" search: books tomorrow (or Monday, if tomorrow is a
+ * weekend) at 8am on the QC & Showroom repairs calendar, tech invited. If
+ * the tech's own calendar already has a "fieldwork" event that morning, the
+ * appointment starts right after that event ends instead of at 8am.
+ * req: {serial, row?, techId, techName, notes?, minutes, dryrun?}
+ */
+function scheduleServiceAsap_(req) {
+  var tz = 'America/Denver';
+  var techId = String(req.techId || 'jakepulver.blp@gmail.com').trim();
+  var master = calById_(SERVICE_CAL);
+  if (!master) return {error: 'the QC & Showroom repairs calendar is not shared with ' + 'the bridge account (brigham@)'};
+  var techCal = calById_(techId);
+  var minutes = Math.max(30, Math.min(240, Math.round((Number(req.minutes) || 60) / 30) * 30));
+  var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+  var found = findPiano_(sh, req.serial, req.row);
+  if (found.error) return found;
+  var techName = String(req.techName || (techCal ? techCal.getName() : techId))
+    .replace(/^\d+\s*-\s*/, '').trim();
+
+  // tomorrow, rolled to Monday if that's a Saturday or Sunday
+  var day = new Date(Date.now() + 86400000);
+  var dow = Number(Utilities.formatDate(day, tz, 'u'));
+  if (dow === 6) day = new Date(day.getTime() + 2 * 86400000);
+  else if (dow === 7) day = new Date(day.getTime() + 1 * 86400000);
+  var y = Utilities.formatDate(day, tz, 'yyyy-MM-dd');
+
+  var start = new Date(y + 'T08:00:00');
+  if (techCal) {
+    var dayEvents = techCal.getEvents(new Date(y + 'T00:00:00'), new Date(y + 'T23:59:59'));
+    var fieldwork = dayEvents.filter(function (ev) { return /field\s*work/i.test(ev.getTitle() || ''); })
+      .sort(function (a, b) { return a.getEndTime() - b.getEndTime(); }).pop();
+    if (fieldwork && fieldwork.getEndTime() > start) start = fieldwork.getEndTime();
+  }
+  var end = new Date(start.getTime() + minutes * 60000);
+
+  var title = 'ASAP Service: ' + (found.summary || 'piano') + ' SN ' + req.serial
+    + (found.location ? ' @ spot ' + found.location : '') + ' — ' + techName;
+  var desc = 'ASAP request via BLP Store Map ('
+    + Utilities.formatDate(new Date(), tz, 'MMM d, h:mm a') + ')'
+    + '\nAssigned to: ' + techName + '\nTime allotted: ' + minutes + ' minutes';
+  if (req.notes && String(req.notes).trim()) {
+    desc += '\n\nService / repair request:\n' + String(req.notes).trim();
+  }
+  desc += '\n\nPiano Log: https://pianologapp.netlify.app/#piano=' +
+    encodeURIComponent(req.serial);
+
+  if (!req.dryrun) {
+    master.createEvent(title, start, end, {description: desc, guests: techId, sendInvites: true});
+  }
+  return {ok: true, scheduled: true, asap: true, dryrun: !!req.dryrun, tech: techName,
+          minutes: minutes,
+          date: Utilities.formatDate(start, tz, 'EEE, MMM d'),
+          time: Utilities.formatDate(start, tz, 'h:mm a'),
           summary: found.summary, title: title};
 }
 

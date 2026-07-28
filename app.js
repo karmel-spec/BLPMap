@@ -2204,25 +2204,31 @@ function openServiceModal(p) {
     <textarea class="svnotes" rows="3" placeholder="sticky key in the middle octave, pedal squeak…"></textarea>
     <label>Time to allot</label>
     <select class="svmins">${durs}</select>
-    <button class="tmgo svgo">Schedule next open slot</button>
+    <div class="svbtns">
+      <button class="tmgo svgo">Schedule next open slot</button>
+      <button class="tmgo svgoasap">Schedule ASAP</button>
+    </div>
     <div class="tmmsg"></div>`);
-  ov.querySelector('.svgo').onclick = () => submitService(p, ov);
+  ov.querySelector('.svgo').onclick = () => submitService(p, ov, false);
+  ov.querySelector('.svgoasap').onclick = () => submitService(p, ov, true);
 }
-async function submitService(p, ov) {
+async function submitService(p, ov, asap) {
   const msg = ov.querySelector('.tmmsg');
-  const btn = ov.querySelector('.svgo');
+  const btns = ov.querySelectorAll('.svgo, .svgoasap');
   const {pin, ok} = writeAuth();
   if (!ok) { msg.className = 'tmmsg err'; msg.textContent = 'Sign in with Google (☰ menu) to make changes — actions are logged under your name.'; return; }
   const sel = ov.querySelector('.svtech');
   const techName = sel.options[sel.selectedIndex].text;
-  btn.disabled = true;
-  msg.className = 'tmmsg'; msg.textContent = `Finding ${techName}’s next open slot…`;
+  btns.forEach(b => b.disabled = true);
+  msg.className = 'tmmsg';
+  msg.textContent = asap ? `Booking ${techName} ASAP (tomorrow, or Monday if that's a weekend)…`
+    : `Finding ${techName}’s next open slot…`;
   try {
     const r = await fetch(BRIDGE_URL, {
       method: 'POST', redirect: 'follow',
       headers: {'content-type': 'text/plain;charset=utf-8'},
       body: JSON.stringify({pin, serial: p.serial, action: 'service', row: p.row,
-        techId: sel.value, techName,
+        techId: sel.value, techName, asap,
         minutes: +ov.querySelector('.svmins').value,
         notes: ov.querySelector('.svnotes').value.trim(), ...authFields()}),
     });
@@ -2230,11 +2236,12 @@ async function submitService(p, ov) {
     if (j.error === 'unauthorized') { lsDel('blpPin'); throw new Error('Not authorized — sign in again from the ☰ menu.'); }
     if (!j.scheduled) throw new Error(j.error || 'scheduling failed');
     msg.className = 'tmmsg ok';
-    msg.textContent = `✓ Scheduled with ${j.tech}: ${j.date} at ${j.time} (${j.minutes} min) — on the QC & Showroom repairs calendar, invite sent to ${j.tech.split(' ')[0]}.`;
+    msg.textContent = (asap ? `✓ ASAP booking with ${j.tech}: ` : `✓ Scheduled with ${j.tech}: `)
+      + `${j.date} at ${j.time} (${j.minutes} min) — on the QC & Showroom repairs calendar, invite sent to ${j.tech.split(' ')[0]}.`;
     setTimeout(() => { ov.hidden = true; }, 3000);
   } catch (e) {
     msg.className = 'tmmsg err'; msg.textContent = '✗ ' + e.message;
-    btn.disabled = false;
+    btns.forEach(b => b.disabled = false);
   }
 }
 

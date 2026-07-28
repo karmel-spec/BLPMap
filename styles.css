@@ -305,6 +305,10 @@ td a{color:#9e2020}
 .tmcard textarea{width:100%;border:1px solid #cfd6dc;border-radius:8px;padding:7px 9px;font:inherit;font-size:12.5px;resize:vertical;box-sizing:border-box}
 .tmgo{width:100%;margin-top:14px;background:#9e2020;color:#fff;border:none;border-radius:9px;padding:10px;font-size:13px;font-weight:800;letter-spacing:.4px;cursor:pointer}
 .tmgo:hover{background:#7f1717}
+.svbtns{display:flex;gap:8px}
+.svbtns .tmgo{flex:1}
+.svgoasap{background:#c26a10}
+.svgoasap:hover{background:#a3590c}
 .tmgo:disabled{opacity:.6;cursor:default}
 .tmmsg{font-size:12px;margin-top:8px;min-height:16px}
 .tmmsg.ok{color:#2e7d4f;font-weight:700}
