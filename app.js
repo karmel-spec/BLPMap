@@ -505,10 +505,14 @@ function unplacedPianos() {
   return S.data.pianos.filter(p => p.active
     && !(p.isSlot && S.slotFloor.has((p.location || '').toLowerCase()))
     && !areaBinFor(p)     // area-bin pianos (incl. conference/Larson-home) drawn in their zone
-    && !isRented(p));     // rented pianos live in the rented zone
+    && !isRented(p)       // rented pianos live in the rented zone
+    && !comingSoon(p));   // coming-soon pianos live in the front-door/parking-lot zone
 }
 function rentedPianos() {
   return S.data.pianos.filter(p => p.active && isRented(p));
+}
+function comingSoonPianos() {
+  return S.data.pianos.filter(p => p.active && comingSoon(p));
 }
 const localDay = () => new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD local
 function todaysMoves() {
@@ -642,13 +646,16 @@ function focusPiano(p) {
   S.focusRow = p.row;
   const placed = p.isSlot && S.slotFloor.has(p.location.toLowerCase());
   const inBin = areaBinFor(p);   // parked in a named work-area zone
-  const fi = placed ? S.slotFloor.get(p.location.toLowerCase()) : (inBin ? floorForBin(inBin) : 1);   // attic/rented live on floor 1
+  const fi = placed ? S.slotFloor.get(p.location.toLowerCase())
+    : inBin ? floorForBin(inBin)
+    : comingSoon(p) ? 0    // front-door/parking-lot zone lives on floor 0
+    : 1;                   // attic/rented live on floor 1
   if (fi !== S.floor) { S.floor = fi; renderTabs(); }
   renderMap();
   const f = S.map.floors[S.floor];
   const sl = placed ? f.slots.find(x => x.id.toLowerCase() === p.location.toLowerCase()) : null;
   const target = sl ? {x: sl.x + sl.w / 2, y: sl.y + sl.h / 2}
-    : (S.binXY || {})[p.row] || (S.rentXY || {})[p.row] || (S.holdingXY || {})[p.row];
+    : (S.binXY || {})[p.row] || (S.rentXY || {})[p.row] || (S.comingXY || {})[p.row] || (S.holdingXY || {})[p.row];
   if (target) {
     S.zoom = Math.max(S.zoom, 2.4); sizePlan();
     const sc = $('#mapscroll');
@@ -1145,6 +1152,41 @@ function renderMap() {
     }
   }
 
+  // ---- COMING SOON zone (1st floor): pianos not yet at the store, parked
+  // virtually in the blank area outside the building (front door / parking
+  // lot) rather than mixed in with pianos that are actually here
+  S.comingXY = {};
+  if (S.floor === 0) {
+    const csl = comingSoonPianos();
+    if (csl.length) {
+      const CZ = {x: 1480, y: 2000, x2: 2020, y2: 2280};
+      const czw = CZ.x2 - CZ.x, czh = CZ.y2 - CZ.y;
+      s += `<rect x="${CZ.x}" y="${CZ.y}" width="${czw}" height="${czh}" rx="8" class="csnzone"/>`;
+      s += `<text x="${CZ.x + czw / 2}" y="${CZ.y + 24}" text-anchor="middle" class="csntitle" font-size="16">FRONT DOOR / PARKING LOT — COMING SOON (${csl.length})</text>`;
+      const chH = 34, ccols = 6;
+      const crows = Math.ceil(csl.length / ccols);
+      const ccw = (czw - 12) / ccols;
+      const cch = Math.min(95, (czh - chH - 10) / crows);
+      csl.forEach((p, idx) => {
+        const cx0 = CZ.x + 6 + (idx % ccols) * ccw;
+        const cy0 = CZ.y + chH + Math.floor(idx / ccols) * cch;
+        const cx = cx0 + ccw / 2;
+        const st = pianoStatus(p);
+        const hl = S.focusRow === p.row || (q && matches(p, q));
+        const dim = q && !matches(p, q);
+        const nm = (p.year ? p.year + ' ' : '')
+          + ([p.make, p.model].filter(Boolean).join(' ') || p.summary || '');
+        const nameLines = wrapCap(nm, ccw - 8, 9, 1);
+        const iconCy = cy0 + (cch - 14) / 2;
+        const sc = Math.max(0.8, Math.min(1.4, (cch - 20) / 22));
+        S.comingXY[p.row] = {x: cx, y: cy0 + cch / 2};
+        s += `<g class="piano ${st} own-${ownerClass(p)} ${dim ? 'dim' : ''} ${hl ? 'hl' : ''}"
+              data-row="${p.row}">${glyph(p.type, cx, iconCy, sc)}</g>`;
+        s += `<text x="${cx}" y="${cy0 + cch - 4}" text-anchor="middle" class="csnname" font-size="9">`
+          + nameLines.map(L => esc(L)).join('') + `</text>`;
+      });
+    }
+  }
   // ---- ATTIC holding zone (2nd floor): every active piano not on a spot,
   // drawn inside the map's empty lower-right region as a full rectangle
   // flush with the map's right and bottom edges

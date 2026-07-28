@@ -394,3 +394,8 @@ td a{color:#9e2020}
 .piano.financed .pbody{fill:#32cd32}
 .piano.financed .pk{fill:#1f7a1f}
 .finbadge{fill:#0a5c0a;font-weight:900;paint-order:stroke;stroke:#fff;stroke-width:2.2px;stroke-linejoin:round}
+
+/* front door / parking lot — coming-soon pianos, staged outside the building */
+.csnzone{fill:#eef4f8;stroke:#5b8ba8;stroke-width:1.5;stroke-dasharray:5 3}
+.csntitle{fill:#2f5f78;font-weight:700;letter-spacing:0.5px}
+.csnname{fill:#2f3a40}
