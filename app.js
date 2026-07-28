@@ -78,6 +78,14 @@ function areaBinFor(p) {
   const l = (p.location || '').toLowerCase();
   return AREA_BINS.find(b => b.test(l)) || null;
 }
+// which floor actually has a zone label matching this bin (bins live on
+// whichever floor the Store Map sheet drew their room on — not assumed)
+function floorForBin(bin) {
+  for (let i = 0; i < S.map.floors.length; i++) {
+    if (S.map.floors[i].labels.some(z => bin.zones.includes(z.text.trim().toLowerCase()))) return i;
+  }
+  return 0;
+}
 // the bin whose zones list includes this zone-label (or null)
 function binForZone(normLabel) {
   return AREA_BINS.find(b => b.zones.includes(normLabel)) || null;
@@ -627,8 +635,8 @@ function focusPiano(p) {
   if (S.view !== 'map') switchView('map');
   S.focusRow = p.row;
   const placed = p.isSlot && S.slotFloor.has(p.location.toLowerCase());
-  const inBin = areaBinFor(p);   // parked in a named work-area zone (floor 0)
-  const fi = placed ? S.slotFloor.get(p.location.toLowerCase()) : (inBin ? 0 : 1);   // rented + attic both live on floor 1
+  const inBin = areaBinFor(p);   // parked in a named work-area zone
+  const fi = placed ? S.slotFloor.get(p.location.toLowerCase()) : (inBin ? floorForBin(inBin) : 1);   // attic/rented live on floor 1
   if (fi !== S.floor) { S.floor = fi; renderTabs(); }
   renderMap();
   const f = S.map.floors[S.floor];
