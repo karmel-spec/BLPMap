@@ -538,6 +538,11 @@ function isPrivateFinancing(p) {
 function finClass(p) {
   return isPrivateFinancing(p) ? 'financed' : '';
 }
+function finBadge(p, cx, cy, sc) {
+  if (!isPrivateFinancing(p)) return '';
+  return `<text x="${cx + 8.5 * sc}" y="${cy - 6 * sc}" text-anchor="middle"
+          class="finbadge" font-size="${11 * sc}">$</text>`;
+}
 function comingSoon(p) {
   return (p.location || '').trim().replace(/\s+/g, ' ').toLowerCase().startsWith('coming soon');
 }
@@ -1015,7 +1020,7 @@ function renderMap() {
         const hl = S.focusRow === p.row || (q && matches(p, q));
         const dim = q && !matches(p, q);
         s += `<g class="piano ${finClass(p)} ${st} own-${ownerClass(p)} ${dim ? 'dim' : ''} ${hl ? 'hl' : ''}"
-              data-row="${p.row}">${glyph(p.type, cx, cy, sc)}${phaseText(p, cx, cy, sc)}${mediaBadge(p, cx, cy, sc)}</g>`;
+              data-row="${p.row}">${glyph(p.type, cx, cy, sc)}${phaseText(p, cx, cy, sc)}${mediaBadge(p, cx, cy, sc)}${finBadge(p, cx, cy, sc)}</g>`;
       });
     } else {
       s += zoneLabelSVG(disp === z.text ? z : {...z, text: disp}, cls);
@@ -1065,7 +1070,7 @@ function renderMap() {
           const hl = S.focusRow === p.row || (q && matches(p, q));
           s += `<g class="piano ${finClass(p)} ${st} own-${ownerClass(p)} ${q && !matches(p, q) ? 'dim' : ''} ${hl ? 'hl' : ''}"
                 data-slot="${esc(sl.id)}" data-row="${p.row}">
-                <g transform="rotate(90 ${cx} ${cy})">${glyph(p.type, cx, cy, sc)}</g>${phaseText(p, cx, cy, sc)}${mediaBadge(p, cx, cy, sc)}${priceText(p, cx, cy, sc)}</g>`;
+                <g transform="rotate(90 ${cx} ${cy})">${glyph(p.type, cx, cy, sc)}</g>${phaseText(p, cx, cy, sc)}${mediaBadge(p, cx, cy, sc)}${priceText(p, cx, cy, sc)}${finBadge(p, cx, cy, sc)}</g>`;
         });
       } else {
         const pfs = Math.max(10, Math.min(20, sl.w * 0.4));
@@ -1096,7 +1101,7 @@ function renderMap() {
           const cy = sl.y + sl.h / 2;
           const hl = S.focusRow === p.row || (q && matches(p, q));
           s += `<g class="piano ${finClass(p)} ${st} own-${ownerClass(p)} ${q && !matches(p, q) ? 'dim' : ''} ${hl ? 'hl' : ''}"
-                data-slot="${esc(sl.id)}" data-row="${p.row}">${glyph(p.type, cx, cy, sc)}${phaseText(p, cx, cy, sc)}${mediaBadge(p, cx, cy, sc)}${priceText(p, cx, cy, sc)}</g>`;
+                data-slot="${esc(sl.id)}" data-row="${p.row}">${glyph(p.type, cx, cy, sc)}${phaseText(p, cx, cy, sc)}${mediaBadge(p, cx, cy, sc)}${priceText(p, cx, cy, sc)}${finBadge(p, cx, cy, sc)}</g>`;
         });
       } else if (!thin) {
         const pfs = Math.max(9, Math.min(20, sl.h * 0.45));
@@ -1132,7 +1137,7 @@ function renderMap() {
         const sc = Math.max(0.9, Math.min(1.6, (rch - 22) / 22));
         S.rentXY[p.row] = {x: cx, y: cy0 + rch / 2};
         s += `<g class="piano ${finClass(p)} rented own-${ownerClass(p)} ${dim ? 'dim' : ''} ${hl ? 'hl' : ''}"
-              data-row="${p.row}">${glyph(p.type, cx, iconCy, sc)}${phaseText(p, cx, iconCy, sc)}</g>`;
+              data-row="${p.row}">${glyph(p.type, cx, iconCy, sc)}${phaseText(p, cx, iconCy, sc)}${finBadge(p, cx, iconCy, sc)}</g>`;
         s += `<text x="${cx}" y="${cy0 + rch - 5}" text-anchor="middle" class="rentname" font-size="9.5">`
           + nameLines.map(L => esc(L)).join('') + `</text>`;
       });
@@ -1178,7 +1183,7 @@ function renderMap() {
         s += `<rect x="${cx0}" y="${cy0}" width="${iw}" height="${ih}" rx="8"
               class="holdcell ${hl ? 'hl' : ''} ${dim ? 'dim' : ''}" data-row="${p.row}"/>`;
         s += `<g class="piano ${finClass(p)} ${st} own-${ownerClass(p)} ${dim ? 'dim' : ''} ${hl ? 'hl' : ''}"
-              data-row="${p.row}">${glyph(p.type, cx, iconCy, sc)}${phaseText(p, cx, iconCy, sc)}${mediaBadge(p, cx, iconCy, sc)}</g>`;
+              data-row="${p.row}">${glyph(p.type, cx, iconCy, sc)}${phaseText(p, cx, iconCy, sc)}${mediaBadge(p, cx, iconCy, sc)}${finBadge(p, cx, iconCy, sc)}</g>`;
         let ty = textTop + 9;
         s += `<text x="${cx}" y="${ty}" text-anchor="middle" class="holdname" font-size="10.5">`
           + nameLines.map((L, li) => `<tspan x="${cx}" ${li ? `dy="${NLH}"` : ''}>${esc(L)}</tspan>`).join('')

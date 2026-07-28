@@ -393,3 +393,4 @@ td a{color:#9e2020}
 /* Private Financing pianos — lime green wherever they render on the map */
 .piano.financed .pbody{fill:#32cd32}
 .piano.financed .pk{fill:#1f7a1f}
+.finbadge{fill:#0a5c0a;font-weight:900;paint-order:stroke;stroke:#fff;stroke-width:2.2px;stroke-linejoin:round}
