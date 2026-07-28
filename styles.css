@@ -102,7 +102,17 @@ body{background:#f7f8f9;color:#121212;display:flex;flex-direction:column;overflo
 .myes{color:#2e7d4f}.mno{color:#c03636}.mna{color:#9aa2ab;font-weight:600}
 .msec{font-size:13px;letter-spacing:1px;color:#121212;margin:16px 0 4px}
 .msec .pc{color:#9e2020;margin-left:4px}
-.mrow{cursor:pointer}.mrow:hover td{background:#fdf3f3}
+.mrow{cursor:pointer}
+/* media report: 4 independently collapsible sub-sections */
+.mdsec{border:1px solid #e8eaec;border-radius:9px;margin-bottom:8px;overflow:hidden}
+.mdsec.open{border-color:#d6dade}
+.mdsecbtn{display:flex;align-items:center;gap:8px;width:100%;border:none;background:#fafbfc;padding:9px 12px;cursor:pointer;font:inherit;text-align:left}
+.mdsecbtn:hover{background:#f2f4f5}
+.mdsecbtn .chev{margin-left:0}
+.mdsecbtn .pc{margin-left:auto}
+.mdsecbtn .mdsecprint{margin:0 0 0 10px;flex-shrink:0}
+.mdsecbody{padding:8px 12px 12px;border-top:1px solid #f0f2f4}
+.mrow:hover td{background:#fdf3f3}
 .phnum{fill:#fff;font-family:'Assistant','Helvetica Neue',Arial,sans-serif;font-weight:800;
   paint-order:stroke;stroke:#1a1d20;stroke-width:2.6px;stroke-linejoin:round;pointer-events:none}
 .phrow{display:flex;align-items:center;gap:8px}
@@ -352,6 +362,16 @@ td a{color:#9e2020}
 .printbtn{flex-shrink:0;margin-top:8px;border:1px solid #cfd6dc;background:#f7f8f9;border-radius:8px;font-size:11.5px;font-weight:700;padding:6px 12px;cursor:pointer}
 .printbtn:hover{border-color:#9e2020;color:#9e2020}
 .mrow{cursor:pointer}
+/* media report: 4 independently collapsible sub-sections */
+.mdsec{border:1px solid #e8eaec;border-radius:9px;margin-bottom:8px;overflow:hidden}
+.mdsec.open{border-color:#d6dade}
+.mdsecbtn{display:flex;align-items:center;gap:8px;width:100%;border:none;background:#fafbfc;padding:9px 12px;cursor:pointer;font:inherit;text-align:left}
+.mdsecbtn:hover{background:#f2f4f5}
+.mdsecbtn .chev{margin-left:0}
+.mdsecbtn .pc{margin-left:auto}
+.mdsecbtn .mdsecprint{margin:0 0 0 10px;flex-shrink:0}
+.mdsecbody{padding:8px 12px 12px;border-top:1px solid #f0f2f4}
+
 .mrow:hover td{background:#faf7f7}
 
 .boardday{margin:14px 0 4px;font-weight:800;font-size:12px;letter-spacing:1.5px;color:#3a4046;border-bottom:2px solid #eceef0;padding-bottom:4px}

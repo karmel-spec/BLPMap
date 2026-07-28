@@ -101,6 +101,9 @@ const S = {
   zoom: 1,        // 1 = map fills the card width; scroll down to explore
   feedOpen: false, // map opens full width; the truck button opens the feed
   focusRow: null, // piano row highlighted by search / NEW-chip focus
+  // Media Needed report: each of the 4 categories collapses/expands on its
+  // own, so a user can shrink three and print just the one they need
+  mediaOpen: {bp: true, bv: true, ap: true, av: true},
 };
 
 const $ = s => document.querySelector(s);
@@ -3041,17 +3044,38 @@ function missingStageTable() {
       <td><a target="_blank" rel="noopener" href="${logLink(p)}">log ↗</a></td></tr>`).join('')
      || '<tr><td colspan="5" class="empty">None — every arrived piano has a shop stage. 🎉</td></tr>') + '</table>';
 }
+// one bare table of pianos (no "still needed" column — the section
+// heading already says which category this is)
+function mediaRowsTable(list) {
+  return `<table><tr><th>PIANO</th><th>SERIAL</th><th>LOCATION</th><th>PHASE</th><th></th></tr>` +
+    (list.map(p => `<tr class="mrow" data-row="${p.row}"><td>${esc(pianoName(p))}</td>
+      <td>${esc(p.serial)}</td><td class="locraw">${esc(p.location || 'no spot')}</td>
+      <td>${esc(effectivePhase(p) || '—')}</td>
+      <td><a target="_blank" rel="noopener" href="${logLink(p)}">log ↗</a></td></tr>`).join('')
+     || '<tr><td colspan="5" class="empty">Nothing needed here. 🎉</td></tr>') + '</table>';
+}
+const MEDIA_CATS = [
+  {key: 'bp', label: 'Before Photos', icon: '📷', need: 'needBP'},
+  {key: 'bv', label: 'Before Video', icon: '🎥', need: 'needBV'},
+  {key: 'ap', label: 'After Photos', icon: '📷', need: 'needAP'},
+  {key: 'av', label: 'After Video', icon: '🎥', need: 'needAV'},
+];
 function mediaTable() {
   const act = S.data.pianos.filter(p => p.active && !notYetArrived(p))
     .map(p => ({p, m: mediaNeeds(p)})).filter(x => x.m.photo || x.m.video);
-  const need = m => [m.needBP && 'before 📷', m.needBV && 'before 🎥',
-                     m.needAP && 'AFTER 📷', m.needAV && 'AFTER 🎥'].filter(Boolean).join(' · ');
-  return `<table><tr><th>PIANO</th><th>SERIAL</th><th>LOCATION</th><th>PHASE</th><th>STILL NEEDED</th><th></th></tr>` +
-    (act.map(({p, m}) => `<tr class="mrow" data-row="${p.row}"><td>${esc(pianoName(p))}</td>
-      <td>${esc(p.serial)}</td><td class="locraw">${esc(p.location || 'no spot')}</td>
-      <td>${esc(effectivePhase(p) || '—')}</td><td>${need(m)}</td>
-      <td><a target="_blank" rel="noopener" href="${logLink(p)}">log ↗</a></td></tr>`).join('')
-     || '<tr><td colspan="6" class="empty">Every active piano has its media. 🎉</td></tr>') + '</table>';
+  return MEDIA_CATS.map(cat => {
+    const list = act.filter(x => x.m[cat.need]).map(x => x.p);
+    const open = S.mediaOpen[cat.key];
+    return `<div class="mdsec ${open ? 'open' : ''}" data-cat="${cat.key}">
+      <button class="mdsecbtn">
+        <span class="chev">${open ? '▾' : '▸'}</span>
+        <span>${cat.icon} ${esc(cat.label)}</span>
+        <span class="pc ${list.length ? '' : 'zero'}">${list.length}</span>
+        <button class="printbtn mdsecprint" data-cat="${cat.key}">🖨 Print</button>
+      </button>
+      <div class="mdsecbody" ${open ? '' : 'hidden'}>${open ? mediaRowsTable(list) : ''}</div>
+    </div>`;
+  }).join('');
 }
 function waitingPianos() {
   return S.data.pianos.filter(p => p.active && (p.phase || '').startsWith('Waiting'));
@@ -3140,6 +3164,19 @@ function renderReport() {
     if (ev.target.closest('a')) return;
     const p = S.data.pianos.find(x => x.row === +tr.dataset.row);
     if (p) focusPiano(p);
+  });
+  body.querySelectorAll('.mdsecbtn').forEach(b => b.onclick = ev => {
+    if (ev.target.closest('.mdsecprint')) return;
+    const key = b.closest('.mdsec').dataset.cat;
+    S.mediaOpen[key] = !S.mediaOpen[key];
+    renderReport();
+  });
+  body.querySelectorAll('.mdsecprint').forEach(b => b.onclick = ev => {
+    ev.stopPropagation();
+    const cat = MEDIA_CATS.find(c => c.key === b.dataset.cat);
+    const act = S.data.pianos.filter(p => p.active && !notYetArrived(p))
+      .map(p => ({p, m: mediaNeeds(p)})).filter(x => x.m[cat.need]).map(x => x.p);
+    printReport(`${cat.icon} ${cat.label} Needed`, mediaRowsTable(act));
   });
 }
 
