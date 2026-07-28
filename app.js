@@ -530,6 +530,14 @@ function isRented(p) {
 function isConference(p) {
   return /conference room|larson home/i.test((p.location || '').trim());
 }
+// under the Piano Log's PRIVATE FINANCING section header — colored lime
+// green wherever they render so they stay visually distinct
+function isPrivateFinancing(p) {
+  return (p.section || '').trim().toUpperCase() === 'PRIVATE FINANCING';
+}
+function finClass(p) {
+  return isPrivateFinancing(p) ? 'financed' : '';
+}
 function comingSoon(p) {
   return (p.location || '').trim().replace(/\s+/g, ' ').toLowerCase().startsWith('coming soon');
 }
@@ -998,7 +1006,7 @@ function renderMap() {
         const st = pianoStatus(p);
         const hl = S.focusRow === p.row || (q && matches(p, q));
         const dim = q && !matches(p, q);
-        s += `<g class="piano ${st} own-${ownerClass(p)} ${dim ? 'dim' : ''} ${hl ? 'hl' : ''}"
+        s += `<g class="piano ${finClass(p)} ${st} own-${ownerClass(p)} ${dim ? 'dim' : ''} ${hl ? 'hl' : ''}"
               data-row="${p.row}">${glyph(p.type, cx, cy, sc)}${phaseText(p, cx, cy, sc)}${mediaBadge(p, cx, cy, sc)}</g>`;
       });
     } else {
@@ -1047,7 +1055,7 @@ function renderMap() {
           const st = pianoStatus(p);
           const cx = sl.x + sl.w / 2, cy = y0 + i * per * sc;
           const hl = S.focusRow === p.row || (q && matches(p, q));
-          s += `<g class="piano ${st} own-${ownerClass(p)} ${q && !matches(p, q) ? 'dim' : ''} ${hl ? 'hl' : ''}"
+          s += `<g class="piano ${finClass(p)} ${st} own-${ownerClass(p)} ${q && !matches(p, q) ? 'dim' : ''} ${hl ? 'hl' : ''}"
                 data-slot="${esc(sl.id)}" data-row="${p.row}">
                 <g transform="rotate(90 ${cx} ${cy})">${glyph(p.type, cx, cy, sc)}</g>${phaseText(p, cx, cy, sc)}${mediaBadge(p, cx, cy, sc)}${priceText(p, cx, cy, sc)}</g>`;
         });
@@ -1079,7 +1087,7 @@ function renderMap() {
           const cx = x0 + i * per * sc;
           const cy = sl.y + sl.h / 2;
           const hl = S.focusRow === p.row || (q && matches(p, q));
-          s += `<g class="piano ${st} own-${ownerClass(p)} ${q && !matches(p, q) ? 'dim' : ''} ${hl ? 'hl' : ''}"
+          s += `<g class="piano ${finClass(p)} ${st} own-${ownerClass(p)} ${q && !matches(p, q) ? 'dim' : ''} ${hl ? 'hl' : ''}"
                 data-slot="${esc(sl.id)}" data-row="${p.row}">${glyph(p.type, cx, cy, sc)}${phaseText(p, cx, cy, sc)}${mediaBadge(p, cx, cy, sc)}${priceText(p, cx, cy, sc)}</g>`;
         });
       } else if (!thin) {
@@ -1115,7 +1123,7 @@ function renderMap() {
         const iconCy = cy0 + (rch - 16) / 2;
         const sc = Math.max(0.9, Math.min(1.6, (rch - 22) / 22));
         S.rentXY[p.row] = {x: cx, y: cy0 + rch / 2};
-        s += `<g class="piano rented own-${ownerClass(p)} ${dim ? 'dim' : ''} ${hl ? 'hl' : ''}"
+        s += `<g class="piano ${finClass(p)} rented own-${ownerClass(p)} ${dim ? 'dim' : ''} ${hl ? 'hl' : ''}"
               data-row="${p.row}">${glyph(p.type, cx, iconCy, sc)}${phaseText(p, cx, iconCy, sc)}</g>`;
         s += `<text x="${cx}" y="${cy0 + rch - 5}" text-anchor="middle" class="rentname" font-size="9.5">`
           + nameLines.map(L => esc(L)).join('') + `</text>`;
@@ -1151,7 +1159,7 @@ function renderMap() {
         const iconCy = cy0 + (cch - 14) / 2;
         const sc = Math.max(0.8, Math.min(1.4, (cch - 20) / 22));
         S.confXY[p.row] = {x: cx, y: cy0 + cch / 2};
-        s += `<g class="piano own-${ownerClass(p)} ${dim ? 'dim' : ''} ${hl ? 'hl' : ''}"
+        s += `<g class="piano ${finClass(p)} own-${ownerClass(p)} ${dim ? 'dim' : ''} ${hl ? 'hl' : ''}"
               data-row="${p.row}">${glyph(p.type, cx, iconCy, sc)}${phaseText(p, cx, iconCy, sc)}</g>`;
         s += `<text x="${cx}" y="${cy0 + cch - 4}" text-anchor="middle" class="confname" font-size="9">`
           + nameLines.map(L => esc(L)).join('') + `</text>`;
@@ -1197,7 +1205,7 @@ function renderMap() {
         S.holdingXY[p.row] = {x: cx, y: cy0 + ih / 2};
         s += `<rect x="${cx0}" y="${cy0}" width="${iw}" height="${ih}" rx="8"
               class="holdcell ${hl ? 'hl' : ''} ${dim ? 'dim' : ''}" data-row="${p.row}"/>`;
-        s += `<g class="piano ${st} own-${ownerClass(p)} ${dim ? 'dim' : ''} ${hl ? 'hl' : ''}"
+        s += `<g class="piano ${finClass(p)} ${st} own-${ownerClass(p)} ${dim ? 'dim' : ''} ${hl ? 'hl' : ''}"
               data-row="${p.row}">${glyph(p.type, cx, iconCy, sc)}${phaseText(p, cx, iconCy, sc)}${mediaBadge(p, cx, iconCy, sc)}</g>`;
         let ty = textTop + 9;
         s += `<text x="${cx}" y="${ty}" text-anchor="middle" class="holdname" font-size="10.5">`
