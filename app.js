@@ -68,8 +68,8 @@ const KNOWN_AREAS = ['showroom', 'pre-sale showroom', 'third floor', 'storage',
 // pianos parked in a named work area are drawn INSIDE that zone on the map
 // (not in the holding grid). location text -> map zone label to place them in.
 const AREA_BINS = [
-  {test: l => l.includes('refinish'), zones: ['refinishing shop', 'refinishing room']},
-  {test: l => l.includes('sanding'), zones: ['sanding shop', 'back shop', 'sanding room']},
+  {test: l => l.includes('refinish'), zones: ['refinishing shop', 'refinishing room'], below: true},
+  {test: l => l.includes('sanding'), zones: ['sanding shop', 'back shop', 'sanding room'], below: true},
   {test: l => /conference room|larson home/i.test(l), zones: ['conference room'], key: 'conference'},
   {test: l => /\bwing room 4\b/i.test(l), zones: ['recital hall wing room 4']},
 ];
@@ -1059,6 +1059,25 @@ function renderMap() {
       layRow(larsonFam, lfGap, lfCy, lfSc, p => `larsonfam ${pianoStatus(p)} own-${ownerClass(p)}`);
       const finCy = z.y + z.h + 20 + finRowH / 2;
       layRow(financed, finGap, finCy, finSc, p => `${finClass(p)} own-${ownerClass(p)}`);
+    } else if (bin && bin.below && list && list.length) {
+      // room label stays untouched inside its box; the pianos line up in
+      // rows just BELOW the box (Brigham: never over the room label)
+      s += zoneLabelSVG(disp === z.text ? z : {...z, text: disp}, cls);
+      const bGap = 34, bCols = Math.max(1, Math.floor((z.w + 40) / bGap));
+      const bRowH = 34, bSc = 1.05;
+      list.forEach((p, i) => {
+        const row = Math.floor(i / bCols), colI = i % bCols;
+        const rowCount = Math.min(bCols, list.length - row * bCols);
+        const rowW = rowCount * bGap;
+        const cx = z.x + z.w / 2 - rowW / 2 + colI * bGap + bGap / 2;
+        const cy = z.y + z.h + 16 + row * bRowH + bRowH / 2;
+        S.binXY[p.row] = {x: cx, y: cy};
+        const st = pianoStatus(p);
+        const hl = S.focusRow === p.row || (q && matches(p, q));
+        const dim = q && !matches(p, q);
+        s += `<g class="piano ${finClass(p)} ${st} own-${ownerClass(p)} ${dim ? 'dim' : ''} ${hl ? 'hl' : ''}"
+              data-row="${p.row}">${glyph(p.type, cx, cy, bSc)}${phaseText(p, cx, cy, bSc)}${mediaBadge(p, cx, cy, bSc)}${finBadge(p, cx, cy, bSc)}</g>`;
+      });
     } else if (list && list.length) {
       // label rides the top; pianos fill the rest of the zone in a row
       const fs = Math.min(12, Math.max(9, z.h * 0.28));
