@@ -450,3 +450,20 @@ td a{color:#9e2020}
 .cabempty{color:#c2c9cf}
 .cabnote{font-size:11.5px;color:#8a929a;margin:10px 0 0}
 .csq{fill:#5c4a99;font-weight:800;paint-order:stroke;stroke:#fff;stroke-width:2px;stroke-linejoin:round}
+
+/* digital whiteboard replica (cabinetry unit popup) */
+.wbboard{background:#fbfbf9;border:7px solid #e8e6e1;border-radius:12px;padding:10px 14px;box-shadow:inset 0 1px 4px rgba(0,0,0,.06)}
+.wbhead{display:flex;align-items:center;border-bottom:2px solid #444;padding-bottom:5px;margin-bottom:2px}
+.wbnum{font-weight:800;font-size:15px;border-right:2px solid #444;padding-right:10px;margin-right:10px}
+.wbside{flex:1;text-align:center;font-size:11px;letter-spacing:2.5px;font-weight:700}
+.wbrow{display:flex;border-bottom:1.5px solid #b9b6af;min-height:40px;position:relative}
+.wbrow:last-child{border-bottom:none}
+.wbshname{position:absolute;top:1px;left:50%;transform:translateX(-50%);font-size:7.5px;letter-spacing:1.5px;color:#a09c94}
+.wbcell{flex:1;text-align:center;padding:13px 4px 5px;font-family:'Bradley Hand','Comic Sans MS',cursive;font-size:13px;color:#1c1c1c}
+.wbcell + .wbcell{border-left:1.5px solid #b9b6af}
+.wbcell .cabp{display:block;color:#1c1c1c;cursor:pointer;padding:1px 0}
+.wbcell .cabp:hover{color:#9e2020}
+.wbcell .cabp small{color:#8a929a;font-family:Helvetica,Arial,sans-serif;font-size:9px}
+.wbassign{color:#b8c2ca;cursor:pointer;font-family:Helvetica,Arial,sans-serif;font-size:10.5px}
+.wbassign:hover{color:#9e2020}
+#cabroommodal .card, .blpmodal .card{max-width:560px}

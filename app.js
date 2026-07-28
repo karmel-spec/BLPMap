@@ -1870,14 +1870,15 @@ async function saveCabinetry(p, list, pop) {
     if (j.error === 'unauthorized') { lsDel('blpPin'); throw new Error('Not authorized'); }
     if (!j.ok) throw new Error(j.error || 'save failed');
     p.cabinetry = j.cabinetry; edit.cabinetry = j.cabinetry;
-    openPop(p.row, S.popAnchor, true);
+    if (!$('#pop').hidden) openPop(p.row, S.popAnchor, true);   // refresh card if visible
   } catch (e) {
     p.cabinetry = was;
     delete edit.cabinetry; if (!Object.keys(edit).length) pendingEdits.delete(p.row);
     if (msg) { msg.className = 'cabmsg phmsg err'; msg.textContent = '\u2717 ' + e.message; }
   }
 }
-// one shelf unit's contents, shown when its box is clicked on the map
+// one shelf unit, drawn as a digital twin of its physical whiteboard —
+// same LEFT/RIGHT columns and shelf rows the techs see in the room
 function openCabUnitModal(u) {
   const single = CAB_UNITS[u] === 'single';
   const levels = single ? CAB_SGL_LEVELS : CAB_DBL_LEVELS;
@@ -1889,22 +1890,61 @@ function openCabUnitModal(u) {
       if (m && m[1] === String(u)) items.push({p, side: (m[2] || '').toUpperCase(), lvl: m[3].toUpperCase()});
     }
   }
-  const cell = (lvl, side) => items.filter(x => x.lvl === lvl && (single || x.side === side))
-    .map(x => `<a class="cabp" data-row="${x.p.row}">${esc(pianoName(x.p))}${x.p.serial ? ` <small>SN ${esc(x.p.serial)}</small>` : ''}</a>`).join('') || '<i class="cabempty">—</i>';
+  const shName = {T: 'TOP SHELF', 3: single ? '3. THIRD SHELF' : '3rd SHELF', 2: single ? '2. SECOND SHELF' : '2nd SHELF',
+                  1: single ? '1. BOTTOM SHELF' : '1st SHELF', F: 'FLOOR', 6: '6. TOP SHELF', 5: '5. FIFTH SHELF', 4: '4. FOURTH SHELF'};
+  const cell = (lvl, side) => {
+    const here = items.filter(x => x.lvl === lvl && (single || x.side === side));
+    const tok = u + '-' + (single ? '' : side) + lvl;
+    return `<span class="wbcell">${here.length
+      ? here.map(x => `<a class="cabp" data-row="${x.p.row}">${esc(pianoName(x.p))}${x.p.serial ? `<small> ${esc(x.p.serial)}</small>` : ''}</a>`).join('')
+      : `<a class="wbassign" data-tok="${tok}">+ assign</a>`}</span>`;
+  };
+  const rows = levels.map(([v]) => `
+    <div class="wbrow"><div class="wbshname">${shName[v] || v}</div>
+      ${single ? cell(v) : cell(v, 'L') + cell(v, 'R')}</div>`).join('');
   const ov = modalShell('cabroommodal', `
     <span class="x">\u2715</span>
-    <h3>🗄 Cabinetry Unit ${esc(String(u))}${single ? ' (single-sided)' : ''}</h3>
-    <table class="cabtbl">${single
-      ? levels.map(([v, n]) => `<tr><th>${n}</th><td>${cell(v)}</td></tr>`).join('')
-      : `<tr><th></th><th>LEFT</th><th>RIGHT</th></tr>`
-        + levels.map(([v, n]) => `<tr><th>${n}</th><td>${cell(v, 'L')}</td><td>${cell(v, 'R')}</td></tr>`).join('')}
-    </table>
-    <p class="cabnote">Assign shelves from a piano's card: Cabinetry → ＋ shelf.</p>`);
+    <div class="wbboard">
+      <div class="wbhead"><span class="wbnum">${esc(String(u))}</span>
+        ${single ? '<span class="wbside" style="flex:2">SINGLE SHELF</span>'
+                 : '<span class="wbside">LEFT SIDE</span><span class="wbside">RIGHT SIDE</span>'}</div>
+      ${rows}
+    </div>
+    <p class="cabnote">Click a piano to jump to it · click “+ assign” to shelve a piano's parts there.</p>`);
   ov.querySelectorAll('.cabp').forEach(a => a.onclick = () => {
     ov.hidden = true;
     const p = S.data.pianos.find(x => x.row === +a.dataset.row);
     if (p) focusPiano(p);
   });
+  ov.querySelectorAll('.wbassign').forEach(a => a.onclick = () => {
+    ov.hidden = true;
+    openCabAssignModal(a.dataset.tok, u);
+  });
+}
+// assign a piano (by serial, with autocomplete) to a specific shelf token
+function openCabAssignModal(tok, unit) {
+  serialDatalist();
+  const ov = modalShell('cabassignmodal', `
+    <span class="x">\u2715</span>
+    <h3>🗄 Shelve parts — ${esc(cabPretty(tok))}</h3>
+    <label>Piano serial #</label>
+    <input class="casn" list="serialList" placeholder="type a serial…">
+    <button class="tmgo cago">Assign this shelf</button>
+    <div class="tmmsg"></div>`);
+  ov.querySelector('.cago').onclick = async () => {
+    const msg = ov.querySelector('.tmmsg');
+    const sn = ov.querySelector('.casn').value.trim().split(' — ')[0].trim();
+    if (!sn) { msg.className = 'tmmsg err'; msg.textContent = 'Type a serial number first.'; return; }
+    const p = S.data.pianos.find(x => (x.serial || '').toLowerCase() === sn.toLowerCase());
+    if (!p) { msg.className = 'tmmsg err'; msg.textContent = 'No active piano with that serial.'; return; }
+    const list = cabTokens(p);
+    if (!list.includes(tok)) list.push(tok);
+    msg.className = 'tmmsg'; msg.textContent = 'Saving\u2026';
+    await saveCabinetry(p, list, {querySelector: () => null});
+    ov.hidden = true;
+    openCabUnitModal(unit);
+  };
+  ov.querySelector('.casn').focus();
 }
 
 // Misc is a one-off track: ask what it is when it's switched on
