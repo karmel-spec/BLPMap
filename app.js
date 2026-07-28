@@ -92,7 +92,8 @@ function binForZone(normLabel) {
   return AREA_BINS.find(b => b.zones.includes(normLabel)) || null;
 }
 // display relabels for zone labels (sheet may still say "Back Shop")
-const ZONE_RELABEL = {'back shop': 'Sanding Shop', 'upstairs office 3': '3D Printing Lab', 'admin office': 'Bench Room'};
+const ZONE_RELABEL = {'back shop': 'Sanding Shop', 'upstairs office 3': '3D Printing Lab', 'admin office': 'Bench Room',
+  'recital hall wing room 3': "Alisa's Office", 'upstairs office 2': "Melissa's Office"};
 
 const S = {
   map: null, data: null, floor: 0, search: '', view: 'map',
@@ -1025,45 +1026,31 @@ function renderMap() {
       s += `<rect x="${z.x}" y="${z.y}" width="${z.w}" height="${z.h}" class="zonebox ${cls}"/>`;
     if (isExpandedConf) {
       // keep the real room's rectangle exactly as drawn (it's the actual
-      // room, not a fabricated zone) — the label lives inside it as usual,
-      // and the pianos themselves float in the blank floor space BELOW it,
-      // never inside that box, with the financed group further down still
+      // room, not a fabricated zone) — the label lives inside it as usual.
+      // Larson Family pianos (sky blue) float ABOVE the room in a single
+      // row; the lime-green financed pianos get their own single row
+      // BELOW it. Neither group ever sits inside the room's own box.
       s += `<text x="${z.x + z.w / 2}" y="${z.y + z.h / 2 + 4}" text-anchor="middle" class="zlabel ${cls}" font-size="${Math.min(12, Math.max(9, z.h * 0.28))}">${esc(disp)}</text>`;
-      const general = list.filter(p => !isPrivateFinancing(p));
+      const larsonFam = list.filter(p => !isPrivateFinancing(p));
       const financed = list.filter(p => isPrivateFinancing(p));
-      const gGap = 34, gCols = Math.max(1, Math.floor((z.w + 40) / gGap));
-      const gRowH = 34, gSc = 1.05;
-      const fGap = 52, fCols = Math.max(1, Math.floor((z.w + 40) / fGap));
-      const fRowH = 50, fSc = 1.5;
-      const top = z.y + z.h + 20;
-      const groupGap = general.length && financed.length ? 18 : 0;
-      general.forEach((p, i) => {
-        const row = Math.floor(i / gCols), col = i % gCols;
-        const rowCount = Math.min(gCols, general.length - row * gCols);
-        const rowW = rowCount * gGap;
-        const cx = z.x + z.w / 2 - rowW / 2 + col * gGap + gGap / 2;
-        const cy = top + row * gRowH + gRowH / 2;
-        S.binXY[p.row] = {x: cx, y: cy};
-        const st = pianoStatus(p);
-        const hl = S.focusRow === p.row || (q && matches(p, q));
-        const dim = q && !matches(p, q);
-        s += `<g class="piano ${finClass(p)} ${st} own-${ownerClass(p)} ${dim ? 'dim' : ''} ${hl ? 'hl' : ''}"
-              data-row="${p.row}">${glyph(p.type, cx, cy, gSc)}${phaseText(p, cx, cy, gSc)}${mediaBadge(p, cx, cy, gSc)}</g>`;
-      });
-      const gRows = Math.ceil(general.length / gCols) || 0;
-      const finTop = top + gRows * gRowH + groupGap;
-      financed.forEach((p, i) => {
-        const row = Math.floor(i / fCols), col = i % fCols;
-        const rowCount = Math.min(fCols, financed.length - row * fCols);
-        const rowW = rowCount * fGap;
-        const cx = z.x + z.w / 2 - rowW / 2 + col * fGap + fGap / 2;
-        const cy = finTop + row * fRowH + fRowH / 2;
-        S.binXY[p.row] = {x: cx, y: cy};
-        const hl = S.focusRow === p.row || (q && matches(p, q));
-        const dim = q && !matches(p, q);
-        s += `<g class="piano ${finClass(p)} own-${ownerClass(p)} ${dim ? 'dim' : ''} ${hl ? 'hl' : ''}"
-              data-row="${p.row}">${glyph(p.type, cx, cy, fSc)}${phaseText(p, cx, cy, fSc)}${mediaBadge(p, cx, cy, fSc)}${finBadge(p, cx, cy, fSc)}</g>`;
-      });
+      const lfGap = 40, lfSc = 1.05, lfRowH = 40;
+      const finGap = 52, finSc = 1.5, finRowH = 50;
+      const layRow = (arr, gap, cy, sc, extra) => {
+        const rowW = arr.length * gap;
+        const startX = z.x + z.w / 2 - rowW / 2 + gap / 2;
+        arr.forEach((p, i) => {
+          const cx = startX + i * gap;
+          S.binXY[p.row] = {x: cx, y: cy};
+          const hl = S.focusRow === p.row || (q && matches(p, q));
+          const dim = q && !matches(p, q);
+          s += `<g class="piano ${extra(p)} ${dim ? 'dim' : ''} ${hl ? 'hl' : ''}"
+                data-row="${p.row}">${glyph(p.type, cx, cy, sc)}${phaseText(p, cx, cy, sc)}${mediaBadge(p, cx, cy, sc)}${finBadge(p, cx, cy, sc)}</g>`;
+        });
+      };
+      const lfCy = z.y - 16 - lfRowH / 2;
+      layRow(larsonFam, lfGap, lfCy, lfSc, p => `larsonfam ${pianoStatus(p)} own-${ownerClass(p)}`);
+      const finCy = z.y + z.h + 20 + finRowH / 2;
+      layRow(financed, finGap, finCy, finSc, p => `${finClass(p)} own-${ownerClass(p)}`);
     } else if (list && list.length) {
       // label rides the top; pianos fill the rest of the zone in a row
       const fs = Math.min(12, Math.max(9, z.h * 0.28));
