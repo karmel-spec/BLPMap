@@ -506,13 +506,17 @@ function unplacedPianos() {
     && !(p.isSlot && S.slotFloor.has((p.location || '').toLowerCase()))
     && !areaBinFor(p)     // area-bin pianos (incl. conference/Larson-home) drawn in their zone
     && !isRented(p)       // rented pianos live in the rented zone
-    && !comingSoon(p));   // coming-soon pianos live in the front-door/parking-lot zone
+    && !comingSoon(p)     // coming-soon pianos live in the front-door/parking-lot zone
+    && !outForService(p)); // out at an external shop live in that same area
 }
 function rentedPianos() {
   return S.data.pianos.filter(p => p.active && isRented(p));
 }
 function comingSoonPianos() {
   return S.data.pianos.filter(p => p.active && comingSoon(p));
+}
+function outForServicePianos() {
+  return S.data.pianos.filter(p => p.active && outForService(p));
 }
 const localDay = () => new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD local
 function todaysMoves() {
@@ -550,6 +554,11 @@ function finBadge(p, cx, cy, sc) {
 }
 function comingSoon(p) {
   return (p.location || '').trim().replace(/\s+/g, ' ').toLowerCase().startsWith('coming soon');
+}
+// out at an external tech's shop for service (David Hyde today; the name
+// match is easy to extend if other outside shops come up later)
+function outForService(p) {
+  return /david hyde/i.test((p.location || '').trim());
 }
 function pianoStatus(p) {
   const today = localDay();
@@ -648,14 +657,14 @@ function focusPiano(p) {
   const inBin = areaBinFor(p);   // parked in a named work-area zone
   const fi = placed ? S.slotFloor.get(p.location.toLowerCase())
     : inBin ? floorForBin(inBin)
-    : comingSoon(p) ? 0    // front-door/parking-lot zone lives on floor 0
+    : (comingSoon(p) || outForService(p)) ? 0   // front-door/parking-lot zones live on floor 0
     : 1;                   // attic/rented live on floor 1
   if (fi !== S.floor) { S.floor = fi; renderTabs(); }
   renderMap();
   const f = S.map.floors[S.floor];
   const sl = placed ? f.slots.find(x => x.id.toLowerCase() === p.location.toLowerCase()) : null;
   const target = sl ? {x: sl.x + sl.w / 2, y: sl.y + sl.h / 2}
-    : (S.binXY || {})[p.row] || (S.rentXY || {})[p.row] || (S.comingXY || {})[p.row] || (S.holdingXY || {})[p.row];
+    : (S.binXY || {})[p.row] || (S.rentXY || {})[p.row] || (S.comingXY || {})[p.row] || (S.serviceXY || {})[p.row] || (S.holdingXY || {})[p.row];
   if (target) {
     S.zoom = Math.max(S.zoom, 2.4); sizePlan();
     const sc = $('#mapscroll');
@@ -1183,6 +1192,40 @@ function renderMap() {
         s += `<g class="piano ${st} own-${ownerClass(p)} ${dim ? 'dim' : ''} ${hl ? 'hl' : ''}"
               data-row="${p.row}">${glyph(p.type, cx, iconCy, sc)}</g>`;
         s += `<text x="${cx}" y="${cy0 + cch - 4}" text-anchor="middle" class="csnname" font-size="9">`
+          + nameLines.map(L => esc(L)).join('') + `</text>`;
+      });
+    }
+  }
+  // ---- OUT FOR SERVICE zone (1st floor): pianos out at an external tech's
+  // shop, parked in the same front-door/parking-lot area, just below
+  // Coming Soon
+  S.serviceXY = {};
+  if (S.floor === 0) {
+    const ofl = outForServicePianos();
+    if (ofl.length) {
+      const SZ = {x: 1480, y: 2310, x2: 2020, y2: 2310 + 210};
+      const szw = SZ.x2 - SZ.x, szh = SZ.y2 - SZ.y;
+      s += `<rect x="${SZ.x}" y="${SZ.y}" width="${szw}" height="${szh}" rx="8" class="ofszone"/>`;
+      s += `<text x="${SZ.x + szw / 2}" y="${SZ.y + 24}" text-anchor="middle" class="ofstitle" font-size="16">OUT FOR SERVICE (${ofl.length})</text>`;
+      const shH = 34, scols = 6;
+      const srows = Math.ceil(ofl.length / scols);
+      const scw = (szw - 12) / scols;
+      const sch = Math.min(95, (szh - shH - 10) / srows);
+      ofl.forEach((p, idx) => {
+        const cx0 = SZ.x + 6 + (idx % scols) * scw;
+        const cy0 = SZ.y + shH + Math.floor(idx / scols) * sch;
+        const cx = cx0 + scw / 2;
+        const hl = S.focusRow === p.row || (q && matches(p, q));
+        const dim = q && !matches(p, q);
+        const nm = (p.year ? p.year + ' ' : '')
+          + ([p.make, p.model].filter(Boolean).join(' ') || p.summary || '');
+        const nameLines = wrapCap(nm, scw - 8, 9, 1);
+        const iconCy = cy0 + (sch - 14) / 2;
+        const sc = Math.max(0.8, Math.min(1.4, (sch - 20) / 22));
+        S.serviceXY[p.row] = {x: cx, y: cy0 + sch / 2};
+        s += `<g class="piano own-${ownerClass(p)} ${dim ? 'dim' : ''} ${hl ? 'hl' : ''}"
+              data-row="${p.row}">${glyph(p.type, cx, iconCy, sc)}</g>`;
+        s += `<text x="${cx}" y="${cy0 + sch - 4}" text-anchor="middle" class="ofsname" font-size="9">`
           + nameLines.map(L => esc(L)).join('') + `</text>`;
       });
     }

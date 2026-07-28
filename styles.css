@@ -399,3 +399,8 @@ td a{color:#9e2020}
 .csnzone{fill:#eef4f8;stroke:#5b8ba8;stroke-width:1.5;stroke-dasharray:5 3}
 .csntitle{fill:#2f5f78;font-weight:700;letter-spacing:0.5px}
 .csnname{fill:#2f3a40}
+
+/* out-for-service zone, next to coming-soon in the parking lot area */
+.ofszone{fill:#f7f0e8;stroke:#b8875a;stroke-width:1.5;stroke-dasharray:5 3}
+.ofstitle{fill:#7a4d1f;font-weight:700;letter-spacing:0.5px}
+.ofsname{fill:#3a2f24}
