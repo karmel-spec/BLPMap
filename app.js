@@ -728,7 +728,8 @@ function effectivePhase(p) {
 function mediaCard(p) {
   const late = isLate(p);
   const line = (label, field, have, active) => {
-    const mark = !active ? '<b class="mna">— after QC &amp; Assembly</b>'
+    const mark = have === 'na' ? '<b class="mna">— not required</b>'
+      : !active ? '<b class="mna">— after QC &amp; Assembly</b>'
       : have === 'skip' ? '<b class="mskip">— skipped</b>'
       : have ? '<b class="myes">✓ have</b>'
       : (p.serial ? `<span class="mopts"><i class="mno">✗</i>
@@ -750,12 +751,19 @@ function isLate(p) { return phaseNum(p) >= AFTER_MIN; }
 function notYetArrived(p) {
   return /coming soon|not here|on order|ordered|never came|in moving truck/i.test(p.location || '');
 }
+// parked in a *STORAGE Piano Log section — not being worked on, so no
+// media is expected until it moves elsewhere (e.g. into the shop queue)
+function inStorage(p) {
+  return /storage/i.test((p.section || '').trim());
+}
 function mediaNeeds(p) {
+  const NONE = {needBP: false, needBV: false, needAP: false, needAV: false, photo: false, video: false};
   // not-yet-arrived pianos aren't photographed until they're here (NEW / 1N)
-  if (comingSoon(p)) return {needBP: false, needBV: false, needAP: false, needAV: false, photo: false, video: false};
+  if (comingSoon(p) || inStorage(p)) return NONE;
   const late = isLate(p);
-  const needBP = !p.bphoto, needBV = !p.bvideo;
-  const needAP = late && !p.aphoto, needAV = late && !p.avideo;
+  // 'na' ("x" in the sheet cell) means not applicable to this piano — never needed
+  const needBP = p.bphoto !== 'na' && !p.bphoto, needBV = p.bvideo !== 'na' && !p.bvideo;
+  const needAP = late && p.aphoto !== 'na' && !p.aphoto, needAV = late && p.avideo !== 'na' && !p.avideo;
   return {needBP, needBV, needAP, needAV,
           photo: needBP || needAP, video: needBV || needAV};
 }

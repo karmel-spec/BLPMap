@@ -114,7 +114,14 @@ function parsePianos(text) {
         && (/^haydn room$/i.test(summary.trim()) || /go to .* section/i.test(summary + ' ' + serial)
             || /^piano is /i.test(summary.trim()))) continue;
     // media cells: empty=needed, "Skipped ..."=deliberately skipped, else have
-    const med = j => { const v = col(j); return v ? (/^skip/i.test(v) ? 'skip' : true) : false; };
+    // media cells: empty=needed, "Skipped ..."=deliberately skipped,
+    // a bare "x"=not applicable to this piano (never needed), else done
+    const med = j => {
+      const v = col(j);
+      if (!v) return false;
+      if (/^x$/i.test(v.trim())) return 'na';
+      return /^skip/i.test(v) ? 'skip' : true;
+    };
     const dates = parseDates(col(21)).filter(d => d <= todayUTC);
     const entered = dates.length ? new Date(Math.max(...dates)) : null;
     const isNew = !!entered && (todayUTC - entered) / 86400000 <= 7;

@@ -129,10 +129,13 @@ def parse_pianos(raw):
             return r[idx].strip() if len(r) > idx else ''
 
         def med(idx):
-            # media cells: empty=needed, "Skipped ..."=deliberately skipped
+            # media cells: empty=needed, "Skipped ..."=deliberately skipped,
+            # a bare "x"=not applicable to this piano (never needed)
             v = col(idx)
             if not v:
                 return False
+            if v.strip().lower() == 'x':
+                return 'na'
             return 'skip' if v.lower().startswith('skip') else True
         serial, summary = col(2), col(3)
         if not serial and not summary:
