@@ -68,7 +68,10 @@ function parsePianos(text) {
   const phaseIdx = rows[1]
     ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'CURRENT PHASE') : -1;
   const priceIdx = rows[1]
-    ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'PRICE') : -1;
+    ? (() => {
+        const i = rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'TAG / INVOICE PRICE');
+        return i >= 0 ? i : rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'PRICE');
+      })() : -1;
   const trackIdx = rows[1]
     ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'TRACK') : -1;
   const doneIdx = rows[1]
@@ -79,6 +82,8 @@ function parsePianos(text) {
     ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'CLIENT REPORTS') : -1;
   const cbIdx = rows[1]
     ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'CHECK BACK') : -1;
+  const cabIdx = rows[1]
+    ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'CABINETRY') : -1;
   // CUSTOM SHOPWORK queue bounds (1-based rows)
   let qHdr = 0, qEnd = 0;
   for (let k = 0; k < rows.length; k++) {
@@ -136,12 +141,14 @@ function parsePianos(text) {
       isSlot: SLOT_RE.test(loc),
       entered: entered ? entered.toISOString().slice(0, 10) : null,
       phase: phaseIdx >= 0 ? col(phaseIdx) : '',
-      price: priceIdx >= 0 ? col(priceIdx) : '',
+      // only $-amounts count; notes like "In-Store"/"TBD" aren't prices
+      price: priceIdx >= 0 && /\d/.test(col(priceIdx)) ? col(priceIdx) : '',
       track: trackIdx >= 0 ? col(trackIdx) : '',
       phasesDone: doneIdx >= 0 ? col(doneIdx) : '',
       waitNote: waitIdx >= 0 ? col(waitIdx) : '',
       clientReports: crIdx >= 0 ? col(crIdx) : '',
       checkBack: cbIdx >= 0 ? col(cbIdx) : '',
+      cabinetry: cabIdx >= 0 ? col(cabIdx) : '',
       bphoto: med(13), aphoto: med(15), bvideo: med(16), avideo: med(17),
       queuePos: 0, queueTotal: 0,
       isNew, active,

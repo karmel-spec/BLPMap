@@ -1078,6 +1078,37 @@ function renderMap() {
       });
     } else {
       s += zoneLabelSVG(disp === z.text ? z : {...z, text: disp}, cls);
+      if (norm === 'cabinetry storage') {
+        // the 9 shelf units drawn in walk-in order under the room label:
+        // left wall 1·3·5·7·9 (door → back), right wall junk·2·4·6·8
+        const counts = {};
+        for (const p of S.data.pianos) {
+          if (!p.active) continue;
+          for (const t of cabTokens(p)) {
+            const mm = /^(\d)-/.exec(t);
+            if (mm) counts[mm[1]] = (counts[mm[1]] || 0) + 1;
+          }
+        }
+        const bw = 96, bh = 42, gap = 12;
+        const cols = [
+          {x: z.x, units: ['1', '3', '5', '7', '9']},
+          {x: z.x + z.w - bw, units: ['junk', '2', '4', '6', '8']},
+        ];
+        for (const c of cols) {
+          c.units.forEach((u, i) => {
+            const by = z.y + z.h + 14 + i * (bh + gap);
+            if (u === 'junk') {
+              s += `<rect x="${c.x}" y="${by}" width="${bw}" height="${bh}" rx="6" class="cabjunkbox"/>
+                    <text x="${c.x + bw / 2}" y="${by + bh / 2 + 3.5}" text-anchor="middle" class="cabjunktxt" font-size="9">JUNK PARTS</text>`;
+            } else {
+              const n = counts[u] || 0;
+              s += `<rect x="${c.x}" y="${by}" width="${bw}" height="${bh}" rx="6" class="cabunitbox" data-unit="${u}"/>
+                    <text x="${c.x + bw / 2 - (n ? 8 : 0)}" y="${by + bh / 2 + 5}" text-anchor="middle" class="cabunitnum" data-unit="${u}" font-size="15">${u}</text>`;
+              if (n) s += `<text x="${c.x + bw / 2 + 14}" y="${by + bh / 2 + 4}" text-anchor="middle" class="cabcnt" data-unit="${u}" font-size="9.5">${n}</text>`;
+            }
+          });
+        }
+      }
     }
   }
   // drop leftover spreadsheet cell-border fragments inside filled fixture
@@ -1227,7 +1258,8 @@ function renderMap() {
         const sc = Math.max(0.8, Math.min(1.4, (cch - 20) / 22));
         S.comingXY[p.row] = {x: cx, y: cy0 + cch / 2};
         s += `<g class="piano ${st} own-${ownerClass(p)} ${dim ? 'dim' : ''} ${hl ? 'hl' : ''}"
-              data-row="${p.row}">${glyph(p.type, cx, iconCy, sc)}</g>`;
+              data-row="${p.row}">${glyph(p.type, cx, iconCy, sc)}${phaseText(p, cx, iconCy, sc)}${
+                !effectivePhase(p) && p.queuePos ? `<text x="${cx}" y="${iconCy - 13 * sc}" text-anchor="middle" class="csq" font-size="${8.5 * sc}">Q-${p.queuePos}</text>` : ''}</g>`;
         s += `<text x="${cx}" y="${cy0 + cch - 4}" text-anchor="middle" class="csnname" font-size="9">`
           + nameLines.map(L => esc(L)).join('') + `</text>`;
       });
@@ -1322,6 +1354,8 @@ function renderMap() {
 
   const svg = $('#plan');
   svg.innerHTML = s;
+  svg.querySelectorAll('.cabunitbox, .cabunitnum, .cabcnt').forEach(el =>
+    el.addEventListener('click', ev => { ev.stopPropagation(); openCabUnitModal(el.dataset.unit); }));
   sizePlan();
   svg.querySelectorAll('.piano').forEach(el => {
     el.addEventListener('click', ev => { ev.stopPropagation(); openPop(+el.dataset.row, el, true); });
@@ -1435,6 +1469,11 @@ function popHTML(p) {
     ${ti.next ? `<div class="row">Tuning scheduled <b class="tunesched">🎵 ${esc(fmtDay(ti.next.date))} · ${esc(ti.next.time)}</b></div>` : ''}
 
     ${mediaCard(p)}
+    ${p.serial ? `<div class="row trkrow">Cabinetry
+        <span class="trkchips cabchips">${cabTokens(p).map(t =>
+          `<span class="cabchip" title="${esc(cabPretty(t))}">${esc(t)}<i class="cabdel" data-t="${esc(t)}">✕</i></span>`).join('')}
+          <button class="cabadd">＋ shelf</button>
+        </span></div><div class="cabmsg phmsg"></div>` : ''}
     ${tracker}
     ${phaser}
     ${p.serial ? (() => {
@@ -1518,6 +1557,12 @@ function wirePop(p) {
   });
   const me = pop.querySelector('.miscedit');
   if (me) me.onclick = ev => { ev.stopPropagation(); openMiscModal(p, pop); };
+  const ca = pop.querySelector('.cabadd');
+  if (ca) ca.onclick = ev => { ev.stopPropagation(); openCabModal(p, pop); };
+  pop.querySelectorAll('.cabdel').forEach(b => b.onclick = ev => {
+    ev.stopPropagation();
+    saveCabinetry(p, cabTokens(p).filter(t => t !== b.dataset.t), pop);
+  });
   pop.querySelectorAll('.trk.dn').forEach(b => b.onclick = ev => {
     ev.stopPropagation();
     toggleDone(p, b.dataset.ph, pop);
@@ -1677,6 +1722,29 @@ async function setMedia(p, field, pop, skip) {
 
 // toggle one track chip on/off; the full list is saved to the TRACK column
 
+/* ---------- Cabinetry Storage shelving (units 1-9) ----------
+   Parts stripped from a piano are shelved in the Cabinetry Storage room.
+   Each slot is a compact token stored comma-separated in the CABINETRY
+   column: "7-L3" = unit 7, Left side, 3rd shelf; "9-RF" = unit 9, Right,
+   Floor; "8-5" = unit 8 (single-sided), 5th shelf. */
+const CAB_UNITS = {
+  1: 'double', 2: 'double', 3: 'double', 4: 'double', 5: 'double',
+  6: 'single', 7: 'double', 8: 'single', 9: 'double',
+};
+const CAB_DBL_LEVELS = [['T', 'Top shelf'], ['3', '3rd shelf'], ['2', '2nd shelf'], ['1', '1st shelf'], ['F', 'Floor']];
+const CAB_SGL_LEVELS = [['6', '6th (top)'], ['5', '5th shelf'], ['4', '4th shelf'], ['3', '3rd shelf'], ['2', '2nd shelf'], ['1', '1st (bottom)']];
+function cabTokens(p) {
+  return (p.cabinetry || '').split(',').map(t => t.trim()).filter(Boolean);
+}
+function cabPretty(tok) {
+  const m = /^(\d)-(?:([LR])?([TF1-6]))$/i.exec(tok.trim());
+  if (!m) return tok;
+  const unit = m[1], side = (m[2] || '').toUpperCase(), lvl = m[3].toUpperCase();
+  const levels = CAB_UNITS[unit] === 'single' ? CAB_SGL_LEVELS : CAB_DBL_LEVELS;
+  const lname = (levels.find(l => l[0] === lvl) || [lvl, lvl])[1];
+  return `Unit ${unit}${side ? (side === 'L' ? ' · Left' : ' · Right') : ''} · ${lname}`;
+}
+
 // TRACK col entries are comma-separated; Misc carries its write-in summary
 // as "Misc (summary)" — commas in the summary are stored as ';'
 function trackParts(str) {
@@ -1725,6 +1793,99 @@ async function toggleTrack(p, track, pop, miscNote) {
     if (btn) btn.classList.toggle('on');
     msg.className = 'trkmsg phmsg err'; msg.textContent = '✗ ' + e.message + ' — not saved';
   }
+}
+
+// Cabinetry shelf picker: unit 1-9, side for double units, level
+function openCabModal(p, pop) {
+  const unitOpts = Object.keys(CAB_UNITS).map(u =>
+    `<option value="${u}">Unit ${u}${CAB_UNITS[u] === 'single' ? ' (single-sided)' : ''}</option>`).join('');
+  const ov = modalShell('cabmodal', `
+    <span class="x">\u2715</span>
+    <h3>🗄 Add cabinetry shelf</h3>
+    ${pianoHeader(p)}
+    <label>Shelf unit</label>
+    <select class="cbunit">${unitOpts}</select>
+    <label class="cbsidelbl">Side</label>
+    <select class="cbside"><option value="L">Left</option><option value="R">Right</option></select>
+    <label>Shelf</label>
+    <select class="cblvl"></select>
+    <button class="tmgo cbgo">Add shelf location</button>
+    <div class="tmmsg"></div>`);
+  const unitSel = ov.querySelector('.cbunit');
+  const lvlSel = ov.querySelector('.cblvl');
+  const sync = () => {
+    const single = CAB_UNITS[unitSel.value] === 'single';
+    ov.querySelector('.cbsidelbl').style.display = single ? 'none' : '';
+    ov.querySelector('.cbside').style.display = single ? 'none' : '';
+    lvlSel.innerHTML = (single ? CAB_SGL_LEVELS : CAB_DBL_LEVELS)
+      .map(([v, n]) => `<option value="${v}">${n}</option>`).join('');
+  };
+  unitSel.onchange = sync; sync();
+  ov.querySelector('.cbgo').onclick = () => {
+    const single = CAB_UNITS[unitSel.value] === 'single';
+    const tok = unitSel.value + '-' + (single ? '' : ov.querySelector('.cbside').value) + lvlSel.value;
+    const list = cabTokens(p);
+    if (!list.includes(tok)) list.push(tok);
+    ov.hidden = true;
+    saveCabinetry(p, list, pop);
+  };
+}
+async function saveCabinetry(p, list, pop) {
+  const msg = pop.querySelector('.cabmsg');
+  popPinned = true;
+  const {pin, ok} = writeAuth();
+  if (!ok) { if (msg) { msg.className = 'cabmsg phmsg err'; msg.textContent = 'Sign in with Google (☰ menu) first.'; } return; }
+  const was = p.cabinetry || '';
+  p.cabinetry = list.join(', ');
+  const edit = pendingEdits.get(p.row) || {};
+  edit.cabinetry = p.cabinetry; pendingEdits.set(p.row, edit);
+  if (msg) { msg.className = 'cabmsg phmsg'; msg.textContent = 'Saving\u2026'; }
+  try {
+    const r = await fetch(BRIDGE_URL, {
+      method: 'POST', redirect: 'follow',
+      headers: {'content-type': 'text/plain;charset=utf-8'},
+      body: JSON.stringify({pin, serial: p.serial, action: 'setcabinetry',
+        cabinetry: p.cabinetry, row: p.row, ...authFields()}),
+    });
+    const j = await r.json();
+    if (j.error === 'unauthorized') { lsDel('blpPin'); throw new Error('Not authorized'); }
+    if (!j.ok) throw new Error(j.error || 'save failed');
+    p.cabinetry = j.cabinetry; edit.cabinetry = j.cabinetry;
+    openPop(p.row, S.popAnchor, true);
+  } catch (e) {
+    p.cabinetry = was;
+    delete edit.cabinetry; if (!Object.keys(edit).length) pendingEdits.delete(p.row);
+    if (msg) { msg.className = 'cabmsg phmsg err'; msg.textContent = '\u2717 ' + e.message; }
+  }
+}
+// one shelf unit's contents, shown when its box is clicked on the map
+function openCabUnitModal(u) {
+  const single = CAB_UNITS[u] === 'single';
+  const levels = single ? CAB_SGL_LEVELS : CAB_DBL_LEVELS;
+  const items = [];
+  for (const p of S.data.pianos) {
+    if (!p.active) continue;
+    for (const t of cabTokens(p)) {
+      const m = /^(\d)-(?:([LR])?([TF1-6]))$/i.exec(t);
+      if (m && m[1] === String(u)) items.push({p, side: (m[2] || '').toUpperCase(), lvl: m[3].toUpperCase()});
+    }
+  }
+  const cell = (lvl, side) => items.filter(x => x.lvl === lvl && (single || x.side === side))
+    .map(x => `<a class="cabp" data-row="${x.p.row}">${esc(pianoName(x.p))}${x.p.serial ? ` <small>SN ${esc(x.p.serial)}</small>` : ''}</a>`).join('') || '<i class="cabempty">—</i>';
+  const ov = modalShell('cabroommodal', `
+    <span class="x">\u2715</span>
+    <h3>🗄 Cabinetry Unit ${esc(String(u))}${single ? ' (single-sided)' : ''}</h3>
+    <table class="cabtbl">${single
+      ? levels.map(([v, n]) => `<tr><th>${n}</th><td>${cell(v)}</td></tr>`).join('')
+      : `<tr><th></th><th>LEFT</th><th>RIGHT</th></tr>`
+        + levels.map(([v, n]) => `<tr><th>${n}</th><td>${cell(v, 'L')}</td><td>${cell(v, 'R')}</td></tr>`).join('')}
+    </table>
+    <p class="cabnote">Assign shelves from a piano's card: Cabinetry → ＋ shelf.</p>`);
+  ov.querySelectorAll('.cabp').forEach(a => a.onclick = () => {
+    ov.hidden = true;
+    const p = S.data.pianos.find(x => x.row === +a.dataset.row);
+    if (p) focusPiano(p);
+  });
 }
 
 // Misc is a one-off track: ask what it is when it's switched on
@@ -3175,6 +3336,26 @@ function mediaTable() {
     </div>`;
   }).join('');
 }
+function cabinetryTable() {
+  const rows = [];
+  for (const p of S.data.pianos) {
+    if (!p.active) continue;
+    for (const t of cabTokens(p)) {
+      const m = /^(\d)-(?:([LR])?([TF1-6]))$/i.exec(t);
+      rows.push({p, tok: t, unit: m ? +m[1] : 99, side: m ? (m[2] || '') : '', lvl: m ? m[3].toUpperCase() : ''});
+    }
+  }
+  const lvlOrd = {T: 0, 6: 0, 5: 1, 4: 2, 3: 3, 2: 4, 1: 5, F: 6};
+  rows.sort((a, b) => a.unit - b.unit || a.side.localeCompare(b.side) || (lvlOrd[a.lvl] ?? 9) - (lvlOrd[b.lvl] ?? 9));
+  return `<table><tr><th>UNIT</th><th>SIDE</th><th>SHELF</th><th>PIANO</th><th>SERIAL</th><th>MAP SPOT</th><th></th></tr>` +
+    (rows.map(r => `<tr class="mrow" data-row="${r.p.row}"><td><b>${r.unit === 99 ? esc(r.tok) : r.unit}</b></td>
+      <td>${r.side === 'L' ? 'Left' : r.side === 'R' ? 'Right' : '—'}</td>
+      <td>${esc(((CAB_UNITS[r.unit] === 'single' ? CAB_SGL_LEVELS : CAB_DBL_LEVELS).find(l => l[0] === r.lvl) || [r.lvl, r.tok])[1])}</td>
+      <td>${esc(pianoName(r.p))}</td><td>${esc(r.p.serial)}</td>
+      <td class="locraw">${esc(r.p.location || '—')}</td>
+      <td><a target="_blank" rel="noopener" href="${logLink(r.p)}">log ↗</a></td></tr>`).join('')
+     || '<tr><td colspan="7" class="empty">No cabinetry shelved yet — assign from a piano card.</td></tr>') + '</table>';
+}
 function waitingPianos() {
   return S.data.pianos.filter(p => p.active && (p.phase || '').startsWith('Waiting'));
 }
@@ -3222,6 +3403,10 @@ const REPORT_DEFS = () => [
      p.active && !notYetArrived(p) && (mediaNeeds(p).photo || mediaNeeds(p).video)).length,
    desc: 'Before photos/video for every arrived piano; after photos/video once it reaches Tuning or later. Pianos that haven\'t arrived yet join once they\'re here.',
    html: mediaTable},
+  {id: 'cabinetry', icon: '🗄', title: 'CABINETRY', count: S.data.pianos.filter(p =>
+     p.active && cabTokens(p).length).length,
+   desc: 'Which Cabinetry Storage shelves hold each piano\'s stripped cabinetry and hardware. Assign from the piano card (Cabinetry → ＋ shelf); click a unit box on the map for one unit\'s contents.',
+   html: cabinetryTable},
   {id: 'waiting', icon: '⏳', title: 'WAITING ON', count: waitingPianos().length,
    desc: 'Every piano parked in a Waiting phase — what it’s waiting on, and when to check whether the wait is over (set with the card’s +3d/+1w/+2w/+1m snooze buttons). Overdue or dateless waits show in red.',
    html: waitingTable},

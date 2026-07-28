@@ -430,3 +430,23 @@ td a{color:#9e2020}
 .ofszone{fill:#f7f0e8;stroke:#b8875a;stroke-width:1.5;stroke-dasharray:5 3}
 .ofstitle{fill:#7a4d1f;font-weight:700;letter-spacing:0.5px}
 .ofsname{fill:#3a2f24}
+
+/* cabinetry: card chips, map unit boxes, unit modal, coming-soon queue badge */
+.cabchip{display:inline-flex;align-items:center;background:#f2f4f5;border:1px solid #cfd6dc;border-radius:9px;padding:1px 8px;font-size:11px;font-weight:700;margin:1px 2px}
+.cabdel{font-style:normal;color:#9e2020;margin-left:6px;cursor:pointer;font-size:10px}
+.cabadd{border:1px dashed #9aa3ac;border-radius:9px;background:none;padding:1px 9px;font:inherit;font-size:11px;color:#5a636b;cursor:pointer}
+.cabadd:hover{border-color:#9e2020;color:#9e2020}
+.cabunitbox{fill:#dde4e9;stroke:#7c8794;stroke-width:1.4;cursor:pointer}
+.cabunitbox:hover{fill:#cfd9e0}
+.cabunitnum{fill:#3c454d;font-weight:800;cursor:pointer}
+.cabcnt{fill:#fff;font-weight:800;cursor:pointer;paint-order:stroke;stroke:#9e2020;stroke-width:8px;stroke-linejoin:round}
+.cabjunkbox{fill:#efe9df;stroke:#b8a888;stroke-width:1.2}
+.cabjunktxt{fill:#9a8a6a;font-weight:700;letter-spacing:1px}
+.cabtbl{width:100%;border-collapse:collapse;font-size:12px;margin-top:8px}
+.cabtbl th{font-size:10px;letter-spacing:1px;color:#8a929a;text-align:left;padding:4px 8px;border-bottom:1px solid #eef1f3;white-space:nowrap}
+.cabtbl td{padding:4px 8px;border-bottom:1px solid #eef1f3}
+.cabp{display:block;color:#1c5f9e;cursor:pointer;padding:1px 0}
+.cabp small{color:#8a929a}
+.cabempty{color:#c2c9cf}
+.cabnote{font-size:11.5px;color:#8a929a;margin:10px 0 0}
+.csq{fill:#5c4a99;font-weight:800;paint-order:stroke;stroke:#fff;stroke-width:2px;stroke-linejoin:round}

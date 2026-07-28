@@ -583,6 +583,12 @@ function doPost(e) {
         sz.checkBack || '(cleared)');
       return json_(sz);
     }
+    if (req.action === 'setcabinetry') {
+      var cb2 = setCabinetry_(req);
+      if (cb2.ok) logAct_(who, 'Cabinetry location', cb2.summary || req.serial,
+        cb2.cabinetry || '(cleared)');
+      return json_(cb2);
+    }
     if (req.action === 'setclientreports') {
       var cr = setClientReports_(req);
       if (cr.ok) logAct_(who, 'Client reports ' + (req.enabled ? 'ON' : 'OFF'),
@@ -1319,11 +1325,16 @@ function setPrice_(req, who) {
   if (found.error) return found;
   var last = sh.getLastColumn();
   var hdr = sh.getRange(2, 1, 1, last).getValues()[0];
-  var col = -1;
+  // the sheet's real price column is "TAG / INVOICE PRICE" (col BJ) —
+  // the bare "PRICE" column was a duplicate the bridge once created
+  var col = -1, fallback = -1;
   for (var c = 0; c < hdr.length; c++) {
-    if (String(hdr[c] || '').trim().toUpperCase() === 'PRICE') { col = c + 1; break; }
+    var h = String(hdr[c] || '').trim().toUpperCase();
+    if (h === 'TAG / INVOICE PRICE') { col = c + 1; break; }
+    if (h === 'PRICE' && fallback < 0) fallback = c + 1;
   }
-  if (col < 0) return {error: 'no PRICE column found in the Piano Log'};
+  if (col < 0) col = fallback;
+  if (col < 0) return {error: 'no TAG / INVOICE PRICE column found in the Piano Log'};
   var raw = String(req.price == null ? '' : req.price).replace(/[^0-9.]/g, '');
   if (!raw) return {error: 'price required'};
   var num = Number(raw);
@@ -1520,6 +1531,24 @@ function setSnooze_(req) {
   var val = String(req.date || '').trim();
   sh.getRange(found.row, col).setValue(val);
   return {ok: true, row: found.row, summary: found.summary, checkBack: val};
+}
+
+/* which Cabinetry Storage shelves hold this piano's stripped parts —
+   comma-separated tokens like "7-L3, 8-5" in a CABINETRY column */
+function setCabinetry_(req) {
+  var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+  var found = findPiano_(sh, req.serial, req.row);
+  if (found.error) return found;
+  var last = sh.getLastColumn();
+  var hdr = sh.getRange(2, 1, 1, last).getValues()[0];
+  var col = -1;
+  for (var c = 0; c < hdr.length; c++) {
+    if (String(hdr[c] || '').trim().toUpperCase() === 'CABINETRY') { col = c + 1; break; }
+  }
+  if (col < 0) { sh.getRange(2, last + 1).setValue('CABINETRY'); col = last + 1; }
+  var val = String(req.cabinetry == null ? '' : req.cabinetry).trim();
+  sh.getRange(found.row, col).setValue(val);
+  return {ok: true, row: found.row, summary: found.summary, cabinetry: val};
 }
 
 function setClientReports_(req) {

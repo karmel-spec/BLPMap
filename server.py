@@ -97,8 +97,13 @@ def parse_pianos(raw):
     hdr = rows[1] if len(rows) > 1 else []
     phase_idx = next((i for i, h in enumerate(hdr)
                       if h.strip().upper() == 'CURRENT PHASE'), -1)
+    # the sheet's real price column is "TAG / INVOICE PRICE" (col BJ);
+    # the bare "PRICE" column is a retired duplicate kept as fallback
     price_idx = next((i for i, h in enumerate(hdr)
-                      if h.strip().upper() == 'PRICE'), -1)
+                      if h.strip().upper() == 'TAG / INVOICE PRICE'), -1)
+    if price_idx < 0:
+        price_idx = next((i for i, h in enumerate(hdr)
+                          if h.strip().upper() == 'PRICE'), -1)
     track_idx = next((i for i, h in enumerate(hdr)
                       if h.strip().upper() == 'TRACK'), -1)
     done_idx = next((i for i, h in enumerate(hdr)
@@ -109,6 +114,8 @@ def parse_pianos(raw):
                    if h.strip().upper() == 'CLIENT REPORTS'), -1)
     cb_idx = next((i for i, h in enumerate(hdr)
                    if h.strip().upper() == 'CHECK BACK'), -1)
+    cab_idx = next((i for i, h in enumerate(hdr)
+                    if h.strip().upper() == 'CABINETRY'), -1)
     # CUSTOM SHOPWORK queue bounds (1-based rows). Queue position = row - header;
     # total = rows from just after the header down to the first fully-blank row.
     q_hdr = q_end = None
@@ -187,12 +194,13 @@ def parse_pianos(raw):
             'isSlot': bool(SLOT_RE.match(loc)),
             'entered': entered.isoformat() if entered else None,
             'phase': col(phase_idx) if phase_idx >= 0 else '',
-            'price': col(price_idx) if price_idx >= 0 else '',
+            'price': col(price_idx) if price_idx >= 0 and any(ch.isdigit() for ch in col(price_idx)) else '',
             'track': col(track_idx) if track_idx >= 0 else '',
             'phasesDone': col(done_idx) if done_idx >= 0 else '',
             'waitNote': col(wait_idx) if wait_idx >= 0 else '',
             'clientReports': col(cr_idx) if cr_idx >= 0 else '',
             'checkBack': col(cb_idx) if cb_idx >= 0 else '',
+            'cabinetry': col(cab_idx) if cab_idx >= 0 else '',
             'bphoto': med(13), 'aphoto': med(15),
             'bvideo': med(16), 'avideo': med(17),
             'queuePos': 0,
