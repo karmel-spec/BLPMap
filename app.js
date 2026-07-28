@@ -183,6 +183,7 @@ async function boot() {
    lists the tasks with mark-off pills; per-piano marks live on the Piano
    Log's "Task Status" tab via the piano-tasks bridge. */
 const PIANO_TASKS_API = 'https://blpsalesapp.netlify.app/.netlify/functions/piano-tasks';
+const PLATING_REQUEST_API = 'https://blpsalesapp.netlify.app/.netlify/functions/plating-request';
 let TRACKDEFS = null;
 // live from the Sequence sheet (10-min server cache) so Brigham's tab edits
 // apply automatically; the committed snapshot is the offline fallback
@@ -255,7 +256,7 @@ const taskId = n => String(n).toLowerCase().replace(/\s*\(.*?\)\s*/g, ' ').repla
 function taskSteps(name) {
   const t = name.toLowerCase();
   if (t.includes('decal')) return ['Ordered', 'Received'];
-  if (t.includes('electroplat')) return ['Mailed', 'Received'];
+  if (t.includes('electroplat')) return ['Submitted', 'Received'];
   if (t.includes('order parts')) return ['Ordered', 'Received'];  // per part
   return [null, 'Done'];
 }
@@ -327,14 +328,18 @@ function renderTasksInto(p, pop, state) {
       html += `<div class="tpart partadd"><input placeholder="+ part to order (e.g. Abel Hammers)" maxlength="60">
         <button class="tpill padd" data-task="${esc(def.id)}">+ add</button></div>`;
     } else {
-      html += `<div class="tpills">${s1 ? pill(def.id, '', 1, s1, row && row.step1At) : ''}${pill(def.id, '', 2, s2, row && row.step2At)}</div>`;
+      const reqBtn = def.id.includes('electroplat')
+        ? `<button class="tpill preq" data-task="${esc(def.id)}">✉ request form</button>` : '';
+      html += `<div class="tpills">${s1 ? pill(def.id, '', 1, s1, row && row.step1At) : ''}${pill(def.id, '', 2, s2, row && row.step2At)}${reqBtn}</div>`;
     }
     html += `</div>`;
   }
   body.innerHTML = html || '<span class="mna">no concurrent tasks for this track</span>';
-  body.querySelectorAll('.tpill:not(.padd)').forEach(b => b.onclick = ev => {
+  body.querySelectorAll('.tpill:not(.padd):not(.preq)').forEach(b => b.onclick = ev => {
     ev.stopPropagation(); markTask(p, b, pop);
   });
+  const rq = body.querySelector('.preq');
+  if (rq) rq.onclick = ev => { ev.stopPropagation(); openPlatingModal(p, pop); };
   const addBtn = body.querySelector('.padd');
   if (addBtn) addBtn.onclick = async ev => {
     ev.stopPropagation();
@@ -1744,6 +1749,92 @@ function openMiscModal(p, pop) {
     toggleTrack(p, 'Misc', pop, note);
   };
   ov.querySelector('.miscnotes').focus();
+}
+
+/* ---------- plating request form (replaces the handwritten pad) ----------
+   Mirrors the Category 3b survey columns. Submit = save a 3b row on the
+   plating sheet + email the request from info@ + stamp the card's
+   electroplating task "Submitted". */
+function openPlatingModal(p, pop) {
+  const yn = cls => `<select class="pf ${cls}" style="padding:6px;border:1px solid #cfc9bf;border-radius:6px;font:inherit">
+      <option value=""></option><option>Y</option><option>N</option><option>N/A</option></select>`;
+  const num = (cls, w) => `<input class="pf ${cls}" maxlength="20" style="width:${w || 58}px;padding:6px;border:1px solid #cfc9bf;border-radius:6px;font:inherit">`;
+  const txt = (cls, ph) => `<input class="pf ${cls}" maxlength="200" placeholder="${ph || ''}"
+      style="flex:1;min-width:150px;padding:6px;border:1px solid #cfc9bf;border-radius:6px;font:inherit">`;
+  const grp = (label, inner) => `<div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;padding:5px 0;border-bottom:1px dotted #e4dfd5">
+      <b style="min-width:170px;font-size:12.5px">${label}</b>${inner}</div>`;
+  const sm = s => `<small style="color:#8a8378">${s}</small>`;
+  const ov = modalShell('platmodal', `
+    <span class="x">✕</span>
+    <h3>Plating / buffing request</h3>
+    ${pianoHeader(p)}
+    <div style="max-height:62vh;overflow:auto;margin:6px 0;font-size:13px">
+      ${grp('Location / spot', num('f-location', 70))}
+      ${grp('Pedals', `${sm('how many')}${num('f-pedalsCount')} ${sm('brass?')}${yn('f-pedalsBrass')} ${sm('repair?')}${txt('f-pedalsRepair', 'holes, etc')} ${txt('f-pedalsNotes', 'toe buttons? other?')}`)}
+      ${grp('Pedal rods (external)', `${sm('how many')}${num('f-rodsCount')} ${sm('brass?')}${yn('f-rodsBrass')}`)}
+      ${grp('Lyre support rods', `${sm('how many')}${num('f-lyreCount')} ${sm('brass?')}${yn('f-lyreBrass')}`)}
+      ${grp('Pedal trim', `${sm('brass?')}${yn('f-trimBrass')}`)}
+      ${grp('Continuous hinges', `${sm('how many')}${num('f-chCount')} ${sm('brass?')}${yn('f-chBrass')} ${sm('length')}${num('f-chLength', 80)}`)}
+      ${grp('Lid hinges', `${sm('how many')}${num('f-lhCount')} ${sm('brass?')}${yn('f-lhBrass')} ${txt('f-lhNotes', 'decorative? bent butt? missing?')}`)}
+      ${grp('Fallboard lock', yn('f-fbLock'))}
+      ${grp('Top lid lock (grands)', yn('f-topLock'))}
+      ${grp('Escutcheon', yn('f-escutcheon'))}
+      ${grp('Fallboard strike plate', yn('f-strike'))}
+      ${grp('Fallboard hinges', `${sm('how many')}${num('f-fbhCount')} ${sm('brass?')}${yn('f-fbhBrass')}`)}
+      ${grp('Fallboard hardware', `${txt('f-fbHardware', 'what is it? how many?')} ${sm('brass?')}${yn('f-fbHwBrass')}`)}
+      ${grp('Agraffes', `${sm('tumble?')}${yn('f-agraffes')}`)}
+      ${grp('Other (candelabras…)', `${txt('f-otherItems', 'what items?')} ${sm('brass?')}${yn('f-otherBrass')}`)}
+      ${grp('Screws', `${txt('f-screwTypes', 'head type / diameter / length')} ${txt('f-screwCounts', 'ex: OH #4 5/8": 8')}`)}
+      ${grp('Photos folder', txt('f-photos', 'Drive link — hardware on white posterboard'))}
+      <label style="margin-top:8px">General notes</label>
+      <textarea class="pf f-notes" rows="2" placeholder="anything else the platers should know…"></textarea>
+      <label style="display:flex;gap:7px;align-items:center;margin-top:6px;font-size:13px">
+        <input type="checkbox" class="platmail" checked> Email this request to the plating company (from info@)</label>
+    </div>
+    <button class="tmgo platgo">Submit plating request</button>
+    <div class="tmmsg"></div>`);
+  ov.querySelector('.platgo').onclick = () => submitPlatingRequest(p, pop, ov);
+}
+async function submitPlatingRequest(p, pop, ov) {
+  const msg = ov.querySelector('.tmmsg');
+  const af = authFields();
+  const key = (localStorage.getItem('blp.appkey') || '').trim();
+  if (!af.idToken && !key) {
+    msg.className = 'tmmsg err';
+    msg.textContent = 'Sign in with Google (☰ menu) to make changes — actions are logged under your name.';
+    return;
+  }
+  const f = {};
+  ov.querySelectorAll('.pf').forEach(el => {
+    const k = [...el.classList].find(c => c.startsWith('f-'));
+    if (k && el.value.trim()) f[k.slice(2)] = el.value.trim();
+  });
+  const nm = [(p.year || ''), p.make, p.model].filter(Boolean).join(' ') || p.summary || 'Piano';
+  if (!f.location && p.location) f.location = p.location;
+  const go = ov.querySelector('.platgo');
+  go.disabled = true;
+  msg.className = 'tmmsg';
+  msg.textContent = 'Submitting…';
+  try {
+    const headers = {'content-type': 'application/json'};
+    if (af.idToken) headers.authorization = 'Bearer ' + af.idToken;
+    const r = await fetch(PLATING_REQUEST_API, {method: 'POST', headers,
+      body: JSON.stringify({key, piano: nm, serial: p.serial, f,
+        sendEmail: ov.querySelector('.platmail').checked,
+        by: (af.user && (af.user.name || af.user.email)) || 'Team'})});
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error || j.note || ('HTTP ' + r.status));
+    await postTask(p, pop, {task: 'pedals/cabinetry hardware electroplating and polishing',
+      part: '', step: 1, label: 'Submitted', on: true});
+    loadTasks(p, pop);
+    msg.textContent = '✓ ' + [j.saved ? 'saved to Category 3b' : '', j.emailed ? 'emailed' : '',
+      'card marked Submitted'].filter(Boolean).join(' · ') + (j.note ? ' — ' + j.note : '');
+    go.textContent = 'Submitted ✓';
+  } catch (e) {
+    msg.className = 'tmmsg err';
+    msg.textContent = '✗ ' + (e.message || e);
+    go.disabled = false;
+  }
 }
 
 // toggle a completed-phase checkmark; the list is saved to PHASES DONE
