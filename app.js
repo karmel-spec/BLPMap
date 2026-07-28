@@ -71,6 +71,7 @@ const AREA_BINS = [
   {test: l => l.includes('refinish'), zones: ['refinishing shop', 'refinishing room']},
   {test: l => l.includes('sanding'), zones: ['sanding shop', 'back shop', 'sanding room']},
   {test: l => /conference room|larson home/i.test(l), zones: ['conference room']},
+  {test: l => /\bwing room 4\b/i.test(l), zones: ['recital hall wing room 4']},
 ];
 // which bin (if any) a piano's location assigns it to
 function areaBinFor(p) {
