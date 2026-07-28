@@ -92,7 +92,7 @@ function binForZone(normLabel) {
   return AREA_BINS.find(b => b.zones.includes(normLabel)) || null;
 }
 // display relabels for zone labels (sheet may still say "Back Shop")
-const ZONE_RELABEL = {'back shop': 'Sanding Shop'};
+const ZONE_RELABEL = {'back shop': 'Sanding Shop', 'upstairs office 3': '3D Printing Lab', 'admin office': 'Bench Room'};
 
 const S = {
   map: null, data: null, floor: 0, search: '', view: 'map',
@@ -1021,32 +1021,27 @@ function renderMap() {
     const bin = binForZone(norm);
     const list = bin ? binPianos.get(bin) : null;
     const isExpandedConf = bin && bin.key === 'conference' && list && list.length;
-    if (z.w > 4 && z.h > 4 && !isExpandedConf)
+    if (z.w > 4 && z.h > 4)
       s += `<rect x="${z.x}" y="${z.y}" width="${z.w}" height="${z.h}" class="zonebox ${cls}"/>`;
     if (isExpandedConf) {
-      // this zone's real footprint (200x42) is far too small for its
-      // piano count — grow it downward, keep the label clear at the top,
-      // and give the financed group its own bigger, more-spaced cluster
-      const fs = 13;
+      // keep the real room's rectangle exactly as drawn (it's the actual
+      // room, not a fabricated zone) — the label lives inside it as usual,
+      // and the pianos themselves float in the blank floor space BELOW it,
+      // never inside that box, with the financed group further down still
+      s += `<text x="${z.x + z.w / 2}" y="${z.y + z.h / 2 + 4}" text-anchor="middle" class="zlabel ${cls}" font-size="${Math.min(12, Math.max(9, z.h * 0.28))}">${esc(disp)}</text>`;
       const general = list.filter(p => !isPrivateFinancing(p));
       const financed = list.filter(p => isPrivateFinancing(p));
-      const gGap = 34, gCols = Math.max(1, Math.floor((z.w - 16) / gGap));
-      const gRows = Math.ceil(general.length / gCols) || 0;
+      const gGap = 34, gCols = Math.max(1, Math.floor((z.w + 40) / gGap));
       const gRowH = 34, gSc = 1.05;
-      const fGap = 52, fCols = Math.max(1, Math.floor((z.w - 16) / fGap));
-      const fRows = Math.ceil(financed.length / fCols) || 0;
+      const fGap = 52, fCols = Math.max(1, Math.floor((z.w + 40) / fGap));
       const fRowH = 50, fSc = 1.5;
-      const top = z.y + fs + 14;
-      const groupGap = general.length && financed.length ? 16 : 0;
-      const totalH = fs + 14 + gRows * gRowH + groupGap + fRows * fRowH + 14;
-      const zh = Math.max(z.h, totalH);
-      s += `<rect x="${z.x}" y="${z.y}" width="${z.w}" height="${zh}" rx="6" class="zonebox ${cls}"/>`;
-      s += `<text x="${z.x + z.w / 2}" y="${z.y + fs + 2}" text-anchor="middle" class="zlabel ${cls}" font-size="${fs}">${esc(disp)}</text>`;
+      const top = z.y + z.h + 20;
+      const groupGap = general.length && financed.length ? 18 : 0;
       general.forEach((p, i) => {
         const row = Math.floor(i / gCols), col = i % gCols;
         const rowCount = Math.min(gCols, general.length - row * gCols);
         const rowW = rowCount * gGap;
-        const cx = z.x + (z.w - rowW) / 2 + col * gGap + gGap / 2;
+        const cx = z.x + z.w / 2 - rowW / 2 + col * gGap + gGap / 2;
         const cy = top + row * gRowH + gRowH / 2;
         S.binXY[p.row] = {x: cx, y: cy};
         const st = pianoStatus(p);
@@ -1055,12 +1050,13 @@ function renderMap() {
         s += `<g class="piano ${finClass(p)} ${st} own-${ownerClass(p)} ${dim ? 'dim' : ''} ${hl ? 'hl' : ''}"
               data-row="${p.row}">${glyph(p.type, cx, cy, gSc)}${phaseText(p, cx, cy, gSc)}${mediaBadge(p, cx, cy, gSc)}</g>`;
       });
+      const gRows = Math.ceil(general.length / gCols) || 0;
       const finTop = top + gRows * gRowH + groupGap;
       financed.forEach((p, i) => {
         const row = Math.floor(i / fCols), col = i % fCols;
         const rowCount = Math.min(fCols, financed.length - row * fCols);
         const rowW = rowCount * fGap;
-        const cx = z.x + (z.w - rowW) / 2 + col * fGap + fGap / 2;
+        const cx = z.x + z.w / 2 - rowW / 2 + col * fGap + fGap / 2;
         const cy = finTop + row * fRowH + fRowH / 2;
         S.binXY[p.row] = {x: cx, y: cy};
         const hl = S.focusRow === p.row || (q && matches(p, q));
