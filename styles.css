@@ -390,9 +390,6 @@ td a{color:#9e2020}
 
 .agver{margin-top:10px;font-size:10px;color:#c2c9cf}
 
-.confzone{fill:#f4f0fb;stroke:#8a6fc9;stroke-width:1.5;stroke-dasharray:5 3}
 /* Private Financing pianos — lime green wherever they render on the map */
 .piano.financed .pbody{fill:#32cd32}
 .piano.financed .pk{fill:#1f7a1f}
-.conftitle{fill:#5c4a99;font-weight:700;letter-spacing:1px}
-.confname{fill:#3d3040}
