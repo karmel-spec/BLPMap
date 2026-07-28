@@ -1352,7 +1352,8 @@ function renderMap() {
 let hideTimer = null, popPinned = false;
 function scheduleHide() {
   if (popPinned) return;
-  hideTimer = setTimeout(() => { $('#pop').hidden = true; }, 250);
+  // long enough to cross the gap to the card itself before it vanishes
+  hideTimer = setTimeout(() => { $('#pop').hidden = true; }, 500);
 }
 function cancelHide() { clearTimeout(hideTimer); }
 $('#pop').addEventListener('mouseenter', cancelHide);
