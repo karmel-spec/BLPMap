@@ -3012,8 +3012,14 @@ function place(pop, el) {
 
 /* ---------- reports (accordion of printable reports) ---------- */
 // pianos that have arrived but carry no CURRENT PHASE at all
+// only the shop's actual work queue is expected to carry a phase/track —
+// storage, rentals, financing, staged-elsewhere sections etc. are exempt
+function inShopwork(p) {
+  return (p.section || '').trim().toUpperCase() === 'CUSTOM SHOPWORK';
+}
 function missingStage() {
-  return S.data.pianos.filter(p => p.active && !comingSoon(p) && !p.phase && !p.isNew);
+  return S.data.pianos.filter(p => p.active && !comingSoon(p) && !p.isNew
+    && inShopwork(p) && (!p.phase || !p.track));
 }
 function pianoName(p) {
   return (p.year ? p.year + ' ' : '')
@@ -3037,12 +3043,13 @@ function dupTable() {
 }
 function missingStageTable() {
   const ms = missingStage();
-  return `<table><tr><th>PIANO</th><th>SERIAL</th><th>LOCATION</th><th>LOG SECTION</th><th></th></tr>` +
+  const missing = p => [!p.phase && 'Phase', !p.track && 'Track'].filter(Boolean).join(' & ');
+  return `<table><tr><th>PIANO</th><th>SERIAL</th><th>LOCATION</th><th>MISSING</th><th></th></tr>` +
     (ms.map(p => `<tr class="mrow" data-row="${p.row}"><td>${esc(pianoName(p))}</td>
       <td>${esc(p.serial)}</td><td class="locraw">${esc(p.location || '(blank)')}</td>
-      <td>${esc((p.section || '—').slice(0, 38))}</td>
+      <td>${esc(missing(p))}</td>
       <td><a target="_blank" rel="noopener" href="${logLink(p)}">log ↗</a></td></tr>`).join('')
-     || '<tr><td colspan="5" class="empty">None — every arrived piano has a shop stage. 🎉</td></tr>') + '</table>';
+     || '<tr><td colspan="5" class="empty">None — every Custom Shopwork piano has a phase and track. 🎉</td></tr>') + '</table>';
 }
 // one bare table of pianos (no "still needed" column — the section
 // heading already says which category this is)
@@ -3118,7 +3125,7 @@ const REPORT_DEFS = () => [
    desc: 'Two or more active pianos claim the same map spot — one of them is wrong.',
    html: dupTable},
   {id: 'stage', icon: '🔧', title: 'MISSING SHOP STAGE', count: missingStage().length,
-   desc: 'Arrived pianos with no CURRENT PHASE in the Piano Log. Click a row to jump to the piano.',
+   desc: 'Pianos in the Custom Shopwork section missing a CURRENT PHASE or TRACK — storage, rentals, financing, and other non-shopwork sections are exempt. Click a row to jump to the piano.',
    html: missingStageTable},
   {id: 'media', icon: '📸', title: 'MEDIA NEEDED', count: S.data.pianos.filter(p =>
      p.active && !notYetArrived(p) && (mediaNeeds(p).photo || mediaNeeds(p).video)).length,
