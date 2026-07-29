@@ -1428,7 +1428,11 @@ function popHTML(p) {
     ? `<div class="movebox">
          <input class="mvin" placeholder="new spot #" maxlength="12">
          <button class="mvgo">Update</button>
-       </div><div class="mvmsg"></div>`
+       </div><div class="mvmsg"></div>
+       <div class="movebox cabbox">
+         <input class="cabin" placeholder="cabinetry # — 8-3, 5-RF…" maxlength="6">
+         <button class="mvgo cabgo2">Add</button>
+       </div>`
     : `<div class="mvmsg">No serial # — change location in the Piano Log.</div>`;
   // shop queue reorder: row order in Custom Shopwork IS the queue, so setting
   // a new number physically moves the piano's row in the Piano Log
@@ -1554,6 +1558,21 @@ function wirePop(p) {
     // control on the card (tuning, phases, media, tags, move) stays put
     if (!ev.target.closest('.btn')) return;
     window.open(logLink(p), '_blank', 'noopener');
+  };
+  const cgo = pop.querySelector('.cabgo2');
+  if (cgo) cgo.onclick = ev => {
+    ev.stopPropagation();
+    const inp = pop.querySelector('.cabin');
+    const tok = parseCabToken(inp.value);
+    const msg = pop.querySelector('.cabmsg');
+    if (!tok) {
+      if (msg) { msg.className = 'cabmsg phmsg err'; msg.textContent = 'Format: rack‑shelf, e.g. 8‑3 · or rack‑side‑shelf, e.g. 5‑RF (racks 6 & 8 have no side).'; }
+      return;
+    }
+    const list = cabTokens(p);
+    if (!list.includes(tok)) list.push(tok);
+    inp.value = '';
+    saveCabinetry(p, list, pop);
   };
   const go = pop.querySelector('.mvgo:not(.qgo)');
   if (go) go.onclick = () => movePiano(p, pop.querySelector('.mvin:not(.qin)').value.trim(), pop);
@@ -1761,6 +1780,19 @@ const CAB_UNITS = {
 };
 const CAB_DBL_LEVELS = [['T', 'Top shelf'], ['3', '3rd shelf'], ['2', '2nd shelf'], ['1', '1st shelf'], ['F', 'Floor']];
 const CAB_SGL_LEVELS = [['6', '6th (top)'], ['5', '5th shelf'], ['4', '4th shelf'], ['3', '3rd shelf'], ['2', '2nd shelf'], ['1', '1st (bottom)']];
+// normalize hand-typed shelf codes: "5rf" / "5 RF" / "5-rf" -> "5-RF",
+// "83" is invalid but "8-3" / "83rd"-style typos aren't guessed at
+function parseCabToken(str) {
+  const m = /^([1-9])\s*-?\s*([LR])?\s*-?\s*(T|F|[1-6])$/i.exec(String(str || '').trim());
+  if (!m) return null;
+  const unit = m[1], side = (m[2] || '').toUpperCase(), lvl = m[3].toUpperCase();
+  if (CAB_UNITS[unit] === 'single') {
+    if (side || !/^[1-6]$/.test(lvl)) return null;   // single racks: shelf 1-6, no side
+    return unit + '-' + lvl;
+  }
+  if (!side || !/^[T3210F]$/.test(lvl) || lvl === '0') return null;  // double: side + T/3/2/1/F
+  return unit + '-' + side + lvl;
+}
 function cabTokens(p) {
   return (p.cabinetry || '').split(',').map(t => t.trim()).filter(Boolean);
 }
