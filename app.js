@@ -1109,27 +1109,30 @@ function renderMap() {
           }
         }
         // the room door is at the EAST (right) end — walking in, the left
-        // wall (units 1·3·5·7·9) is the map's south side, drawn BELOW the
-        // label; the right wall (junk, 2·4·6·8) is drawn ABOVE it. Door-
-        // nearest unit sits at the right end of each row.
-        const bw = 96, bh = 42, gap = 12;
-        const cx0 = z.x + z.w / 2 - (5 * bw + 4 * gap) / 2;
+        // wall (units 1·3·5·7·9) is the map's south side, the right wall
+        // (junk, 2·4·6·8) the north. Each unit is a deep rack drawn as a
+        // tall rectangle stretching from its wall to the room label, the
+        // door-nearest unit at the east (right) end of each row.
+        const roomCx = z.x + z.w / 2;
+        const rowW = 1020, bw = 172, bgap = (rowW - 5 * bw) / 4;
+        const cx0 = roomCx - rowW / 2;
+        const topH = 130, botH = 215;
         const rowsCab = [
-          {y: z.y - bh - 14, units: ['8', '6', '4', '2', 'junk']},
-          {y: z.y + z.h + 14, units: ['9', '7', '5', '3', '1']},
+          {y: z.y - 14 - topH, h: topH, units: ['8', '6', '4', '2', 'junk']},
+          {y: z.y + z.h + 14, h: botH, units: ['9', '7', '5', '3', '1']},
         ];
         for (const c of rowsCab) {
           c.units.forEach((u, i) => {
-            const bx = cx0 + i * (bw + gap);
-            const by = c.y;
+            const bx = cx0 + i * (bw + bgap);
+            const by = c.y, mid = by + c.h / 2;
             if (u === 'junk') {
-              s += `<rect x="${bx}" y="${by}" width="${bw}" height="${bh}" rx="6" class="cabjunkbox"/>
-                    <text x="${bx + bw / 2}" y="${by + bh / 2 + 3.5}" text-anchor="middle" class="cabjunktxt" font-size="9">JUNK PARTS</text>`;
+              s += `<rect x="${bx}" y="${by}" width="${bw}" height="${c.h}" rx="6" class="cabjunkbox"/>
+                    <text x="${bx + bw / 2}" y="${mid + 3.5}" text-anchor="middle" class="cabjunktxt" font-size="11">JUNK PARTS</text>`;
             } else {
               const n = counts[u] || 0;
-              s += `<rect x="${bx}" y="${by}" width="${bw}" height="${bh}" rx="6" class="cabunitbox" data-unit="${u}"/>
-                    <text x="${bx + bw / 2 - (n ? 8 : 0)}" y="${by + bh / 2 + 5}" text-anchor="middle" class="cabunitnum" data-unit="${u}" font-size="15">${u}</text>`;
-              if (n) s += `<text x="${bx + bw / 2 + 14}" y="${by + bh / 2 + 4}" text-anchor="middle" class="cabcnt" data-unit="${u}" font-size="9.5">${n}</text>`;
+              s += `<rect x="${bx}" y="${by}" width="${bw}" height="${c.h}" rx="6" class="cabunitbox" data-unit="${u}"/>
+                    <text x="${bx + bw / 2 - (n ? 12 : 0)}" y="${mid + 8}" text-anchor="middle" class="cabunitnum" data-unit="${u}" font-size="24">${u}</text>`;
+              if (n) s += `<text x="${bx + bw / 2 + 20}" y="${mid + 6}" text-anchor="middle" class="cabcnt" data-unit="${u}" font-size="12">${n}</text>`;
             }
           });
         }
