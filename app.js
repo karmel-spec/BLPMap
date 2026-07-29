@@ -1131,8 +1131,10 @@ function renderMap() {
             } else {
               const n = counts[u] || 0;
               s += `<rect x="${bx}" y="${by}" width="${bw}" height="${c.h}" rx="6" class="cabunitbox" data-unit="${u}"/>
-                    <text x="${bx + bw / 2 - (n ? 12 : 0)}" y="${mid + 8}" text-anchor="middle" class="cabunitnum" data-unit="${u}" font-size="24">${u}</text>`;
-              if (n) s += `<text x="${bx + bw / 2 + 20}" y="${mid + 6}" text-anchor="middle" class="cabcnt" data-unit="${u}" font-size="12">${n}</text>`;
+                    <text x="${bx + bw / 2}" y="${mid + 8}" text-anchor="middle" class="cabunitnum" data-unit="${u}" font-size="24">${u}</text>`;
+              // red count bubble pinned in the rack's top-left corner
+              if (n) s += `<circle cx="${bx + 17}" cy="${by + 17}" r="12" class="cabcntc" data-unit="${u}"/>
+                    <text x="${bx + 17}" y="${by + 21}" text-anchor="middle" class="cabcnt2" data-unit="${u}" font-size="11">${n}</text>`;
             }
           });
         }
@@ -1382,7 +1384,7 @@ function renderMap() {
 
   const svg = $('#plan');
   svg.innerHTML = s;
-  svg.querySelectorAll('.cabunitbox, .cabunitnum, .cabcnt').forEach(el =>
+  svg.querySelectorAll('.cabunitbox, .cabunitnum, .cabcntc, .cabcnt2').forEach(el =>
     el.addEventListener('click', ev => { ev.stopPropagation(); openCabUnitModal(el.dataset.unit); }));
   sizePlan();
   svg.querySelectorAll('.piano').forEach(el => {

@@ -439,7 +439,8 @@ td a{color:#9e2020}
 .cabunitbox{fill:#dde4e9;stroke:#7c8794;stroke-width:1.4;cursor:pointer}
 .cabunitbox:hover{fill:#cfd9e0}
 .cabunitnum{fill:#3c454d;font-weight:800;cursor:pointer}
-.cabcnt{fill:#fff;font-weight:800;cursor:pointer;paint-order:stroke;stroke:#9e2020;stroke-width:8px;stroke-linejoin:round}
+.cabcntc{fill:#9e2020;cursor:pointer}
+.cabcnt2{fill:#fff;font-weight:800;cursor:pointer}
 .cabjunkbox{fill:#efe9df;stroke:#b8a888;stroke-width:1.2}
 .cabjunktxt{fill:#9a8a6a;font-weight:700;letter-spacing:1px}
 .cabtbl{width:100%;border-collapse:collapse;font-size:12px;margin-top:8px}
