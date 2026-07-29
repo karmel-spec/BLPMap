@@ -1108,22 +1108,28 @@ function renderMap() {
             if (mm) counts[mm[1]] = (counts[mm[1]] || 0) + 1;
           }
         }
+        // the room door is at the EAST (right) end — walking in, the left
+        // wall (units 1·3·5·7·9) is the map's south side, drawn BELOW the
+        // label; the right wall (junk, 2·4·6·8) is drawn ABOVE it. Door-
+        // nearest unit sits at the right end of each row.
         const bw = 96, bh = 42, gap = 12;
-        const cols = [
-          {x: z.x, units: ['1', '3', '5', '7', '9']},
-          {x: z.x + z.w - bw, units: ['junk', '2', '4', '6', '8']},
+        const cx0 = z.x + z.w / 2 - (5 * bw + 4 * gap) / 2;
+        const rowsCab = [
+          {y: z.y - bh - 14, units: ['8', '6', '4', '2', 'junk']},
+          {y: z.y + z.h + 14, units: ['9', '7', '5', '3', '1']},
         ];
-        for (const c of cols) {
+        for (const c of rowsCab) {
           c.units.forEach((u, i) => {
-            const by = z.y + z.h + 14 + i * (bh + gap);
+            const bx = cx0 + i * (bw + gap);
+            const by = c.y;
             if (u === 'junk') {
-              s += `<rect x="${c.x}" y="${by}" width="${bw}" height="${bh}" rx="6" class="cabjunkbox"/>
-                    <text x="${c.x + bw / 2}" y="${by + bh / 2 + 3.5}" text-anchor="middle" class="cabjunktxt" font-size="9">JUNK PARTS</text>`;
+              s += `<rect x="${bx}" y="${by}" width="${bw}" height="${bh}" rx="6" class="cabjunkbox"/>
+                    <text x="${bx + bw / 2}" y="${by + bh / 2 + 3.5}" text-anchor="middle" class="cabjunktxt" font-size="9">JUNK PARTS</text>`;
             } else {
               const n = counts[u] || 0;
-              s += `<rect x="${c.x}" y="${by}" width="${bw}" height="${bh}" rx="6" class="cabunitbox" data-unit="${u}"/>
-                    <text x="${c.x + bw / 2 - (n ? 8 : 0)}" y="${by + bh / 2 + 5}" text-anchor="middle" class="cabunitnum" data-unit="${u}" font-size="15">${u}</text>`;
-              if (n) s += `<text x="${c.x + bw / 2 + 14}" y="${by + bh / 2 + 4}" text-anchor="middle" class="cabcnt" data-unit="${u}" font-size="9.5">${n}</text>`;
+              s += `<rect x="${bx}" y="${by}" width="${bw}" height="${bh}" rx="6" class="cabunitbox" data-unit="${u}"/>
+                    <text x="${bx + bw / 2 - (n ? 8 : 0)}" y="${by + bh / 2 + 5}" text-anchor="middle" class="cabunitnum" data-unit="${u}" font-size="15">${u}</text>`;
+              if (n) s += `<text x="${bx + bw / 2 + 14}" y="${by + bh / 2 + 4}" text-anchor="middle" class="cabcnt" data-unit="${u}" font-size="9.5">${n}</text>`;
             }
           });
         }
