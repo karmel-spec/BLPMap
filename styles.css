@@ -84,10 +84,8 @@ body{background:#f7f8f9;color:#121212;display:flex;flex-direction:column;overflo
 .piano.sale.own-blp .pk{fill:#9aa3ac}  /* gray bench = BLP owned */
 .piano.sched .pbody{fill:#7c3aed}
 .piano.tune .pbody{fill:#3a6ea5}
-.piano.coming .pbody{fill:#f4c20d}   /* not yet at the store */
-.piano.coming .pk{fill:#8a6a00}
-.piano.rented .pbody{fill:#e8871e}   /* out on rental — orange */
-.piano.rented .pk{fill:#7a4708}
+.piano.coming .pbody{fill:#f4c20d}   /* not yet at the store — bench stays ownership-colored */
+.piano.rented .pbody{fill:#e8871e}   /* out on rental — orange; bench stays ownership-colored */
 .rentzone{fill:#fdf5ec;stroke:#e8b47e;stroke-width:2;stroke-dasharray:10 6}
 .renttitle{fill:#c26a10;font-weight:800;letter-spacing:2px}
 .rentname{fill:#7a4708;font-weight:600;pointer-events:none}
@@ -415,10 +413,8 @@ td a{color:#9e2020}
 .agver{margin-top:10px;font-size:10px;color:#c2c9cf}
 
 /* Private Financing pianos — lime green wherever they render on the map */
-.piano.financed .pbody{fill:#32cd32}
-.piano.financed .pk{fill:#1f7a1f}
-.piano.larsonfam .pbody{fill:#5bb8e8}
-.piano.larsonfam .pk{fill:#1f5f7a}
+.piano.financed .pbody{fill:#32cd32}   /* bench stays ownership-colored, not lime */
+.piano.larsonfam .pbody{fill:#5bb8e8}   /* bench stays ownership-colored, not sky-blue */
 .finbadge{fill:#0a5c0a;font-weight:900;paint-order:stroke;stroke:#fff;stroke-width:2.2px;stroke-linejoin:round}
 
 /* front door / parking lot — coming-soon pianos, staged outside the building */
@@ -450,7 +446,6 @@ td a{color:#9e2020}
 .cabp small{color:#8a929a}
 .cabempty{color:#c2c9cf}
 .cabnote{font-size:11.5px;color:#8a929a;margin:10px 0 0}
-.csq{fill:#5c4a99;font-weight:800;paint-order:stroke;stroke:#fff;stroke-width:2px;stroke-linejoin:round}
 
 /* digital whiteboard replica (cabinetry unit popup) */
 .wbboard{background:#fbfbf9;border:7px solid #e8e6e1;border-radius:12px;padding:10px 14px;box-shadow:inset 0 1px 4px rgba(0,0,0,.06)}

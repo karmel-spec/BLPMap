@@ -734,7 +734,10 @@ function renderMoves() {
 // phase number/letter drawn dead-center on the icon (always upright,
 // even when the piano glyph itself is rotated against a wall)
 function phaseText(p, cx, cy, sc) {
-  const lab = phaseLabels(effectivePhase(p), p);
+  // a piano sitting in the shop queue (has a row position in CUSTOM
+  // SHOPWORK) but with no phase assigned yet still reads as "in the
+  // queue" — same Q-# badge as an explicit "In Queue" phase, not blank
+  const lab = phaseLabels(effectivePhase(p), p) || (p.queuePos ? phaseLabels('In Queue', p) : null);
   if (!lab) return '';
   // fit the full "6R"/"10QC" label to the icon width; shrink font as needed,
   // and if it would get too tiny fall back to the number/letter only
@@ -1288,8 +1291,7 @@ function renderMap() {
         const sc = Math.max(0.8, Math.min(1.4, (cch - 20) / 22));
         S.comingXY[p.row] = {x: cx, y: cy0 + cch / 2};
         s += `<g class="piano ${st} own-${ownerClass(p)} ${dim ? 'dim' : ''} ${hl ? 'hl' : ''}"
-              data-row="${p.row}">${glyph(p.type, cx, iconCy, sc)}${phaseText(p, cx, iconCy, sc)}${
-                !effectivePhase(p) && p.queuePos ? `<text x="${cx}" y="${iconCy - 13 * sc}" text-anchor="middle" class="csq" font-size="${8.5 * sc}">Q-${p.queuePos}</text>` : ''}</g>`;
+              data-row="${p.row}">${glyph(p.type, cx, iconCy, sc)}${phaseText(p, cx, iconCy, sc)}</g>`;
         s += `<text x="${cx}" y="${cy0 + cch - 4}" text-anchor="middle" class="csnname" font-size="9">`
           + nameLines.map(L => esc(L)).join('') + `</text>`;
       });
