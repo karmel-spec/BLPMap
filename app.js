@@ -3675,6 +3675,31 @@ $('#movesClose').onclick = () => { S.feedOpen = false; syncFeed(); };
 
 $('#legendBtn').onclick = () => { const p = $('#legendPanel'); p.hidden = !p.hidden; };
 
+// top-bar 🏢 BLP Apps menu — links to the other BLP webapps
+const appsTopBtn = $('#appsTopBtn');
+if (appsTopBtn) {
+  appsTopBtn.onclick = () => {
+    const m = $('#appsTopMenu');
+    m.hidden = !m.hidden;
+    if (!m.hidden) {
+      const r = appsTopBtn.getBoundingClientRect();
+      const menuW = Math.max(190, m.offsetWidth || 0);
+      const right = Math.min(
+        Math.max(8, window.innerWidth - r.right),
+        Math.max(8, window.innerWidth - menuW - 8));
+      m.style.position = 'fixed';
+      m.style.top = (r.bottom + 6) + 'px';
+      m.style.right = right + 'px';
+      m.style.left = 'auto';
+    }
+  };
+  document.addEventListener('click', e => {
+    if (!e.target.closest('#appsTopBtn') && !e.target.closest('#appsTopMenu')) {
+      $('#appsTopMenu').hidden = true;
+    }
+  });
+}
+
 // top-bar 📨 Request menu — general requests, no piano required
 const topReqBtn = $('#reqTopBtn');
 if (topReqBtn) {
