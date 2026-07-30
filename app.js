@@ -3440,6 +3440,263 @@ function mediaTable() {
     </div>`;
   }).join('');
 }
+/* ---------- Shop Work Map: geocode CUSTOM SHOPWORK pianos from free-text
+   owner/notes, same technique as the Sales App's Lead Map (US Census
+   Gazetteer, no API key, no per-piano network call) ---------- */
+const STATE_NAMES = {
+  AL: "Alabama", AK: "Alaska", AZ: "Arizona", AR: "Arkansas", CA: "California",
+  CO: "Colorado", CT: "Connecticut", DE: "Delaware", DC: "District of Columbia",
+  FL: "Florida", GA: "Georgia", HI: "Hawaii", ID: "Idaho", IL: "Illinois",
+  IN: "Indiana", IA: "Iowa", KS: "Kansas", KY: "Kentucky", LA: "Louisiana",
+  ME: "Maine", MD: "Maryland", MA: "Massachusetts", MI: "Michigan",
+  MN: "Minnesota", MS: "Mississippi", MO: "Missouri", MT: "Montana",
+  NE: "Nebraska", NV: "Nevada", NH: "New Hampshire", NJ: "New Jersey",
+  NM: "New Mexico", NY: "New York", NC: "North Carolina", ND: "North Dakota",
+  OH: "Ohio", OK: "Oklahoma", OR: "Oregon", PA: "Pennsylvania",
+  RI: "Rhode Island", SC: "South Carolina", SD: "South Dakota",
+  TN: "Tennessee", TX: "Texas", UT: "Utah", VT: "Vermont", VA: "Virginia",
+  WA: "Washington", WV: "West Virginia", WI: "Wisconsin", WY: "Wyoming",
+};
+const NAME_TO_ABBR = Object.fromEntries(
+  Object.entries(STATE_NAMES).map(([abbr, name]) => [name.toLowerCase(), abbr]));
+const STATE_CENTROIDS = {
+  AL: [32.79, -86.83], AK: [64.07, -152.28], AZ: [34.27, -111.66],
+  AR: [34.89, -92.44], CA: [37.18, -119.47], CO: [38.99, -105.55],
+  CT: [41.62, -72.73], DE: [38.99, -75.51], DC: [38.91, -77.01],
+  FL: [28.63, -82.45], GA: [32.64, -83.44], HI: [20.29, -156.37],
+  ID: [44.35, -114.61], IL: [40.04, -89.2], IN: [39.89, -86.28],
+  IA: [42.08, -93.5], KS: [38.49, -98.38], KY: [37.53, -85.3],
+  LA: [31.07, -92.0], ME: [45.37, -69.24], MD: [39.06, -76.8],
+  MA: [42.26, -71.81], MI: [44.35, -85.41], MN: [46.28, -94.31],
+  MS: [32.74, -89.67], MO: [38.35, -92.46], MT: [47.05, -109.63],
+  NE: [41.54, -99.8], NV: [39.33, -116.63], NH: [43.68, -71.58],
+  NJ: [40.19, -74.67], NM: [34.41, -106.11], NY: [42.95, -75.53],
+  NC: [35.56, -79.39], ND: [47.45, -100.47], OH: [40.29, -82.79],
+  OK: [35.58, -97.51], OR: [43.93, -120.56], PA: [40.88, -77.8],
+  RI: [41.68, -71.56], SC: [33.92, -80.9], SD: [44.44, -100.23],
+  TN: [35.86, -86.35], TX: [31.48, -99.33], UT: [39.31, -111.67],
+  VT: [44.07, -72.67], VA: [37.52, -78.85], WA: [47.38, -120.45],
+  WV: [38.64, -80.62], WI: [44.62, -89.99], WY: [43.0, -107.55],
+};
+const HOME_STATE = 'ut';   // BLP is Utah-based — breaks ties on ambiguous city names
+const ABBRS = Object.keys(STATE_NAMES);
+function normCity(raw) {
+  return raw.toLowerCase().replace(/[.'’]/g, '')
+    .replace(/^saint\s+/, 'st ').replace(/^ft\.?\s+/, 'fort ')
+    .replace(/\s+/g, ' ').trim();
+}
+let GEO_READY = null;   // Promise resolving once PLACE_INDEX/CITY_STATES/ZIPS are built
+let PLACE_INDEX = null, CITY_STATES = null, ZIPS = null;
+function loadGeoData() {
+  if (GEO_READY) return GEO_READY;
+  GEO_READY = Promise.all([
+    fetch('data/us-places.json').then(r => r.json()),
+    fetch('data/us-zips.json').then(r => r.json()),
+  ]).then(([places, zips]) => {
+    ZIPS = zips;
+    PLACE_INDEX = new Map(); CITY_STATES = new Map();
+    for (const [key, coords] of Object.entries(places)) {
+      const [city, st] = key.split('|');
+      const norm = normCity(city);
+      PLACE_INDEX.set(`${norm}|${st}`, coords);
+      const states = CITY_STATES.get(norm);
+      if (states) { if (!states.includes(st)) states.push(st); }
+      else CITY_STATES.set(norm, [st]);
+    }
+  });
+  return GEO_READY;
+}
+function precedingTokens(text, end) {
+  const before = text.slice(0, end).replace(/[,\s]+$/, '');
+  const m = before.match(/((?:[A-Za-z][\w.'’-]*)(?:[ \t][A-Za-z][\w.'’-]*){0,3})$/);
+  return m ? m[1].split(/[ \t]+/) : [];
+}
+const CITY_STOPWORDS = new Set(['north', 'south', 'east', 'west', 'center', 'central']);
+function lookupCity(tokens, st) {
+  for (let take = Math.min(4, tokens.length); take >= 1; take--) {
+    const words = tokens.slice(tokens.length - take);
+    const probe = normCity(words.join(' '));
+    if (!probe || (take === 1 && CITY_STOPWORDS.has(probe))) continue;
+    const coords = PLACE_INDEX.get(`${probe}|${st.toLowerCase()}`);
+    if (coords) return {coords, city: words.join(' ')};
+  }
+  return null;
+}
+function titleCase(s) { return s.replace(/\b\w/g, c => c.toUpperCase()); }
+const ABBR_RE = new RegExp(`\\b(${ABBRS.filter(a => a !== 'OK').join('|')})\\b`, 'g');
+const FULL_NAMES = Object.values(STATE_NAMES).sort((a, b) => b.length - a.length);
+const FULL_NAME_RE = new RegExp(`\\b(${FULL_NAMES.join('|')})\\b`, 'gi');
+const STATE_ZIP_RE = new RegExp(`\\b(${ABBRS.join('|')})\\.?,?\\s+(\\d{5})(?:-\\d{4})?\\b`, 'g');
+function extractFromText(text) {
+  if (!text || !text.trim()) return null;
+  for (const m of text.matchAll(ABBR_RE)) {
+    const st = m[1];
+    const city = lookupCity(precedingTokens(text, m.index), st);
+    if (city) return {lat: city.coords[0], lng: city.coords[1],
+      place: `${titleCase(city.city)}, ${st}`, state: st, precision: 'city'};
+  }
+  for (const m of text.matchAll(FULL_NAME_RE)) {
+    const st = NAME_TO_ABBR[m[1].toLowerCase()];
+    if (!st) continue;
+    const city = lookupCity(precedingTokens(text, m.index), st);
+    if (city) return {lat: city.coords[0], lng: city.coords[1],
+      place: `${titleCase(city.city)}, ${st}`, state: st, precision: 'city'};
+  }
+  for (const m of text.matchAll(STATE_ZIP_RE)) {
+    const coords = ZIPS[m[2]];
+    if (coords) return {lat: coords[0], lng: coords[1], place: `${m[1]} ${m[2]}`, state: m[1], precision: 'zip'};
+  }
+  const CUE_CITY_RE = /\b(in|near|from|at|to|around|outside)\s+([A-Z][\w.'’-]*(?:[ \t][A-Z][\w.'’-]*){0,3})/g;
+  const PLACE_ONLY_CUES = new Set(['in', 'near', 'around', 'outside']);
+  for (const m of text.matchAll(CUE_CITY_RE)) {
+    const tokens = m[2].split(/[ \t]+/);
+    for (let take = tokens.length; take >= 1; take--) {
+      if (take === 1 && !PLACE_ONLY_CUES.has(m[1].toLowerCase())) continue;
+      const words = tokens.slice(0, take).join(' ');
+      if (words.length < 4) continue;
+      const norm = normCity(words);
+      if (take === 1 && CITY_STOPWORDS.has(norm)) continue;
+      const states = CITY_STATES.get(norm);
+      let key = null;
+      if (PLACE_INDEX.has(`${norm}|${HOME_STATE}`)) key = `${norm}|${HOME_STATE}`;
+      else if (PLACE_INDEX.has(`${norm} city|${HOME_STATE}`)) key = `${norm} city|${HOME_STATE}`;
+      else if (states && states.length === 1) key = `${norm}|${states[0]}`;
+      if (key) {
+        const st = key.split('|')[1].toUpperCase();
+        const coords = PLACE_INDEX.get(key);
+        return {lat: coords[0], lng: coords[1], place: `${titleCase(words)}, ${st}`, state: st, precision: 'city'};
+      }
+    }
+  }
+  const CONTEXT_STATE_RE = new RegExp(
+    `(?:^|[,(\u2013\u2014-]|\\bin\\b|\\bnear\\b|\\bfrom\\b|\\bto\\b|\\boutside\\b|\\barea of\\b)\\s*(${FULL_NAMES.join('|')})\\b`, 'i');
+  const sm = text.match(CONTEXT_STATE_RE);
+  if (sm) {
+    const st = NAME_TO_ABBR[sm[1].toLowerCase()];
+    const c = st && STATE_CENTROIDS[st];
+    if (c) return {lat: c[0], lng: c[1], place: `${STATE_NAMES[st]} (state)`, state: st, precision: 'state'};
+  }
+  return null;
+}
+const PRECISION_RANK = {city: 0, zip: 1, state: 2};
+function extractPianoGeo(...texts) {
+  let best = null;
+  for (const text of texts) {
+    const hit = extractFromText(text);
+    if (!hit) continue;
+    if (hit.precision === 'city') return hit;
+    if (!best || PRECISION_RANK[hit.precision] < PRECISION_RANK[best.precision]) best = hit;
+  }
+  return best;
+}
+
+const SHOPMAP_VW = 975, SHOPMAP_VH = 610;
+let SHOPMAP_STATES = null;   // cached lower-48+DC path data
+function shopMapProjection(bbox) {
+  const pad = 30;
+  const midLat = (bbox.minLat + bbox.maxLat) / 2;
+  const cos = Math.cos(midLat * Math.PI / 180);
+  const sx = (SHOPMAP_VW - pad * 2) / ((bbox.maxLng - bbox.minLng) * cos);
+  const sy = (SHOPMAP_VH - pad * 2) / (bbox.maxLat - bbox.minLat);
+  const scale = Math.min(sx, sy);
+  const cx = (bbox.minLng + bbox.maxLng) / 2, cy = (bbox.minLat + bbox.maxLat) / 2;
+  return (lng, lat) => [
+    SHOPMAP_VW / 2 + (lng - cx) * cos * scale,
+    SHOPMAP_VH / 2 - (lat - cy) * scale,
+  ];
+}
+function shopMapStatePath(geometry, project) {
+  const polys = geometry.type === 'Polygon' ? [geometry.coordinates]
+    : geometry.type === 'MultiPolygon' ? geometry.coordinates : [];
+  let d = '';
+  for (const rings of polys) {
+    for (const ring of rings) {
+      const pts = ring.map(c => project(c[0], c[1]));
+      if (pts.length < 3) continue;
+      d += 'M' + pts.map(p => `${p[0].toFixed(1)},${p[1].toFixed(1)}`).join('L') + 'Z';
+    }
+  }
+  return d;
+}
+async function loadShopMapStates() {
+  if (SHOPMAP_STATES) return SHOPMAP_STATES;
+  const fc = await fetch('data/us-states.json').then(r => r.json());
+  // lower 48 + DC only — Alaska/Hawaii/territories sit far outside this
+  // bounding box and would otherwise squash the whole map
+  const EXCLUDE = new Set(['Alaska', 'Hawaii', 'Puerto Rico']);
+  const feats = fc.features.filter(f => !EXCLUDE.has(f.properties.name));
+  let minLat = 90, maxLat = -90, minLng = 180, maxLng = -180;
+  for (const f of feats) {
+    const polys = f.geometry.type === 'Polygon' ? [f.geometry.coordinates]
+      : f.geometry.type === 'MultiPolygon' ? f.geometry.coordinates : [];
+    for (const rings of polys) for (const ring of rings) for (const [lng, lat] of ring) {
+      if (lat < minLat) minLat = lat; if (lat > maxLat) maxLat = lat;
+      if (lng < minLng) minLng = lng; if (lng > maxLng) maxLng = lng;
+    }
+  }
+  SHOPMAP_STATES = {feats, bbox: {minLat, maxLat, minLng, maxLng}};
+  return SHOPMAP_STATES;
+}
+function shopWorkPianos() {
+  return S.data.pianos.filter(p => p.active && inShopwork(p));
+}
+async function renderShopMap() {
+  const canvas = $('#shopMapCanvas'), list = $('#shopMapList');
+  if (!canvas || canvas.dataset.rendered === S.data.fetchedAt) return;   // don't rebuild on every nav click
+  canvas.innerHTML = '<div class="empty">Loading map…</div>';
+  list.innerHTML = '';
+  try {
+    const [, {feats, bbox}] = await Promise.all([loadGeoData(), loadShopMapStates()]);
+    const project = shopMapProjection(bbox);
+    const pianos = shopWorkPianos();
+    const pins = [];
+    for (const p of pianos) {
+      const geo = extractPianoGeo(p.owner || '', p.summary || '');
+      if (geo) pins.push({p, geo});
+    }
+    const outOfFrame = pins.filter(x => x.geo.state === 'AK' || x.geo.state === 'HI');
+    const onFrame = pins.filter(x => x.geo.state !== 'AK' && x.geo.state !== 'HI');
+
+    let svg = `<svg viewBox="0 0 ${SHOPMAP_VW} ${SHOPMAP_VH}" role="img" aria-label="US map of shop-work pianos">`;
+    for (const f of feats) {
+      const d = shopMapStatePath(f.geometry, project);
+      if (d) svg += `<path d="${d}" fill-rule="evenodd" class="smstate"><title>${esc(f.properties.name)}</title></path>`;
+    }
+    onFrame.sort((a, b) => (a.geo.precision === 'state') - (b.geo.precision === 'state'));   // city pins drawn last/on-top
+    onFrame.forEach(({p, geo}) => {
+      const xy = project(geo.lng, geo.lat);
+      const r = geo.precision === 'state' ? 6 : 5.5;
+      svg += `<circle cx="${xy[0].toFixed(1)}" cy="${xy[1].toFixed(1)}" r="${r}" class="smpin ${geo.precision === 'state' ? 'smstatepin' : ''}"
+              data-row="${p.row}"><title>${esc(pianoName(p))} — ${esc(geo.place)}</title></circle>`;
+    });
+    svg += '</svg>';
+    canvas.innerHTML = svg;
+    canvas.dataset.rendered = S.data.fetchedAt;
+    canvas.querySelectorAll('.smpin').forEach(el => el.addEventListener('click', () => {
+      const p = S.data.pianos.find(x => x.row === +el.dataset.row);
+      if (p) { switchView('map'); focusPiano(p); }
+    }));
+
+    const rows = pianos.map(p => {
+      const hit = pins.find(x => x.p.row === p.row);
+      return {p, place: hit ? hit.geo.place : null};
+    }).sort((a, b) => (a.place ? 0 : 1) - (b.place ? 0 : 1));
+    list.innerHTML = `<div class="smlisthead">${pianos.length} in Custom Shopwork ·
+        ${pins.length} pinned${outOfFrame.length ? ` (+${outOfFrame.length} in AK/HI, listed below the map only)` : ''} ·
+        ${pianos.length - pins.length} with no address found</div>` +
+      rows.map(({p, place}) => `<div class="smrow ${place ? '' : 'nogeo'}" data-row="${p.row}">
+        <span class="smname">${esc(pianoName(p))}</span>
+        <span class="smplace">${place ? '📍 ' + esc(place) : 'no address found in owner/notes'}</span>
+      </div>`).join('');
+    list.querySelectorAll('.smrow').forEach(el => el.addEventListener('click', () => {
+      const p = S.data.pianos.find(x => x.row === +el.dataset.row);
+      if (p) { switchView('map'); focusPiano(p); }
+    }));
+  } catch (e) {
+    canvas.innerHTML = `<div class="empty">⚠ ${esc(e.message)}</div>`;
+  }
+}
+
 function cabinetryTable() {
   const rows = [];
   for (const p of S.data.pianos) {
@@ -3652,9 +3909,10 @@ function renderBoard() {
 
 /* ---------- views / nav / drawers ---------- */
 function showView(v) {
-  ['map', 'report', 'board', 'cal', 'media'].forEach(x => $('#view-' + x).hidden = x !== v);
+  ['map', 'report', 'board', 'cal', 'media', 'shopmap'].forEach(x => $('#view-' + x).hidden = x !== v);
   document.querySelectorAll('.navitem[data-view]').forEach(el =>
     el.classList.toggle('on', el.dataset.view === v));
+  if (v === 'shopmap') renderShopMap();
 }
 function switchView(v) { S.view = v; showView(v); closeNav(); }
 document.querySelectorAll('.navitem[data-view]').forEach(el =>

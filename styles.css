@@ -266,6 +266,7 @@ td a{color:#9e2020}
 .reqmenu{display:flex;flex-direction:column;border:1px solid #cfd6dc;border-radius:8px;overflow:hidden;margin-top:2px}
 .reqmenu[hidden]{display:none}
 .reqmenu button,.reqmenu a{border:none;background:#fff;text-align:left;padding:7px 12px;font-size:12px;font-weight:600;color:#2b2f33;cursor:pointer;border-bottom:1px solid #f0f2f4;text-decoration:none;display:block}
+.reqmenu a small{color:#9aa3ac;font-weight:500;margin-left:4px}
 .reqmenu button:last-child,.reqmenu a:last-child{border-bottom:none}
 .reqmenu button:hover,.reqmenu a:hover{background:#fdf3f3;color:#9e2020}
 .topreq{position:relative;flex-shrink:0}
@@ -463,3 +464,19 @@ td a{color:#9e2020}
 .wbassign{color:#b8c2ca;cursor:pointer;font-family:Helvetica,Arial,sans-serif;font-size:10.5px}
 .wbassign:hover{color:#9e2020}
 #cabroommodal .card, .blpmodal .card{max-width:560px}
+
+/* Shop Work Map */
+.shopmapwrap{display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap}
+.shopmapcanvas{flex:1 1 560px;min-width:320px;background:#fbfcfd;border:1px solid #e3e6e9;border-radius:10px;padding:8px}
+.shopmapcanvas svg{width:100%;height:auto;display:block}
+.smstate{fill:#f3f0ea;stroke:#cfc8bd;stroke-width:0.8}
+.smpin{fill:#9e2020;fill-opacity:.85;stroke:#fff;stroke-width:1.5;cursor:pointer}
+.smpin:hover{fill-opacity:1;stroke:#121212}
+.smstatepin{fill-opacity:.4}
+.shopmaplist{flex:1 1 260px;min-width:240px;max-height:610px;overflow:auto;border:1px solid #e3e6e9;border-radius:10px}
+.smlisthead{padding:9px 12px;font-size:11px;letter-spacing:.5px;color:#69727a;background:#f7f8f9;border-bottom:1px solid #e3e6e9;position:sticky;top:0}
+.smrow{padding:8px 12px;border-bottom:1px solid #f0f2f4;cursor:pointer;display:flex;flex-direction:column;gap:1px}
+.smrow:hover{background:#fdf7f3}
+.smname{font-weight:700;font-size:12.5px}
+.smplace{font-size:11.5px;color:#5a636b}
+.smrow.nogeo .smplace{color:#b0555c;font-style:italic}

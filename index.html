@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Store Map — Brigham Larson Pianos</title>
 <link rel="icon" href="assets/blp-logo.png">
-<link rel="stylesheet" href="styles.css?v=98">
+<link rel="stylesheet" href="styles.css?v=99">
 </head>
 <body>
 
@@ -26,13 +26,16 @@
   <div class="topreq">
     <button class="iconbtn" id="appsTopBtn">🏢 BLP Apps ▾</button>
     <div class="reqmenu topmenu" id="appsTopMenu" hidden>
-      <a href="https://blpstoremap.netlify.app/" target="_blank" rel="noopener">🗺 Store Map</a>
-      <a href="https://pianologapp.netlify.app/" target="_blank" rel="noopener">🎹 Piano Log</a>
-      <a href="https://blpshop.netlify.app/" target="_blank" rel="noopener">🔧 Shop App</a>
-      <a href="https://blpsalesapp.netlify.app/" target="_blank" rel="noopener">💼 Sales Console</a>
+      <a href="https://blpstoremap.netlify.app/" target="_blank" rel="noopener">🗺 Store Map <small>this app</small></a>
       <a href="https://blpcrm.netlify.app/" target="_blank" rel="noopener">📇 CRM</a>
-      <a href="https://blpagents.netlify.app/" target="_blank" rel="noopener">🤖 Agents</a>
-      <a href="https://blppricetags.netlify.app/" target="_blank" rel="noopener">🏷 Price Tags</a>
+      <a href="https://blpsalesapp.netlify.app/" target="_blank" rel="noopener">💼 Sales App</a>
+      <a href="https://blpsalesapp.netlify.app/map" target="_blank" rel="noopener">📍 US Sales Map</a>
+      <a href="https://blpshop.netlify.app/" target="_blank" rel="noopener">🔧 Shop App</a>
+      <a href="https://blpagents.netlify.app/" target="_blank" rel="noopener">🤖 Agent App</a>
+      <a href="https://pianologapp.netlify.app/" target="_blank" rel="noopener">🎹 Piano Log</a>
+      <a href="https://blppricetags.netlify.app/" target="_blank" rel="noopener">🏷 Price Tag Maker</a>
+      <a href="https://pianotechnologylibrary.com/" target="_blank" rel="noopener">📚 PTL</a>
+      <a href="https://www.brighamlarsonpianos.com/" target="_blank" rel="noopener">🌐 BLP Website</a>
     </div>
   </div>
   <button class="iconbtn drawerbtn" id="movesBtn">🚚 <b id="movesBadge">0</b></button>
@@ -51,6 +54,7 @@
     <div class="navitem" data-view="cal"><span class="ic">📅</span>Calendar</div>
     <div class="navitem" data-view="report"><span class="ic">⚠️</span>Reports</div>
     <div class="navitem" data-view="media"><span class="ic">📸</span>Media</div>
+    <div class="navitem" data-view="shopmap"><span class="ic">📍</span>Shop Work Map</div>
     <div class="crew">
       <b>Move Crew Today</b><span id="crew">—</span>
       <span id="crewMoves" class="crewmoves">— Moves Today</span>
@@ -140,8 +144,19 @@
       <div id="mediaBody"></div>
     </div>
   </div>
+
+  <div class="view panelview" id="view-shopmap" hidden>
+    <div class="panel">
+      <h2 class="ph">📍 CURRENT SHOP WORK — DELIVERY / ORIGIN MAP</h2>
+      <p class="pd">Every piano in the Custom Shopwork queue, pinned by where it's headed for delivery or where it came from — read out of the Piano Log's owner/notes text, same idea as the Sales App's lead map. Click a pin (or a row in the list) to open that piano.</p>
+      <div class="shopmapwrap">
+        <div class="shopmapcanvas" id="shopMapCanvas"><div class="empty">Loading map…</div></div>
+        <div class="shopmaplist" id="shopMapList"></div>
+      </div>
+    </div>
+  </div>
 </div>
 
-<script src="app.js?v=98"></script>
+<script src="app.js?v=99"></script>
 </body>
 </html>
