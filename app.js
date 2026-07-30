@@ -3678,7 +3678,24 @@ $('#legendBtn').onclick = () => { const p = $('#legendPanel'); p.hidden = !p.hid
 // top-bar 📨 Request menu — general requests, no piano required
 const topReqBtn = $('#reqTopBtn');
 if (topReqBtn) {
-  topReqBtn.onclick = () => { const m = $('#reqTopMenu'); m.hidden = !m.hidden; };
+  topReqBtn.onclick = () => {
+    const m = $('#reqTopMenu');
+    m.hidden = !m.hidden;
+    if (!m.hidden) {
+      // pin under the button but clamp inside the viewport — on small
+      // screens the button can sit far left, and a right-anchored 190px
+      // menu would otherwise run off the left edge
+      const r = topReqBtn.getBoundingClientRect();
+      const menuW = Math.max(190, m.offsetWidth || 0);
+      const right = Math.min(
+        Math.max(8, window.innerWidth - r.right),
+        Math.max(8, window.innerWidth - menuW - 8));
+      m.style.position = 'fixed';
+      m.style.top = (r.bottom + 6) + 'px';
+      m.style.right = right + 'px';
+      m.style.left = 'auto';
+    }
+  };
   document.addEventListener('click', e => {
     if (!e.target.closest('#reqTopBtn') && !e.target.closest('#reqTopMenu')) {
       $('#reqTopMenu').hidden = true;
