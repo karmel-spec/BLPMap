@@ -11,7 +11,9 @@ const PIANO_LOG_CSV =
 const BRIDGE_URL =
   'https://script.google.com/macros/s/AKfycbxY4BKnr_Tr0iCTc9itCWhNYLvgszmkI1IoYSkbBWpyAqRtWI-yaUkJQjcVdgG58KXt/exec';
 const TZ = 'America/Denver';
-const CACHE_MS = 120000;
+// must stay comfortably above app.js's 150s poll interval — a shorter
+// window guarantees every poll is a cache miss and pays full fetch latency
+const CACHE_MS = 170000;
 
 let cache = { at: 0, payload: null };
 
@@ -234,23 +236,22 @@ export default async () => {
     return jsonRes({ ...cache.payload, cached: true });
   }
   try {
-    const csv = await (await fetch(PIANO_LOG_CSV)).text();
-    const pianos = parsePianos(csv);
-    let events = [];
     const icsUrl = process.env.BLP_MOVING_ICS;
-    try {
-      if (icsUrl) {
-        events = parseEvents(await (await fetch(icsUrl)).text());
-      } else {
-        const j = await (await fetch(BRIDGE_URL + '?fn=events', { redirect: 'follow' })).json();
-        events = j.events || [];
-      }
-    } catch { /* calendar down: pianos still ship */ }
-    let tunings = { upcoming: [], past: [] };
-    try {
-      const t = await (await fetch(BRIDGE_URL + '?fn=tunings', { redirect: 'follow' })).json();
-      if (t.upcoming) tunings = t;
-    } catch { /* tuning calendar unavailable: feature degrades gracefully */ }
+    // independent upstream calls (sheet export, moving calendar, tuning
+    // calendar) — run them concurrently so total latency is the slowest
+    // one, not the sum of all three
+    const [csvR, eventsR, tuningsR] = await Promise.allSettled([
+      fetch(PIANO_LOG_CSV).then(r => r.text()),
+      icsUrl
+        ? fetch(icsUrl).then(r => r.text()).then(parseEvents)
+        : fetch(BRIDGE_URL + '?fn=events', { redirect: 'follow' }).then(r => r.json()).then(j => j.events || []),
+      fetch(BRIDGE_URL + '?fn=tunings', { redirect: 'follow' }).then(r => r.json()),
+    ]);
+    if (csvR.status === 'rejected') throw csvR.reason;
+    const pianos = parsePianos(csvR.value);
+    const events = eventsR.status === 'fulfilled' ? eventsR.value : [];   // calendar down: pianos still ship
+    const tunings = (tuningsR.status === 'fulfilled' && tuningsR.value.upcoming)
+      ? tuningsR.value : { upcoming: [], past: [] };                     // tuning calendar unavailable: degrade gracefully
     const payload = {
       pianos, events, crew: crewToday(events), tunings,
       fetchedAt: new Date().toLocaleString('sv-SE', { timeZone: TZ }).replace(' ', 'T'),
