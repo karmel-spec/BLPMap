@@ -65,6 +65,22 @@ const KNOWN_AREAS = ['showroom', 'pre-sale showroom', 'third floor', 'storage',
   'warehouse', 'rental', 'rented', 'out for delivery', 'customer', 'sanding', 'coming soon',
   'conference room', 'larson home'];
 
+// standard "big" icon scale, matching what a normal single-piano numbered
+// slot renders at (e.g. spot 60) — every virtual zone (refinishing/sanding
+// overflow rows, coming-soon, out-for-service, rented, conference room)
+// targets this size, only shrinking a row when it genuinely can't fit
+const BIGICON_SC = 4;
+const BIGICON_PITCH = 27;   // icon+gap footprint at scale 1 (matches the numbered-slot convention)
+// how many icons fit per row at BIGICON_SC within maxWidth, and the scale
+// to actually use (BIGICON_SC, unless even ONE icon can't fit that width —
+// then shrink just enough for one column to fit)
+function bigIconLayout(maxWidth) {
+  const fullPitch = BIGICON_PITCH * BIGICON_SC;
+  const cols = Math.max(1, Math.floor(maxWidth / fullPitch));
+  const sc = cols >= 1 && maxWidth < fullPitch ? Math.max(0.7, maxWidth / BIGICON_PITCH) : BIGICON_SC;
+  return {cols, sc, pitch: BIGICON_PITCH * sc};
+}
+
 // pianos parked in a named work area are drawn INSIDE that zone on the map
 // (not in the holding grid). location text -> map zone label to place them in.
 const AREA_BINS = [
@@ -1044,30 +1060,38 @@ function renderMap() {
       s += `<text x="${z.x + z.w / 2}" y="${z.y + z.h / 2 + 4}" text-anchor="middle" class="zlabel ${cls}" font-size="${Math.min(12, Math.max(9, z.h * 0.28))}">${esc(disp)}</text>`;
       const larsonFam = list.filter(p => !isPrivateFinancing(p));
       const financed = list.filter(p => isPrivateFinancing(p));
-      const lfGap = 40, lfSc = 1.05, lfRowH = 40;
-      const finGap = 52, finSc = 1.5, finRowH = 50;
-      const layRow = (arr, gap, cy, sc, extra) => {
-        const rowW = arr.length * gap;
-        const startX = z.x + z.w / 2 - rowW / 2 + gap / 2;
+      const groupMaxW = Math.max(z.w + 300, 500);   // plenty of blank floor space around this room
+      // multi-row wrap at BIGICON_SC, growing UP (above the box) or DOWN
+      // (below it) from an anchor y — never inside the room's own rectangle
+      const layGroup = (arr, anchorY, grow, extra) => {
+        if (!arr.length) return anchorY;
+        const lay = bigIconLayout(groupMaxW);
+        const cols = lay.cols, sc = lay.sc, rowH = lay.pitch;
+        const rows = Math.ceil(arr.length / cols);
         arr.forEach((p, i) => {
-          const cx = startX + i * gap;
+          const row = Math.floor(i / cols), col = i % cols;
+          const rowCount = Math.min(cols, arr.length - row * cols);
+          const rowW = rowCount * rowH;
+          const cx = z.x + z.w / 2 - rowW / 2 + col * rowH + rowH / 2;
+          const cy = grow === 'up'
+            ? anchorY - (rows - row - 0.5) * rowH
+            : anchorY + (row + 0.5) * rowH;
           S.binXY[p.row] = {x: cx, y: cy};
           const hl = S.focusRow === p.row || (q && matches(p, q));
           const dim = q && !matches(p, q);
           s += `<g class="piano ${extra(p)} ${dim ? 'dim' : ''} ${hl ? 'hl' : ''}"
                 data-row="${p.row}">${glyph(p.type, cx, cy, sc)}${phaseText(p, cx, cy, sc)}${mediaBadge(p, cx, cy, sc)}${finBadge(p, cx, cy, sc)}</g>`;
         });
+        return grow === 'up' ? anchorY - rows * rowH : anchorY + rows * rowH;
       };
-      const lfCy = z.y - 16 - lfRowH / 2;
-      layRow(larsonFam, lfGap, lfCy, lfSc, p => `larsonfam ${pianoStatus(p)} own-${ownerClass(p)}`);
-      const finCy = z.y + z.h + 20 + finRowH / 2;
-      layRow(financed, finGap, finCy, finSc, p => `${finClass(p)} own-${ownerClass(p)}`);
+      layGroup(larsonFam, z.y - 16, 'up', p => `larsonfam ${pianoStatus(p)} own-${ownerClass(p)}`);
+      layGroup(financed, z.y + z.h + 20, 'down', p => `${finClass(p)} own-${ownerClass(p)}`);
     } else if (bin && bin.below && list && list.length) {
       // room label stays untouched inside its box; the pianos line up in
       // rows just BELOW the box (Brigham: never over the room label)
       s += zoneLabelSVG(disp === z.text ? z : {...z, text: disp}, cls);
-      const bGap = 34, bCols = Math.max(1, Math.floor((z.w + 40) / bGap));
-      const bRowH = 34, bSc = 1.05;
+      const bLay = bigIconLayout(z.w + 40);
+      const bCols = bLay.cols, bSc = bLay.sc, bGap = bLay.pitch, bRowH = bGap;
       list.forEach((p, i) => {
         const row = Math.floor(i / bCols), colI = i % bCols;
         const rowCount = Math.min(bCols, list.length - row * bCols);
@@ -1234,16 +1258,18 @@ function renderMap() {
   if (S.floor === 1) {
     const rl = rentedPianos();
     if (rl.length) {
-      const RZ = {x: 80, y: 875, x2: 1050, y2: 1115};
-      const zw = RZ.x2 - RZ.x, zh = RZ.y2 - RZ.y;
+      const RZ = {x: 80, y: 875, x2: 1050};
+      const zw = RZ.x2 - RZ.x;
+      const headH = 38, nameH = 22;
+      const rLay = bigIconLayout(zw - 12);
+      const cols = rLay.cols, rsc = rLay.sc, rch = rLay.pitch + nameH;
+      const rrows = Math.ceil(rl.length / cols);
+      const zh = headH + rrows * rch + 10;
       s += `<rect x="${RZ.x}" y="${RZ.y}" width="${zw}" height="${zh}" rx="8" class="rentzone"/>`;
       s += `<text x="${RZ.x + zw / 2}" y="${RZ.y + 26}" text-anchor="middle" class="renttitle" font-size="19">RENTED — OUT ON RENTAL (${rl.length})</text>`;
-      const headH = 38, cols = 6;
-      const rrows = Math.ceil(rl.length / cols);
-      const rcw = (zw - 12) / cols;
-      const rch = Math.min(105, (zh - headH - 10) / rrows);
+      const rcw = zw / cols;
       rl.forEach((p, idx) => {
-        const cx0 = RZ.x + 6 + (idx % cols) * rcw;
+        const cx0 = RZ.x + (idx % cols) * rcw;
         const cy0 = RZ.y + headH + Math.floor(idx / cols) * rch;
         const cx = cx0 + rcw / 2;
         const hl = S.focusRow === p.row || (q && matches(p, q));
@@ -1251,12 +1277,11 @@ function renderMap() {
         const nm = (p.year ? p.year + ' ' : '')
           + ([p.make, p.model].filter(Boolean).join(' ') || p.summary || '');
         const nameLines = wrapCap(nm, rcw - 8, 9.5, 1);
-        const iconCy = cy0 + (rch - 16) / 2;
-        const sc = Math.max(0.9, Math.min(1.6, (rch - 22) / 22));
+        const iconCy = cy0 + (rch - nameH) / 2;
         S.rentXY[p.row] = {x: cx, y: cy0 + rch / 2};
         s += `<g class="piano ${finClass(p)} rented own-${ownerClass(p)} ${dim ? 'dim' : ''} ${hl ? 'hl' : ''}"
-              data-row="${p.row}">${glyph(p.type, cx, iconCy, sc)}${phaseText(p, cx, iconCy, sc)}${finBadge(p, cx, iconCy, sc)}</g>`;
-        s += `<text x="${cx}" y="${cy0 + rch - 5}" text-anchor="middle" class="rentname" font-size="9.5">`
+              data-row="${p.row}">${glyph(p.type, cx, iconCy, rsc)}${phaseText(p, cx, iconCy, rsc)}${finBadge(p, cx, iconCy, rsc)}</g>`;
+        s += `<text x="${cx}" y="${cy0 + rch - 6}" text-anchor="middle" class="rentname" font-size="9.5">`
           + nameLines.map(L => esc(L)).join('') + `</text>`;
       });
     }
@@ -1266,19 +1291,22 @@ function renderMap() {
   // virtually in the blank area outside the building (front door / parking
   // lot) rather than mixed in with pianos that are actually here
   S.comingXY = {};
+  let csnBottom = 2000;   // Out For Service (below) chains off wherever this box ends
   if (S.floor === 0) {
     const csl = comingSoonPianos();
     if (csl.length) {
-      const CZ = {x: 1480, y: 2000, x2: 2020, y2: 2280};
-      const czw = CZ.x2 - CZ.x, czh = CZ.y2 - CZ.y;
+      const CZ = {x: 1480, y: 2000, x2: 2020};
+      const czw = CZ.x2 - CZ.x;
+      const chH = 34, nameH = 26;
+      const cLay = bigIconLayout(czw - 12);
+      const ccols = cLay.cols, csc = cLay.sc, cch = cLay.pitch + nameH;
+      const crows = Math.ceil(csl.length / ccols);
+      const czh = chH + crows * cch + 10;
       s += `<rect x="${CZ.x}" y="${CZ.y}" width="${czw}" height="${czh}" rx="8" class="csnzone"/>`;
       s += `<text x="${CZ.x + czw / 2}" y="${CZ.y + 24}" text-anchor="middle" class="csntitle" font-size="16">FRONT DOOR / PARKING LOT — COMING SOON (${csl.length})</text>`;
-      const chH = 34, ccols = 6;
-      const crows = Math.ceil(csl.length / ccols);
-      const ccw = (czw - 12) / ccols;
-      const cch = Math.min(95, (czh - chH - 10) / crows);
+      const ccw = czw / ccols;
       csl.forEach((p, idx) => {
-        const cx0 = CZ.x + 6 + (idx % ccols) * ccw;
+        const cx0 = CZ.x + (idx % ccols) * ccw;
         const cy0 = CZ.y + chH + Math.floor(idx / ccols) * cch;
         const cx = cx0 + ccw / 2;
         const st = pianoStatus(p);
@@ -1287,14 +1315,14 @@ function renderMap() {
         const nm = (p.year ? p.year + ' ' : '')
           + ([p.make, p.model].filter(Boolean).join(' ') || p.summary || '');
         const nameLines = wrapCap(nm, ccw - 8, 9, 1);
-        const iconCy = cy0 + (cch - 14) / 2;
-        const sc = Math.max(0.8, Math.min(1.4, (cch - 20) / 22));
+        const iconCy = cy0 + (cch - nameH) / 2;
         S.comingXY[p.row] = {x: cx, y: cy0 + cch / 2};
         s += `<g class="piano ${st} own-${ownerClass(p)} ${dim ? 'dim' : ''} ${hl ? 'hl' : ''}"
-              data-row="${p.row}">${glyph(p.type, cx, iconCy, sc)}${phaseText(p, cx, iconCy, sc)}</g>`;
-        s += `<text x="${cx}" y="${cy0 + cch - 4}" text-anchor="middle" class="csnname" font-size="9">`
+              data-row="${p.row}">${glyph(p.type, cx, iconCy, csc)}${phaseText(p, cx, iconCy, csc)}</g>`;
+        s += `<text x="${cx}" y="${cy0 + cch - 6}" text-anchor="middle" class="csnname" font-size="9">`
           + nameLines.map(L => esc(L)).join('') + `</text>`;
       });
+      csnBottom = CZ.y + czh;
     }
   }
   // ---- OUT FOR SERVICE zone (1st floor): pianos out at an external tech's
@@ -1304,16 +1332,18 @@ function renderMap() {
   if (S.floor === 0) {
     const ofl = outForServicePianos();
     if (ofl.length) {
-      const SZ = {x: 1480, y: 2310, x2: 2020, y2: 2310 + 210};
-      const szw = SZ.x2 - SZ.x, szh = SZ.y2 - SZ.y;
+      const SZ = {x: 1480, y: csnBottom + 16, x2: 2020};
+      const szw = SZ.x2 - SZ.x;
+      const shH = 34, nameH = 26;
+      const sLay = bigIconLayout(szw - 12);
+      const scols = sLay.cols, ssc = sLay.sc, sch = sLay.pitch + nameH;
+      const srows = Math.ceil(ofl.length / scols);
+      const szh = shH + srows * sch + 10;
       s += `<rect x="${SZ.x}" y="${SZ.y}" width="${szw}" height="${szh}" rx="8" class="ofszone"/>`;
       s += `<text x="${SZ.x + szw / 2}" y="${SZ.y + 24}" text-anchor="middle" class="ofstitle" font-size="16">OUT FOR SERVICE (${ofl.length})</text>`;
-      const shH = 34, scols = 6;
-      const srows = Math.ceil(ofl.length / scols);
-      const scw = (szw - 12) / scols;
-      const sch = Math.min(95, (szh - shH - 10) / srows);
+      const scw = szw / scols;
       ofl.forEach((p, idx) => {
-        const cx0 = SZ.x + 6 + (idx % scols) * scw;
+        const cx0 = SZ.x + (idx % scols) * scw;
         const cy0 = SZ.y + shH + Math.floor(idx / scols) * sch;
         const cx = cx0 + scw / 2;
         const hl = S.focusRow === p.row || (q && matches(p, q));
@@ -1321,12 +1351,11 @@ function renderMap() {
         const nm = (p.year ? p.year + ' ' : '')
           + ([p.make, p.model].filter(Boolean).join(' ') || p.summary || '');
         const nameLines = wrapCap(nm, scw - 8, 9, 1);
-        const iconCy = cy0 + (sch - 14) / 2;
-        const sc = Math.max(0.8, Math.min(1.4, (sch - 20) / 22));
+        const iconCy = cy0 + (sch - nameH) / 2;
         S.serviceXY[p.row] = {x: cx, y: cy0 + sch / 2};
         s += `<g class="piano own-${ownerClass(p)} ${dim ? 'dim' : ''} ${hl ? 'hl' : ''}"
-              data-row="${p.row}">${glyph(p.type, cx, iconCy, sc)}</g>`;
-        s += `<text x="${cx}" y="${cy0 + sch - 4}" text-anchor="middle" class="ofsname" font-size="9">`
+              data-row="${p.row}">${glyph(p.type, cx, iconCy, ssc)}</g>`;
+        s += `<text x="${cx}" y="${cy0 + sch - 6}" text-anchor="middle" class="ofsname" font-size="9">`
           + nameLines.map(L => esc(L)).join('') + `</text>`;
       });
     }
