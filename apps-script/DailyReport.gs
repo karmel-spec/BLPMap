@@ -583,6 +583,24 @@ function doPost(e) {
         sz.checkBack || '(cleared)');
       return json_(sz);
     }
+    if (req.action === 'markduplicate') {
+      var mdp = markDuplicate_(req);
+      if (mdp.ok) logAct_(who, 'Marked duplicate', mdp.summary || req.serial,
+        'row ' + mdp.row + (req.realRef ? ' — real one: ' + req.realRef : '') +
+        ' — reversible: remove "(DUPLICATE)" from Owner in the Piano Log');
+      return json_(mdp);
+    }
+    if (req.action === 'unmarkduplicate') {
+      var umd = unmarkDuplicate_(req);
+      if (umd.ok) logAct_(who, 'Restored from duplicate', umd.summary || req.serial, 'row ' + umd.row);
+      return json_(umd);
+    }
+    if (req.action === 'settype') {
+      var sty = setTypeOverride_(req);
+      if (sty.ok) logAct_(who, 'Icon type set', sty.summary || req.serial,
+        (sty.previous || '(auto)') + ' → ' + (sty.type || '(auto)'));
+      return json_(sty);
+    }
     if (req.action === 'setcabinetry') {
       var cb2 = setCabinetry_(req);
       if (cb2.ok) logAct_(who, 'Cabinetry location', cb2.summary || req.serial,
@@ -1535,6 +1553,59 @@ function setSnooze_(req) {
 
 /* which Cabinetry Storage shelves hold this piano's stripped parts —
    comma-separated tokens like "7-L3, 8-5" in a CABINETRY column */
+/* Accidental duplicate cleanup (non-destructive): prefixes the OWNER cell
+ * (col B) with "(DUPLICATE)" so the data parsers' existing exclusion rule
+ * (same one that already drops "NEVER RECEIVED" rows) removes this row
+ * from the map/reports on the next fetch. The row and its full history
+ * stay in the sheet — reversible by editing that one cell.
+ * req: {serial, row, realRef?} */
+function markDuplicate_(req) {
+  var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+  var found = findPiano_(sh, req.serial, req.row);
+  if (found.error) return found;
+  var ownerCell = sh.getRange(found.row, 2);
+  var owner = String(ownerCell.getValue() || '');
+  if (owner.toLowerCase().indexOf('duplicate') < 0) {
+    ownerCell.setValue('(DUPLICATE) ' + owner);
+  }
+  return {ok: true, row: found.row, summary: found.summary};
+}
+
+/* Undo markDuplicate_: strips the "(DUPLICATE)" prefix back off, putting
+ * the row back on the map/reports on the next fetch. req: {serial, row} */
+function unmarkDuplicate_(req) {
+  var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+  var found = findPiano_(sh, req.serial, req.row);
+  if (found.error) return found;
+  var ownerCell = sh.getRange(found.row, 2);
+  var owner = String(ownerCell.getValue() || '');
+  ownerCell.setValue(owner.replace(/^\(DUPLICATE\)\s*/i, ''));
+  return {ok: true, row: found.row, summary: found.summary};
+}
+
+/* Manual override for which map icon a piano gets (grand/upright/digital)
+ * — for the rare case CATEGORY + summary text both mislead pianoType()'s
+ * auto-detection. req: {serial, row, type: 'grand'|'upright'|'digital'|''}
+ * (blank clears the override, reverting to auto-detection). */
+function setTypeOverride_(req) {
+  var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+  var found = findPiano_(sh, req.serial, req.row);
+  if (found.error) return found;
+  var last = sh.getLastColumn();
+  var hdr = sh.getRange(2, 1, 1, last).getValues()[0];
+  var col = -1;
+  for (var c = 0; c < hdr.length; c++) {
+    if (String(hdr[c] || '').trim().toUpperCase() === 'TYPE OVERRIDE') { col = c + 1; break; }
+  }
+  var val = String(req.type || '').trim().toLowerCase();
+  if (val && ['grand', 'upright', 'digital'].indexOf(val) < 0) return {error: 'type must be grand, upright, or digital'};
+  if (col < 0) { if (!val) return {ok: true, row: found.row, summary: found.summary, type: ''};
+    sh.getRange(2, last + 1).setValue('TYPE OVERRIDE'); col = last + 1; }
+  var prev = String(sh.getRange(found.row, col).getValue() || '');
+  sh.getRange(found.row, col).setValue(val);
+  return {ok: true, row: found.row, summary: found.summary, previous: prev, type: val};
+}
+
 function setCabinetry_(req) {
   var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
   var found = findPiano_(sh, req.serial, req.row);

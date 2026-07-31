@@ -84,6 +84,8 @@ function parsePianos(text) {
     ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'CHECK BACK') : -1;
   const cabIdx = rows[1]
     ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'CABINETRY') : -1;
+  const typeOvIdx = rows[1]
+    ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'TYPE OVERRIDE') : -1;
   // CUSTOM SHOPWORK queue bounds (1-based rows)
   let qHdr = 0, qEnd = 0;
   for (let k = 0; k < rows.length; k++) {
@@ -137,7 +139,8 @@ function parsePianos(text) {
       row: i + 1, section, owner: col(1), serial,
       summary: summary || [col(4), col(5), col(6)].filter(Boolean).join(' '),
       year: col(4), make: col(5), model: col(6), size: col(7),
-      type: pianoType(col(9), summary + ' ' + col(6)), status, location: loc,
+      type: (typeOvIdx >= 0 && col(typeOvIdx)) || pianoType(col(9), summary + ' ' + col(6)),
+      typeOverride: (typeOvIdx >= 0 && col(typeOvIdx)) || '', status, location: loc,
       isSlot: SLOT_RE.test(loc),
       entered: entered ? entered.toISOString().slice(0, 10) : null,
       phase: phaseIdx >= 0 ? col(phaseIdx) : '',

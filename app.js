@@ -1588,6 +1588,11 @@ function popHTML(p) {
           `<span class="cabchip" title="${esc(cabPretty(t))}">${esc(t)}<i class="cabdel" data-t="${esc(t)}">✕</i></span>`).join('')}
           <button class="cabadd">＋ shelf</button>
         </span></div><div class="cabmsg phmsg"></div>` : ''}
+    ${p.serial ? `<div class="row trkrow" title="wrong icon on the map? set the correct type here">Icon
+        <span class="trkchips">${['grand', 'upright', 'digital'].map(t =>
+          `<button class="trk typebtn ${p.type === t ? 'on' : ''}" data-type="${t}">${t === 'grand' ? '🎹 Grand' : t === 'upright' ? '🎼 Upright' : '🔌 Digital'}</button>`).join('')}
+          ${p.typeOverride ? `<button class="trk typebtn typeclear" data-type="">✕ Clear override</button>` : ''}
+        </span></div><div class="typemsg phmsg"></div>` : ''}
     ${tracker}
     ${phaser}
     ${p.serial ? (() => {
@@ -1616,6 +1621,7 @@ function popHTML(p) {
         <button data-req="price">💲 Price Change</button>
         <button data-req="priority">⚡ Priority Scheduling</button>
         <button data-req="brigham">🗒 Brigham Task</button>
+        <button data-req="dup" class="reqdanger">🗑 Mark as Duplicate</button>
       </div>` : ''}
     ${photo}
     ${mover}
@@ -1679,10 +1685,14 @@ function wirePop(p) {
     ev.stopPropagation();
     setMedia(p, b.dataset.f, pop, !!b.dataset.skip);
   });
-  pop.querySelectorAll('.trk:not(.dn)').forEach(b => b.onclick = ev => {
+  pop.querySelectorAll('.trk:not(.dn):not(.typebtn)').forEach(b => b.onclick = ev => {
     ev.stopPropagation();
     if (b.dataset.t === 'Misc' && !b.classList.contains('on')) { openMiscModal(p, pop); return; }
     toggleTrack(p, b.dataset.t, pop);
+  });
+  pop.querySelectorAll('.typebtn').forEach(b => b.onclick = ev => {
+    ev.stopPropagation();
+    setTypeOverride(p, b.dataset.type, pop);
   });
   const me = pop.querySelector('.miscedit');
   if (me) me.onclick = ev => { ev.stopPropagation(); openMiscModal(p, pop); };
@@ -1738,6 +1748,7 @@ function wirePop(p) {
     else if (kind === 'touchup') openGenericModal(p, 'Touch Up');
     else if (kind === 'priority') openGenericModal(p, 'Priority Scheduling');
     else if (kind === 'brigham') openBrighamModal(p);
+    else if (kind === 'dup') openDuplicateModal(p);
   });
   if (pop.querySelector('.taskbox')) loadTasks(p, pop);
   const pb = pop.querySelector('.photobtn');
@@ -1998,6 +2009,32 @@ async function saveCabinetry(p, list, pop) {
     p.cabinetry = was;
     delete edit.cabinetry; if (!Object.keys(edit).length) pendingEdits.delete(p.row);
     if (msg) { msg.className = 'cabmsg phmsg err'; msg.textContent = '\u2717 ' + e.message; }
+  }
+}
+async function setTypeOverride(p, type, pop) {
+  const msg = pop.querySelector('.typemsg');
+  popPinned = true;
+  const {pin, ok} = writeAuth();
+  if (!ok) { if (msg) { msg.className = 'typemsg phmsg err'; msg.textContent = 'Sign in with Google (menu) first.'; } return; }
+  const wasType = p.type, wasOv = p.typeOverride;
+  p.typeOverride = type; if (type) p.type = type;
+  if (msg) { msg.className = 'typemsg phmsg'; msg.textContent = 'Saving...'; }
+  try {
+    const r = await fetch(BRIDGE_URL, {
+      method: 'POST', redirect: 'follow',
+      headers: {'content-type': 'text/plain;charset=utf-8'},
+      body: JSON.stringify({pin, serial: p.serial, action: 'settype',
+        type, row: p.row, ...authFields()}),
+    });
+    const j = await r.json();
+    if (j.error === 'unauthorized') { lsDel('blpPin'); throw new Error('Not authorized'); }
+    if (!j.ok) throw new Error(j.error || 'save failed');
+    p.typeOverride = j.type || ''; p.type = j.type || p.type;
+    if (!$('#pop').hidden) openPop(p.row, S.popAnchor, true);
+    renderMap();
+  } catch (e) {
+    p.type = wasType; p.typeOverride = wasOv;
+    if (msg) { msg.className = 'typemsg phmsg err'; msg.textContent = 'Error: ' + e.message; }
   }
 }
 // one shelf unit, drawn as a digital twin of its physical whiteboard —
@@ -3040,6 +3077,60 @@ async function submitTune(p, ov) {
 // which the Shop Manager's "Brigham" view renders as his priority list.
 // Auth: the map's Google sign-in (company account), else the BLP app
 // passcode (asked once, stored on this device).
+// Accidental duplicate cleanup: an admin mistypes/misses a serial, adds a
+// SECOND row for a piano already on the map. Rather than a destructive
+// hard-delete, this prefixes the OWNER column with "(DUPLICATE)" — the
+// data parsers already exclude any row whose owner text contains that
+// word (same rule as "NEVER RECEIVED"), so it vanishes from the map and
+// every report immediately, but the row itself, and full history, stay in
+// the Piano Log — reversible any time by removing that prefix in the sheet.
+function openDuplicateModal(p) {
+  popPinned = false; $('#pop').hidden = true;
+  const ov = modalShell('dupmodal', `
+    <span class="x">✕</span>
+    <h3>🗑 Mark as Duplicate</h3>
+    ${pianoHeader(p)}
+    <p class="tmwarn">This removes <b>this specific row</b> (row ${p.row}, serial ${esc(p.serial || '—')})
+      from the map and every report — use it when the SAME piano got added twice by mistake.
+      It stays in the Piano Log with an "(DUPLICATE)" tag on Owner, so nothing is actually deleted
+      and Brigham/Karmel can undo it by removing that tag.</p>
+    <label>Which row is the REAL one? <small>(optional — goes in the activity log)</small></label>
+    <input class="dupreal" placeholder="e.g. the other row's serial, or a spot number">
+    <label><input type="checkbox" class="dupconfirm"> I've checked — this row really is a duplicate</label>
+    <button class="tmgo dupgo">Mark this row as duplicate</button>
+    <div class="tmmsg"></div>`);
+  ov.querySelector('.dupgo').onclick = () => submitDuplicate(p, ov);
+}
+async function submitDuplicate(p, ov) {
+  const msg = ov.querySelector('.tmmsg');
+  const btn = ov.querySelector('.dupgo');
+  if (!ov.querySelector('.dupconfirm').checked) {
+    msg.className = 'tmmsg err'; msg.textContent = 'Check the confirmation box first.';
+    return;
+  }
+  const {pin, ok} = writeAuth();
+  if (!ok) { msg.className = 'tmmsg err'; msg.textContent = 'Sign in with Google (☰ menu) or enter the team PIN first.'; return; }
+  btn.disabled = true;
+  msg.className = 'tmmsg'; msg.textContent = 'Marking…';
+  try {
+    const r = await fetch(BRIDGE_URL, {
+      method: 'POST', redirect: 'follow',
+      headers: {'content-type': 'text/plain;charset=utf-8'},
+      body: JSON.stringify({pin, serial: p.serial, row: p.row, action: 'markduplicate',
+        realRef: ov.querySelector('.dupreal').value.trim(), ...authFields()}),
+    });
+    const j = await r.json();
+    if (j.error === 'unauthorized') { lsDel('blpPin'); throw new Error('Not authorized — sign in again from the ☰ menu.'); }
+    if (!j.ok) throw new Error(j.error || 'failed');
+    msg.className = 'tmmsg ok';
+    msg.textContent = '✓ Marked as duplicate — it will drop off the map on the next refresh.';
+    setTimeout(() => { ov.hidden = true; }, 2200);
+  } catch (e) {
+    msg.className = 'tmmsg err'; msg.textContent = '✗ ' + e.message;
+    btn.disabled = false;
+  }
+}
+
 function openBrighamModal(p) {
   popPinned = false; $('#pop').hidden = true;
   serialDatalist();
@@ -3775,6 +3866,35 @@ async function renderShopMap() {
   }
 }
 
+function duplicateMarkedPianos() {
+  return S.data.pianos.filter(p => !p.active && (p.owner || '').toLowerCase().includes('duplicate'));
+}
+function duplicatesTable() {
+  const dl = duplicateMarkedPianos();
+  return `<table><tr><th>PIANO</th><th>SERIAL</th><th>LAST SPOT</th><th>OWNER TEXT</th><th></th></tr>` +
+    (dl.map(p => `<tr><td>${esc(pianoName(p))}</td><td>${esc(p.serial)}</td>
+      <td class="locraw">${esc(p.location || '—')}</td>
+      <td class="locraw">${esc((p.owner || '').slice(0, 70))}</td>
+      <td><button class="tagbtn duprestore" data-row="${p.row}" data-serial="${esc(p.serial)}">↩ Restore</button></td></tr>`).join('')
+     || '<tr><td colspan="5" class="empty">None marked as duplicates. 🎉</td></tr>') + '</table>';
+}
+async function restoreDuplicate(row, serial, btn) {
+  const {pin, ok} = writeAuth();
+  if (!ok) { alert('Sign in with Google (☰ menu) or enter the team PIN first.'); return; }
+  btn.disabled = true; btn.textContent = 'Restoring…';
+  try {
+    const r = await fetch(BRIDGE_URL, {
+      method: 'POST', redirect: 'follow',
+      headers: {'content-type': 'text/plain;charset=utf-8'},
+      body: JSON.stringify({pin, serial, row, action: 'unmarkduplicate', ...authFields()}),
+    });
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error || 'failed');
+    btn.textContent = '✓ Restored'; btn.closest('tr').style.opacity = 0.5;
+  } catch (e) {
+    btn.disabled = false; btn.textContent = '✗ ' + e.message;
+  }
+}
 function cabinetryTable() {
   const rows = [];
   for (const p of S.data.pianos) {
@@ -3846,6 +3966,9 @@ const REPORT_DEFS = () => [
      p.active && cabTokens(p).length).length,
    desc: 'Which Cabinetry Storage shelves hold each piano\'s stripped cabinetry and hardware. Assign from the piano card (Cabinetry → ＋ shelf); click a unit box on the map for one unit\'s contents.',
    html: cabinetryTable},
+  {id: 'duplicates', icon: '🗑', title: 'MARKED DUPLICATES', count: duplicateMarkedPianos().length,
+   desc: 'Rows marked "Mark as Duplicate" from a piano card — hidden from the map/reports but never deleted. Restore one here if it was flagged by mistake.',
+   html: duplicatesTable},
   {id: 'waiting', icon: '⏳', title: 'WAITING ON', count: waitingPianos().length,
    desc: 'Every piano parked in a Waiting phase — what it’s waiting on, and when to check whether the wait is over (set with the card’s +3d/+1w/+2w/+1m snooze buttons). Overdue or dateless waits show in red.',
    html: waitingTable},
@@ -3899,6 +4022,10 @@ function renderReport() {
     const act = S.data.pianos.filter(p => p.active && !notYetArrived(p))
       .map(p => ({p, m: mediaNeeds(p)})).filter(x => x.m[cat.need]).map(x => x.p);
     printReport(`${cat.icon} ${cat.label} Needed`, mediaRowsTable(act));
+  });
+  body.querySelectorAll('.duprestore').forEach(b => b.onclick = ev => {
+    ev.stopPropagation();
+    restoreDuplicate(+b.dataset.row, b.dataset.serial, b);
   });
 }
 

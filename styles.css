@@ -263,12 +263,18 @@ td a{color:#9e2020}
 .trk{border:1px solid #cfd6dc;background:#fff;color:#5a626a;border-radius:999px;font-size:10px;font-weight:700;padding:2px 8px;cursor:pointer}
 .trk:hover{border-color:#9e2020;color:#9e2020}
 .trk.on{background:#9e2020;border-color:#9e2020;color:#fff}
+.typebtn.on{background:#2b5fa8;border-color:#2b5fa8;color:#fff}
+.typebtn.on:hover{border-color:#2b5fa8;color:#fff}
+.typeclear{color:#9aa3ac;border-style:dashed}
 .reqmenu{display:flex;flex-direction:column;border:1px solid #cfd6dc;border-radius:8px;overflow:hidden;margin-top:2px}
 .reqmenu[hidden]{display:none}
 .reqmenu button,.reqmenu a{border:none;background:#fff;text-align:left;padding:7px 12px;font-size:12px;font-weight:600;color:#2b2f33;cursor:pointer;border-bottom:1px solid #f0f2f4;text-decoration:none;display:block}
 .reqmenu a small{color:#9aa3ac;font-weight:500;margin-left:4px}
 .reqmenu button:last-child,.reqmenu a:last-child{border-bottom:none}
 .reqmenu button:hover,.reqmenu a:hover{background:#fdf3f3;color:#9e2020}
+.reqmenu button.reqdanger{color:#9e2020;border-top:1px solid #f0d5d5}
+.tmwarn{background:#fdf3ec;border:1px solid #eecfae;border-radius:8px;padding:8px 10px;font-size:11.5px;color:#6b5030;margin:8px 0}
+
 .topreq{position:relative;flex-shrink:0}
 .topreq .iconbtn{font-size:12.5px;white-space:nowrap}
 .reqmenu.topmenu{position:absolute;top:calc(100% + 6px);right:0;z-index:60;background:#fff;min-width:190px;box-shadow:0 10px 30px rgba(10,16,22,.25)}

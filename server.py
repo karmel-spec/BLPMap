@@ -116,6 +116,8 @@ def parse_pianos(raw):
                    if h.strip().upper() == 'CHECK BACK'), -1)
     cab_idx = next((i for i, h in enumerate(hdr)
                     if h.strip().upper() == 'CABINETRY'), -1)
+    type_ov_idx = next((i for i, h in enumerate(hdr)
+                        if h.strip().upper() == 'TYPE OVERRIDE'), -1)
     # CUSTOM SHOPWORK queue bounds (1-based rows). Queue position = row - header;
     # total = rows from just after the header down to the first fully-blank row.
     q_hdr = q_end = None
@@ -188,7 +190,8 @@ def parse_pianos(raw):
             'serial': serial,
             'summary': summary or f"{col(4)} {col(5)} {col(6)}".strip(),
             'year': col(4), 'make': col(5), 'model': col(6), 'size': col(7),
-            'type': piano_type(col(9), summary + ' ' + col(6)),
+            'type': (col(type_ov_idx) if type_ov_idx >= 0 else '') or piano_type(col(9), summary + ' ' + col(6)),
+            'typeOverride': col(type_ov_idx) if type_ov_idx >= 0 else '',
             'status': status,
             'location': loc,
             'isSlot': bool(SLOT_RE.match(loc)),
