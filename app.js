@@ -80,6 +80,47 @@ function bigIconLayout(maxWidth) {
   const sc = cols >= 1 && maxWidth < fullPitch ? Math.max(0.7, maxWidth / BIGICON_PITCH) : BIGICON_SC;
   return {cols, sc, pitch: BIGICON_PITCH * sc};
 }
+// same idea, but also bounded by a fixed available height (e.g. a real
+// walled room) — shrinks below BIGICON_SC only as much as needed so every
+// icon still fits inside both dimensions
+// nearest real wall directly below [x1,x2] and below y=belowY, on this
+// floor — used to stop a "below the label" piano stack before it runs into
+// whatever equipment/room sits just past the room's open-plan boundary
+function wallBelow(floorIdx, x1, x2, belowY) {
+  const hits = S.map.floors[floorIdx].walls.filter(w =>
+    w.y1 === w.y2 && w.y1 > belowY &&
+    Math.max(w.x1, w.x2) >= x1 && Math.min(w.x1, w.x2) <= x2);
+  return hits.length ? Math.min(...hits.map(w => w.y1)) : null;
+}
+// 4-directional raycast from a point to the nearest enclosing walls on this
+// floor — used to fit icons inside an actual walled room (not just an
+// open-plan labeled zone) without spilling past its real boundary
+function wallBoundsAround(floorIdx, cx, cy) {
+  const walls = S.map.floors[floorIdx].walls;
+  const hz = walls.filter(w => w.y1 === w.y2 && Math.min(w.x1, w.x2) <= cx && Math.max(w.x1, w.x2) >= cx);
+  const vt = walls.filter(w => w.x1 === w.x2 && Math.min(w.y1, w.y2) <= cy && Math.max(w.y1, w.y2) >= cy);
+  const top = hz.filter(w => w.y1 < cy).sort((a, b) => b.y1 - a.y1)[0];
+  const bot = hz.filter(w => w.y1 > cy).sort((a, b) => a.y1 - b.y1)[0];
+  const topY = top ? top.y1 : cy - 300, botY = bot ? bot.y1 : cy + 300;
+  const midY = (topY + botY) / 2;
+  const vt2 = walls.filter(w => w.x1 === w.x2 && Math.min(w.y1, w.y2) <= midY && Math.max(w.y1, w.y2) >= midY);
+  const left = vt2.filter(w => w.x1 < cx).sort((a, b) => b.x1 - a.x1)[0];
+  const right = vt2.filter(w => w.x1 > cx).sort((a, b) => a.x1 - b.x1)[0];
+  return {top: topY, bot: botY, left: left ? left.x1 : cx - 300, right: right ? right.x1 : cx + 300};
+}
+function fitIconsInBox(count, maxWidth, maxHeight) {
+  let lay = bigIconLayout(maxWidth);
+  let rows = Math.max(1, Math.ceil(count / lay.cols));
+  const scByHeight = maxHeight / (rows * BIGICON_PITCH);
+  if (scByHeight < lay.sc) {
+    const sc = Math.max(0.6, scByHeight);
+    const pitch = BIGICON_PITCH * sc;
+    const cols = Math.max(1, Math.floor(maxWidth / pitch));
+    rows = Math.max(1, Math.ceil(count / cols));
+    return {cols, rows, sc, pitch};
+  }
+  return {cols: lay.cols, rows, sc: lay.sc, pitch: lay.pitch};
+}
 
 // pianos parked in a named work area are drawn INSIDE that zone on the map
 // (not in the holding grid). location text -> map zone label to place them in.
@@ -1060,12 +1101,13 @@ function renderMap() {
       s += `<text x="${z.x + z.w / 2}" y="${z.y + z.h / 2 + 4}" text-anchor="middle" class="zlabel ${cls}" font-size="${Math.min(12, Math.max(9, z.h * 0.28))}">${esc(disp)}</text>`;
       const larsonFam = list.filter(p => !isPrivateFinancing(p));
       const financed = list.filter(p => isPrivateFinancing(p));
-      const groupMaxW = Math.max(z.w + 300, 500);   // plenty of blank floor space around this room
-      // multi-row wrap at BIGICON_SC, growing UP (above the box) or DOWN
-      // (below it) from an anchor y — never inside the room's own rectangle
-      const layGroup = (arr, anchorY, grow, extra) => {
+      // fit both groups inside the room's ACTUAL walls (raycast from the
+      // label's center) — never past them, shrinking only if they don't fit
+      const room = wallBoundsAround(S.floor, z.x + z.w / 2, z.y + z.h / 2);
+      const roomW = room.right - room.left - 20;
+      const layGroup = (arr, anchorY, grow, maxH, extra) => {
         if (!arr.length) return anchorY;
-        const lay = bigIconLayout(groupMaxW);
+        const lay = fitIconsInBox(arr.length, roomW, maxH);
         const cols = lay.cols, sc = lay.sc, rowH = lay.pitch;
         const rows = Math.ceil(arr.length / cols);
         arr.forEach((p, i) => {
@@ -1084,20 +1126,27 @@ function renderMap() {
         });
         return grow === 'up' ? anchorY - rows * rowH : anchorY + rows * rowH;
       };
-      layGroup(larsonFam, z.y - 16, 'up', p => `larsonfam ${pianoStatus(p)} own-${ownerClass(p)}`);
-      layGroup(financed, z.y + z.h + 20, 'down', p => `${finClass(p)} own-${ownerClass(p)}`);
+      const aboveH = z.y - 10 - room.top, belowH = room.bot - 10 - (z.y + z.h);
+      layGroup(larsonFam, z.y - 10, 'up', aboveH, p => `larsonfam ${pianoStatus(p)} own-${ownerClass(p)}`);
+      layGroup(financed, z.y + z.h + 10, 'down', belowH, p => `${finClass(p)} own-${ownerClass(p)}`);
     } else if (bin && bin.below && list && list.length) {
       // room label stays untouched inside its box; the pianos line up in
       // rows just BELOW the box (Brigham: never over the room label)
       s += zoneLabelSVG(disp === z.text ? z : {...z, text: disp}, cls);
-      const bLay = bigIconLayout(z.w + 40);
-      const bCols = bLay.cols, bSc = bLay.sc, bGap = bLay.pitch, bRowH = bGap;
+      // stop before whatever wall/equipment sits past this open-plan area
+      // (e.g. the storage bins under Refinishing Shop) — shrink only if
+      // the full stack of rows genuinely can't fit above that wall
+      const bTop = z.y + z.h + 16;
+      const bWall = wallBelow(S.floor, z.x, z.x + z.w, z.y + z.h);
+      const bMaxH = bWall ? Math.max(BIGICON_PITCH * 0.6, bWall - bTop - 10) : Infinity;
+      const bFit = fitIconsInBox(list.length, z.w + 40, bMaxH);
+      const bCols = bFit.cols, bSc = bFit.sc, bGap = bFit.pitch, bRowH = bGap;
       list.forEach((p, i) => {
         const row = Math.floor(i / bCols), colI = i % bCols;
         const rowCount = Math.min(bCols, list.length - row * bCols);
         const rowW = rowCount * bGap;
         const cx = z.x + z.w / 2 - rowW / 2 + colI * bGap + bGap / 2;
-        const cy = z.y + z.h + 16 + row * bRowH + bRowH / 2;
+        const cy = bTop + row * bRowH + bRowH / 2;
         S.binXY[p.row] = {x: cx, y: cy};
         const st = pianoStatus(p);
         const hl = S.focusRow === p.row || (q && matches(p, q));
