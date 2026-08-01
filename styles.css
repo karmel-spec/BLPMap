@@ -159,6 +159,7 @@ body{background:#f7f8f9;color:#121212;display:flex;flex-direction:column;overflo
 
 /* mandatory sign-in gate */
 #authgate{position:fixed;inset:0;background:#0d0d0d;z-index:200;display:grid;place-items:center}
+#authgate[hidden]{display:none}
 #authgate .agcard{background:#fff;border-radius:14px;padding:36px 34px;max-width:400px;width:92%;text-align:center;display:flex;flex-direction:column;gap:14px;align-items:center}
 #authgate img{max-width:210px}
 #authgate h2{font-size:14px;letter-spacing:.24em;color:#4a4a4a;margin:2px 0}
