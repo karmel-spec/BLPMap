@@ -107,8 +107,14 @@ function parsePianos(text) {
     const r = rows[i];
     const col = j => (r[j] || '').trim();
     const serial = col(2), summary = col(3);
-    if (!serial && !summary) {
-      const head = col(1);
+    // Section banner. Most are blank except the label in col B, but a few
+    // ("SOLD OR COMPLETED BUT NOT DELIVERED YET") also carry a note in the
+    // summary column — so an ALL-CAPS one-line label with no serial and no
+    // year/make/model counts as a banner too, not as a piano.
+    const head = col(1);
+    const capsBanner = !col(4) && !col(5) && !col(6) && head && !head.includes('\n')
+      && head.length < 60 && /[A-Z]/.test(head) && !/[a-z]/.test(head);
+    if (!serial && (!summary || capsBanner)) {
       if (head) {
         section = head;
         if (head.trim().toUpperCase() === 'SOLD') soldZone = true;

@@ -177,6 +177,7 @@ body{background:#f7f8f9;color:#121212;display:flex;flex-direction:column;overflo
 .shape-row{display:flex;gap:14px;align-items:center;color:#3a4046;flex-wrap:wrap}
 .legend{display:flex;gap:12px;font-size:11.5px;color:#555;align-items:center;margin-top:8px;flex-wrap:wrap}
 .dot{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:4px;vertical-align:-1px}
+.dot.ring{background:transparent;border:2.4px solid #c9a227;box-sizing:border-box}
 .phaselegend{max-width:520px}
 .phaselegend b{color:#121212}
 
@@ -298,7 +299,12 @@ td a{color:#9e2020}
 .typebtn.on{background:#2b5fa8;border-color:#2b5fa8;color:#fff}
 .typebtn.on:hover{border-color:#2b5fa8;color:#fff}
 .typeclear{color:#9aa3ac;border-style:dashed}
-.hdrtype{margin-left:auto}
+/* header type picker: compact so Serial # / Queue / Grand-Upright stay on one line */
+.hdrtype{margin-left:auto;flex-wrap:nowrap;gap:3px}
+.hdrtype .typebtn{padding:2px 6px;font-size:9.5px;white-space:nowrap}
+.popsticky .rowflex{gap:6px;flex-wrap:nowrap;align-items:center}
+.popsticky .rowflex > span:first-child{white-space:nowrap}
+.popsticky .qchip{white-space:nowrap}
 .popsticky .typemsg:empty{display:none}
 .reqmenu{display:flex;flex-direction:column;border:1px solid #cfd6dc;border-radius:8px;overflow:hidden;margin-top:2px}
 .reqmenu[hidden]{display:none}
@@ -457,6 +463,12 @@ td a{color:#9e2020}
 .piano.financed .pbody{fill:#32cd32}   /* bench stays ownership-colored, not lime */
 .piano.larsonfam .pbody{fill:#5bb8e8}   /* bench stays ownership-colored, not sky-blue */
 .finbadge{fill:#0a5c0a;font-weight:900;paint-order:stroke;stroke:#fff;stroke-width:2.2px;stroke-linejoin:round}
+/* SOLD OR COMPLETED BUT NOT DELIVERED YET — a gold ring around the icon
+   rather than a 12th fill colour, so the piano keeps showing its real
+   ownership/status colour underneath and the ring just says "spoken for" */
+.piano.soldpend .pbody{stroke:#c9a227;stroke-width:2.4px;paint-order:stroke}
+.piano.soldpend .pk{stroke:#c9a227;stroke-width:1.4px;paint-order:stroke}
+.soldbadge{fill:#8a6a00;font-weight:900;paint-order:stroke;stroke:#fff;stroke-width:2.2px;stroke-linejoin:round}
 
 /* front door / parking lot — coming-soon pianos, staged outside the building */
 .csnzone{fill:#eef4f8;stroke:#5b8ba8;stroke-width:1.5;stroke-dasharray:5 3}

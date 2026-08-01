@@ -153,8 +153,15 @@ def parse_pianos(raw):
                 return 'na'
             return 'skip' if v.lower().startswith('skip') else True
         serial, summary = col(2), col(3)
-        if not serial and not summary:
-            head = col(1)
+        # Section banner. Most are blank except the label in col B, but a few
+        # ("SOLD OR COMPLETED BUT NOT DELIVERED YET") also carry a note in the
+        # summary column - so an ALL-CAPS one-line label with no serial and no
+        # year/make/model counts as a banner too, not as a piano.
+        head = col(1)
+        caps_banner = (not col(4) and not col(5) and not col(6) and head
+                       and '\n' not in head and len(head) < 60
+                       and re.search(r'[A-Z]', head) and not re.search(r'[a-z]', head))
+        if not serial and (not summary or caps_banner):
             if head:                       # section divider row
                 section = head
                 if head.strip().upper() == 'SOLD':

@@ -626,6 +626,18 @@ function finBadge(p, cx, cy, sc) {
   return `<text x="${cx + 8.5 * sc}" y="${cy - 6 * sc}" text-anchor="middle"
           class="finbadge" font-size="${11 * sc}">$</text>`;
 }
+// Sold/finished but still physically here — lives under the Piano Log's
+// "SOLD OR COMPLETED BUT NOT DELIVERED YET" banner, so it follows the sheet
+// no matter which row the section moves to.
+function soldPending(p) {
+  return /sold or completed but not delivered/i.test(p.section || '');
+}
+function soldClass(p) { return soldPending(p) ? 'soldpend' : ''; }
+function soldBadge(p, cx, cy, sc) {
+  if (!soldPending(p)) return '';
+  return `<text x="${cx - 8.5 * sc}" y="${cy - 6 * sc}" text-anchor="middle"
+          class="soldbadge" font-size="${11 * sc}">✓</text>`;
+}
 function comingSoon(p) {
   return (p.location || '').trim().replace(/\s+/g, ' ').toLowerCase().startsWith('coming soon');
 }
@@ -1257,13 +1269,13 @@ function renderMap() {
           const hl = S.focusRow === p.row || (q && matches(p, q));
           const dim = q && !matches(p, q);
           s += `<g class="piano ${extra(p)} ${dim ? 'dim' : ''} ${hl ? 'hl' : ''}"
-                data-row="${p.row}">${glyph(p.type, cx, cy, sc)}${phaseText(p, cx, cy, sc)}${mediaBadge(p, cx, cy, sc)}${finBadge(p, cx, cy, sc)}</g>`;
+                data-row="${p.row}">${glyph(p.type, cx, cy, sc)}${phaseText(p, cx, cy, sc)}${mediaBadge(p, cx, cy, sc)}${finBadge(p, cx, cy, sc)}${soldBadge(p, cx, cy, sc)}</g>`;
         });
         return grow === 'up' ? anchorY - rows * rowH : anchorY + rows * rowH;
       };
       const aboveH = z.y - 10 - room.top, belowH = room.bot - 10 - (z.y + z.h);
       layGroup(larsonFam, z.y - 10, 'up', aboveH, p => `larsonfam ${pianoStatus(p)} own-${ownerClass(p)}`);
-      layGroup(financed, z.y + z.h + 10, 'down', belowH, p => `${finClass(p)} own-${ownerClass(p)}`);
+      layGroup(financed, z.y + z.h + 10, 'down', belowH, p => `${finClass(p)} ${soldClass(p)} own-${ownerClass(p)}`);
     } else if (bin && bin.below && list && list.length) {
       // room label stays untouched inside its box; the pianos line up in
       // rows just BELOW the box (Brigham: never over the room label)
@@ -1286,7 +1298,7 @@ function renderMap() {
         const st = pianoStatus(p);
         const hl = S.focusRow === p.row || (q && matches(p, q));
         const dim = q && !matches(p, q);
-        s += `<g class="piano ${finClass(p)} ${st} own-${ownerClass(p)} ${dim ? 'dim' : ''} ${hl ? 'hl' : ''}"
+        s += `<g class="piano ${finClass(p)} ${soldClass(p)} ${st} own-${ownerClass(p)} ${dim ? 'dim' : ''} ${hl ? 'hl' : ''}"
               data-row="${p.row}">${glyph(p.type, cx, cy, bSc)}${phaseText(p, cx, cy, bSc)}${mediaBadge(p, cx, cy, bSc)}${finBadge(p, cx, cy, bSc)}</g>`;
       });
     } else if (list && list.length) {
@@ -1303,8 +1315,8 @@ function renderMap() {
         const st = pianoStatus(p);
         const hl = S.focusRow === p.row || (q && matches(p, q));
         const dim = q && !matches(p, q);
-        s += `<g class="piano ${finClass(p)} ${st} own-${ownerClass(p)} ${dim ? 'dim' : ''} ${hl ? 'hl' : ''}"
-              data-row="${p.row}">${glyph(p.type, cx, cy, sc)}${phaseText(p, cx, cy, sc)}${mediaBadge(p, cx, cy, sc)}${finBadge(p, cx, cy, sc)}</g>`;
+        s += `<g class="piano ${finClass(p)} ${soldClass(p)} ${st} own-${ownerClass(p)} ${dim ? 'dim' : ''} ${hl ? 'hl' : ''}"
+              data-row="${p.row}">${glyph(p.type, cx, cy, sc)}${phaseText(p, cx, cy, sc)}${mediaBadge(p, cx, cy, sc)}${finBadge(p, cx, cy, sc)}${soldBadge(p, cx, cy, sc)}</g>`;
       });
     } else {
       s += zoneLabelSVG(disp === z.text ? z : {...z, text: disp}, cls);
@@ -1394,9 +1406,9 @@ function renderMap() {
           const st = pianoStatus(p);
           const cx = sl.x + sl.w / 2, cy = y0 + i * per * sc;
           const hl = S.focusRow === p.row || (q && matches(p, q));
-          s += `<g class="piano ${finClass(p)} ${st} own-${ownerClass(p)} ${q && !matches(p, q) ? 'dim' : ''} ${hl ? 'hl' : ''}"
+          s += `<g class="piano ${finClass(p)} ${soldClass(p)} ${st} own-${ownerClass(p)} ${q && !matches(p, q) ? 'dim' : ''} ${hl ? 'hl' : ''}"
                 data-slot="${esc(sl.id)}" data-row="${p.row}">
-                <g transform="rotate(90 ${cx} ${cy})">${glyph(p.type, cx, cy, sc)}</g>${phaseText(p, cx, cy, sc)}${mediaBadge(p, cx, cy, sc)}${priceText(p, cx, cy, sc)}${finBadge(p, cx, cy, sc)}</g>`;
+                <g transform="rotate(90 ${cx} ${cy})">${glyph(p.type, cx, cy, sc)}</g>${phaseText(p, cx, cy, sc)}${mediaBadge(p, cx, cy, sc)}${priceText(p, cx, cy, sc)}${finBadge(p, cx, cy, sc)}${soldBadge(p, cx, cy, sc)}</g>`;
         });
       } else {
         const pfs = Math.max(10, Math.min(20, sl.w * 0.4));
@@ -1426,8 +1438,8 @@ function renderMap() {
           const cx = x0 + i * per * sc;
           const cy = sl.y + sl.h / 2;
           const hl = S.focusRow === p.row || (q && matches(p, q));
-          s += `<g class="piano ${finClass(p)} ${st} own-${ownerClass(p)} ${q && !matches(p, q) ? 'dim' : ''} ${hl ? 'hl' : ''}"
-                data-slot="${esc(sl.id)}" data-row="${p.row}">${glyph(p.type, cx, cy, sc)}${phaseText(p, cx, cy, sc)}${mediaBadge(p, cx, cy, sc)}${priceText(p, cx, cy, sc)}${finBadge(p, cx, cy, sc)}</g>`;
+          s += `<g class="piano ${finClass(p)} ${soldClass(p)} ${st} own-${ownerClass(p)} ${q && !matches(p, q) ? 'dim' : ''} ${hl ? 'hl' : ''}"
+                data-slot="${esc(sl.id)}" data-row="${p.row}">${glyph(p.type, cx, cy, sc)}${phaseText(p, cx, cy, sc)}${mediaBadge(p, cx, cy, sc)}${priceText(p, cx, cy, sc)}${finBadge(p, cx, cy, sc)}${soldBadge(p, cx, cy, sc)}</g>`;
         });
       } else if (!thin) {
         const pfs = Math.max(9, Math.min(20, sl.h * 0.45));
@@ -1463,7 +1475,7 @@ function renderMap() {
         const nameLines = wrapCap(nm, rcw - 8, 9.5, 1);
         const iconCy = cy0 + (rch - nameH) / 2;
         S.rentXY[p.row] = {x: cx, y: cy0 + rch / 2};
-        s += `<g class="piano ${finClass(p)} rented own-${ownerClass(p)} ${dim ? 'dim' : ''} ${hl ? 'hl' : ''}"
+        s += `<g class="piano ${finClass(p)} ${soldClass(p)} rented own-${ownerClass(p)} ${dim ? 'dim' : ''} ${hl ? 'hl' : ''}"
               data-row="${p.row}">${glyph(p.type, cx, iconCy, rsc)}${phaseText(p, cx, iconCy, rsc)}${finBadge(p, cx, iconCy, rsc)}</g>`;
         s += `<text x="${cx}" y="${cy0 + rch - 6}" text-anchor="middle" class="rentname" font-size="9.5">`
           + nameLines.map(L => esc(L)).join('') + `</text>`;
@@ -1582,8 +1594,8 @@ function renderMap() {
         S.holdingXY[p.row] = {x: cx, y: cy0 + ih / 2};
         s += `<rect x="${cx0}" y="${cy0}" width="${iw}" height="${ih}" rx="8"
               class="holdcell ${hl ? 'hl' : ''} ${dim ? 'dim' : ''}" data-row="${p.row}"/>`;
-        s += `<g class="piano ${finClass(p)} ${st} own-${ownerClass(p)} ${dim ? 'dim' : ''} ${hl ? 'hl' : ''}"
-              data-row="${p.row}">${glyph(p.type, cx, iconCy, sc)}${phaseText(p, cx, iconCy, sc)}${mediaBadge(p, cx, iconCy, sc)}${finBadge(p, cx, iconCy, sc)}</g>`;
+        s += `<g class="piano ${finClass(p)} ${soldClass(p)} ${st} own-${ownerClass(p)} ${dim ? 'dim' : ''} ${hl ? 'hl' : ''}"
+              data-row="${p.row}">${glyph(p.type, cx, iconCy, sc)}${phaseText(p, cx, iconCy, sc)}${mediaBadge(p, cx, iconCy, sc)}${finBadge(p, cx, iconCy, sc)}${soldBadge(p, cx, iconCy, sc)}</g>`;
         let ty = textTop + 9;
         s += `<text x="${cx}" y="${ty}" text-anchor="middle" class="holdname" font-size="10.5">`
           + nameLines.map((L, li) => `<tspan x="${cx}" ${li ? `dy="${NLH}"` : ''}>${esc(L)}</tspan>`).join('')
