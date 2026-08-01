@@ -948,63 +948,132 @@ function ownerEmailOf(p) {
 // Shop tag — "The Rail": half-letter (8.5×5.5), prints 2-up on one letter
 // sheet (cut at the midline — one tag per side of the piano). Every field
 // auto-fills from the Piano Log and is click-to-edit before printing.
-function printShopTag(p) {
+/* ---- printed-tag snapshot: what is physically taped to the piano ---- */
+function tagSnapOf(p) {
+  try {
+    const o = JSON.parse(p.tagSnapshot || 'null');
+    return (o && o.d) ? o : null;
+  } catch (e) { return null; }
+}
+async function saveTagSnapshot(p, d) {
+  if (!p.serial) return;
+  const u = authUser();
+  const snap = {d: d, at: new Date().toISOString(), by: (u && u.name) || 'unknown'};
+  const {pin, ok} = writeAuth();
+  if (!ok) return;                       // printing still works, just unrecorded
+  p.tagSnapshot = JSON.stringify(snap);   // optimistic so the thumb appears now
+  try {
+    await fetch(BRIDGE_URL, {
+      method: 'POST', redirect: 'follow',
+      headers: {'content-type': 'text/plain;charset=utf-8'},
+      body: JSON.stringify({pin, serial: p.serial, action: 'tagsnapshot',
+        snapshot: p.tagSnapshot, row: p.row, ...authFields()}),
+    });
+  } catch (e) { /* best effort — never block the print */ }
+  if (!$('#pop').hidden) openPop(p.row, S.popAnchor, true);
+}
+// which fields have changed on the piano since that tag was printed
+function tagSnapDrift(p, snap) {
+  const now = shopTagFields(p), was = snap.d, out = [];
+  const LBL = {track: 'Track', plan: 'Plan', refin: 'Refinishing', lvl: 'Refinishing level',
+               tech: 'Technology', keys: 'Keys', plating: 'Plating', bench: 'Bench',
+               notes: 'Notes', owner: 'Owner', serial: 'Serial'};
+  for (const k in LBL) { if (String(now[k] || '') !== String(was[k] || '')) out.push(LBL[k]); }
+  return out;
+}
+function openTagSnapshot(p) {
+  const snap = tagSnapOf(p);
+  if (!snap) return;
+  popPinned = true;
+  const when = new Date(snap.at);
+  const drift = tagSnapDrift(p, snap);
+  const ov = document.createElement('div');
+  ov.className = 'tagview';
+  ov.innerHTML = `<div class="tvbox">
+    <div class="tvhead">
+      <div><b>Printed tag on this piano</b>
+        <span>printed ${esc(when.toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'}))}
+        at ${esc(when.toLocaleTimeString('en-US', {hour: 'numeric', minute: '2-digit'}))}
+        by ${esc(snap.by || 'unknown')}</span></div>
+      <button class="tvx">\u2715</button>
+    </div>
+    ${drift.length
+      ? `<div class="tvdrift">\u26a0 Changed since this was printed: <b>${esc(drift.join(', '))}</b>
+           \u2014 reprint to bring the piano's tag up to date.</div>`
+      : `<div class="tvok">\u2713 Still matches the piano's current data.</div>`}
+    <div class="tagrender tvtag">${shopTagInner(snap.d)}</div>
+  </div>`;
+  ov.onclick = ev => {
+    if (ev.target === ov || ev.target.classList.contains('tvx')) ov.remove();
+  };
+  document.body.appendChild(ov);
+}
+
+// Everything the tag shows, as a plain object — so the same values can be
+// printed, snapshotted to the sheet, and re-rendered later as the thumbnail
+// of "what is actually taped to this piano right now".
+function shopTagFields(p) {
   const blob = p.owner || '';
-  const ownerName = ownerNameOf(p) || '—';
-  const cityState = ownerCityStateOf(p) || '—';
-
-  const arrived = p.entered
-    ? new Date(p.entered + 'T00:00:00').toLocaleDateString('en-US',
-        {month: 'long', day: 'numeric', year: 'numeric'})
-    : '—';
-  const tracks = trackParts(p.track).list;
   const plan = (p.plan || '').trim();
-  const notes = (p.planNotes || '').trim().replace(/\s*\n+\s*/g, '  ·  ');
-  const lvl = (/level\s*([1-3])/i.exec(plan) || [])[1] || '';
-  const refinYN = (/refinish/i.test(p.track || '') || /refinish/i.test(plan)) ? 'Yes' : 'No';
-  const techYN = /tech/i.test(p.track || '') ? 'Yes' : 'No';
-  const techNote = /qrs/i.test(blob + ' ' + plan + ' ' + notes)
-    ? (/(upgrade|update)/i.test(blob + ' ' + plan) ? 'QRS upgrade' : 'QRS') : '';
-  const plating = /^y/i.test(p.replate || '') ? 'Yes'
-    : /^n/i.test(p.replate || '') ? 'No'
-    : /replat|plating/i.test(plan + ' ' + notes) ? 'Yes' : '—';
-  const bench = /^y/i.test(p.bench || '') ? 'Yes'
-    : /^n/i.test(p.bench || '') ? 'No'
-    : (p.bench ? p.bench.slice(0, 26) : '—');
-
-  const h1 = p.make || (p.summary || 'Piano').slice(0, 26);
-  const sub = [p.model ? 'Model ' + p.model : '', p.year, p.size].filter(Boolean).join(' · ');
-  const qr = 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data='
-    + encodeURIComponent(logLink(p));
+  const notes = (p.planNotes || '').trim().replace(/\s*\n+\s*/g, '  \u00b7  ');
+  const kt = keyTokens(p);
+  const mark = k => kt.length ? (kt.includes(k) ? 'Yes' : 'No') : '\u2014';
+  return {
+    serial: p.serial || '\u2014',
+    h1: p.make || (p.summary || 'Piano').slice(0, 26),
+    sub: [p.model ? 'Model ' + p.model : '', p.year, p.size].filter(Boolean).join(' \u00b7 '),
+    owner: (ownerNameOf(p) || '\u2014') + ' \u2014 ' + (ownerCityStateOf(p) || '\u2014'),
+    arrived: p.entered
+      ? new Date(p.entered + 'T00:00:00').toLocaleDateString('en-US',
+          {month: 'long', day: 'numeric', year: 'numeric'})
+      : '\u2014',
+    track: trackParts(p.track).list.join(' \u00b7 ') || '\u2014',
+    plan: plan.slice(0, 90) || '\u2014',
+    refin: (/refinish/i.test(p.track || '') || /refinish/i.test(plan)) ? 'Yes' : 'No',
+    lvl: (/level\s*([1-3])/i.exec(plan) || [])[1] || '',
+    tech: (/tech/i.test(p.track || '') ? 'Yes' : 'No')
+      + ((/qrs/i.test(blob + ' ' + plan + ' ' + notes)
+          ? (/(upgrade|update)/i.test(blob + ' ' + plan) ? ' \u2014 QRS upgrade' : ' \u2014 QRS') : '')),
+    keys: KEY_SERVICE.map(k => k + ' ' + mark(k)).join(' \u00b7 '),
+    plating: /^y/i.test(p.replate || '') ? 'Yes'
+      : /^n/i.test(p.replate || '') ? 'No'
+      : /replat|plating/i.test(plan + ' ' + notes) ? 'Yes' : '\u2014',
+    bench: /^y/i.test(p.bench || '') ? 'Yes'
+      : /^n/i.test(p.bench || '') ? 'No'
+      : (p.bench ? p.bench.slice(0, 26) : '\u2014'),
+    notes: notes.slice(0, 180) || '\u2014',
+    qr: logLink(p),
+  };
+}
+// The tag itself. Identical markup for print, thumbnail and the popup — only
+// the surrounding CSS scale differs.
+function shopTagInner(d) {
   const logo = location.origin + '/assets/blp-logo.png';
-  const lvBox = n => `<i class="${lvl === String(n) ? 'on' : ''}">${n}</i>`;
-
-  const tag = `<div class="tag">
-    <div class="rail"><span>SERIAL # ${esc(p.serial || '—')}</span></div>
+  const qrImg = 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data='
+    + encodeURIComponent(d.qr || '');
+  const lvBox = n => `<i class="${d.lvl === String(n) ? 'on' : ''}">${n}</i>`;
+  return `<div class="tag">
+    <div class="rail"><span>SERIAL # ${esc(d.serial)}</span></div>
     <div class="main">
       <div class="id"><img src="${logo}" alt="Brigham Larson Pianos">
-        <div class="nm"><h1>${esc(h1)}</h1><div class="sub">${esc(sub || '—')}</div></div></div>
+        <div class="nm"><h1>${esc(d.h1)}</h1><div class="sub">${esc(d.sub || '\u2014')}</div></div></div>
       <div class="rows">
-        <div class="rw"><span class="lb">Owner</span><b>${esc(ownerName)} — ${esc(cityState)}</b></div>
-        <div class="rw"><span class="lb">Arrived</span><b>${esc(arrived)}</b></div>
+        <div class="rw"><span class="lb">Owner</span><b>${esc(d.owner)}</b></div>
+        <div class="rw"><span class="lb">Arrived</span><b>${esc(d.arrived)}</b></div>
         <div class="divider"><em>SCOPE OF WORK</em></div>
-        <div class="rw spec"><span class="lb">Track</span><b>${esc(tracks.join(' · ') || '—')}</b></div>
-        <div class="rw spec"><span class="lb">Plan</span><b>${esc(plan.slice(0, 90) || '—')}</b></div>
-        <div class="rw spec"><span class="lb">Refinishing</span><b>${refinYN}
+        <div class="rw spec"><span class="lb">Track</span><b>${esc(d.track)}</b></div>
+        <div class="rw spec"><span class="lb">Plan</span><b>${esc(d.plan)}</b></div>
+        <div class="rw spec"><span class="lb">Refinishing</span><b>${esc(d.refin)}
           <span class="lv">${lvBox(1)}${lvBox(2)}${lvBox(3)}</span></b></div>
-        <div class="rw spec"><span class="lb">Technology</span><b>${techYN}${techNote ? ' — ' + esc(techNote) : ''}</b></div>
-        <div class="rw spec"><span class="lb">Keys</span><b>${(() => {
-          const kt = keyTokens(p);
-          const mark = k => kt.length ? (kt.includes(k) ? 'Yes' : 'No') : '—';
-          return KEY_SERVICE.map(k => k + ' ' + mark(k)).join(' · ');
-        })()}</b></div>
-        <div class="rw spec"><span class="lb">Plating</span><b>${esc(plating)}</b></div>
-        <div class="rw spec"><span class="lb">Bench</span><b>${esc(bench)}</b></div>
-        <div class="rw spec note"><span class="lb">Notes</span><b>${esc(notes.slice(0, 180) || '—')}</b></div>
+        <div class="rw spec"><span class="lb">Technology</span><b>${esc(d.tech)}</b></div>
+        <div class="rw spec"><span class="lb">Keys</span><b>${esc(d.keys)}</b></div>
+        <div class="rw spec"><span class="lb">Plating</span><b>${esc(d.plating)}</b></div>
+        <div class="rw spec"><span class="lb">Bench</span><b>${esc(d.bench)}</b></div>
+        <div class="rw spec note"><span class="lb">Notes</span><b>${esc(d.notes)}</b></div>
       </div>
     </div>
     <div class="band">
-      <img class="q" src="${qr}" alt="QR">
+      <img class="q" src="${qrImg}" alt="QR">
       <div class="scan"><b>SCAN FOR UPDATES</b><ul>
         <li>Queue #</li><li>Map Spot</li><li>Cabinetry Shelf</li><li>Phase Checklists</li>
         <li>Concurrent Work</li><li>Progress Photos</li><li>Tech Reports</li>
@@ -1012,6 +1081,13 @@ function printShopTag(p) {
         <li>Records &amp; Files</li></ul></div>
     </div>
   </div>`;
+}
+
+function printShopTag(p) {
+  const d = shopTagFields(p);
+  const h1 = d.h1;
+  const tag = shopTagInner(d);
+  saveTagSnapshot(p, d);   // remember what went on the piano
 
   const w = window.open('', '_blank');
   if (!w) { alert('Pop-up blocked — allow pop-ups to print shop tags.'); return; }
@@ -1818,6 +1894,15 @@ function popHTML(p) {
       ${priceLabel(p) ? `<a class="tagbtn" target="_blank" rel="noopener"
         href="${priceTagUrl(p)}">🏷 Price tag ↗</a>` : ''}
       ${p.serial ? `<button class="tagbtn shoptag">🖨 Shop tag</button>` : ''}
+      ${(() => {
+        const sn = tagSnapOf(p);
+        if (!sn) return '';
+        const drift = tagSnapDrift(p, sn).length;
+        return `<button class="tagthumb ${drift ? 'stale' : ''}"
+          title="${drift ? 'Tag on the piano is out of date \u2014 click to see it' : 'The tag currently taped to this piano \u2014 click to enlarge'}">
+          <span class="tagrender">${shopTagInner(sn.d)}</span>
+          ${drift ? '<i>\u26a0</i>' : ''}</button>`;
+      })()}
     </div>
     <span class="btn">Open Piano Log ↗</span>`;
 }
@@ -1986,6 +2071,8 @@ function wirePop(p) {
   }
   const st = pop.querySelector('.shoptag');
   if (st) st.onclick = ev => { ev.stopPropagation(); printShopTag(p); };
+  const tt = pop.querySelector('.tagthumb');
+  if (tt) tt.onclick = ev => { ev.stopPropagation(); openTagSnapshot(p); };
   const pt = pop.querySelector('.tagbtns a');
   if (pt) pt.onclick = ev => ev.stopPropagation();
 }

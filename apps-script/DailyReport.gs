@@ -601,6 +601,11 @@ function doPost(e) {
         (sty.previous || '(auto)') + ' → ' + (sty.type || '(auto)'));
       return json_(sty);
     }
+    if (req.action === 'tagsnapshot') {
+      var tsn = setTagSnapshot_(req);
+      if (tsn.ok) logAct_(who, 'Shop tag printed', tsn.summary || req.serial, 'tag snapshot saved');
+      return json_(tsn);
+    }
     if (req.action === 'setkeys') {
       var sks = setKeyService_(req);
       if (sks.ok) logAct_(who, 'Key service', sks.summary || req.serial, sks.keys || '(cleared)');
@@ -1636,6 +1641,16 @@ function pianoCol_(sh, name) {
   }
   sh.getRange(2, last + 1).setValue(name);
   return last + 1;
+}
+
+function setTagSnapshot_(req) {
+  var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+  var found = findPiano_(sh, req.serial, req.row);
+  if (found.error) return found;
+  var col = pianoCol_(sh, 'TAG SNAPSHOT');
+  var val = String(req.snapshot == null ? '' : req.snapshot).slice(0, 8000);
+  sh.getRange(found.row, col).setValue(val);
+  return {ok: true, row: found.row, summary: found.summary};
 }
 
 function setKeyService_(req) {

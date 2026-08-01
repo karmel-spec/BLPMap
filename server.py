@@ -126,6 +126,8 @@ def parse_pianos(raw):
                          if h.strip().upper() == 'ADMIN STEPS'), -1)
     key_svc_idx = next((i for i, h in enumerate(hdr)
                         if h.strip().upper() == 'KEY SERVICE'), -1)
+    tag_snap_idx = next((i for i, h in enumerate(hdr)
+                         if h.strip().upper() == 'TAG SNAPSHOT'), -1)
     # CUSTOM SHOPWORK queue bounds (1-based rows). Queue position = row - header;
     # total = rows from just after the header down to the first fully-blank row.
     q_hdr = q_end = None
@@ -215,6 +217,7 @@ def parse_pianos(raw):
             'payMilestone': col(pay_ms_idx) if pay_ms_idx >= 0 else '',
             'adminSteps': col(admin_st_idx) if admin_st_idx >= 0 else '',
             'keyService': col(key_svc_idx) if key_svc_idx >= 0 else '',
+            'tagSnapshot': col(tag_snap_idx) if tag_snap_idx >= 0 else '',
             'status': status,
             'location': loc,
             'isSlot': bool(SLOT_RE.match(loc)),
