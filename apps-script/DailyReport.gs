@@ -601,6 +601,22 @@ function doPost(e) {
         (sty.previous || '(auto)') + ' → ' + (sty.type || '(auto)'));
       return json_(sty);
     }
+    if (req.action === 'setpayplan') {
+      var spp = setPayPlan_(req);
+      if (spp.ok) logAct_(who, 'Payment plan', spp.summary || req.serial, spp.plan || '(cleared)');
+      return json_(spp);
+    }
+    if (req.action === 'setadminsteps') {
+      var sas = setAdminSteps_(req);
+      if (sas.ok) logAct_(who, 'Admin steps', sas.summary || req.serial, sas.steps || '(cleared)');
+      return json_(sas);
+    }
+    if (req.action === 'paymilestone') {
+      var pms = payMilestone_(req);
+      if (pms.ok && !pms.skipped) logAct_(who, 'Payment milestone email', req.summary || req.serial,
+        pms.milestone + '% — emailed ' + (pms.emailed || ''));
+      return json_(pms);
+    }
     if (req.action === 'setcabinetry') {
       var cb2 = setCabinetry_(req);
       if (cb2.ok) logAct_(who, 'Cabinetry location', cb2.summary || req.serial,
