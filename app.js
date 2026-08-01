@@ -1743,9 +1743,9 @@ function popHTML(p) {
           `<span class="cabchip" title="${esc(cabPretty(t))}">${esc(t)}<i class="cabdel" data-t="${esc(t)}">✕</i></span>`).join('')}
           <button class="cabadd">＋ shelf</button>
         </span></div><div class="cabmsg phmsg"></div>` : ''}
-    ${p.serial ? `<div class="row trkrow" title="wrong icon on the map? set the correct type here">Icon
-        <span class="trkchips">${['grand', 'upright', 'digital'].map(t =>
-          `<button class="trk typebtn ${p.type === t ? 'on' : ''}" data-type="${t}">${t === 'grand' ? '🎹 Grand' : t === 'upright' ? '🎼 Upright' : '🔌 Digital'}</button>`).join('')}
+    ${p.serial ? `<div class="row trkrow" title="wrong icon on the map? set the correct type here — digitals are marked as uprights">Icon
+        <span class="trkchips">${['grand', 'upright'].map(t =>
+          `<button class="trk typebtn ${p.type === t ? 'on' : ''}" data-type="${t}">${t === 'grand' ? '🎹 Grand' : '🎼 Upright'}</button>`).join('')}
           ${p.typeOverride ? `<button class="trk typebtn typeclear" data-type="">✕ Clear override</button>` : ''}
         </span></div><div class="typemsg phmsg"></div>` : ''}
 
