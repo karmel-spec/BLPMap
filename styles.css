@@ -597,3 +597,4 @@ td a{color:#9e2020}
   .tagview .tvtag{width:calc(96vw - 32px);height:calc((96vw - 32px) * 0.647)}
   .tagview .tvtag .tagrender{transform:scale(calc((96vw - 32px) / 850))}
 }
+.pop .mapnum{font-size:14px;font-weight:800;color:#9e2020}

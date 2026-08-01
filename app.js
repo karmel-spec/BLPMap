@@ -1824,9 +1824,9 @@ function popHTML(p) {
   return `<div class="popgrip l" title="drag to resize"></div><div class="popgrip r" title="drag to resize"></div>
     <div class="popsticky">
     <span class="x">✕</span>
-    <span class="tag ${st}">${st === 'in' ? `MAP # ${esc(p.location)}` : `${tags[st]} · MAP # ${esc(p.location)}`}</span>
+    <span class="tag ${st}">${tags[st]}</span>
     <h3>${esc(makeModel)}</h3>
-    <div class="row rowflex"><span>Serial # <b>${esc(p.serial || '—')}</b></span>${queueChip}${typeBtns}</div>
+    <div class="row rowflex"><span>Serial # <b>${esc(p.serial || '—')}</b></span>${typeBtns}</div>
     <div class="typemsg phmsg"></div>
     </div>
     <div class="row">Owner <b>${esc(ownerLine)}</b></div>
@@ -1837,6 +1837,8 @@ function popHTML(p) {
       : (priceLabel(p) ? `<div class="row">Price <b class="pricecard">${esc(priceLabel(p))}</b></div>` : '')}
 
     <div class="sechead">📍 Locations</div>
+    <div class="row rowflex"><span>Map #</span><b class="mapnum">${esc(p.location || '—')}</b></div>
+    ${p.queuePos ? `<div class="row rowflex"><span>Queue #</span>${queueChip}</div>` : ''}
     ${mover}
     ${queuer}
     ${p.serial ? `<div class="row trkrow">Cabinetry
