@@ -1721,12 +1721,20 @@ function popHTML(p) {
       return `<button class="astep ${on ? 'on' : ''}" data-as="${esc(s)}"><i>${on ? '✓' : i + 1}</i>${esc(s)}</button>`;
     }).join('')}</div><div class="asmsg phmsg"></div>
     ${payBar}` : '';
+  const typeBtns = p.serial
+    ? `<span class="trkchips hdrtype" title="wrong icon on the map? tap the correct type — digitals are marked as uprights">
+        ${['grand', 'upright'].map(t =>
+          `<button class="trk typebtn ${p.type === t ? 'on' : ''}" data-type="${t}">${t === 'grand' ? '🎹 Grand' : '🎼 Upright'}</button>`).join('')}
+        ${p.typeOverride ? `<button class="trk typebtn typeclear" data-type="" title="clear override">✕</button>` : ''}
+      </span>`
+    : '';
   return `<div class="popgrip l" title="drag to resize"></div><div class="popgrip r" title="drag to resize"></div>
     <div class="popsticky">
     <span class="x">✕</span>
-    <span class="tag ${st}">${tags[st]} · SPOT ${esc(p.location)}</span>
+    <span class="tag ${st}">${st === 'in' ? `MAP # ${esc(p.location)}` : `${tags[st]} · MAP # ${esc(p.location)}`}</span>
     <h3>${esc(makeModel)}</h3>
-    <div class="row rowflex"><span>Serial # <b>${esc(p.serial || '—')}</b></span>${queueChip}</div>
+    <div class="row rowflex"><span>Serial # <b>${esc(p.serial || '—')}</b></span>${queueChip}${typeBtns}</div>
+    <div class="typemsg phmsg"></div>
     </div>
     <div class="row">Owner <b>${esc(ownerLine)}</b></div>
     <div class="row">Status <b>${esc(p.status || '—')}</b></div>
@@ -1743,11 +1751,6 @@ function popHTML(p) {
           `<span class="cabchip" title="${esc(cabPretty(t))}">${esc(t)}<i class="cabdel" data-t="${esc(t)}">✕</i></span>`).join('')}
           <button class="cabadd">＋ shelf</button>
         </span></div><div class="cabmsg phmsg"></div>` : ''}
-    ${p.serial ? `<div class="row trkrow" title="wrong icon on the map? set the correct type here — digitals are marked as uprights">Icon
-        <span class="trkchips">${['grand', 'upright'].map(t =>
-          `<button class="trk typebtn ${p.type === t ? 'on' : ''}" data-type="${t}">${t === 'grand' ? '🎹 Grand' : '🎼 Upright'}</button>`).join('')}
-          ${p.typeOverride ? `<button class="trk typebtn typeclear" data-type="">✕ Clear override</button>` : ''}
-        </span></div><div class="typemsg phmsg"></div>` : ''}
 
     ${p.serial ? `<div class="sechead">🔨 Shop Progress</div>` : ''}
     ${tracker}

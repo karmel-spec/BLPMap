@@ -298,6 +298,8 @@ td a{color:#9e2020}
 .typebtn.on{background:#2b5fa8;border-color:#2b5fa8;color:#fff}
 .typebtn.on:hover{border-color:#2b5fa8;color:#fff}
 .typeclear{color:#9aa3ac;border-style:dashed}
+.hdrtype{margin-left:auto}
+.popsticky .typemsg:empty{display:none}
 .reqmenu{display:flex;flex-direction:column;border:1px solid #cfd6dc;border-radius:8px;overflow:hidden;margin-top:2px}
 .reqmenu[hidden]{display:none}
 .reqmenu button,.reqmenu a{border:none;background:#fff;text-align:left;padding:7px 12px;font-size:12px;font-weight:600;color:#2b2f33;cursor:pointer;border-bottom:1px solid #f0f2f4;text-decoration:none;display:block}
