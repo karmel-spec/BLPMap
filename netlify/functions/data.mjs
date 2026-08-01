@@ -94,6 +94,8 @@ function parsePianos(text) {
     ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'PAY MILESTONE') : -1;
   const adminStIdx = rows[1]
     ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'ADMIN STEPS') : -1;
+  const keySvcIdx = rows[1]
+    ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'KEY SERVICE') : -1;
   // CUSTOM SHOPWORK queue bounds (1-based rows)
   let qHdr = 0, qEnd = 0;
   for (let k = 0; k < rows.length; k++) {
@@ -162,6 +164,7 @@ function parsePianos(text) {
       payPlan: payPlanIdx >= 0 ? col(payPlanIdx) : '',
       payMilestone: payMsIdx >= 0 ? col(payMsIdx) : '',
       adminSteps: adminStIdx >= 0 ? col(adminStIdx) : '',
+      keyService: keySvcIdx >= 0 ? col(keySvcIdx) : '',
       isSlot: SLOT_RE.test(loc),
       entered: entered ? entered.toISOString().slice(0, 10) : null,
       phase: phaseIdx >= 0 ? col(phaseIdx) : '',

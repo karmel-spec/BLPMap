@@ -601,6 +601,11 @@ function doPost(e) {
         (sty.previous || '(auto)') + ' → ' + (sty.type || '(auto)'));
       return json_(sty);
     }
+    if (req.action === 'setkeys') {
+      var sks = setKeyService_(req);
+      if (sks.ok) logAct_(who, 'Key service', sks.summary || req.serial, sks.keys || '(cleared)');
+      return json_(sks);
+    }
     if (req.action === 'setpayplan') {
       var spp = setPayPlan_(req);
       if (spp.ok) logAct_(who, 'Payment plan', spp.summary || req.serial, spp.plan || '(cleared)');
@@ -1631,6 +1636,20 @@ function pianoCol_(sh, name) {
   }
   sh.getRange(2, last + 1).setValue(name);
   return last + 1;
+}
+
+function setKeyService_(req) {
+  var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+  var found = findPiano_(sh, req.serial, req.row);
+  if (found.error) return found;
+  var col = pianoCol_(sh, 'KEY SERVICE');
+  var ok = ['ivory', 'plastic', 'ebony'];
+  var keep = String(req.keys == null ? '' : req.keys).split(',')
+    .map(function (t) { return t.trim(); })
+    .filter(function (t) { return ok.indexOf(t.toLowerCase()) >= 0; });
+  var val = keep.join(', ');
+  sh.getRange(found.row, col).setValue(val);
+  return {ok: true, row: found.row, summary: found.summary, keys: val};
 }
 
 function setPayPlan_(req) {

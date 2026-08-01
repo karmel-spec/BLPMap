@@ -23,6 +23,7 @@ const PHASE_STATES = ['In Queue', 'Paused', 'For Sale',
 const TRACKS = ['Rebuild', 'Hybrid', 'Refurbish', 'Refinish', 'Technology', 'Old Player', 'Storage', 'Misc'];   // unnumbered states; For Sale turns the icon green
 // Admin section: client payment plans, the shop-progress milestones that
 // trigger a payment email to info@, and the client's admin-experience steps
+const KEY_SERVICE = ['Ivory', 'Plastic', 'Ebony'];   // key-top service, multi-select
 const PAY_PLANS = ['Pd in Full', '12 Month', '24 Month', '4 Progress Payments', 'Financed'];
 const PAY_MILESTONES = [25, 50, 75, 100];
 const ADMIN_STEPS = ['$1000 Queue Payment', 'Selections Made (Google Form)', 'Welcome Email',
@@ -992,7 +993,11 @@ function printShopTag(p) {
         <div class="rw spec"><span class="lb">Refinishing</span><b>${refinYN}
           <span class="lv">${lvBox(1)}${lvBox(2)}${lvBox(3)}</span></b></div>
         <div class="rw spec"><span class="lb">Technology</span><b>${techYN}${techNote ? ' — ' + esc(techNote) : ''}</b></div>
-        <div class="rw spec"><span class="lb">Keys</span><b>Ivory — · Plastic — · Ebony —</b></div>
+        <div class="rw spec"><span class="lb">Keys</span><b>${(() => {
+          const kt = keyTokens(p);
+          const mark = k => kt.length ? (kt.includes(k) ? 'Yes' : 'No') : '—';
+          return KEY_SERVICE.map(k => k + ' ' + mark(k)).join(' · ');
+        })()}</b></div>
         <div class="rw spec"><span class="lb">Plating</span><b>${esc(plating)}</b></div>
         <div class="rw spec"><span class="lb">Bench</span><b>${esc(bench)}</b></div>
         <div class="rw spec note"><span class="lb">Notes</span><b>${esc(notes.slice(0, 180) || '—')}</b></div>
@@ -1766,6 +1771,10 @@ function popHTML(p) {
 
     ${p.serial ? `<div class="sechead">🔨 Shop Progress</div>` : ''}
     ${tracker}
+    ${p.serial ? `<div class="row trkrow" title="key-top service — tap each that applies">Keys
+        <span class="trkchips">${KEY_SERVICE.map(t =>
+          `<button class="trk keybtn ${keyTokens(p).includes(t) ? 'on' : ''}" data-k="${t}">${esc(t)}</button>`).join('')}
+        </span></div><div class="keymsg phmsg"></div>` : ''}
     ${phaser}
     ${p.serial ? (() => {
       const dl = (p.phasesDone || '').split(',').map(t => t.trim()).filter(Boolean);
@@ -1872,6 +1881,12 @@ function wirePop(p) {
   pop.querySelectorAll('.typebtn').forEach(b => b.onclick = ev => {
     ev.stopPropagation();
     setTypeOverride(p, b.dataset.type, pop);
+  });
+  pop.querySelectorAll('.keybtn').forEach(b => b.onclick = ev => {
+    ev.stopPropagation();
+    const list = keyTokens(p);
+    const k = b.dataset.k;
+    setKeyService(p, list.includes(k) ? list.filter(x => x !== k) : list.concat(k), pop);
   });
   const pay = pop.querySelector('.paysel');
   if (pay) {
@@ -2221,6 +2236,40 @@ async function saveCabinetry(p, list, pop) {
     p.cabinetry = was;
     delete edit.cabinetry; if (!Object.keys(edit).length) pendingEdits.delete(p.row);
     if (msg) { msg.className = 'cabmsg phmsg err'; msg.textContent = '\u2717 ' + e.message; }
+  }
+}
+function keyTokens(p) {
+  return String(p.keyService || '').split(',').map(t => t.trim())
+    .filter(t => KEY_SERVICE.some(k => k.toLowerCase() === t.toLowerCase()))
+    .map(t => KEY_SERVICE.find(k => k.toLowerCase() === t.toLowerCase()));
+}
+async function setKeyService(p, list, pop) {
+  const msg = pop.querySelector('.keymsg');
+  popPinned = true;
+  const {pin, ok} = writeAuth();
+  if (!ok) { if (msg) { msg.className = 'keymsg phmsg err'; msg.textContent = 'Sign in with Google (menu) first.'; } return; }
+  const was = p.keyService || '';
+  p.keyService = KEY_SERVICE.filter(k => list.includes(k)).join(', ');
+  if (!$('#pop').hidden) openPop(p.row, S.popAnchor, true);
+  const m = $('#pop').querySelector('.keymsg');
+  if (m) { m.className = 'keymsg phmsg'; m.textContent = 'Saving...'; }
+  try {
+    const r = await fetch(BRIDGE_URL, {
+      method: 'POST', redirect: 'follow',
+      headers: {'content-type': 'text/plain;charset=utf-8'},
+      body: JSON.stringify({pin, serial: p.serial, action: 'setkeys',
+        keys: p.keyService, row: p.row, ...authFields()}),
+    });
+    const j = await r.json();
+    if (j.error === 'unauthorized') { lsDel('blpPin'); throw new Error('Not authorized'); }
+    if (!j.ok) throw new Error(j.error || 'save failed');
+    const m2 = $('#pop').querySelector('.keymsg');
+    if (m2) { m2.className = 'keymsg phmsg ok'; m2.textContent = '\u2713 saved'; }
+  } catch (e) {
+    p.keyService = was;
+    if (!$('#pop').hidden) openPop(p.row, S.popAnchor, true);
+    const m2 = $('#pop').querySelector('.keymsg');
+    if (m2) { m2.className = 'keymsg phmsg err'; m2.textContent = 'Error: ' + e.message; }
   }
 }
 async function setTypeOverride(p, type, pop) {
