@@ -1683,6 +1683,546 @@ function payMilestone_(req) {
   return {ok: true, row: found.row, milestone: ms, emailed: REPORT_TO};
 }
 
+/* ============ SHOP MANAGER DAILY BRIEFING ============
+ * A working checklist for the shop manager, not just a headcount: what
+ * changed yesterday and who did it, what's blocked, what needs a decision,
+ * and what data is missing. Every section hides itself when it's empty, so
+ * a quiet day is a short email.
+ * Run sendShopManagerReport() manually, or sendShopManagerReportTo('a@b.com')
+ * to send a sample somewhere else. */
+var SHOPMGR_TO = 'shop@brighamlarsonpianos.com';
+var TRACKDEFS_URL = 'https://blpsalesapp.netlify.app/.netlify/functions/track-defs';
+var TASKS_URL = 'https://blpsalesapp.netlify.app/.netlify/functions/piano-tasks';
+// phase -> the specialty area that staffs it (mirrors the Store Map card)
+var SM_PHASE_AREA = {
+  'CAP': 'CAP', 'PRSB & Plate Refinishing': 'PRSB', 'Restringing': 'Restringing',
+  'Refinishing': 'Refinishing', 'QC & Assembly': 'QC', '1st Tuning': 'Tuning',
+  '2nd Tuning': 'Tuning', 'Chip Tuning': 'Tuning'
+};
+// median scheduled hours per phase (7 months of tech calendar history) turned
+// into "this is taking too long" day thresholds
+var SM_PHASE_DAYS = {
+  'CAP': 21, 'PRSB & Plate Refinishing': 21, 'Lacquer Soundboard': 10,
+  'Restringing': 14, 'Chip Tuning': 5, 'DHRT': 30, '1st Tuning': 5,
+  'Refinishing': 30, 'QC & Assembly': 10, '2nd Tuning': 5,
+  'Exit Prep - Admin': 7, 'Assessment': 7, 'New Arrival - Admin': 5
+};
+var SM_ADMIN_STEPS = ['$1000 Queue Payment', 'Selections Made (Google Form)',
+  'Welcome Email', 'Before Photos', 'Plan Entered to Shop Tag & Printed',
+  'Upsell Offers — Brigham Call (after 50%)',
+  '100% Payment Collected Prior to Delivery', 'Delivery Scheduled'];
+
+function smDenverDay_(d) {
+  return Utilities.formatDate(d || new Date(), 'America/Denver', 'yyyy-MM-dd');
+}
+function smIsShopwork_(p) {
+  return String(p.section || '').trim().toUpperCase() === 'CUSTOM SHOPWORK';
+}
+function smPhaseIdx_(ph) { return PHASE_VALUES.indexOf(ph); }
+function smIsWorkPhase_(ph) {
+  var i = smPhaseIdx_(ph);
+  return i >= 0 && i <= 12;   // New Arrival .. Exit Prep
+}
+// pianos whose track phases are done, as a rough % (mirrors the card's bar)
+function smProgress_(p) {
+  var done = String(p.phasesDone || '').split(',').map(function (s) { return s.trim(); })
+    .filter(String);
+  var list = PHASE_VALUES.slice(0, 13);
+  var cur = smPhaseIdx_(p.phase);
+  var n = 0;
+  for (var i = 0; i < list.length; i++) {
+    if (done.indexOf(list[i]) >= 0 || (cur >= 0 && i < cur)) n++;
+  }
+  return Math.round(n / list.length * 100);
+}
+// "City, ST" hiding in the owner blob — the Shop Work Map needs one to pin
+function smHasPlace_(p) {
+  var blob = String(p.owner || '');
+  return /[A-Za-z][A-Za-z .'-]{2,},?\s*[A-Z]{2}[,.]?\s+\d{5}/.test(blob)
+      || /[A-Za-z][A-Za-z .'-]{2,},\s*[A-Z]{2}\b/.test(blob);
+}
+function smDaysSince_(iso) {
+  if (!iso) return null;
+  var t = new Date(iso + 'T00:00:00Z').getTime();
+  if (isNaN(t)) return null;
+  return Math.floor((Date.now() - t) / 86400000);
+}
+function smName_(p) {
+  return (p.summary || [p.year, p.make, p.model].filter(String).join(' ') || 'piano');
+}
+function smSpot_(p) { return p.location ? String(p.location) : '—'; }
+
+/* ---- yesterday's activity, grouped by person ---- */
+function smYesterdayActivity_() {
+  var ss = SpreadsheetApp.openById(PIANO_LOG_ID);
+  var sh = ss.getSheetByName('ACTIVITY LOG');
+  var out = {byWho: {}, phases: [], dups: [], total: 0};
+  if (!sh || sh.getLastRow() < 2) return out;
+  var n = Math.min(sh.getLastRow() - 1, 600);
+  var vals = sh.getRange(sh.getLastRow() - n + 1, 1, n, 5).getValues();
+  var since = new Date(Date.now() - 36 * 3600 * 1000);   // since ~yesterday morning
+  for (var i = 0; i < vals.length; i++) {
+    var when = vals[i][0];
+    if (!(when instanceof Date) || when < since) continue;
+    var who = String(vals[i][1] || 'unknown');
+    var action = String(vals[i][2] || '');
+    var piano = String(vals[i][3] || '');
+    var detail = String(vals[i][4] || '');
+    var stamp = Utilities.formatDate(when, 'America/Denver', 'h:mm a');
+    out.total++;
+    if (!out.byWho[who]) out.byWho[who] = [];
+    out.byWho[who].push({t: stamp, action: action, piano: piano, detail: detail});
+    if (/phase change/i.test(action)) out.phases.push({who: who, piano: piano, detail: detail});
+    if (/marked duplicate/i.test(action)) out.dups.push({who: who, piano: piano, detail: detail});
+  }
+  return out;
+}
+
+/* ---- concurrent tasks that must finish before the NEXT phase starts ---- */
+function smBlockedByTasks_(pianos, defs) {
+  if (!defs || !defs.tracks) return [];
+  var live = pianos.filter(function (p) {
+    return p.serial && smIsShopwork_(p) && smIsWorkPhase_(p.phase);
+  }).slice(0, 60);                       // cap so the trigger can't time out
+  if (!live.length) return [];
+  var reqs = live.map(function (p) {
+    return {url: TASKS_URL + '?serial=' + encodeURIComponent(p.serial),
+            muteHttpExceptions: true};
+  });
+  var resp;
+  try { resp = UrlFetchApp.fetchAll(reqs); } catch (e) { return []; }
+  var out = [];
+  for (var i = 0; i < live.length; i++) {
+    var p = live[i], rows = [];
+    try { rows = (JSON.parse(resp[i].getContentText()) || {}).rows || []; }
+    catch (e) { continue; }
+    var keys = smTrackKeys_(p, defs);
+    if (!keys.length) continue;
+    var curIdx = smPhaseIdx_(p.phase);
+    var late = [];
+    for (var k = 0; k < keys.length; k++) {
+      var tasks = defs.tracks[keys[k]].tasks || [];
+      for (var t = 0; t < tasks.length; t++) {
+        var endIdx = smPhaseIdx_(smNormPhase_(tasks[t].endPhase));
+        if (endIdx < 0 || endIdx > curIdx) continue;      // not due yet
+        var id = smTaskId_(tasks[t].name);
+        var row = null;
+        for (var r = 0; r < rows.length; r++) {
+          if (smTaskId_(rows[r].task) === id && !rows[r].part) { row = rows[r]; break; }
+        }
+        var parts = rows.filter(function (x) { return smTaskId_(x.task) === id && x.part; });
+        var doneAll = parts.length
+          ? parts.every(function (x) { return x.step2At; })
+          : !!(row && row.step2At);
+        if (!doneAll && late.indexOf(tasks[t].name) < 0) late.push(tasks[t].name);
+      }
+    }
+    if (late.length) out.push({p: p, tasks: late});
+  }
+  return out;
+}
+function smTaskId_(n) {
+  return String(n || '').toLowerCase().replace(/\s*\(.*?\)\s*/g, ' ')
+    .replace(/\s+/g, ' ').trim();
+}
+function smNormPhase_(s) {
+  var t = String(s || '').toLowerCase();
+  if (t.indexOf('new arrival') >= 0) return 'New Arrival - Admin';
+  if (t.indexOf('assessment') >= 0) return 'Assessment';
+  if (t.indexOf('chip tuning') >= 0) return 'Chip Tuning';
+  if (t.indexOf('string') >= 0) return 'Restringing';
+  if (t.indexOf('cap') >= 0) return 'CAP';
+  if (t.indexOf('prsb') >= 0) return 'PRSB & Plate Refinishing';
+  if (t.indexOf('lacquer') >= 0) return 'Lacquer Soundboard';
+  if (t.indexOf('dhrt') >= 0) return 'DHRT';
+  if (t.indexOf('1st tuning') >= 0) return '1st Tuning';
+  if (t.indexOf('2nd tuning') >= 0) return '2nd Tuning';
+  if (t.indexOf('refinish') >= 0) return 'Refinishing';
+  if (t.indexOf('qc') >= 0) return 'QC & Assembly';
+  if (t.indexOf('exit prep') >= 0) return 'Exit Prep - Admin';
+  if (t.indexOf('delivered') >= 0) return 'Delivered';
+  return String(s || '').trim();
+}
+function smTrackKeys_(p, defs) {
+  var have = String(p.track || '').toLowerCase();
+  var alias = {rebuild: 'rebuild', hybrid: 'hybrid', refurbish: 'refurbishing',
+               refurbishing: 'refurbishing', repair: 'repair'};
+  var keys = [];
+  for (var a in alias) {
+    if (have.indexOf(a) >= 0 && defs.tracks[alias[a]] && keys.indexOf(alias[a]) < 0) {
+      keys.push(alias[a]);
+    }
+  }
+  return keys;
+}
+function smGoTo_(phase, type, defs) {
+  if (!defs || !defs.specialties) return '';
+  var area = SM_PHASE_AREA[phase];
+  if (phase === 'DHRT') area = (type === 'grand') ? 'DHRT for grands' : 'DHRT for uprights';
+  if (!area) return '';
+  var folks = (defs.specialties.people || []).filter(function (x) {
+    return x.role !== 'intern' && (x.skills[area] || 0) >= 2;
+  }).sort(function (a, b) { return (b.skills[area] || 0) - (a.skills[area] || 0); }).slice(0, 3);
+  return folks.map(function (x) {
+    return x.name + ((x.skills[area] === 3) ? ' ★' : '');
+  }).join(', ');
+}
+
+/* ---- the briefing itself ---- */
+function buildShopManagerReport_() {
+  var data = JSON.parse(UrlFetchApp.fetch(APP_URL + '/api/data').getContentText());
+  var slots = JSON.parse(UrlFetchApp.fetch(APP_URL + '/data/slots.json').getContentText());
+  var defs = null;
+  try { defs = JSON.parse(UrlFetchApp.fetch(TRACKDEFS_URL).getContentText()); } catch (e) {}
+  var pianos = (data.pianos || []).filter(function (p) { return p.active !== false; });
+  var today = smDenverDay_();
+  var R = {day: Utilities.formatDate(new Date(), 'America/Denver', 'EEEE, MMMM d, yyyy')};
+
+  R.activity = smYesterdayActivity_();
+
+  // phase advances yesterday + who staffs the phase they're now in
+  R.advances = R.activity.phases.map(function (a) {
+    var p = null;
+    for (var i = 0; i < pianos.length; i++) {
+      if (pianos[i].summary === a.piano || pianos[i].serial === a.piano) { p = pianos[i]; break; }
+    }
+    return {who: a.who, piano: a.piano, detail: a.detail,
+            goTo: p ? smGoTo_(p.phase, p.type, defs) : '', spot: p ? smSpot_(p) : ''};
+  });
+
+  R.blocked = smBlockedByTasks_(pianos, defs);
+
+  // waiting on… + check-back hygiene
+  R.waiting = [];
+  pianos.forEach(function (p) {
+    if (!/^waiting/i.test(String(p.phase || ''))) return;
+    var cb = String(p.checkBack || '').trim();
+    var state = 'ok', days = null;
+    if (!cb) state = 'missing';
+    else {
+      var d = new Date(cb);
+      if (isNaN(d.getTime())) state = 'missing';
+      else {
+        days = Math.floor((Date.now() - d.getTime()) / 86400000);
+        if (days > 0) state = 'overdue';
+        else if (days === 0) state = 'today';
+      }
+    }
+    R.waiting.push({p: p, on: p.waitNote || String(p.phase).replace(/^Waiting on /i, ''),
+                    cb: cb, state: state, days: days});
+  });
+  R.waiting.sort(function (a, b) {
+    var rank = {overdue: 0, missing: 1, today: 2, ok: 3};
+    return rank[a.state] - rank[b.state];
+  });
+
+  // stalled: in one work phase longer than its standard
+  R.stalled = [];
+  pianos.forEach(function (p) {
+    if (!smIsShopwork_(p) || !smIsWorkPhase_(p.phase)) return;
+    var lim = SM_PHASE_DAYS[p.phase];
+    var age = smDaysSince_(p.entered);
+    if (lim && age !== null && age > lim * 2) {
+      R.stalled.push({p: p, age: age, lim: lim});
+    }
+  });
+  R.stalled.sort(function (a, b) { return b.age - a.age; });
+
+  // open numbered spots -> next up in the queue (a recommendation to approve)
+  var taken = {};
+  pianos.forEach(function (p) {
+    if (p.isSlot) taken[String(p.location).toLowerCase()] = true;
+  });
+  var open = [];
+  (slots.floors || []).forEach(function (f, fi) {
+    (f.slots || []).forEach(function (s) {
+      var id = String(s.id || s.slot || '').toLowerCase();
+      if (id && !taken[id]) open.push({id: s.id || s.slot, floor: fi + 1});
+    });
+  });
+  R.openSpots = open;
+  R.queueUp = pianos.filter(function (p) {
+    return p.queuePos && !p.isSlot && smIsShopwork_(p);
+  }).sort(function (a, b) { return a.queuePos - b.queuePos; }).slice(0, Math.max(3, open.length));
+
+  // data gaps
+  R.noMap = pianos.filter(function (p) {
+    return smIsShopwork_(p) && !p.isSlot && !/coming soon|david hyde|attic/i.test(p.location || '');
+  });
+  R.noTrack = pianos.filter(function (p) {
+    return smIsShopwork_(p) && !String(p.track || '').trim();
+  });
+  R.noPhase = pianos.filter(function (p) {
+    return smIsShopwork_(p) && p.isSlot && !String(p.phase || '').trim();
+  });
+  R.noCab = pianos.filter(function (p) {
+    return smIsShopwork_(p) && smPhaseIdx_(p.phase) >= 3 && smPhaseIdx_(p.phase) <= 12
+      && !String(p.cabinetry || '').trim();
+  });
+  R.noAddress = pianos.filter(function (p) {
+    return smIsShopwork_(p) && !smHasPlace_(p);
+  });
+
+  // media
+  R.mediaBefore = pianos.filter(function (p) {
+    return smIsShopwork_(p) && (p.bphoto === false || p.bvideo === false);
+  });
+  R.exitBlocked = pianos.filter(function (p) {
+    var i = smPhaseIdx_(p.phase);
+    return smIsShopwork_(p) && i >= 10 && i <= 12
+      && (p.aphoto === false || p.avideo === false);
+  });
+
+  // admin + payments
+  R.noPlan = pianos.filter(function (p) {
+    return smIsShopwork_(p) && !String(p.payPlan || '').trim() && smProgress_(p) >= 25;
+  });
+  R.adminDrift = [];
+  pianos.forEach(function (p) {
+    if (!smIsShopwork_(p)) return;
+    var steps = String(p.adminSteps || '').split('|').map(function (s) { return s.trim(); });
+    var i = smPhaseIdx_(p.phase);
+    var want = [];
+    if (i >= 1 && steps.indexOf('$1000 Queue Payment') < 0) want.push('$1000 Queue Payment');
+    if (i >= 2 && steps.indexOf('Welcome Email') < 0) want.push('Welcome Email');
+    if (i >= 2 && steps.indexOf('Before Photos') < 0) want.push('Before Photos');
+    if (smProgress_(p) >= 50 && steps.indexOf('Upsell Offers — Brigham Call (after 50%)') < 0) {
+      want.push('Upsell call (50%+)');
+    }
+    if (i >= 12 && steps.indexOf('100% Payment Collected Prior to Delivery') < 0) {
+      want.push('100% payment');
+    }
+    if (want.length) R.adminDrift.push({p: p, want: want});
+  });
+
+  R.soldPending = pianos.filter(function (p) {
+    return /sold or completed but not delivered/i.test(p.section || '');
+  });
+
+  // housekeeping (what the old daily report covered)
+  R.unplaced = pianos.filter(function (p) {
+    return !p.isSlot && !/coming soon/i.test(p.location || '');
+  });
+  var bySlot = {};
+  pianos.forEach(function (p) {
+    if (!p.isSlot) return;
+    var k = String(p.location).toLowerCase();
+    (bySlot[k] = bySlot[k] || []).push(p);
+  });
+  R.dupSpots = [];
+  for (var k in bySlot) { if (bySlot[k].length > 1) R.dupSpots.push({spot: k, list: bySlot[k]}); }
+
+  R.moves = (data.events || []).filter(function (e) {
+    return String(e.date || e.start || '').slice(0, 10) === today;
+  });
+  R.total = pianos.length;
+  return R;
+}
+
+function shopManagerHtml_(R) {
+  var H = [];
+  function sec(icon, title, count, note) {
+    H.push('<h2 style="font:700 13px/1.4 Helvetica,Arial,sans-serif;letter-spacing:1.5px;'
+      + 'text-transform:uppercase;color:#6f6a63;background:#f4f1ec;border-left:4px solid #9e2020;'
+      + 'margin:22px 0 8px;padding:7px 11px">' + icon + ' ' + title
+      + (count != null ? ' <span style="color:#9e2020">(' + count + ')</span>' : '') + '</h2>');
+    if (note) H.push('<p style="margin:0 0 8px;font:12px Helvetica,Arial;color:#8a847b">' + note + '</p>');
+  }
+  function ul(items) {
+    H.push('<ul style="margin:0 0 4px;padding-left:18px;font:13px/1.65 Helvetica,Arial;color:#2b2f33">'
+      + items.map(function (t) { return '<li>' + t + '</li>'; }).join('') + '</ul>');
+  }
+  function pill(t, bg, fg) {
+    return '<span style="background:' + bg + ';color:' + fg + ';border-radius:4px;'
+      + 'padding:1px 6px;font-size:11px;font-weight:700">' + t + '</span>';
+  }
+  function ref(p) {
+    return '<b>' + smName_(p) + '</b> <span style="color:#8a847b">· map #' + smSpot_(p)
+      + (p.serial ? ' · ' + p.serial : '') + '</span>';
+  }
+
+  H.push('<div style="max-width:760px;margin:0 auto;font-family:Helvetica,Arial,sans-serif">');
+  H.push('<div style="background:#0d0d0d;color:#fff;padding:16px 18px;border-radius:8px 8px 0 0">'
+    + '<div style="font-family:Georgia,serif;letter-spacing:3px;font-size:15px">BRIGHAM LARSON PIANOS</div>'
+    + '<div style="font-size:11px;letter-spacing:2px;color:#c9a227;margin-top:3px">SHOP MANAGER BRIEFING · '
+    + R.day.toUpperCase() + '</div></div>');
+  H.push('<div style="border:1.5px solid #121212;border-top:none;border-radius:0 0 8px 8px;padding:16px 18px">');
+
+  // at a glance
+  var alerts = R.blocked.length + R.stalled.length + R.noCab.length + R.noTrack.length
+    + R.noPhase.length + R.noAddress.length + R.exitBlocked.length;
+  H.push('<p style="font:13px/1.6 Helvetica,Arial;color:#2b2f33;margin:0 0 4px">'
+    + '<b>' + R.activity.total + '</b> changes logged since yesterday · '
+    + '<b>' + R.moves.length + '</b> moves today · '
+    + '<b style="color:' + (alerts ? '#9e2020' : '#2e7d4f') + '">' + alerts + '</b> items needing attention'
+    + '</p>');
+
+  if (R.activity.total) {
+    sec('📋', 'Yesterday in the map', R.activity.total, 'Every change is logged under the name that made it.');
+    var whos = [];
+    for (var w in R.activity.byWho) {
+      var list = R.activity.byWho[w];
+      whos.push('<b>' + w + '</b> — ' + list.length + ' change' + (list.length > 1 ? 's' : '')
+        + '<br><span style="color:#6f6a63;font-size:12px">'
+        + list.slice(0, 8).map(function (a) {
+            return a.t + ' · ' + a.action + (a.piano ? ' — ' + a.piano : '');
+          }).join('<br>')
+        + (list.length > 8 ? '<br>… and ' + (list.length - 8) + ' more' : '') + '</span>');
+    }
+    ul(whos);
+  }
+
+  if (R.advances.length) {
+    sec('▶', 'Phase advances — is the next tech lined up?', R.advances.length);
+    ul(R.advances.map(function (a) {
+      return '<b>' + a.piano + '</b>' + (a.spot ? ' <span style="color:#8a847b">· map #' + a.spot + '</span>' : '')
+        + '<br><span style="font-size:12px;color:#6f6a63">' + a.detail + ' — moved by ' + a.who + '</span>'
+        + (a.goTo ? '<br>' + pill('GO-TO: ' + a.goTo, '#eef4ff', '#2b5fa8') : '');
+    }));
+  }
+
+  if (R.blocked.length) {
+    sec('⛔', 'Blocked — concurrent work not finished', R.blocked.length,
+      'These pianos are at or past the phase where the task below was due.');
+    ul(R.blocked.map(function (b) {
+      return ref(b.p) + '<br>' + pill('IN ' + (b.p.phase || '—'), '#fdf3ec', '#8a6a00')
+        + ' <span style="font-size:12px;color:#9e2020">outstanding: ' + b.tasks.join(', ') + '</span>';
+    }));
+  }
+
+  if (R.waiting.length) {
+    sec('⏳', 'Waiting on…', R.waiting.length, 'Overdue and missing check-back dates first.');
+    ul(R.waiting.map(function (w) {
+      var tag = w.state === 'overdue'
+          ? pill('CHECK BACK ' + w.days + 'd OVERDUE', '#fbeaea', '#9e2020')
+        : w.state === 'missing' ? pill('NO CHECK-BACK DATE', '#fdf3ec', '#8a6a00')
+        : w.state === 'today' ? pill('CHECK BACK TODAY', '#eef4ff', '#2b5fa8')
+        : '<span style="font-size:12px;color:#8a847b">check back ' + w.cb + '</span>';
+      return ref(w.p) + '<br><span style="font-size:12px;color:#6f6a63">waiting on ' + w.on
+        + '</span> ' + tag;
+    }));
+  }
+
+  if (R.stalled.length) {
+    sec('🐢', 'Sitting longer than the standard', R.stalled.length,
+      'Days since arrival vs. the typical span for the phase they are in.');
+    ul(R.stalled.slice(0, 12).map(function (s) {
+      return ref(s.p) + '<br>' + pill(s.p.phase + ' · ' + s.age + ' days in the building',
+        '#fbeaea', '#9e2020');
+    }));
+  }
+
+  if (R.openSpots.length && R.queueUp.length) {
+    sec('🔄', 'Open spots — next up in the queue', null,
+      R.openSpots.length + ' numbered spot' + (R.openSpots.length > 1 ? 's are' : ' is')
+      + ' free. Recommended for the in-store moves list — approve before scheduling.');
+    ul(R.queueUp.map(function (p) {
+      return pill('QUEUE #' + p.queuePos, '#f0f2f4', '#5a626a') + ' ' + ref(p)
+        + '<br><span style="font-size:12px;color:#6f6a63">currently: ' + (p.location || '—')
+        + (p.track ? ' · track: ' + p.track : ' · <b style="color:#9e2020">no track set</b>') + '</span>';
+    }));
+    H.push('<p style="font:12px Helvetica,Arial;color:#8a847b;margin:2px 0 0">Open: '
+      + R.openSpots.slice(0, 30).map(function (s) { return '#' + s.id; }).join(', ')
+      + (R.openSpots.length > 30 ? ' …' : '') + '</p>');
+  }
+
+  var gaps = [];
+  if (R.noMap.length) gaps.push('<b>' + R.noMap.length + '</b> shop-work pianos with <b>no map number</b>: '
+    + R.noMap.slice(0, 8).map(smName_).join('; '));
+  if (R.noPhase.length) gaps.push('<b>' + R.noPhase.length + '</b> on the map with <b>no shop phase</b>: '
+    + R.noPhase.slice(0, 8).map(function (p) { return smName_(p) + ' (#' + smSpot_(p) + ')'; }).join('; '));
+  if (R.noTrack.length) gaps.push('<b>' + R.noTrack.length + '</b> with <b>no track</b> — phases can\'t be planned: '
+    + R.noTrack.slice(0, 8).map(smName_).join('; '));
+  if (R.noCab.length) gaps.push('<b>' + R.noCab.length + '</b> past PRSB with <b>no cabinetry shelf</b> recorded: '
+    + R.noCab.slice(0, 8).map(function (p) { return smName_(p) + ' (#' + smSpot_(p) + ')'; }).join('; '));
+  if (gaps.length) { sec('⚠️', 'Data gaps', null, 'Small fixes that keep the map and reports honest.'); ul(gaps); }
+
+  if (R.noAddress.length) {
+    sec('📍', 'No delivery address found', R.noAddress.length,
+      'The Shop Work Map can\'t pin these — add a "City, ST" to the owner cell in the Piano Log.');
+    ul(R.noAddress.slice(0, 15).map(function (p) { return ref(p); }));
+  }
+
+  if (R.mediaBefore.length || R.exitBlocked.length) {
+    sec('📷', 'Media', R.mediaBefore.length + R.exitBlocked.length);
+    var m = [];
+    if (R.exitBlocked.length) m.push('<b style="color:#9e2020">Exit blocked — at QC or later, after media missing:</b><br>'
+      + '<span style="font-size:12px">' + R.exitBlocked.slice(0, 10).map(function (p) {
+          return smName_(p) + ' (#' + smSpot_(p) + ')'; }).join('; ') + '</span>');
+    if (R.mediaBefore.length) m.push('<b>' + R.mediaBefore.length + '</b> shop-work pianos still need before photos/video');
+    ul(m);
+  }
+
+  if (R.noPlan.length || R.adminDrift.length) {
+    sec('💰', 'Admin & payments', R.noPlan.length + R.adminDrift.length);
+    var a = [];
+    if (R.noPlan.length) a.push('<b style="color:#9e2020">' + R.noPlan.length
+      + ' past 25% complete with no payment plan set</b> — milestone emails stay off until one is chosen:<br>'
+      + '<span style="font-size:12px">' + R.noPlan.slice(0, 10).map(function (p) {
+          return smName_(p) + ' (#' + smSpot_(p) + ')'; }).join('; ') + '</span>');
+    R.adminDrift.slice(0, 10).forEach(function (d) {
+      a.push(ref(d.p) + '<br><span style="font-size:12px;color:#8a6a00">admin steps not checked: '
+        + d.want.join(', ') + '</span>');
+    });
+    ul(a);
+  }
+
+  if (R.soldPending.length) {
+    sec('✓', 'Sold / completed — awaiting delivery', R.soldPending.length,
+      'Gold ring on the map. Do not re-sell or re-price these.');
+    ul(R.soldPending.map(function (p) { return ref(p); }));
+  }
+
+  if (R.activity.dups.length) {
+    sec('🗑', 'Marked duplicate yesterday', R.activity.dups.length,
+      'Review — restoring is one click in Reports → Marked Duplicates.');
+    ul(R.activity.dups.map(function (d) { return '<b>' + d.piano + '</b> — by ' + d.who; }));
+  }
+
+  if (R.unplaced.length || R.dupSpots.length) {
+    sec('🧹', 'Housekeeping', R.unplaced.length + R.dupSpots.length);
+    var h = [];
+    if (R.unplaced.length) h.push('<b>' + R.unplaced.length + '</b> pianos not on a numbered spot');
+    if (R.dupSpots.length) h.push('<b>' + R.dupSpots.length + '</b> spots with more than one piano: '
+      + R.dupSpots.slice(0, 10).map(function (d) { return '#' + d.spot; }).join(', '));
+    ul(h);
+  }
+
+  H.push('<p style="margin:22px 0 0;padding-top:10px;border-top:1px solid #e4e0d8;'
+    + 'font:11.5px Helvetica,Arial;color:#8a847b">Generated from the live Store Map · '
+    + '<a href="' + APP_URL + '" style="color:#9e2020">open the map</a> · '
+    + R.total + ' active pianos</p>');
+  H.push('</div></div>');
+  return H.join('');
+}
+
+function sendShopManagerReportTo_(to, note) {
+  var R = buildShopManagerReport_();
+  var alerts = R.blocked.length + R.stalled.length + R.noCab.length + R.noTrack.length
+    + R.noPhase.length + R.noAddress.length + R.exitBlocked.length;
+  var html = shopManagerHtml_(R);
+  if (note) {
+    html = '<div style="max-width:760px;margin:0 auto 10px;padding:10px 14px;background:#fdf3ec;'
+      + 'border:1px solid #eecfae;border-radius:8px;font:13px Helvetica,Arial;color:#6b5030">'
+      + note + '</div>' + html;
+  }
+  MailApp.sendEmail({
+    to: to,
+    subject: (note ? '[SAMPLE] ' : '') + 'Shop Manager Briefing — ' + R.day
+      + ' · ' + alerts + ' to review',
+    htmlBody: html,
+    body: 'Shop Manager Briefing ' + R.day + '\n'
+      + R.activity.total + ' changes logged, ' + alerts + ' items needing attention.\n'
+      + 'Open in HTML for the full briefing.',
+    name: 'BLP Store Map',
+  });
+  return {ok: true, to: to, alerts: alerts, changes: R.activity.total};
+}
+
+function sendShopManagerReport() {
+  return sendShopManagerReportTo_(SHOPMGR_TO);
+}
+
 function setCabinetry_(req) {
   var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
   var found = findPiano_(sh, req.serial, req.row);
