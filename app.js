@@ -20,13 +20,14 @@ const PHASES = ['New Arrival - Admin', 'Assessment', 'CAP',
 const PHASE_STATES = ['In Queue', 'Paused', 'For Sale',
   'Waiting on Brigham', 'Waiting on Curtis Harper', 'Waiting on OTHER'];
 // work tracks (multi-select, stored comma-separated in the TRACK column)
-const TRACKS = ['Rebuild', 'Hybrid', 'Refurbish', 'Refinish', 'Technology', 'Old Player', 'Misc'];   // unnumbered states; For Sale turns the icon green
+const TRACKS = ['Rebuild', 'Hybrid', 'Refurbish', 'Refinish', 'Technology', 'Old Player', 'Storage', 'Misc'];   // unnumbered states; For Sale turns the icon green
 // Admin section: client payment plans, the shop-progress milestones that
 // trigger a payment email to info@, and the client's admin-experience steps
 const PAY_PLANS = ['Pd in Full', '12 Month', '24 Month', '4 Progress Payments', 'Financed'];
 const PAY_MILESTONES = [25, 50, 75, 100];
 const ADMIN_STEPS = ['$1000 Queue Payment', 'Selections Made (Google Form)', 'Welcome Email',
   'Before Photos', 'Plan Entered to Shop Tag & Printed',
+  'Upsell Offers — Brigham Call (after 50%)',
   '100% Payment Collected Prior to Delivery', 'Delivery Scheduled'];
 // icon letter for each numbered phase (QC & Assembly gets two letters)
 const PHASE_ABBR = {

@@ -974,7 +974,7 @@ function migratePhases_() {
  */
 var TRACK_HEADER = 'TRACK';
 var TRACK_VALUES = ['Rebuild', 'Hybrid', 'Refurbish', 'Refinish',
-                    'Technology', 'Old Player', 'Misc'];
+                    'Technology', 'Old Player', 'Storage', 'Misc'];
 
 function trackCol_(sh) {
   var last = sh.getLastColumn();
