@@ -21,6 +21,13 @@ const PHASE_STATES = ['In Queue', 'Paused', 'For Sale',
   'Waiting on Brigham', 'Waiting on Curtis Harper', 'Waiting on OTHER'];
 // work tracks (multi-select, stored comma-separated in the TRACK column)
 const TRACKS = ['Rebuild', 'Hybrid', 'Refurbish', 'Refinish', 'Technology', 'Old Player', 'Misc'];   // unnumbered states; For Sale turns the icon green
+// Admin section: client payment plans, the shop-progress milestones that
+// trigger a payment email to info@, and the client's admin-experience steps
+const PAY_PLANS = ['Pd in Full', '12 Month', '24 Month', '4 Progress Payments', 'Financed'];
+const PAY_MILESTONES = [25, 50, 75, 100];
+const ADMIN_STEPS = ['$1000 Queue Payment', 'Selections Made (Google Form)', 'Welcome Email',
+  'Before Photos', 'Plan Entered to Shop Tag & Printed',
+  '100% Payment Collected Prior to Delivery', 'Delivery Scheduled'];
 // icon letter for each numbered phase (QC & Assembly gets two letters)
 const PHASE_ABBR = {
   'New Arrival - Admin': 'N', 'Assessment': 'A', 'CAP': 'C',
@@ -883,41 +890,54 @@ function priceTagUrl(p) {
   if (p.serial) q.set('serial', p.serial);
   return PRICETAGS_URL + '?' + q.toString();
 }
-// Shop tag — "The Rail": half-letter (8.5×5.5), prints 2-up on one letter
-// sheet (cut at the midline — one tag per side of the piano). Every field
-// auto-fills from the Piano Log and is click-to-edit before printing.
-function printShopTag(p) {
-  // owner "First Last" = first line of the owner blob that looks like a name
+/* ---- owner privacy helpers: pull "First Last" and "City, ST" out of the
+   owner blob (which is full of phones/emails/addresses that should never
+   show on the card or the shop tag) ---- */
+function ownerNameOf(p) {
   const blob = p.owner || '';
-  let ownerName = '';
   const badLine = /sold|consign|paid|add |qrs|pick.?up|deliver|steps|@|http|\d{3}[-.)\s]\d{3}|\*\*?/i;
   for (const ln of blob.split('\n').map(s => s.trim()).filter(Boolean)) {
     if (badLine.test(ln)) continue;
     if (/^[A-Za-z][A-Za-z .,'&-]+$/.test(ln) && ln.split(/\s+/).length >= 2 && ln.length < 40) {
-      ownerName = ln.replace(/,+$/, ''); break;
+      return ln.replace(/,+$/, '');
     }
   }
-  if (!ownerName) {
-    // second pass: name hiding behind a role prefix ("Consignment Mike Smith",
-    // "SOLD TO: STEPHEN JONES (deliver fall 2026)")
-    for (const ln of blob.split('\n').map(s => s.trim()).filter(Boolean)) {
-      const t = ln.replace(/^(consignment|sold to:?|owner:?)\s*/i, '')
-        .replace(/\s*\(.*$/, '').trim();
-      if (t !== ln.trim() && /^[A-Za-z][A-Za-z .,'&-]+$/.test(t)
-          && t.split(/\s+/).length >= 2 && t.length < 40) { ownerName = t; break; }
-    }
+  // second pass: name hiding behind a role prefix ("Consignment Mike Smith",
+  // "SOLD TO: STEPHEN JONES (deliver fall 2026)")
+  for (const ln of blob.split('\n').map(s => s.trim()).filter(Boolean)) {
+    const t = ln.replace(/^(consignment|sold to:?|owner:?)\s*/i, '')
+      .replace(/\s*\(.*$/, '').trim();
+    if (t !== ln.trim() && /^[A-Za-z][A-Za-z .,'&-]+$/.test(t)
+        && t.split(/\s+/).length >= 2 && t.length < 40) return t;
   }
-  if (!ownerName) ownerName = (blob.split('\n')[0] || '').trim().slice(0, 34) || '—';
-  // owner "City, ST" — prefer a match vouched by a zip code
+  return (blob.split('\n')[0] || '').trim().slice(0, 34);
+}
+function ownerCityStateOf(p) {
+  const blob = p.owner || '';
+  // prefer a match vouched by a zip code
   const csZip = blob.match(/([A-Za-z][A-Za-z .'-]{2,}),?\s*([A-Z]{2})[,.]?\s+\d{5}/);
   const csAny = blob.match(/([A-Za-z][A-Za-z .'-]{2,}),\s*([A-Z]{2})\b/);
   let city = (csZip || csAny) ? (csZip || csAny)[1].trim() : '';
+  if (!city) return '';
   // comma-less addresses leak the street in ("Glen Canyon Dr Laguna Hills") —
   // drop everything through a street-suffix word when a real city remains
   const deStreet = city.replace(
     /^.*\b(?:dr|drive|rd|road|ave|avenue|ln|lane|blvd|ct|court|way|cir|circle|pl|place|run|pike|hwy|street|st)\.?\s+/i, '');
   if (deStreet !== city && deStreet.split(/\s+/).length >= 2) city = deStreet;
-  const cityState = city ? `${city}, ${(csZip || csAny)[2]}` : '—';
+  return `${city}, ${(csZip || csAny)[2]}`;
+}
+// client email, for prepared payment-milestone drafts (never shown on the card)
+function ownerEmailOf(p) {
+  return ((p.owner || '').match(/[\w.+-]+@[\w-]+\.[\w.]+/) || [''])[0];
+}
+
+// Shop tag — "The Rail": half-letter (8.5×5.5), prints 2-up on one letter
+// sheet (cut at the midline — one tag per side of the piano). Every field
+// auto-fills from the Piano Log and is click-to-edit before printing.
+function printShopTag(p) {
+  const blob = p.owner || '';
+  const ownerName = ownerNameOf(p) || '—';
+  const cityState = ownerCityStateOf(p) || '—';
 
   const arrived = p.entered
     ? new Date(p.entered + 'T00:00:00').toLocaleDateString('en-US',
@@ -1667,36 +1687,56 @@ function popHTML(p) {
              `<option value="${esc(ph)}" ${effPh === ph ? 'selected' : ''}>${esc(ph)}</option>`).join('')}
          </select></div>${gotoLine(p, effPh)}<div class="phmsg"></div>`
     : '';
-  return `<span class="x">✕</span>
+  // opt-IN: blank asks, Yes shows the history button, No shows nothing at all
+  const crVal = (p.clientReports || '').trim().toLowerCase();
+  let crAsk = '';
+  if (crVal === 'yes') {
+    crAsk = `<div class="crask"><span class="croff">✕ no client reports</span><span class="crmsg"></span></div>`;
+  } else if (crVal !== 'no') {
+    crAsk = `<div class="crask">Client reports for this piano?
+      <button class="crbtn cryes">Yes</button><button class="crbtn crno">No</button>
+      <span class="crmsg"></span></div>`;
+  }
+  const ownerLine = [ownerNameOf(p), ownerCityStateOf(p)].filter(Boolean).join(' — ') || '—';
+  const pct = shopProgressPct(p);
+  const payBar = (p.serial && inShopwork(p)) ? (() => {
+    const next = PAY_MILESTONES.find(m => pct < m);
+    return `<div class="row rowflex"><span>Shop progress</span><b>${pct}%</b></div>
+      <div class="pbar"><i style="width:${pct}%"></i><s style="left:25%"></s><s style="left:50%"></s><s style="left:75%"></s></div>
+      <div class="pbarlbl">${next ? `next payment milestone at ${next}%` : 'all payment milestones reached'}${+p.payMilestone ? ` · last emailed at ${esc(p.payMilestone)}%` : ''}</div>`;
+  })() : '';
+  const asDone = adminStepsOf(p);
+  const admin = p.serial ? `<div class="sechead">🔐 Admin</div>
+    ${crVal === 'yes' ? `<div class="tagbtns histbtns"><button class="tagbtn creports">🤝 Client Reports History</button></div>` : ''}
+    ${crAsk}
+    <div class="row rowflex payrow"><span>Payment plan</span>
+      <select class="paysel"><option value="">— not set —</option>
+        ${PAY_PLANS.map(o => `<option ${p.payPlan === o ? 'selected' : ''}>${o}</option>`).join('')}
+      </select></div><div class="paymsg phmsg"></div>
+    <div class="row" title="the client's admin journey — tap a step to mark it done">Admin steps
+      <b>${asDone.length}/${ADMIN_STEPS.length}</b></div>
+    <div class="adminsteps">${ADMIN_STEPS.map((s, i) => {
+      const on = asDone.includes(s);
+      return `<button class="astep ${on ? 'on' : ''}" data-as="${esc(s)}"><i>${on ? '✓' : i + 1}</i>${esc(s)}</button>`;
+    }).join('')}</div><div class="asmsg phmsg"></div>
+    ${payBar}` : '';
+  return `<div class="popgrip l" title="drag to resize"></div><div class="popgrip r" title="drag to resize"></div>
+    <div class="popsticky">
+    <span class="x">✕</span>
     <span class="tag ${st}">${tags[st]} · SPOT ${esc(p.location)}</span>
     <h3>${esc(makeModel)}</h3>
     <div class="row rowflex"><span>Serial # <b>${esc(p.serial || '—')}</b></span>${queueChip}</div>
-    ${p.serial ? (() => {
-      // opt-IN: blank asks, Yes shows the history button, No shows nothing at all
-      const crVal = (p.clientReports || '').trim().toLowerCase();
-      let crAsk = '';
-      if (crVal === 'yes') {
-        crAsk = `<div class="crask"><span class="croff">✕ no client reports</span><span class="crmsg"></span></div>`;
-      } else if (crVal !== 'no') {
-        crAsk = `<div class="crask">Client reports for this piano?
-          <button class="crbtn cryes">Yes</button><button class="crbtn crno">No</button>
-          <span class="crmsg"></span></div>`;
-      }
-      return `<div class="tagbtns histbtns">
-        <button class="tagbtn rreports">📄 Tech Reports History</button>
-        ${crVal === 'yes' ? `<button class="tagbtn creports">🤝 Client Reports History</button>` : ''}
-      </div>${crAsk}`;
-    })() : ''}
+    </div>
+    <div class="row">Owner <b>${esc(ownerLine)}</b></div>
     <div class="row">Status <b>${esc(p.status || '—')}</b></div>
-    <div class="row">Owner <b>${esc(p.owner || '—')}</b></div>
     ${effectivePhase(p) === 'For Sale'
       ? `<div class="row rowflex"><span>Price <b class="pricecard">${priceLabel(p) ? esc(priceLabel(p)) : '—'}</b></span>
            ${p.serial ? `<button class="predit">${p.price ? '✎ Edit price' : '＋ Add price'}</button>` : ''}</div>`
       : (priceLabel(p) ? `<div class="row">Price <b class="pricecard">${esc(priceLabel(p))}</b></div>` : '')}
-    <div class="row">Last tuned <b>${ti.last ? esc(fmtDayYear(ti.last)) : '—'}</b></div>
-    ${ti.next ? `<div class="row">Tuning scheduled <b class="tunesched">🎵 ${esc(fmtDay(ti.next.date))} · ${esc(ti.next.time)}</b></div>` : ''}
 
-    ${mediaCard(p)}
+    <div class="sechead">📍 Locations</div>
+    ${mover}
+    ${queuer}
     ${p.serial ? `<div class="row trkrow">Cabinetry
         <span class="trkchips cabchips">${cabTokens(p).map(t =>
           `<span class="cabchip" title="${esc(cabPretty(t))}">${esc(t)}<i class="cabdel" data-t="${esc(t)}">✕</i></span>`).join('')}
@@ -1707,6 +1747,8 @@ function popHTML(p) {
           `<button class="trk typebtn ${p.type === t ? 'on' : ''}" data-type="${t}">${t === 'grand' ? '🎹 Grand' : t === 'upright' ? '🎼 Upright' : '🔌 Digital'}</button>`).join('')}
           ${p.typeOverride ? `<button class="trk typebtn typeclear" data-type="">✕ Clear override</button>` : ''}
         </span></div><div class="typemsg phmsg"></div>` : ''}
+
+    ${p.serial ? `<div class="sechead">🔨 Shop Progress</div>` : ''}
     ${tracker}
     ${phaser}
     ${p.serial ? (() => {
@@ -1724,6 +1766,16 @@ function popHTML(p) {
       ${p.serial ? `<div class="row rowflex snzrow"><span class="snzlbl">${p.checkBack ? 'Re-snooze' : 'Check back in'}</span>
         <span class="snzbtns"><button class="snz" data-d="3">+3d</button><button class="snz" data-d="7">+1w</button><button class="snz" data-d="14">+2w</button><button class="snz" data-d="30">+1m</button></span>
       </div><div class="snzmsg phmsg"></div>` : ''}` : ''}
+    ${p.serial ? `<div class="tagbtns histbtns"><button class="tagbtn rreports">📄 Tech Reports History</button></div>` : ''}
+
+    ${p.serial ? `<div class="sechead">📷 Media</div>` : ''}
+    ${mediaCard(p)}
+    ${photo}
+
+    ${admin}
+
+    <div class="row" style="margin-top:10px">Last tuned <b>${ti.last ? esc(fmtDayYear(ti.last)) : '—'}</b></div>
+    ${ti.next ? `<div class="row">Tuning scheduled <b class="tunesched">🎵 ${esc(fmtDay(ti.next.date))} · ${esc(ti.next.time)}</b></div>` : ''}
     ${p.serial ? `<button class="tunebtn reqbtn">📨 Request… ▾</button>
       <div class="reqmenu" hidden>
         <button data-req="move">🚚 Move</button>
@@ -1737,9 +1789,6 @@ function popHTML(p) {
         <button data-req="brigham">🗒 Brigham Task</button>
         <button data-req="dup" class="reqdanger">🗑 Mark as Duplicate</button>
       </div>` : ''}
-    ${photo}
-    ${mover}
-    ${queuer}
     <div class="tagbtns">
       ${priceLabel(p) ? `<a class="tagbtn" target="_blank" rel="noopener"
         href="${priceTagUrl(p)}">🏷 Price tag ↗</a>` : ''}
@@ -1807,6 +1856,38 @@ function wirePop(p) {
   pop.querySelectorAll('.typebtn').forEach(b => b.onclick = ev => {
     ev.stopPropagation();
     setTypeOverride(p, b.dataset.type, pop);
+  });
+  const pay = pop.querySelector('.paysel');
+  if (pay) {
+    pay.onclick = ev => ev.stopPropagation();
+    pay.onchange = () => setPayPlan(p, pay.value, pop);
+  }
+  pop.querySelectorAll('.astep').forEach(b => b.onclick = ev => {
+    ev.stopPropagation();
+    toggleAdminStep(p, b.dataset.as, pop);
+  });
+  // drag either side edge to resize (for the shop Chromebooks' big screens);
+  // width is remembered on this device
+  const savedW = parseInt(lsGet('popW') || '', 10);
+  if (savedW) pop.style.width = Math.max(246, Math.min(640, savedW)) + 'px';
+  pop.querySelectorAll('.popgrip').forEach(g => g.onpointerdown = ev => {
+    ev.preventDefault(); ev.stopPropagation();
+    popPinned = true;
+    const startX = ev.clientX, startW = pop.offsetWidth;
+    const startL = parseFloat(pop.style.left) || pop.offsetLeft;
+    const side = g.classList.contains('l') ? -1 : 1;
+    const move = e => {
+      const w = Math.max(246, Math.min(640, startW + (e.clientX - startX) * side));
+      pop.style.width = w + 'px';
+      if (side < 0) pop.style.left = (startL + startW - w) + 'px';
+      lsSet('popW', String(w));
+    };
+    const up = () => {
+      removeEventListener('pointermove', move);
+      removeEventListener('pointerup', up);
+    };
+    addEventListener('pointermove', move);
+    addEventListener('pointerup', up);
   });
   const me = pop.querySelector('.miscedit');
   if (me) me.onclick = ev => { ev.stopPropagation(); openMiscModal(p, pop); };
@@ -1925,6 +2006,7 @@ async function setPhase(p, phase, pop, extra) {
       if (j.note != null) p.waitNote = j.note;
       if (j.checkBack != null) p.checkBack = j.checkBack;
       openPop(p.row, S.popAnchor, true);   // refresh the card rows
+      checkPayMilestone(p, $('#pop'));     // payment milestone crossed?
     } else {
       revertPhase(p, was, sel, edit);
       msg.className = 'phmsg err'; msg.textContent = '✗ ' + (j.error || 'update failed');
@@ -2151,6 +2233,118 @@ async function setTypeOverride(p, type, pop) {
     if (msg) { msg.className = 'typemsg phmsg err'; msg.textContent = 'Error: ' + e.message; }
   }
 }
+/* ---- Admin section: shop progress %, payment plan, admin steps, milestones ---- */
+// % of this piano's own track phases complete (explicit Done checks plus
+// everything ordered before the current phase); Delivered excluded
+function shopProgressPct(p) {
+  const list = (pianoPhases(p) || PHASES).filter(ph => ph !== 'Delivered');
+  if (!list.length || !p.serial) return 0;
+  const dl = (p.phasesDone || '').split(',').map(t => t.trim()).filter(Boolean);
+  const effIdx = list.indexOf(effectivePhase(p));
+  let done = 0;
+  list.forEach((ph, i) => { if (dl.includes(ph) || (effIdx >= 0 && i < effIdx)) done++; });
+  return Math.min(100, Math.round(done / list.length * 100));
+}
+async function setPayPlan(p, plan, pop) {
+  const msg = pop.querySelector('.paymsg');
+  popPinned = true;
+  const {pin, ok} = writeAuth();
+  if (!ok) { if (msg) { msg.className = 'paymsg phmsg err'; msg.textContent = 'Sign in with Google (menu) first.'; } return; }
+  const was = p.payPlan;
+  p.payPlan = plan;
+  if (msg) { msg.className = 'paymsg phmsg'; msg.textContent = 'Saving...'; }
+  try {
+    const r = await fetch(BRIDGE_URL, {
+      method: 'POST', redirect: 'follow',
+      headers: {'content-type': 'text/plain;charset=utf-8'},
+      body: JSON.stringify({pin, serial: p.serial, action: 'setpayplan',
+        plan, row: p.row, ...authFields()}),
+    });
+    const j = await r.json();
+    if (j.error === 'unauthorized') { lsDel('blpPin'); throw new Error('Not authorized'); }
+    if (!j.ok) throw new Error(j.error || 'save failed');
+    if (msg) { msg.className = 'paymsg phmsg ok'; msg.textContent = '✓ saved'; }
+  } catch (e) {
+    p.payPlan = was;
+    if (msg) { msg.className = 'paymsg phmsg err'; msg.textContent = 'Error: ' + e.message; }
+  }
+}
+function adminStepsOf(p) {
+  return (p.adminSteps || '').split('|').map(t => t.trim()).filter(Boolean);
+}
+async function toggleAdminStep(p, step, pop) {
+  const msg = pop.querySelector('.asmsg');
+  popPinned = true;
+  const {pin, ok} = writeAuth();
+  if (!ok) { if (msg) { msg.className = 'asmsg phmsg err'; msg.textContent = 'Sign in with Google (menu) first.'; } return; }
+  const was = p.adminSteps || '';
+  const list = adminStepsOf(p);
+  const next = list.includes(step) ? list.filter(s => s !== step) : list.concat(step);
+  // keep sheet order canonical regardless of click order
+  p.adminSteps = ADMIN_STEPS.filter(s => next.includes(s)).join(' | ');
+  if (!$('#pop').hidden) openPop(p.row, S.popAnchor, true);
+  const m2 = $('#pop').querySelector('.asmsg');
+  if (m2) { m2.className = 'asmsg phmsg'; m2.textContent = 'Saving...'; }
+  try {
+    const r = await fetch(BRIDGE_URL, {
+      method: 'POST', redirect: 'follow',
+      headers: {'content-type': 'text/plain;charset=utf-8'},
+      body: JSON.stringify({pin, serial: p.serial, action: 'setadminsteps',
+        steps: p.adminSteps, row: p.row, ...authFields()}),
+    });
+    const j = await r.json();
+    if (j.error === 'unauthorized') { lsDel('blpPin'); throw new Error('Not authorized'); }
+    if (!j.ok) throw new Error(j.error || 'save failed');
+    const m3 = $('#pop').querySelector('.asmsg');
+    if (m3) { m3.className = 'asmsg phmsg ok'; m3.textContent = '✓ saved'; }
+  } catch (e) {
+    p.adminSteps = was;
+    if (!$('#pop').hidden) openPop(p.row, S.popAnchor, true);
+    const m3 = $('#pop').querySelector('.asmsg');
+    if (m3) { m3.className = 'asmsg phmsg err'; m3.textContent = 'Error: ' + e.message; }
+  }
+}
+// after any phase change: if shop progress crossed a 25/50/75/100 marker the
+// admin hasn't been emailed about yet, tell the bridge — it emails info@ a
+// shop update + progress-photo folder link + a prepared client email asking
+// for the next progress payment, then records the milestone in the sheet
+async function checkPayMilestone(p, pop) {
+  if (!p.serial || !inShopwork(p)) return;
+  const pct = shopProgressPct(p);
+  const last = +String(p.payMilestone || '').replace(/\D/g, '') || 0;
+  const crossed = PAY_MILESTONES.filter(m => pct >= m && m > last);
+  if (!crossed.length || !p.payPlan) return;   // no plan set → no payment emails
+  const milestone = Math.max(...crossed);
+  const {pin, ok} = writeAuth();
+  if (!ok) return;
+  const first = (ownerNameOf(p) || 'there').split(/\s+/)[0];
+  const nmYr = [p.year, p.make, p.model].filter(Boolean).join(' ') || p.summary;
+  const payAsk = p.payPlan === 'Pd in Full' ? ''
+    : p.payPlan === '4 Progress Payments'
+      ? `\n\nWith the ${milestone}% milestone reached, this is also the point in your payment plan where the next progress payment comes due. We'll send the invoice separately — and as always, reach out with any questions.`
+      : `\n\nA friendly note that per your ${p.payPlan} plan, this milestone is a great time for the next payment — we'll send the details separately.`;
+  const clientDraft = `Subject: Your ${nmYr} — ${milestone}% complete at Brigham Larson Pianos\n\n`
+    + `Hi ${first},\n\nGreat news from the shop — your ${nmYr} has reached ${milestone}% completion. `
+    + `The piano is currently in ${effectivePhase(p) || 'the shop'}, and the work is moving along beautifully.${payAsk}\n\n`
+    + `We'll keep the updates coming as we move into the next phase.\n\nWarmly,\nBrigham Larson Pianos\n(801) 763-7967`;
+  try {
+    const r = await fetch(BRIDGE_URL, {
+      method: 'POST', redirect: 'follow',
+      headers: {'content-type': 'text/plain;charset=utf-8'},
+      body: JSON.stringify({pin, serial: p.serial, action: 'paymilestone',
+        row: p.row, milestone, pct, phase: effectivePhase(p) || '',
+        plan: p.payPlan, summary: p.summary, ownerName: ownerNameOf(p),
+        clientEmail: ownerEmailOf(p), clientDraft, ...authFields()}),
+    });
+    const j = await r.json();
+    if (j.ok) {
+      p.payMilestone = String(milestone);
+      const msg = pop && pop.querySelector('.paymsg');
+      if (msg) { msg.className = 'paymsg phmsg ok'; msg.textContent = `📧 ${milestone}% milestone email sent to info@`; }
+    }
+  } catch (e) { /* milestone email is best-effort — phase save already succeeded */ }
+}
+
 // one shelf unit, drawn as a digital twin of its physical whiteboard —
 // same LEFT/RIGHT columns and shelf rows the techs see in the room
 function openCabUnitModal(u) {
@@ -2360,6 +2554,7 @@ async function toggleDone(p, phase, pop) {
     p.phasesDone = j.done; edit.phasesDone = j.done;
     msg.className = 'dnmsg phmsg ok';
     msg.textContent = j.done ? `✓ Completed: ${j.done}` : '✓ Cleared';
+    checkPayMilestone(p, pop);   // payment milestone crossed?
   } catch (e) {
     p.phasesDone = was;
     delete edit.phasesDone; if (!Object.keys(edit).length) pendingEdits.delete(p.row);
@@ -3419,14 +3614,35 @@ function signOut() {
   if (window.google?.accounts?.id) google.accounts.id.disableAutoSelect();
   renderAuth();
 }
-// Sign-in is OPTIONAL again (mandatory gate removed) — the authbox in the
-// menu still offers Google sign-in so actions are logged under a name.
+// Sign-in is REQUIRED: the map stays behind a full-screen Google gate until
+// we know who's clicking. A signed-in user whose hourly token lapsed mid-
+// session is NOT locked back out — the silent refresh handles that, and
+// attribution falls back to their stored name/email meanwhile.
 function authGate() {
   const ov = document.getElementById('authgate');
-  if (ov) ov.hidden = true;
+  if (!ov) return;
+  if (!GOOGLE_CLIENT_ID) { ov.hidden = true; return; }
+  const signedIn = !!authUser();
+  ov.hidden = signedIn;
+  if (!signedIn) {
+    const gb = document.getElementById('gateBtn');
+    if (gb && window.google?.accounts?.id) {
+      gb.innerHTML = '';
+      google.accounts.id.renderButton(gb,
+        {theme: 'filled_black', size: 'large', text: 'signin_with', width: 240});
+    }
+  }
 }
 function renderAuth() {
   authGate();
+  // top-bar identity chip — who's signed in, always visible
+  const tw = $('#topWho');
+  if (tw) {
+    const tu = authUser();
+    tw.innerHTML = tu
+      ? `${tu.pic ? `<img src="${esc(tu.pic)}" alt="">` : '👤'}<span>${esc((tu.name || '').split(/\s+/)[0])}</span>`
+      : '';
+  }
   const box = $('#authbox');
   if (!box) return;
   if (!GOOGLE_CLIENT_ID) { box.hidden = true; return; }

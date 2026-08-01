@@ -5,9 +5,19 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Store Map — Brigham Larson Pianos</title>
 <link rel="icon" href="assets/blp-logo.png">
-<link rel="stylesheet" href="styles.css?v=100">
+<link rel="stylesheet" href="styles.css?v=101">
 </head>
 <body>
+
+<div id="authgate" hidden>
+  <div class="agcard">
+    <img src="assets/blp-logo.png" alt="Brigham Larson Pianos">
+    <h2>STORE MAP</h2>
+    <p>Sign in with your BLP Google account to open the map — every move,
+       phase change, and payment update is logged under your name.</p>
+    <div id="gateBtn"></div>
+  </div>
+</div>
 
 <header class="bar">
   <img class="logo" src="assets/blp-logo.png" alt="Brigham Larson Pianos">
@@ -38,6 +48,7 @@
       <a href="https://www.brighamlarsonpianos.com/" target="_blank" rel="noopener">🌐 BLP Website</a>
     </div>
   </div>
+  <span class="topwho" id="topWho" title="signed in — sign out from the ☰ menu"></span>
   <button class="iconbtn drawerbtn" id="movesBtn">🚚 <b id="movesBadge">0</b></button>
   <button class="iconbtn" id="menuBtn" aria-label="Menu">☰</button>
 </header>
@@ -157,6 +168,6 @@
   </div>
 </div>
 
-<script src="app.js?v=103"></script>
+<script src="app.js?v=104"></script>
 </body>
 </html>

@@ -88,6 +88,12 @@ function parsePianos(text) {
     ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'CABINETRY') : -1;
   const typeOvIdx = rows[1]
     ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'TYPE OVERRIDE') : -1;
+  const payPlanIdx = rows[1]
+    ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'PAYMENT PLAN') : -1;
+  const payMsIdx = rows[1]
+    ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'PAY MILESTONE') : -1;
+  const adminStIdx = rows[1]
+    ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'ADMIN STEPS') : -1;
   // CUSTOM SHOPWORK queue bounds (1-based rows)
   let qHdr = 0, qEnd = 0;
   for (let k = 0; k < rows.length; k++) {
@@ -146,6 +152,10 @@ function parsePianos(text) {
       // shop-tag statics: BENCH, PROJECT CATEGORY (plan), NOTES, REPLATING ORDERED
       bench: col(19).slice(0, 60), plan: col(23).slice(0, 220),
       planNotes: col(26).slice(0, 300), replate: col(50).slice(0, 20),
+      // admin section: payment plan, last-emailed pay milestone, admin steps done
+      payPlan: payPlanIdx >= 0 ? col(payPlanIdx) : '',
+      payMilestone: payMsIdx >= 0 ? col(payMsIdx) : '',
+      adminSteps: adminStIdx >= 0 ? col(adminStIdx) : '',
       isSlot: SLOT_RE.test(loc),
       entered: entered ? entered.toISOString().slice(0, 10) : null,
       phase: phaseIdx >= 0 ? col(phaseIdx) : '',

@@ -118,6 +118,12 @@ def parse_pianos(raw):
                     if h.strip().upper() == 'CABINETRY'), -1)
     type_ov_idx = next((i for i, h in enumerate(hdr)
                         if h.strip().upper() == 'TYPE OVERRIDE'), -1)
+    pay_plan_idx = next((i for i, h in enumerate(hdr)
+                         if h.strip().upper() == 'PAYMENT PLAN'), -1)
+    pay_ms_idx = next((i for i, h in enumerate(hdr)
+                       if h.strip().upper() == 'PAY MILESTONE'), -1)
+    admin_st_idx = next((i for i, h in enumerate(hdr)
+                         if h.strip().upper() == 'ADMIN STEPS'), -1)
     # CUSTOM SHOPWORK queue bounds (1-based rows). Queue position = row - header;
     # total = rows from just after the header down to the first fully-blank row.
     q_hdr = q_end = None
@@ -195,6 +201,10 @@ def parse_pianos(raw):
             # shop-tag statics: BENCH, PROJECT CATEGORY (plan), NOTES, REPLATING ORDERED
             'bench': col(19)[:60], 'plan': col(23)[:220],
             'planNotes': col(26)[:300], 'replate': col(50)[:20],
+            # admin section: payment plan, last-emailed pay milestone, admin steps done
+            'payPlan': col(pay_plan_idx) if pay_plan_idx >= 0 else '',
+            'payMilestone': col(pay_ms_idx) if pay_ms_idx >= 0 else '',
+            'adminSteps': col(admin_st_idx) if admin_st_idx >= 0 else '',
             'status': status,
             'location': loc,
             'isSlot': bool(SLOT_RE.match(loc)),

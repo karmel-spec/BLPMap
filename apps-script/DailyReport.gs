@@ -1606,6 +1606,67 @@ function setTypeOverride_(req) {
   return {ok: true, row: found.row, summary: found.summary, previous: prev, type: val};
 }
 
+// helper: find-or-create a named column on the Piano Log header row (row 2)
+function pianoCol_(sh, name) {
+  var last = sh.getLastColumn();
+  var hdr = sh.getRange(2, 1, 1, last).getValues()[0];
+  for (var c = 0; c < hdr.length; c++) {
+    if (String(hdr[c] || '').trim().toUpperCase() === name) return c + 1;
+  }
+  sh.getRange(2, last + 1).setValue(name);
+  return last + 1;
+}
+
+function setPayPlan_(req) {
+  var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+  var found = findPiano_(sh, req.serial, req.row);
+  if (found.error) return found;
+  var col = pianoCol_(sh, 'PAYMENT PLAN');
+  var val = String(req.plan == null ? '' : req.plan).trim();
+  sh.getRange(found.row, col).setValue(val);
+  return {ok: true, row: found.row, summary: found.summary, plan: val};
+}
+
+function setAdminSteps_(req) {
+  var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+  var found = findPiano_(sh, req.serial, req.row);
+  if (found.error) return found;
+  var col = pianoCol_(sh, 'ADMIN STEPS');
+  var val = String(req.steps == null ? '' : req.steps).trim();
+  sh.getRange(found.row, col).setValue(val);
+  return {ok: true, row: found.row, summary: found.summary, steps: val};
+}
+
+// A shop-progress payment milestone (25/50/75/100%) was crossed: email info@
+// a shop update + progress-photo folder link + a prepared client email, then
+// record the milestone so it never emails twice
+function payMilestone_(req) {
+  var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+  var found = findPiano_(sh, req.serial, req.row);
+  if (found.error) return found;
+  var col = pianoCol_(sh, 'PAY MILESTONE');
+  var prev = parseInt(String(sh.getRange(found.row, col).getValue() || '').replace(/\D/g, ''), 10) || 0;
+  var ms = parseInt(req.milestone, 10) || 0;
+  if (ms <= prev) return {ok: true, row: found.row, milestone: prev, skipped: 'already emailed'};
+  var tech = null;
+  try { tech = techFolderFor_(sh, found.row, req.serial); } catch (e) {}
+  var subject = '💰 ' + ms + '% payment milestone — ' + (req.summary || req.serial)
+    + (req.plan ? ' (' + req.plan + ')' : '');
+  var body = 'Shop work progress update\n'
+    + '========================\n'
+    + 'Piano: ' + (req.summary || '') + '  (serial ' + (req.serial || '—') + ')\n'
+    + 'Client: ' + (req.ownerName || '—') + (req.clientEmail ? '  <' + req.clientEmail + '>' : '') + '\n'
+    + 'Milestone reached: ' + ms + '%  (currently ' + (req.pct || ms) + '% · phase: ' + (req.phase || '—') + ')\n'
+    + 'Payment plan: ' + (req.plan || 'not set') + '\n'
+    + 'Progress photos: ' + (tech ? tech.getUrl() : 'no Tech folder found for this piano') + '\n'
+    + 'Store Map: ' + APP_URL + '\n\n'
+    + '--- Prepared email for the client (review, personalize, send) ---\n\n'
+    + (req.clientDraft || '(none)') + '\n';
+  MailApp.sendEmail(REPORT_TO, subject, body);
+  sh.getRange(found.row, col).setValue(String(ms));
+  return {ok: true, row: found.row, milestone: ms, emailed: REPORT_TO};
+}
+
 function setCabinetry_(req) {
   var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
   var found = findPiano_(sh, req.serial, req.row);
