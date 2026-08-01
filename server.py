@@ -192,6 +192,9 @@ def parse_pianos(raw):
             'year': col(4), 'make': col(5), 'model': col(6), 'size': col(7),
             'type': (col(type_ov_idx) if type_ov_idx >= 0 else '') or piano_type(col(9), summary + ' ' + col(6)),
             'typeOverride': col(type_ov_idx) if type_ov_idx >= 0 else '',
+            # shop-tag statics: BENCH, PROJECT CATEGORY (plan), NOTES, REPLATING ORDERED
+            'bench': col(19)[:60], 'plan': col(23)[:220],
+            'planNotes': col(26)[:300], 'replate': col(50)[:20],
             'status': status,
             'location': loc,
             'isSlot': bool(SLOT_RE.match(loc)),

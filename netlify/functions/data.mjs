@@ -143,6 +143,9 @@ function parsePianos(text) {
       year: col(4), make: col(5), model: col(6), size: col(7),
       type: (typeOvIdx >= 0 && col(typeOvIdx)) || pianoType(col(9), summary + ' ' + col(6)),
       typeOverride: (typeOvIdx >= 0 && col(typeOvIdx)) || '', status, location: loc,
+      // shop-tag statics: BENCH, PROJECT CATEGORY (plan), NOTES, REPLATING ORDERED
+      bench: col(19).slice(0, 60), plan: col(23).slice(0, 220),
+      planNotes: col(26).slice(0, 300), replate: col(50).slice(0, 20),
       isSlot: SLOT_RE.test(loc),
       entered: entered ? entered.toISOString().slice(0, 10) : null,
       phase: phaseIdx >= 0 ? col(phaseIdx) : '',

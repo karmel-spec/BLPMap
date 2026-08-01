@@ -883,66 +883,180 @@ function priceTagUrl(p) {
   if (p.serial) q.set('serial', p.serial);
   return PRICETAGS_URL + '?' + q.toString();
 }
-// 4x6 shop tag: identity + phase checklist + QR to the Piano Log entry
+// Shop tag — "The Rail": half-letter (8.5×5.5), prints 2-up on one letter
+// sheet (cut at the midline — one tag per side of the piano). Every field
+// auto-fills from the Piano Log and is click-to-edit before printing.
 function printShopTag(p) {
-  const nm = [(p.year || ''), p.make, p.model].filter(Boolean).join(' ') || p.summary || 'Piano';
-  const eff = effectivePhase(p);
-  const qr = 'https://api.qrserver.com/v1/create-qr-code/?size=150x150&data='
+  // owner "First Last" = first line of the owner blob that looks like a name
+  const blob = p.owner || '';
+  let ownerName = '';
+  const badLine = /sold|consign|paid|add |qrs|pick.?up|deliver|steps|@|http|\d{3}[-.)\s]\d{3}|\*\*?/i;
+  for (const ln of blob.split('\n').map(s => s.trim()).filter(Boolean)) {
+    if (badLine.test(ln)) continue;
+    if (/^[A-Za-z][A-Za-z .,'&-]+$/.test(ln) && ln.split(/\s+/).length >= 2 && ln.length < 40) {
+      ownerName = ln.replace(/,+$/, ''); break;
+    }
+  }
+  if (!ownerName) {
+    // second pass: name hiding behind a role prefix ("Consignment Mike Smith",
+    // "SOLD TO: STEPHEN JONES (deliver fall 2026)")
+    for (const ln of blob.split('\n').map(s => s.trim()).filter(Boolean)) {
+      const t = ln.replace(/^(consignment|sold to:?|owner:?)\s*/i, '')
+        .replace(/\s*\(.*$/, '').trim();
+      if (t !== ln.trim() && /^[A-Za-z][A-Za-z .,'&-]+$/.test(t)
+          && t.split(/\s+/).length >= 2 && t.length < 40) { ownerName = t; break; }
+    }
+  }
+  if (!ownerName) ownerName = (blob.split('\n')[0] || '').trim().slice(0, 34) || '—';
+  // owner "City, ST" — prefer a match vouched by a zip code
+  const csZip = blob.match(/([A-Za-z][A-Za-z .'-]{2,}),?\s*([A-Z]{2})[,.]?\s+\d{5}/);
+  const csAny = blob.match(/([A-Za-z][A-Za-z .'-]{2,}),\s*([A-Z]{2})\b/);
+  let city = (csZip || csAny) ? (csZip || csAny)[1].trim() : '';
+  // comma-less addresses leak the street in ("Glen Canyon Dr Laguna Hills") —
+  // drop everything through a street-suffix word when a real city remains
+  const deStreet = city.replace(
+    /^.*\b(?:dr|drive|rd|road|ave|avenue|ln|lane|blvd|ct|court|way|cir|circle|pl|place|run|pike|hwy|street|st)\.?\s+/i, '');
+  if (deStreet !== city && deStreet.split(/\s+/).length >= 2) city = deStreet;
+  const cityState = city ? `${city}, ${(csZip || csAny)[2]}` : '—';
+
+  const arrived = p.entered
+    ? new Date(p.entered + 'T00:00:00').toLocaleDateString('en-US',
+        {month: 'long', day: 'numeric', year: 'numeric'})
+    : '—';
+  const tracks = trackParts(p.track).list;
+  const plan = (p.plan || '').trim();
+  const notes = (p.planNotes || '').trim().replace(/\s*\n+\s*/g, '  ·  ');
+  const lvl = (/level\s*([1-3])/i.exec(plan) || [])[1] || '';
+  const refinYN = (/refinish/i.test(p.track || '') || /refinish/i.test(plan)) ? 'Yes' : 'No';
+  const techYN = /tech/i.test(p.track || '') ? 'Yes' : 'No';
+  const techNote = /qrs/i.test(blob + ' ' + plan + ' ' + notes)
+    ? (/(upgrade|update)/i.test(blob + ' ' + plan) ? 'QRS upgrade' : 'QRS') : '';
+  const plating = /^y/i.test(p.replate || '') ? 'Yes'
+    : /^n/i.test(p.replate || '') ? 'No'
+    : /replat|plating/i.test(plan + ' ' + notes) ? 'Yes' : '—';
+  const bench = /^y/i.test(p.bench || '') ? 'Yes'
+    : /^n/i.test(p.bench || '') ? 'No'
+    : (p.bench ? p.bench.slice(0, 26) : '—');
+
+  const h1 = p.make || (p.summary || 'Piano').slice(0, 26);
+  const sub = [p.model ? 'Model ' + p.model : '', p.year, p.size].filter(Boolean).join(' · ');
+  const qr = 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data='
     + encodeURIComponent(logLink(p));
-  const rows = PHASES.map((ph, i) => {
-    const done = PHASES.indexOf(eff) > i;
-    const cur = eff === ph;
-    return `<div class="ph ${cur ? 'cur' : ''} ${done ? 'done' : ''}">
-      <span class="box">${done ? '✓' : cur ? '▶' : ''}</span>
-      <span class="n">${i + 1}</span> ${esc(ph)}</div>`;
-  }).join('');
-  const state = ['In Queue', 'Paused', 'For Sale'].includes(eff)
-    ? `<div class="state">${esc(eff.toUpperCase())}</div>` : '';
+  const logo = location.origin + '/assets/blp-logo.png';
+  const lvBox = n => `<i class="${lvl === String(n) ? 'on' : ''}">${n}</i>`;
+
+  const tag = `<div class="tag">
+    <div class="rail"><span>SERIAL # ${esc(p.serial || '—')}</span></div>
+    <div class="main">
+      <div class="id"><img src="${logo}" alt="Brigham Larson Pianos">
+        <div class="nm"><h1>${esc(h1)}</h1><div class="sub">${esc(sub || '—')}</div></div></div>
+      <div class="rows">
+        <div class="rw"><span class="lb">Owner</span><b>${esc(ownerName)} — ${esc(cityState)}</b></div>
+        <div class="rw"><span class="lb">Arrived</span><b>${esc(arrived)}</b></div>
+        <div class="divider"><em>SCOPE OF WORK</em></div>
+        <div class="rw spec"><span class="lb">Track</span><b>${esc(tracks.join(' · ') || '—')}</b></div>
+        <div class="rw spec"><span class="lb">Plan</span><b>${esc(plan.slice(0, 90) || '—')}</b></div>
+        <div class="rw spec"><span class="lb">Refinishing</span><b>${refinYN}
+          <span class="lv">${lvBox(1)}${lvBox(2)}${lvBox(3)}</span></b></div>
+        <div class="rw spec"><span class="lb">Technology</span><b>${techYN}${techNote ? ' — ' + esc(techNote) : ''}</b></div>
+        <div class="rw spec"><span class="lb">Keys</span><b>Ivory — · Plastic — · Ebony —</b></div>
+        <div class="rw spec"><span class="lb">Plating</span><b>${esc(plating)}</b></div>
+        <div class="rw spec"><span class="lb">Bench</span><b>${esc(bench)}</b></div>
+        <div class="rw spec note"><span class="lb">Notes</span><b>${esc(notes.slice(0, 180) || '—')}</b></div>
+      </div>
+    </div>
+    <div class="band">
+      <img class="q" src="${qr}" alt="QR">
+      <div class="scan"><b>SCAN FOR UPDATES</b><ul>
+        <li>Queue #</li><li>Map Spot</li><li>Cabinetry Shelf</li><li>Phase Checklists</li>
+        <li>Concurrent Work</li><li>Progress Photos</li><li>Tech Reports</li>
+        <li>Client Reports</li><li>Media</li><li>QC &amp; Tuning</li><li>Notes</li>
+        <li>Records &amp; Files</li></ul></div>
+    </div>
+  </div>`;
+
   const w = window.open('', '_blank');
   if (!w) { alert('Pop-up blocked — allow pop-ups to print shop tags.'); return; }
-  w.document.write(`<!doctype html><html><head><title>Shop tag — ${esc(nm)}</title><style>
-    @page { size: 4in 6in; margin: 0.18in; }
+  w.document.write(`<!doctype html><html><head><title>Shop tag — ${esc(h1)}</title><style>
     * { box-sizing: border-box; margin: 0; }
-    body { font: 11px/1.35 Helvetica, Arial, sans-serif; color: #121212; width: 3.6in; }
-    .hd { background: #0d0d0d; color: #fff; padding: 8px 10px; border-radius: 6px 6px 0 0;
-          font-family: Georgia, serif; letter-spacing: 3px; font-size: 13px; }
-    .hd small { display: block; font-family: Helvetica, Arial, sans-serif; letter-spacing: 2px;
-          font-size: 8px; color: #bbb; margin-top: 2px; }
-    .bd { border: 1.5px solid #121212; border-top: none; border-radius: 0 0 6px 6px; padding: 8px 10px; }
-    h1 { font-size: 15px; margin: 0 0 4px; }
-    .meta { display: grid; grid-template-columns: 1fr 1fr; gap: 1px 8px; margin-bottom: 6px; }
-    .meta b { font-size: 12px; }
-    .meta span { color: #555; font-size: 9px; letter-spacing: 1px; text-transform: uppercase; }
-    .state { border: 2px solid #9e2020; color: #9e2020; font-weight: 800; text-align: center;
-             padding: 3px; margin: 4px 0; letter-spacing: 2px; border-radius: 4px; }
-    .phases { column-count: 2; column-gap: 10px; border-top: 1px solid #ddd; padding-top: 6px; }
-    .ph { break-inside: avoid; padding: 1.5px 0; color: #444; }
-    .ph .box { display: inline-block; width: 12px; height: 12px; border: 1.2px solid #888;
-               border-radius: 2px; text-align: center; line-height: 11px; font-size: 9px; margin-right: 3px; }
-    .ph .n { color: #999; font-size: 9px; }
-    .ph.done { color: #999; } .ph.done .box { border-color: #2e7d4f; color: #2e7d4f; }
-    .ph.cur { color: #9e2020; font-weight: 800; } .ph.cur .box { border-color: #9e2020; color: #9e2020; }
-    .ft { display: flex; align-items: center; gap: 8px; margin-top: 7px; border-top: 1px solid #ddd; padding-top: 6px; }
-    .ft img { width: 68px; height: 68px; }
-    .ft .note { font-size: 8.5px; color: #666; }
+    body { font: 10pt/1.4 Helvetica, Arial, sans-serif; color: #121212; background: #f2efe9;
+           -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .bar { display: flex; align-items: center; gap: 14px; padding: 10px 16px; background: #17171b;
+           color: #e8e4dd; font-size: 13px; position: sticky; top: 0; }
+    .bar button { background: #B43333; color: #fff; border: 0; border-radius: 6px;
+                  padding: 8px 18px; font: inherit; font-weight: 700; cursor: pointer; }
+    .sheet { width: 8.2in; margin: 0 auto; padding: 14px 0; }
+    .tag { width: 8.06in; height: 5.02in; background: #fff; display: flex; overflow: hidden;
+           box-shadow: 0 4px 14px rgba(0,0,0,.18); page-break-inside: avoid; }
+    .cut { display: none; align-items: center; color: #999; font-size: 8pt; gap: 6px; height: .24in; }
+    .cut::before, .cut::after { content: ""; flex: 1; border-top: 1px dashed #bbb; }
+    .copy2 { display: none; }
+    .rail { width: .55in; background: #9E2020; color: #fff; position: relative; flex: none; }
+    .rail span { position: absolute; top: .2in; left: 50%; transform: translateX(-50%) rotate(180deg);
+                 writing-mode: vertical-rl; font-size: 15pt; font-weight: 800; letter-spacing: 3px;
+                 white-space: nowrap; }
+    .main { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: .13in .18in .11in; }
+    .id { display: flex; align-items: center; gap: .18in; margin-bottom: .05in; }
+    .id img { width: 1.8in; height: auto; }
+    .nm h1 { font-family: Georgia, serif; font-size: 18pt; line-height: 1.05; }
+    .nm .sub { font-size: 10pt; color: #555; margin-top: 2px; }
+    .rows { flex: 1; display: flex; flex-direction: column; justify-content: space-evenly; }
+    .rw { display: flex; align-items: baseline; gap: .12in; border-top: 1px solid #e4e0d8;
+          padding: 3pt 0; font-size: 10pt; }
+    .rw .lb { color: #999; font-size: 6.5pt; letter-spacing: 1.5px; text-transform: uppercase;
+              width: .95in; flex: none; }
+    .rw b { line-height: 1.3; min-width: 0; }
+    .rw.note b { font-weight: 400; font-style: italic; color: #444; font-size: 8.5pt; }
+    .divider { border-top: 2.5pt solid #121212; margin-top: 3pt; padding-top: 2pt;
+               display: flex; justify-content: flex-end; }
+    .divider em { font-style: normal; font-size: 6.5pt; letter-spacing: 3px; color: #9E2020;
+                  font-weight: 800; }
+    .rw.spec { border-top-color: #f4f1ec; }
+    .lv { display: inline-flex; gap: 3pt; margin-left: 6pt; vertical-align: -2pt; }
+    .lv i { font-style: normal; width: 13pt; height: 13pt; border: 1pt solid #121212;
+            display: inline-grid; place-items: center; font-size: 8pt; font-weight: 700; cursor: pointer; }
+    .lv i.on { background: #9E2020; border-color: #9E2020; color: #fff; }
+    .band { width: 2.2in; flex: none; background: #0d0d0d; color: #fff; display: flex;
+            flex-direction: column; align-items: center; padding: .16in .13in; }
+    .band img.q { width: 1.28in; height: 1.28in; background: #fff; padding: .05in; }
+    .scan { align-self: stretch; margin-top: .09in; }
+    .scan b { display: block; font-size: 8pt; letter-spacing: 2px; color: #e9b8b8;
+              margin-bottom: 3pt; text-align: center; }
+    .scan ul { list-style: none; font-size: 7.6pt; line-height: 1.85; color: #ddd; padding: 0; }
+    .scan li { border-bottom: 1px solid #232323; }
+    .scan li::before { content: "• "; color: #B43333; }
+    [contenteditable] { border-radius: 2px; }
+    [contenteditable]:hover { background: #fdf3ec; outline: none; }
+    [contenteditable]:focus { background: #fdf3ec; outline: 1.5px solid #B43333; }
+    .rail [contenteditable]:hover, .rail [contenteditable]:focus
+      { background: rgba(255,255,255,.15); outline: none; }
+    @page { size: letter; margin: 0.22in; }
+    @media print {
+      body { background: #fff; }
+      .bar { display: none; }
+      .sheet { width: auto; margin: 0; padding: 0; }
+      .tag { box-shadow: none; }
+      .cut { display: flex; }
+      .copy2 { display: flex; }
+    }
   </style></head><body>
-    <div class="hd">BRIGHAM LARSON PIANOS<small>SHOP TAG · ${esc(new Date().toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'}))}</small></div>
-    <div class="bd">
-      <h1>${esc(nm)}</h1>
-      <div class="meta">
-        <div><span>Serial</span><br><b>${esc(p.serial || '—')}</b></div>
-        <div><span>Spot</span><br><b>${esc(p.location || '—')}</b></div>
-        <div><span>Owner</span><br><b>${esc((p.owner || '—').slice(0, 22))}</b></div>
-        <div><span>${p.queuePos ? 'Queue' : 'Type'}</span><br><b>${p.queuePos ? '#' + p.queuePos + ' of ' + p.queueTotal : esc(p.type || '—')}</b></div>
-      </div>
-      ${state}
-      <div class="phases">${rows}</div>
-      <div class="ft"><img src="${qr}" alt="QR">
-        <div class="note"><b>Scan for the Piano Log entry</b><br>
-        Live location + phase: blpstoremap.netlify.app<br>
-        Update the phase from the map’s data card.</div></div>
-    </div>
-    <script>onload = () => setTimeout(() => print(), 300)<\/script>
+    <div class="bar"><b>Shop tag</b> — click any field to edit, tap 1·2·3 to set the refinishing level
+      <button onclick="doPrint()">🖨 Print — 2 per page</button></div>
+    <div class="sheet">${tag}<div class="cut">✂ cut</div>${tag.replace('class="tag"', 'class="tag copy2"')}</div>
+    <script>
+      const t1 = document.querySelectorAll('.tag')[0], t2 = document.querySelectorAll('.tag')[1];
+      const sync = () => { t2.innerHTML = t1.innerHTML; };
+      function doPrint() { sync(); print(); }
+      window.onbeforeprint = sync;
+      t1.querySelectorAll('.rw b, .nm h1, .nm .sub, .rail span').forEach(el => {
+        el.contentEditable = 'true'; el.spellcheck = false;
+      });
+      t1.addEventListener('click', e => {
+        const i = e.target.closest('.lv i');
+        if (!i) return;
+        [...i.parentElement.children].forEach(x => x.classList.toggle('on', x === i));
+      });
+    <\/script>
   </body></html>`);
   w.document.close();
 }
