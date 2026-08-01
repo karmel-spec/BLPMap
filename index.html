@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Store Map — Brigham Larson Pianos</title>
 <link rel="icon" href="assets/blp-logo.png">
-<link rel="stylesheet" href="styles.css?v=101">
+<link rel="stylesheet" href="styles.css?v=102">
 </head>
 <body>
 
@@ -16,6 +16,14 @@
     <p>Sign in with your BLP Google account to open the map — every move,
        phase change, and payment update is logged under your name.</p>
     <div id="gateBtn"></div>
+    <div class="agor">— or —</div>
+    <div class="agpin">
+      <input id="agName" placeholder="Your name" maxlength="40" autocomplete="name">
+      <input id="agPin" placeholder="Team PIN" type="password" maxlength="20">
+      <button id="agGo">Enter</button>
+    </div>
+    <div class="agmsg" id="agMsg">Google button not loading on this device? Enter your
+      name and the team PIN instead — changes are still logged under your name.</div>
   </div>
 </div>
 
@@ -168,6 +176,6 @@
   </div>
 </div>
 
-<script src="app.js?v=104"></script>
+<script src="app.js?v=105"></script>
 </body>
 </html>

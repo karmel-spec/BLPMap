@@ -3648,6 +3648,14 @@ function renderAuth() {
   if (!GOOGLE_CLIENT_ID) { box.hidden = true; return; }
   box.hidden = false;
   const u = authUser();
+  if (u && u.pinOnly) {
+    // PIN + name entry from the gate (Google button unavailable on that device)
+    box.innerHTML = `<b>Signed in · team PIN</b>
+      <span class="authname">👤 ${esc(u.name)}</span>
+      <button class="authout" id="authOut">sign out</button>`;
+    $('#authOut').onclick = signOut;
+    return;
+  }
   const expired = u && u.exp * 1000 < Date.now();
   if (u && expired) {
     // hourly Google token ran out and the silent refresh didn't come back —
@@ -3692,7 +3700,7 @@ function initAuth() {
     // on load and every 5 minutes while the page stays open
     const refresh = () => {
       const u = authUser();
-      if (!u) return;
+      if (!u || u.pinOnly) return;   // PIN users have no Google token to refresh
       if (u.exp * 1000 < Date.now() + 600000) { try { google.accounts.id.prompt(); } catch (ig) {} }
       if (u.exp * 1000 < Date.now()) renderAuth();   // flip the box to "Session expired"
     };
@@ -3708,6 +3716,29 @@ try {
   if (redirCred) { localStorage.removeItem('blpGsiCred'); onGoogleCred({credential: redirCred}); }
 } catch (e) { /* storage unavailable — sign-in will be offered again */ }
 initAuth();
+// gate fallback: name + team PIN for devices where the Google button
+// won't load (Safari tracking prevention, ad blockers) — attribution
+// still works because every write carries the typed name
+{
+  const agGo = document.getElementById('agGo');
+  const agTry = () => {
+    const name = (document.getElementById('agName').value || '').trim();
+    const pin = (document.getElementById('agPin').value || '').trim();
+    const m = document.getElementById('agMsg');
+    if (!name) { m.className = 'agmsg err'; m.textContent = 'Enter your name first.'; return; }
+    if (!pin) { m.className = 'agmsg err'; m.textContent = 'Enter the team PIN.'; return; }
+    lsSet('blpPin', pin);
+    lsSet('blpUser', JSON.stringify({tok: '', exp: 0, name, email: '', pic: '', pinOnly: true}));
+    renderAuth();
+  };
+  if (agGo) {
+    agGo.onclick = agTry;
+    ['agName', 'agPin'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.onkeydown = e => { if (e.key === 'Enter') agTry(); };
+    });
+  }
+}
 
 async function movePiano(p, dest, pop) {
   const msg = pop.querySelector('.mvmsg');
