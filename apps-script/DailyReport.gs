@@ -506,6 +506,8 @@ function doPost(e) {
         (ph.previous || '(none)') + ' → ' + (ph.phase || '(none)'));
       if (ph.ok && ph.movedToSold) logAct_(who, 'Moved to SOLD section', ph.summary || req.serial,
         'delivered — row relocated below the SOLD divider, off the map');
+      if (ph.ok && ph.autoCompleted) logAct_(who, 'Phases auto-completed',
+        ph.summary || req.serial, 'For Sale — all shop phases marked done');
       return json_(ph);
     }
     if (req.action === 'fixtabs') return json_(fixTabs_());
@@ -1099,9 +1101,28 @@ function setPhase_(req) {
       }
     } finally { lock.releaseLock(); }
   }
+  // A piano reaching For Sale has finished the shop, so every work phase is
+  // complete by definition — tick them all so the Done row and the shop
+  // progress bar agree with reality instead of needing 13 manual taps.
+  // Only ever ADDS marks (nothing is un-ticked), and it runs here rather
+  // than in the app so the Shop app and any other caller get it too.
+  var autoDone = null;
+  if (phase === 'For Sale' && prev !== 'For Sale') {
+    try {
+      var dcol = pianoCol_(sh, 'PHASES DONE');
+      var had = String(sh.getRange(found.row, dcol).getValue() || '')
+        .split(',').map(function (t) { return t.trim(); }).filter(String);
+      var work = PHASE_VALUES.slice(0, 13);        // New Arrival .. Exit Prep
+      var missing = work.filter(function (ph) { return had.indexOf(ph) < 0; });
+      if (missing.length) {                        // already all ticked? leave it
+        autoDone = work.join(', ');                // canonical sheet order
+        sh.getRange(found.row, dcol).setValue(autoDone);
+      }
+    } catch (e) { /* automation is a convenience — never fail the phase write */ }
+  }
   return {ok: true, row: movedTo || found.row, summary: found.summary,
           previous: prev, phase: phase, note: note, checkBack: cb,
-          movedToSold: !!movedTo};
+          movedToSold: !!movedTo, done: autoDone, autoCompleted: !!autoDone};
 }
 
 // the row number of the "SOLD" divider (col B = SOLD, blank serial) —

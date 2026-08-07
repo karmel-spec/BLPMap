@@ -2125,7 +2125,14 @@ async function setPhase(p, phase, pop, extra) {
       if (p.phase === 'For Sale') openPriceModal(p);
       if (j.note != null) p.waitNote = j.note;
       if (j.checkBack != null) p.checkBack = j.checkBack;
+      // For Sale auto-ticks every shop phase (bridge-side) — take the new
+      // list so the Done row and progress bar update without a refetch
+      if (j.done != null) { p.phasesDone = j.done; edit.phasesDone = j.done; }
       openPop(p.row, S.popAnchor, true);   // refresh the card rows
+      if (j.autoCompleted) {
+        const m = $('#pop').querySelector('.dnmsg');
+        if (m) { m.className = 'dnmsg phmsg ok'; m.textContent = '\u2713 For Sale \u2014 all shop phases marked complete'; }
+      }
       checkPayMilestone(p, $('#pop'));     // payment milestone crossed?
     } else {
       revertPhase(p, was, sel, edit);
