@@ -2012,6 +2012,39 @@ function smStalePhases_(pianos) {
   return out;
 }
 
+/* ---- arrivals on the moving calendar with no Piano Log row: pickups
+   headed to the shop whose client name matches no owner cell — these
+   pianos will never appear on the map unless a Coming Soon row is added
+   (caught live 8/8: Metler, Karhan, Haas pickups had no rows). ---- */
+function smArrivalName_(sum) {
+  var t = String(sum || '');
+  var m = /from\s+([A-Z][A-Za-z .'-]{3,40}?)'s/i.exec(t);   // "from Suzanne Metler's house"
+  if (m) return m[1].trim();
+  var parts = t.split(':');
+  if (parts.length > 1) {
+    var last = parts[parts.length - 1]
+      .replace(/\b(pick\s?up|pickup|delivery|move)\b/gi, '').trim();
+    if (/^[A-Za-z .'&-]{4,40}$/.test(last)) return last;
+  }
+  return '';
+}
+function smMissingArrivals_(pianos, events) {
+  var out = [];
+  (events || []).forEach(function (e) {
+    var sum = String(e.summary || '');
+    if (!/pick\s?up|pickup|grab/i.test(sum)) return;             // arrivals only
+    if (/bench|plate|skid|board|part|tool|rug|dolly/i.test(sum)) return;  // gear, not pianos
+    var name = smArrivalName_(sum);
+    if (!name || name.length < 5) return;                        // nothing matchable
+    var needle = name.toLowerCase();
+    var found = pianos.some(function (p) {
+      return String(p.owner || '').toLowerCase().indexOf(needle) >= 0;
+    });
+    if (!found) out.push({date: String(e.date || ''), summary: sum.slice(0, 90), name: name});
+  });
+  return out;
+}
+
 /* ---- the briefing itself ---- */
 function buildShopManagerReport_() {
   var data = JSON.parse(UrlFetchApp.fetch(APP_URL + '/api/data').getContentText());
@@ -2140,6 +2173,7 @@ function buildShopManagerReport_() {
   });
 
   R.stalePhases = smStalePhases_(pianos);
+  R.missingArrivals = smMissingArrivals_(pianos, data.events || []);
 
   R.soldPending = pianos.filter(function (p) {
     return /sold or completed but not delivered/i.test(p.section || '');
@@ -2317,6 +2351,15 @@ function shopManagerHtml_(R) {
     sec('✓', 'Sold / completed — awaiting delivery', R.soldPending.length,
       'Gold ring on the map. Do not re-sell or re-price these.');
     ul(R.soldPending.map(function (p) { return ref(p); }));
+  }
+
+  if (R.missingArrivals.length) {
+    sec('\ud83d\ude9a', 'Arrivals with no Piano Log row', R.missingArrivals.length,
+      'The moving calendar is picking these up, but no owner cell matches the client \u2014 add a Coming Soon row so they land on the map when they arrive.');
+    ul(R.missingArrivals.map(function (a) {
+      return '<b>' + a.name + '</b> \u2014 ' + a.date
+        + ' <span style="font-size:12px;color:#6f6a63">\u201c' + a.summary + '\u201d</span>';
+    }));
   }
 
   if (R.stalePhases.length) {
