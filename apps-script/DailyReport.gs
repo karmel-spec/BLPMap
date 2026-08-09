@@ -1933,6 +1933,78 @@ function smGoTo_(phase, type, defs) {
   }).join(', ');
 }
 
+/* ---- stale phases: Friday reports say a phase is finished but the map
+   still shows the piano IN that phase. Matches on word STEMS because the
+   team writes shorthand and ESL phrasing — "restring" == "restringing",
+   "chip tune" == "Chip Tuning" (this exact miss happened with M&H 55383:
+   "I finished restring" 7/31, map still said Restringing a week later). ---- */
+var SM_PHASE_STEMS = {
+  'Restringing': ['restring', 'string'],
+  'Chip Tuning': ['chip'],
+  '1st Tuning': ['tun'], '2nd Tuning': ['tun'],
+  'CAP': ['cap'],
+  'PRSB & Plate Refinishing': ['prsb', 'plate'],
+  'Lacquer Soundboard': ['lacquer', 'soundboard'],
+  'Refinishing': ['refinish', 'spray', 'sanded', 'sanding'],
+  'DHRT': ['dhrt', 'regulat', 'voicing', 'voice'],
+  'QC & Assembly': ['qc', 'assembl'],
+  'Exit Prep - Admin': ['exit prep']
+};
+var SM_DONE_RE = /finish|finished|done|complete|completed|100\s*%/;
+function smReportSheetLatest_() {
+  // latest non-empty Friday column + the one before it (completion claims
+  // often appear the week BEFORE the phase gets advanced — read both)
+  try {
+    var ss = SpreadsheetApp.openById('11RoeVRETag5rZYX6_tEH-rf6x8JL0JeZU0P5AT0WI-I');
+    var year = Utilities.formatDate(new Date(), 'America/Denver', 'yyyy');
+    var sh = null, tabs = ss.getSheets();
+    for (var i = 0; i < tabs.length; i++) {
+      if (tabs[i].getName().indexOf(year) >= 0) { sh = tabs[i]; break; }
+    }
+    if (!sh) return '';
+    var vals = sh.getDataRange().getValues();
+    var lastCol = -1;
+    for (var c = vals[0].length - 1; c >= 1; c--) {
+      for (var r2 = 1; r2 < vals.length; r2++) {
+        if (String(vals[r2][c] || '').trim()) { lastCol = c; break; }
+      }
+      if (lastCol >= 0) break;
+    }
+    if (lastCol < 1) return '';
+    var txt = [];
+    for (var r3 = 1; r3 < vals.length; r3++) {
+      txt.push(String(vals[r3][lastCol] || ''));
+      if (lastCol > 1) txt.push(String(vals[r3][lastCol - 1] || ''));
+    }
+    return txt.join('\n').toLowerCase();
+  } catch (e) { return ''; }
+}
+function smStalePhases_(pianos) {
+  var blob = smReportSheetLatest_();
+  if (!blob) return [];
+  // split into sentence-ish segments so "finished" binds to the right serial
+  var segs = blob.split(/[\n.|;]+/);
+  var out = [];
+  pianos.forEach(function (p) {
+    if (!p.serial || !smIsShopwork_(p)) return;
+    var stems = SM_PHASE_STEMS[p.phase];
+    if (!stems) return;
+    var ser = String(p.serial).toLowerCase();
+    if (ser.length < 4) return;                     // too short to trust a match
+    for (var i = 0; i < segs.length; i++) {
+      if (segs[i].indexOf(ser) < 0) continue;
+      if (!SM_DONE_RE.test(segs[i])) continue;
+      for (var k = 0; k < stems.length; k++) {
+        if (segs[i].indexOf(stems[k]) >= 0) {
+          out.push({p: p, quote: segs[i].trim().slice(0, 140)});
+          return;
+        }
+      }
+    }
+  });
+  return out;
+}
+
 /* ---- the briefing itself ---- */
 function buildShopManagerReport_() {
   var data = JSON.parse(UrlFetchApp.fetch(APP_URL + '/api/data').getContentText());
@@ -2059,6 +2131,8 @@ function buildShopManagerReport_() {
     }
     if (want.length) R.adminDrift.push({p: p, want: want});
   });
+
+  R.stalePhases = smStalePhases_(pianos);
 
   R.soldPending = pianos.filter(function (p) {
     return /sold or completed but not delivered/i.test(p.section || '');
@@ -2236,6 +2310,15 @@ function shopManagerHtml_(R) {
     sec('✓', 'Sold / completed — awaiting delivery', R.soldPending.length,
       'Gold ring on the map. Do not re-sell or re-price these.');
     ul(R.soldPending.map(function (p) { return ref(p); }));
+  }
+
+  if (R.stalePhases.length) {
+    sec('\ud83d\udd04', 'Phase looks stale vs Friday reports', R.stalePhases.length,
+      'A recent report says this phase is finished, but the map still shows the piano in it \u2014 advance the phase so scheduling doesn\u2019t re-assign done work.');
+    ul(R.stalePhases.map(function (sp) {
+      return ref(sp.p) + '<br>' + pill('MAP SAYS: ' + sp.p.phase, '#fdf3ec', '#8a6a00')
+        + ' <span style="font-size:12px;color:#6f6a63">report: \u201c' + sp.quote + '\u2026\u201d</span>';
+    }));
   }
 
   if (R.activity.dups.length) {
