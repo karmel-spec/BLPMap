@@ -132,6 +132,10 @@ function doGet(e) {
       return json_({url: fold ? fold.getUrl() : '', name: fold ? fold.getName() : ''});
     } catch (err) { return json_({error: String(err), url: ''}); }
   }
+  if (e && e.parameter && e.parameter.fn === 'proposal') {
+    try { return json_(latestProposal_()); }
+    catch (err) { return json_({error: String(err)}); }
+  }
   if (e && e.parameter && e.parameter.fn === 'tunings') {
     try { return json_(tunings_()); }
     catch (err) { return json_({error: String(err), upcoming: [], past: []}); }
@@ -622,6 +626,17 @@ function doPost(e) {
       var sks = setKeyService_(req);
       if (sks.ok) logAct_(who, 'Key service', sks.summary || req.serial, sks.keys || '(cleared)');
       return json_(sks);
+    }
+    if (req.action === 'saveproposal') {
+      var svp = saveProposal_(req);
+      if (svp.ok) logAct_(who, 'Schedule proposal saved', svp.week, 'awaiting review in Shop Manager');
+      return json_(svp);
+    }
+    if (req.action === 'applyschedule') {
+      var aps = applySchedule_(req);
+      if (aps.ok) logAct_(who, 'Schedule APPLIED to tech calendars', aps.week,
+        aps.results.map(function (r) { return r.tech + ':' + (r.events != null ? r.events : (r.skipped || r.error)); }).join(', '));
+      return json_(aps);
     }
     if (req.action === 'setpayplan') {
       var spp = setPayPlan_(req);
@@ -2043,6 +2058,110 @@ function smMissingArrivals_(pianos, events) {
     if (!found) out.push({date: String(e.date || ''), summary: sum.slice(0, 90), name: name});
   });
   return out;
+}
+
+/* ---- weekly schedule proposal: stored in Drive, embedded in the Shop
+   Manager's Planner page, and (after Brigham approves) written onto the
+   technicians' real Google Calendars ---- */
+var PROPOSAL_FOLDER = 'BLP Schedule Proposals';
+var TECH_CAL_TAB = 'Tech Calendars';   // Name | Calendar ID — editable, no redeploy
+function proposalFolder_() {
+  var it = DriveApp.getFoldersByName(PROPOSAL_FOLDER);
+  return it.hasNext() ? it.next() : DriveApp.createFolder(PROPOSAL_FOLDER);
+}
+function saveProposal_(req) {
+  var plan = String(req.plan || '');
+  if (!plan || plan.length > 400000) return {error: 'plan missing or too large'};
+  try { JSON.parse(plan); } catch (e) { return {error: 'plan is not valid JSON'}; }
+  var name = 'proposal-' + String(req.week || 'week').replace(/[^\w-]+/g, '_') + '.json';
+  var f = proposalFolder_().createFile(name, plan, 'application/json');
+  var meta = {week: String(req.week || ''), weekStart: String(req.weekStart || ''),
+              savedAt: new Date().toISOString(), fileId: f.getId(), applied: false};
+  PropertiesService.getScriptProperties().setProperty('PROPOSAL_META', JSON.stringify(meta));
+  return {ok: true, fileId: f.getId(), week: meta.week};
+}
+function latestProposal_() {
+  var raw = PropertiesService.getScriptProperties().getProperty('PROPOSAL_META');
+  if (!raw) return {error: 'no proposal saved yet'};
+  var meta = JSON.parse(raw);
+  var plan = JSON.parse(DriveApp.getFileById(meta.fileId).getBlob().getDataAsString());
+  return {ok: true, meta: meta, plan: plan};
+}
+function techCalMap_() {
+  var ss = SpreadsheetApp.openById('11RoeVRETag5rZYX6_tEH-rf6x8JL0JeZU0P5AT0WI-I');
+  var sh = ss.getSheetByName(TECH_CAL_TAB);
+  if (!sh) {
+    sh = ss.insertSheet(TECH_CAL_TAB, ss.getSheets().length);
+    // verified calendars only — Garrett VICKERY is the mover, NOT Garrett
+    // Taylor the DHRT tech, so unknowns stay blank for Brigham to fill in
+    var seed = [['Technician', 'Calendar ID (leave blank = skip on apply)'],
+      ['Korban', 'korbangreenhalgh.blp@gmail.com'],
+      ['Curtis', 'curtisbiggs.blp@gmail.com'],
+      ['Jake', 'jakepulver.blp@gmail.com'],
+      ['McKinly', 'mckinlylopp.blp@gmail.com'],
+      ['Matthew', 'matthewwessman.blp@gmail.com'],
+      ['Mark', 'markhales.blp@gmail.com'],
+      ['Avery', ''], ['Courtney', ''], ['Doris', ''], ['Garrett', ''],
+      ['Jacob', ''], ['Lupita', ''], ['Marcelo', ''], ['Myrrhanda', ''],
+      ['Sadie', ''], ['Victoria', '']];
+    sh.getRange(1, 1, seed.length, 2).setValues(seed);
+    sh.setFrozenRows(1);
+  }
+  var vals = sh.getDataRange().getValues();
+  var map = {};
+  for (var i = 1; i < vals.length; i++) {
+    var n = String(vals[i][0] || '').trim(), c = String(vals[i][1] || '').trim();
+    if (n && c) map[n.toLowerCase()] = c;
+  }
+  return map;
+}
+// plan times are shop-clock 12h without am/pm: 7-11 = morning, 12-6 = afternoon
+function shopClock_(t) {
+  var m = /^(\d{1,2}):(\d{2})$/.exec(String(t || '').trim());
+  if (!m) return null;
+  var h = parseInt(m[1], 10);
+  if (h >= 1 && h <= 6) h += 12;
+  return {h: h, min: parseInt(m[2], 10)};
+}
+function applySchedule_(req) {
+  var got = latestProposal_();
+  if (!got.ok) return got;
+  if (got.meta.applied && !req.force) {
+    return {error: 'already applied ' + got.meta.appliedAt + ' — resend with force:true to re-apply'};
+  }
+  var plan = got.plan;
+  var start = new Date((plan.weekStart || got.meta.weekStart) + 'T12:00:00');
+  if (isNaN(start.getTime())) return {error: 'proposal has no weekStart date'};
+  var map = techCalMap_();
+  var results = [];
+  (plan.techs || []).forEach(function (tch) {
+    var calId = map[String(tch.name || '').toLowerCase()];
+    if (!calId) { results.push({tech: tch.name, skipped: 'no calendar mapped'}); return; }
+    var cal;
+    try { cal = CalendarApp.getCalendarById(calId); } catch (e) { cal = null; }
+    if (!cal) { results.push({tech: tch.name, error: 'no access to ' + calId}); return; }
+    var made = 0, failed = 0;
+    (tch.days || []).forEach(function (blocks, di) {
+      (blocks || []).forEach(function (b) {
+        if (b[2] === 'hold') return;               // already on their calendar
+        var t1 = shopClock_(b[0]), t2 = shopClock_(b[1]);
+        if (!t1 || !t2) { failed++; return; }
+        var d1 = new Date(start); d1.setDate(d1.getDate() + di); d1.setHours(t1.h, t1.min, 0, 0);
+        var d2 = new Date(start); d2.setDate(d2.getDate() + di); d2.setHours(t2.h, t2.min, 0, 0);
+        try {
+          cal.createEvent(String(b[3] || 'Shop work'), d1, d2,
+            {description: (b[4] ? String(b[4]) + '\n' : '')
+              + 'Applied from the Shop Manager schedule proposal (' + plan.week + ')'});
+          made++;
+        } catch (e) { failed++; }
+      });
+    });
+    results.push({tech: tch.name, events: made, failed: failed});
+  });
+  got.meta.applied = true;
+  got.meta.appliedAt = new Date().toISOString();
+  PropertiesService.getScriptProperties().setProperty('PROPOSAL_META', JSON.stringify(got.meta));
+  return {ok: true, week: plan.week, results: results};
 }
 
 /* ---- the briefing itself ---- */
