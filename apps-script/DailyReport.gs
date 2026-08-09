@@ -2000,6 +2000,13 @@ function smStalePhases_(pianos) {
           return;
         }
       }
+      // bare "<serial>: completed" with no phase word at all still counts —
+      // McKinly wrote exactly that about Baldwin 191714 while the map said
+      // Refinishing, and a stem-only match missed it
+      if (segs[i].replace(ser, '').length < 60) {
+        out.push({p: p, quote: segs[i].trim().slice(0, 140)});
+        return;
+      }
     }
   });
   return out;
