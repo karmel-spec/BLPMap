@@ -1855,6 +1855,16 @@ function cancelHide() { clearTimeout(hideTimer); }
 $('#pop').addEventListener('mouseenter', cancelHide);
 $('#pop').addEventListener('mouseleave', scheduleHide);
 
+/* Collapsible Bold Banner sections — header click toggles the body; the
+ * open/closed choice is remembered per section for this device, so a tech
+ * who never wants Media open keeps it collapsed on every card. */
+function secOpen(key) { return lsGet('sec_' + key) !== 'closed'; }
+function secWrap(key, label, content) {
+  const open = secOpen(key);
+  return `<div class="sechead${open ? '' : ' shut'}" data-sec="${key}">${label}
+      <i class="secarrow">${open ? '▾' : '▸'}</i></div>
+    <div class="secbody${open ? '' : ' closed'}" data-sec="${key}">${content}</div>`;
+}
 function popHTML(p) {
   const st = pianoStatus(p);
   const ti = tuningInfo(p);
@@ -1933,7 +1943,7 @@ function popHTML(p) {
       <div class="pbarlbl">${next ? `next payment milestone at ${next}%` : 'all payment milestones reached'}${+p.payMilestone ? ` · last emailed at ${esc(p.payMilestone)}%` : ''}</div>`;
   })() : '';
   const asDone = adminStepsOf(p);
-  const admin = p.serial ? `<div class="sechead">🔐 Admin</div>
+  const admin = p.serial ? secWrap('admin', '🔐 Admin', `
     ${crVal === 'yes' ? `<div class="tagbtns histbtns"><button class="tagbtn creports">🤝 Client Reports History</button></div>` : ''}
     ${crAsk}
     <div class="row rowflex payrow"><span>Payment plan</span>
@@ -1946,7 +1956,7 @@ function popHTML(p) {
       const on = asDone.includes(s);
       return `<button class="astep ${on ? 'on' : ''}" data-as="${esc(s)}"><i>${on ? '✓' : i + 1}</i>${esc(s)}</button>`;
     }).join('')}</div><div class="asmsg phmsg"></div>
-    ${payBar}` : '';
+    ${payBar}`) : '';
   const typeBtns = p.serial
     ? `<span class="trkchips hdrtype" title="wrong icon on the map? tap the correct type — digitals are marked as uprights">
         ${['grand', 'upright'].map(t =>
@@ -1969,7 +1979,7 @@ function popHTML(p) {
            ${p.serial ? `<button class="predit">${p.price ? '✎ Edit price' : '＋ Add price'}</button>` : ''}</div>`
       : (priceLabel(p) ? `<div class="row">Price <b class="pricecard">${esc(priceLabel(p))}</b></div>` : '')}
 
-    <div class="sechead">📍 Locations</div>
+    ${secWrap('loc', '📍 Locations', `
     <div class="row rowflex"><span>Map #</span><b class="mapnum">${esc(p.location || '—')}</b></div>
     ${p.queuePos ? `<div class="row rowflex"><span>Queue #</span>${queueChip}</div>` : ''}
     ${mover}
@@ -1978,9 +1988,9 @@ function popHTML(p) {
         <span class="trkchips cabchips">${cabTokens(p).map(t =>
           `<span class="cabchip" title="${esc(cabPretty(t))}">${esc(t)}<i class="cabdel" data-t="${esc(t)}">✕</i></span>`).join('')}
           <button class="cabadd">＋ shelf</button>
-        </span></div><div class="cabmsg phmsg"></div>` : ''}
+        </span></div><div class="cabmsg phmsg"></div>` : ''}`)}
 
-    ${p.serial ? `<div class="sechead">🔨 Shop Progress</div>` : ''}
+    ${(body => p.serial ? secWrap('shop', '🔨 Shop Progress', body) : body)(`
     ${tracker}
     ${p.serial ? `<div class="row trkrow" title="key-top service — tap each that applies">Keys
         <span class="trkchips">${KEY_SERVICE.map(t =>
@@ -2002,14 +2012,13 @@ function popHTML(p) {
       ${p.serial ? `<div class="row rowflex snzrow"><span class="snzlbl">${p.checkBack ? 'Re-snooze' : 'Check back in'}</span>
         <span class="snzbtns"><button class="snz" data-d="3">+3d</button><button class="snz" data-d="7">+1w</button><button class="snz" data-d="14">+2w</button><button class="snz" data-d="30">+1m</button></span>
       </div><div class="snzmsg phmsg"></div>` : ''}` : ''}
-    ${p.serial ? `<div class="tagbtns histbtns"><button class="tagbtn rreports">📄 Tech Reports History</button></div>` : ''}
+    ${p.serial ? `<div class="tagbtns histbtns"><button class="tagbtn rreports">📄 Tech Reports History</button></div>` : ''}`)}
 
-    ${p.serial ? `<div class="sechead">📷 Media</div>` : ''}
+    ${(body => p.serial ? secWrap('media', '📷 Media', body) : body)(`
     ${mediaCard(p)}
-    ${photo}
+    ${photo}`)}
 
-    ${p.serial ? `<div class="sechead">📁 Paperwork</div>` : ''}
-    ${paperworkCard(p)}
+    ${p.serial ? secWrap('pw', '📁 Paperwork', paperworkCard(p)) : ''}
 
     ${admin}
 
@@ -2213,6 +2222,18 @@ function wirePop(p) {
   if (dt) dt.onclick = ev => { ev.preventDefault(); ev.stopPropagation(); openTechFolder(dt.dataset.serial, dt); };
   const tt = pop.querySelector('.tagthumb');
   if (tt) tt.onclick = ev => { ev.stopPropagation(); openTagSnapshot(p); };
+  pop.querySelectorAll('.sechead[data-sec]').forEach(h => {
+    h.onclick = ev => {
+      ev.stopPropagation(); popPinned = true;
+      const body = pop.querySelector(`.secbody[data-sec="${h.dataset.sec}"]`);
+      if (!body) return;
+      const closed = body.classList.toggle('closed');
+      h.classList.toggle('shut', closed);
+      const ar = h.querySelector('.secarrow');
+      if (ar) ar.textContent = closed ? '▸' : '▾';
+      lsSet('sec_' + h.dataset.sec, closed ? 'closed' : 'open');
+    };
+  });
   const pws = pop.querySelector('.pwscan');
   if (pws) pws.onclick = ev => { ev.stopPropagation(); popPinned = true; scanPaperwork(p, pop); };
   pop.querySelectorAll('.pwadd').forEach(b => {
