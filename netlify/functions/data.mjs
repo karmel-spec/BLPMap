@@ -179,6 +179,22 @@ function parsePianos(text) {
       keywork: col(51).slice(0, 90),
       tagSnapshot: tagSnapIdx >= 0 ? col(tagSnapIdx) : '',
       paperwork: paperworkIdx >= 0 ? col(paperworkIdx) : '',
+      // everything else the Piano Log holds for this row that the card
+      // doesn't already surface — keyed by the sheet's own header names
+      logExtras: (() => {
+        const used = new Set([0, 1, 2, 3, 4, 5, 6, 7, 9, 14, 15, 16, 17, 18, 19, 20, 21, 23, 26, 50, 51, 68,
+          phaseIdx, priceIdx, trackIdx, doneIdx, waitIdx, crIdx, cbIdx, cabIdx, typeOvIdx,
+          payPlanIdx, payMsIdx, adminStIdx, keySvcIdx, tagSnapIdx, paperworkIdx]);
+        const hdr = rows[1] || [];
+        const out = {};
+        for (let c = 0; c < hdr.length; c++) {
+          const h = String(hdr[c] || '').trim();
+          if (!h || used.has(c)) continue;
+          const v = col(c);
+          if (v) out[h] = v.slice(0, 300);
+        }
+        return out;
+      })(),
       // the media cells double as Drive folder links when they hold a URL
       bphotoUrl: driveUrl(col(14)), bvideoUrl: driveUrl(col(15)),
       aphotoUrl: driveUrl(col(16)), avideoUrl: driveUrl(col(17)),

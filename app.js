@@ -1858,9 +1858,12 @@ $('#pop').addEventListener('mouseleave', scheduleHide);
 /* Collapsible Bold Banner sections — header click toggles the body; the
  * open/closed choice is remembered per section for this device, so a tech
  * who never wants Media open keeps it collapsed on every card. */
-function secOpen(key) { return lsGet('sec_' + key) !== 'closed'; }
-function secWrap(key, label, content) {
-  const open = secOpen(key);
+function secOpen(key, def = true) {
+  const v = lsGet('sec_' + key);
+  return v == null ? def : v !== 'closed';
+}
+function secWrap(key, label, content, defOpen = true) {
+  const open = secOpen(key, defOpen);
   return `<div class="sechead${open ? '' : ' shut'}" data-sec="${key}">${label}
       <i class="secarrow">${open ? '▾' : '▸'}</i></div>
     <div class="secbody${open ? '' : ' closed'}" data-sec="${key}">${content}</div>`;
@@ -2051,7 +2054,23 @@ function popHTML(p) {
           ${drift ? '<i>\u26a0</i>' : ''}</button>`;
       })()}
     </div>
-    <span class="btn">Open Piano Log ↗</span>`;
+    ${secWrap('log', '📖 Piano Log', logExtrasBody(p), false)}`;
+}
+/* Everything the Piano Log row holds that the card doesn't already show,
+ * keyed by the sheet's own column headers (server sends only non-empty
+ * cells). Default-collapsed — it can be a long list. */
+function logExtrasBody(p) {
+  const ex = p.logExtras || {};
+  const rows = Object.keys(ex).map(k => {
+    const v = String(ex[k]);
+    return (v.length > 58 || v.includes('\n'))
+      ? `<div class="lxrow lxlong"><div class="lxk">${esc(k)}</div><div class="lxv">${esc(v)}</div></div>`
+      : `<div class="row rowflex"><span class="lxk">${esc(k)}</span><b class="lxv1">${esc(v)}</b></div>`;
+  }).join('');
+  return `<div class="lxbox">
+    ${rows || '<div class="pwnone" style="display:block;padding:3px 0 6px">Nothing else is recorded in the Piano Log for this piano.</div>'}
+    <div class="tagbtns"><span class="btn">Open Piano Log row ↗</span></div>
+  </div>`;
 }
 const fmtDay = iso => new Date(iso + 'T12:00')
   .toLocaleDateString('en-US', {weekday: 'short', month: 'short', day: 'numeric'});

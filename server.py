@@ -231,6 +231,17 @@ def parse_pianos(raw):
             'keywork': col(51)[:90],
             'tagSnapshot': col(tag_snap_idx) if tag_snap_idx >= 0 else '',
             'paperwork': col(paperwork_idx) if paperwork_idx >= 0 else '',
+            # everything else the Piano Log holds for this row that the card
+            # doesn't already surface — keyed by the sheet's own header names
+            'logExtras': {
+                h.strip(): col(c)[:300]
+                for c, h in enumerate(hdr)
+                if h and h.strip() and col(c) and c not in
+                {0, 1, 2, 3, 4, 5, 6, 7, 9, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 26, 50, 51, 68,
+                 phase_idx, price_idx, track_idx, done_idx, wait_idx, cr_idx, cb_idx, cab_idx,
+                 type_ov_idx, pay_plan_idx, pay_ms_idx, admin_st_idx, key_svc_idx,
+                 tag_snap_idx, paperwork_idx}
+            },
             # the media cells double as Drive folder links when they hold a URL
             'bphotoUrl': drive_url(col(14)), 'bvideoUrl': drive_url(col(15)),
             'aphotoUrl': drive_url(col(16)), 'avideoUrl': drive_url(col(17)),

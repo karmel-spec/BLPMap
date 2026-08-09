@@ -606,6 +606,12 @@ td a{color:#9e2020}
 .pop .mapnum{font-size:14px;font-weight:800;color:#9e2020}
 
 /* ---- Drive folder links in the Media section ---- */
+/* Piano Log extras: leftover sheet columns, header → value */
+.lxbox{margin-top:2px}
+.lxk{color:#6f7a84;font-size:11px;text-transform:capitalize}
+.lxv1{max-width:60%;text-align:right;overflow-wrap:anywhere}
+.lxrow.lxlong{margin:5px 0 7px}
+.lxrow.lxlong .lxv{font-size:12px;color:#222;background:#faf8f4;border:1px solid #eee7db;border-radius:6px;padding:5px 8px;margin-top:2px;white-space:pre-wrap;overflow-wrap:anywhere;max-height:150px;overflow-y:auto}
 /* paperwork slots: attach/remove Drive links + serial-matched scan finder */
 .pwbox{margin-top:2px}
 .pwadd{font-size:10.5px;border:1px dashed #b9c2cb;border-radius:6px;background:#fbfcfd;color:#5c6770;padding:2px 8px;cursor:pointer}
