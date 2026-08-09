@@ -1073,7 +1073,13 @@ function shopTagFields(p) {
     tech: (/tech/i.test(p.track || '') ? 'Yes' : 'No')
       + ((/qrs/i.test(blob + ' ' + plan + ' ' + notes)
           ? (/(upgrade|update)/i.test(blob + ' ' + plan) ? ' \u2014 QRS upgrade' : ' \u2014 QRS') : '')),
-    keys: KEY_SERVICE.map(k => k + ' ' + mark(k)).join(' \u00b7 '),
+    keys: (() => {
+      if (kt.length) return KEY_SERVICE.map(k => k + ' ' + mark(k)).join(' \u00b7 ');
+      const kw = (p.keywork || '').trim();
+      if (kw && !/^(done|\u2713|x+|completed?)[.!\s]*$/i.test(kw)) return kw;   // requested work, verbatim
+      if (kw) return 'Done \u2713';
+      return '\u2610 Ivory \u00b7 \u2610 Plastic \u00b7 \u2610 Ebony';        // unknown: mark by hand
+    })(),
     plating: /^y/i.test(p.replate || '') ? 'Yes'
       : /^n/i.test(p.replate || '') ? 'No'
       : /replat|plating/i.test(plan + ' ' + notes) ? 'Yes' : '\u2014',

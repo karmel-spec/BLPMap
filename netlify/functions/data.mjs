@@ -174,6 +174,7 @@ function parsePianos(text) {
       payMilestone: payMsIdx >= 0 ? col(payMsIdx) : '',
       adminSteps: adminStIdx >= 0 ? col(adminStIdx) : '',
       keyService: keySvcIdx >= 0 ? col(keySvcIdx) : '',
+      keywork: col(51).slice(0, 90),
       tagSnapshot: tagSnapIdx >= 0 ? col(tagSnapIdx) : '',
       // the media cells double as Drive folder links when they hold a URL
       bphotoUrl: driveUrl(col(14)), bvideoUrl: driveUrl(col(15)),
