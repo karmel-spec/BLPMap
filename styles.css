@@ -598,3 +598,24 @@ td a{color:#9e2020}
   .tagview .tvtag .tagrender{transform:scale(calc((96vw - 32px) / 850))}
 }
 .pop .mapnum{font-size:14px;font-weight:800;color:#9e2020}
+
+/* ---- Drive folder links in the Media section ---- */
+.drivelinks{display:flex;flex-wrap:wrap;gap:5px;margin:7px 0 2px}
+.dlink{display:inline-block;background:#f4f6f8;border:1px solid #dfe3e7;border-radius:6px;
+  padding:3px 8px;font-size:10.5px;font-weight:700;color:#3a6ea5;text-decoration:none;white-space:nowrap}
+.dlink:hover{border-color:#3a6ea5;background:#eef4fb}
+
+/* ---- search type-ahead ---- */
+.searchwrap{position:relative;flex-shrink:1;min-width:0}
+.searchac{position:absolute;top:calc(100% + 4px);left:0;width:min(360px,86vw);background:#fff;
+  border:1px solid #dfe3e7;border-radius:10px;box-shadow:0 12px 30px rgba(20,30,40,.22);
+  z-index:60;overflow:hidden;max-height:340px;overflow-y:auto}
+.searchac[hidden]{display:none}
+.acrow{padding:7px 11px;cursor:pointer;border-bottom:1px solid #f2f4f6}
+.acrow:last-child{border-bottom:none}
+.acrow:hover,.acrow.on{background:#fdf3f3}
+.acname{display:block;font-size:12.5px;color:#121212;line-height:1.35}
+.acname b{color:#9e2020}
+.acmeta{display:block;font-size:10.5px;color:#8a929a;margin-top:1px}
+.acmeta b{color:#9e2020}
+.acmeta i{font-style:normal;margin-left:6px;color:#aab2b9}

@@ -122,6 +122,16 @@ function doGet(e) {
     try { return json_({events: fetchEvents_()}); }
     catch (err) { return json_({error: String(err), events: []}); }
   }
+  // Tech photo folder for one piano — the Store Map's Media section links here
+  if (e && e.parameter && e.parameter.fn === 'techfolder') {
+    try {
+      var tsh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+      var tf = findPiano_(tsh, e.parameter.serial, e.parameter.row);
+      if (tf.error) return json_({error: tf.error, url: ''});
+      var fold = techFolderFor_(tsh, tf.row, String(e.parameter.serial || ''));
+      return json_({url: fold ? fold.getUrl() : '', name: fold ? fold.getName() : ''});
+    } catch (err) { return json_({error: String(err), url: ''}); }
+  }
   if (e && e.parameter && e.parameter.fn === 'tunings') {
     try { return json_(tunings_()); }
     catch (err) { return json_({error: String(err), upcoming: [], past: []}); }

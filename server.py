@@ -90,6 +90,15 @@ def parse_dates(text):
     return out
 
 
+DRIVE_URL_RE = re.compile(r'(https://(?:drive|docs)\.google\.com/[^\s,"\']+)')
+
+
+def drive_url(v):
+    """Media/folder cells hold a Drive link when one has been pasted in."""
+    m = DRIVE_URL_RE.search(v or '')
+    return m.group(1) if m else ''
+
+
 def parse_pianos(raw):
     rows = list(csv.reader(io.StringIO(raw.decode('utf-8', 'replace'))))
     pianos = []
@@ -218,6 +227,10 @@ def parse_pianos(raw):
             'adminSteps': col(admin_st_idx) if admin_st_idx >= 0 else '',
             'keyService': col(key_svc_idx) if key_svc_idx >= 0 else '',
             'tagSnapshot': col(tag_snap_idx) if tag_snap_idx >= 0 else '',
+            # the media cells double as Drive folder links when they hold a URL
+            'bphotoUrl': drive_url(col(14)), 'bvideoUrl': drive_url(col(15)),
+            'aphotoUrl': drive_url(col(16)), 'avideoUrl': drive_url(col(17)),
+            'mainFolder': drive_url(col(68)),
             'status': status,
             'location': loc,
             'isSlot': bool(SLOT_RE.match(loc)),

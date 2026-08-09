@@ -62,6 +62,13 @@ function pianoType(cat, name) {
   return 'other';
 }
 
+// media/folder cells hold a Drive link when one has been pasted in — the
+// same cells are also used as done/skip markers, so only take real URLs
+function driveUrl(v) {
+  const m = /(https:\/\/(?:drive|docs)\.google\.com\/[^\s,"']+)/.exec(v || '');
+  return m ? m[1] : '';
+}
+
 /* ---------- piano log ---------- */
 const SLOT_RE = /^\d+[a-zA-Z]?$/;
 function parsePianos(text) {
@@ -168,6 +175,10 @@ function parsePianos(text) {
       adminSteps: adminStIdx >= 0 ? col(adminStIdx) : '',
       keyService: keySvcIdx >= 0 ? col(keySvcIdx) : '',
       tagSnapshot: tagSnapIdx >= 0 ? col(tagSnapIdx) : '',
+      // the media cells double as Drive folder links when they hold a URL
+      bphotoUrl: driveUrl(col(14)), bvideoUrl: driveUrl(col(15)),
+      aphotoUrl: driveUrl(col(16)), avideoUrl: driveUrl(col(17)),
+      mainFolder: driveUrl(col(68)),
       isSlot: SLOT_RE.test(loc),
       entered: entered ? entered.toISOString().slice(0, 10) : null,
       phase: phaseIdx >= 0 ? col(phaseIdx) : '',

@@ -670,7 +670,7 @@ function ownerClass(p) {
 }
 function matches(p, q) {
   return (p.summary + ' ' + p.serial + ' ' + p.make + ' ' + p.model + ' '
-          + p.location).toLowerCase().includes(q);
+          + p.year + ' ' + p.location).toLowerCase().includes(q);
 }
 function logLink(p) {
   return PIANOLOG_URL + '#piano=' + encodeURIComponent(p.serial || p.summary);
@@ -850,13 +850,52 @@ function mediaCard(p) {
                   : '<b class="mno">✗ needed</b>');
     return `<div class="row rowflex"><span>${label}</span>${mark}</div>`;
   };
+  // Drive folders: the media cells hold links once someone pastes one in, and
+  // progress photos land in a "Tech" subfolder of the piano's main folder
+  const links = [
+    ['\ud83d\udcf7 Before photos', p.bphotoUrl],
+    ['\ud83c\udfa5 Before video', p.bvideoUrl],
+    ['\ud83d\udcf7 After photos', p.aphotoUrl],
+    ['\ud83c\udfa5 After video', p.avideoUrl],
+    ['\ud83d\udcc1 Main folder', p.mainFolder],
+  ].filter(x => x[1]);
+  const folderRow = (links.length || p.serial)
+    ? `<div class="drivelinks">${links.map(([t, u]) =>
+        `<a class="dlink" href="${esc(u)}" target="_blank" rel="noopener">${t} \u2197</a>`).join('')}
+        ${p.serial ? `<a class="dlink dtech" href="#" data-serial="${esc(p.serial)}">\ud83d\udd27 Tech photos \u2197</a>` : ''}
+      </div>`
+    : '';
   return `<div class="mediabox">
     ${line('Before photos', 'bphoto', p.bphoto, true)}
     ${line('Before video', 'bvideo', p.bvideo, true)}
     ${line('After photos', 'aphoto', p.aphoto, late)}
     ${line('After video', 'avideo', p.avideo, late)}
+    ${folderRow}
     <div class="mdmsg"></div>
   </div>`;
+}
+const techFolderCache = new Map();
+// The Tech subfolder has no link in the sheet — the bridge knows where it is
+// (it is where progress photos get uploaded), so resolve it on demand.
+async function openTechFolder(serial, a) {
+  if (techFolderCache.has(serial)) {
+    const u = techFolderCache.get(serial);
+    if (u) window.open(u, '_blank', 'noopener');
+    return;
+  }
+  const was = a.textContent;
+  a.textContent = 'opening\u2026';
+  try {
+    const r = await fetch(BRIDGE_URL + '?fn=techfolder&serial=' + encodeURIComponent(serial),
+      {redirect: 'follow'});
+    const j = await r.json();
+    techFolderCache.set(serial, j.url || '');
+    a.textContent = was;
+    if (j.url) window.open(j.url, '_blank', 'noopener');
+    else a.textContent = '\ud83d\udd27 no Tech folder yet';
+  } catch (e) {
+    a.textContent = '\ud83d\udd27 Tech folder unavailable';
+  }
 }
 function isLate(p) { return phaseNum(p) >= AFTER_MIN; }
 // on the books but physically not in the building yet — no media possible
@@ -2073,6 +2112,8 @@ function wirePop(p) {
   }
   const st = pop.querySelector('.shoptag');
   if (st) st.onclick = ev => { ev.stopPropagation(); printShopTag(p); };
+  const dt = pop.querySelector('.dtech');
+  if (dt) dt.onclick = ev => { ev.preventDefault(); ev.stopPropagation(); openTechFolder(dt.dataset.serial, dt); };
   const tt = pop.querySelector('.tagthumb');
   if (tt) tt.onclick = ev => { ev.stopPropagation(); openTagSnapshot(p); };
   const pt = pop.querySelector('.tagbtns a');
@@ -4723,13 +4764,82 @@ if (topReqBtn) {
 }
 
 let searchTimer = null;
+/* ---------- search + type-ahead suggestions ---------- */
+// Ranked so the thing you are most likely typing floats up: a serial you
+// started keying beats a serial that merely contains those digits, which
+// beats a year/make/model hit, which beats a loose summary match.
+function searchRank(p, q) {
+  const ser = String(p.serial || '').toLowerCase();
+  const make = String(p.make || '').toLowerCase();
+  const model = String(p.model || '').toLowerCase();
+  const year = String(p.year || '').toLowerCase();
+  const spot = String(p.location || '').toLowerCase();
+  if (spot === q) return 0;
+  if (ser === q) return 1;
+  if (ser.startsWith(q)) return 2;
+  if (ser.includes(q)) return 3;
+  if (make.startsWith(q) || model.startsWith(q)) return 4;
+  if (year.startsWith(q)) return 5;
+  if (make.includes(q) || model.includes(q)) return 6;
+  if (String(p.summary || '').toLowerCase().includes(q)) return 7;
+  if (spot.startsWith(q)) return 8;
+  return 99;
+}
+let acList = [], acIdx = -1;
+function renderSuggest(q) {
+  const box = $('#searchac');
+  if (!box) return;
+  if (q.length < 1) { box.hidden = true; acList = []; acIdx = -1; return; }
+  acList = (S.data.pianos || [])
+    .filter(p => p.active)
+    .map(p => ({p, r: searchRank(p, q)}))
+    .filter(x => x.r < 99)
+    .sort((a, b) => a.r - b.r || String(a.p.summary).localeCompare(String(b.p.summary)))
+    .slice(0, 8)
+    .map(x => x.p);
+  acIdx = -1;
+  if (!acList.length) { box.hidden = true; return; }
+  const hl = t => {
+    const i = String(t).toLowerCase().indexOf(q);
+    if (i < 0) return esc(t);
+    return esc(String(t).slice(0, i)) + '<b>' + esc(String(t).slice(i, i + q.length))
+      + '</b>' + esc(String(t).slice(i + q.length));
+  };
+  box.innerHTML = acList.map((p, i) => `<div class="acrow" data-i="${i}">
+      <span class="acname">${hl(p.summary || [p.year, p.make, p.model].filter(Boolean).join(' '))}</span>
+      <span class="acmeta">${p.serial ? '#' + hl(p.serial) : ''}
+        <i>map ${esc(p.location || '—')}</i></span>
+    </div>`).join('');
+  box.hidden = false;
+  box.querySelectorAll('.acrow').forEach(el => {
+    el.onmousedown = ev => { ev.preventDefault(); pickSuggest(+el.dataset.i); };
+  });
+}
+function pickSuggest(i) {
+  const p = acList[i];
+  if (!p) return;
+  $('#searchac').hidden = true;
+  $('#search').value = p.summary || p.serial || '';
+  S.search = $('#search').value;
+  renderMap();
+  focusPiano(p);
+}
+function moveSuggest(d) {
+  const box = $('#searchac');
+  if (box.hidden || !acList.length) return;
+  acIdx = (acIdx + d + acList.length) % acList.length;
+  box.querySelectorAll('.acrow').forEach((el, i) => el.classList.toggle('on', i === acIdx));
+  const on = box.querySelector('.acrow.on');
+  if (on) on.scrollIntoView({block: 'nearest'});
+}
 $('#search').addEventListener('input', e => {
   S.search = e.target.value;
   S.focusRow = null;
   if (S.view !== 'map') switchView('map');
   renderMap();
-  clearTimeout(searchTimer);
   const q = S.search.trim().toLowerCase();
+  renderSuggest(q);
+  clearTimeout(searchTimer);
   if (q.length < 2) return;
   searchTimer = setTimeout(() => {
     if (S.slotFloor.has(q)) { focusSpot(q); return; }      // exact spot #
@@ -4737,6 +4847,16 @@ $('#search').addEventListener('input', e => {
     if (hits.length === 1) focusPiano(hits[0]);            // unique piano
   }, 450);
 });
+$('#search').addEventListener('keydown', e => {
+  if (e.key === 'ArrowDown') { e.preventDefault(); moveSuggest(1); }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); moveSuggest(-1); }
+  else if (e.key === 'Enter') {
+    if (acIdx >= 0) { e.preventDefault(); pickSuggest(acIdx); }
+    else if (acList.length === 1) { e.preventDefault(); pickSuggest(0); }
+  } else if (e.key === 'Escape') { $('#searchac').hidden = true; }
+});
+$('#search').addEventListener('focus', () => renderSuggest(S.search.trim().toLowerCase()));
+$('#search').addEventListener('blur', () => setTimeout(() => { $('#searchac').hidden = true; }, 120));
 
 /* ---------- document-style zoom (scroll is native) ---------- */
 function zoomAt(k, cx, cy) {
