@@ -156,9 +156,11 @@ export async function buildSlots() {
   return { floors, generatedAt: new Date().toISOString() };
 }
 
-export default async () => {
+export default async (req) => {
   const now = Date.now();
-  if (cache.body && now - cache.at < CACHE_MS) {
+  // ?refresh=1 skips the 6h cache — for same-minute floor-plan edits
+  const force = req && new URL(req.url).searchParams.get('refresh');
+  if (!force && cache.body && now - cache.at < CACHE_MS) {
     return new Response(cache.body, {
       headers: { 'content-type': 'application/json', 'x-slots-cache': 'hit' },
     });
