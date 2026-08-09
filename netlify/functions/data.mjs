@@ -105,6 +105,8 @@ function parsePianos(text) {
     ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'KEY SERVICE') : -1;
   const tagSnapIdx = rows[1]
     ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'TAG SNAPSHOT') : -1;
+  const paperworkIdx = rows[1]
+    ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'PAPERWORK') : -1;
   // CUSTOM SHOPWORK queue bounds (1-based rows)
   let qHdr = 0, qEnd = 0;
   for (let k = 0; k < rows.length; k++) {
@@ -176,6 +178,7 @@ function parsePianos(text) {
       keyService: keySvcIdx >= 0 ? col(keySvcIdx) : '',
       keywork: col(51).slice(0, 90),
       tagSnapshot: tagSnapIdx >= 0 ? col(tagSnapIdx) : '',
+      paperwork: paperworkIdx >= 0 ? col(paperworkIdx) : '',
       // the media cells double as Drive folder links when they hold a URL
       bphotoUrl: driveUrl(col(14)), bvideoUrl: driveUrl(col(15)),
       aphotoUrl: driveUrl(col(16)), avideoUrl: driveUrl(col(17)),

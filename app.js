@@ -897,6 +897,94 @@ async function openTechFolder(serial, a) {
     a.textContent = '\ud83d\udd27 Tech folder unavailable';
   }
 }
+/* Paperwork — the physical sheets that travel with a piano, attached as
+ * Drive links: QC checklist scans (auto-findable — they live in one shared
+ * folder filed by year, named "Make Serial") plus manual slots for bass
+ * string orders, tear down sheets and plating orders. Stored per piano in
+ * the PAPERWORK column as JSON via the bridge. */
+const PW_KINDS = [
+  ['qc', '📋 QC Checklist'],
+  ['bass', '🎼 Bass String Order'],
+  ['teardown', '🔩 Tear Down Sheet'],
+  ['plating', '✨ Plating Order'],
+  ['other', '🗂 Other'],
+];
+function pwOf(p) {
+  try { return JSON.parse(p.paperwork || '{}') || {}; } catch (e) { return {}; }
+}
+function paperworkCard(p) {
+  if (!p.serial) return '';
+  const pw = pwOf(p);
+  const rows = PW_KINDS.map(([k, label]) => {
+    const it = pw[k];
+    if (!it && k === 'other') return '';   // Other only shows once attached
+    return `<div class="row rowflex"><span>${label}</span>
+      ${it ? `<span class="pwhave"><a class="dlink" href="${esc(it.url)}" target="_blank"
+                rel="noopener" title="${esc(it.name || '')}">open ↗</a>
+              <button class="pwdel" data-k="${k}" title="remove link">✕</button></span>`
+           : `<button class="pwadd" data-k="${k}">＋ attach</button>`}
+    </div>`;
+  }).join('');
+  return `<div class="pwbox">${rows}
+    <div class="row rowflex"><span class="pwscanlbl">Scans folder</span>
+      <button class="pwscan" data-serial="${esc(p.serial)}">🔎 find this piano's scans</button></div>
+    <div class="pwfound"></div><div class="pwmsg phmsg"></div>
+  </div>`;
+}
+const pwScanCache = new Map();
+async function scanPaperwork(p, pop) {
+  const btn = pop.querySelector('.pwscan');
+  const out = pop.querySelector('.pwfound');
+  let files = pwScanCache.get(p.serial);
+  if (files == null) {
+    btn.textContent = 'searching…';
+    try {
+      const r = await fetch(BRIDGE_URL + '?fn=paperwork&serial=' + encodeURIComponent(p.serial),
+        {redirect: 'follow'});
+      files = (await r.json()).files || [];
+      pwScanCache.set(p.serial, files);
+    } catch (e) { files = null; }
+    btn.textContent = '🔎 find this piano’s scans';
+  }
+  if (files == null) { out.innerHTML = '<i class="pwnone">Drive unavailable — try again</i>'; return; }
+  out.innerHTML = files.length
+    ? files.map((f, i) => `<div class="pwfrow"><a class="dlink" href="${esc(f.url)}" target="_blank"
+        rel="noopener">${esc(f.name)} ↗</a>
+        <button class="pwuse" data-i="${i}" title="attach as QC Checklist">→ QC</button></div>`).join('')
+    : `<i class="pwnone">No scans matching serial ${esc(p.serial)} in the QC folder yet.</i>`;
+  out.querySelectorAll('.pwuse').forEach(b => {
+    b.onclick = ev => {
+      ev.stopPropagation();
+      const f = files[+b.dataset.i];
+      setPaperwork(p, 'qc', f.url, f.name, pop);
+    };
+  });
+}
+async function setPaperwork(p, kind, url, name, pop) {
+  const msg = pop.querySelector('.pwmsg');
+  popPinned = true;
+  const {pin, ok} = writeAuth();
+  if (!ok) { if (msg) { msg.className = 'pwmsg phmsg err'; msg.textContent = 'Sign in with Google (menu) first.'; } return; }
+  if (msg) { msg.className = 'pwmsg phmsg'; msg.textContent = 'Saving…'; }
+  try {
+    const r = await fetch(BRIDGE_URL, {
+      method: 'POST', redirect: 'follow',
+      headers: {'content-type': 'text/plain;charset=utf-8'},
+      body: JSON.stringify({pin, serial: p.serial, action: 'setpaperwork',
+        kind, url: url || '', name: name || '', row: p.row, ...authFields()}),
+    });
+    const j = await r.json();
+    if (j.error === 'unauthorized') { lsDel('blpPin'); throw new Error('Not authorized'); }
+    if (!j.ok) throw new Error(j.error || 'save failed');
+    p.paperwork = JSON.stringify(j.paperwork || {});
+    if (!$('#pop').hidden) openPop(p.row, S.popAnchor, true);
+    const m2 = $('#pop').querySelector('.pwmsg');
+    if (m2) { m2.className = 'pwmsg phmsg ok'; m2.textContent = '✓ saved'; }
+  } catch (e) {
+    const m2 = $('#pop').querySelector('.pwmsg');
+    if (m2) { m2.className = 'pwmsg phmsg err'; m2.textContent = '✗ ' + e.message; }
+  }
+}
 function isLate(p) { return phaseNum(p) >= AFTER_MIN; }
 // on the books but physically not in the building yet — no media possible
 function notYetArrived(p) {
@@ -1920,6 +2008,9 @@ function popHTML(p) {
     ${mediaCard(p)}
     ${photo}
 
+    ${p.serial ? `<div class="sechead">📁 Paperwork</div>` : ''}
+    ${paperworkCard(p)}
+
     ${admin}
 
     <div class="row" style="margin-top:10px">Last tuned <b>${ti.last ? esc(fmtDayYear(ti.last)) : '—'}</b></div>
@@ -2122,6 +2213,24 @@ function wirePop(p) {
   if (dt) dt.onclick = ev => { ev.preventDefault(); ev.stopPropagation(); openTechFolder(dt.dataset.serial, dt); };
   const tt = pop.querySelector('.tagthumb');
   if (tt) tt.onclick = ev => { ev.stopPropagation(); openTagSnapshot(p); };
+  const pws = pop.querySelector('.pwscan');
+  if (pws) pws.onclick = ev => { ev.stopPropagation(); popPinned = true; scanPaperwork(p, pop); };
+  pop.querySelectorAll('.pwadd').forEach(b => {
+    b.onclick = ev => {
+      ev.stopPropagation(); popPinned = true;
+      const label = (PW_KINDS.find(x => x[0] === b.dataset.k) || ['', b.dataset.k])[1];
+      const url = prompt('Paste the Drive link for ' + label.replace(/^\S+\s/, '') + ':');
+      if (url && /^https?:\/\//i.test(url.trim())) setPaperwork(p, b.dataset.k, url.trim(), '', pop);
+      else if (url) alert('That does not look like a link — paste the full https:// URL.');
+    };
+  });
+  pop.querySelectorAll('.pwdel').forEach(b => {
+    b.onclick = ev => {
+      ev.stopPropagation(); popPinned = true;
+      if (confirm('Remove this paperwork link? (The Drive file itself is untouched.)'))
+        setPaperwork(p, b.dataset.k, '', '', pop);
+    };
+  });
   const pt = pop.querySelector('.tagbtns a');
   if (pt) pt.onclick = ev => ev.stopPropagation();
 }

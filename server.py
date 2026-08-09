@@ -137,6 +137,8 @@ def parse_pianos(raw):
                         if h.strip().upper() == 'KEY SERVICE'), -1)
     tag_snap_idx = next((i for i, h in enumerate(hdr)
                          if h.strip().upper() == 'TAG SNAPSHOT'), -1)
+    paperwork_idx = next((i for i, h in enumerate(hdr)
+                          if h.strip().upper() == 'PAPERWORK'), -1)
     # CUSTOM SHOPWORK queue bounds (1-based rows). Queue position = row - header;
     # total = rows from just after the header down to the first fully-blank row.
     q_hdr = q_end = None
@@ -228,6 +230,7 @@ def parse_pianos(raw):
             'keyService': col(key_svc_idx) if key_svc_idx >= 0 else '',
             'keywork': col(51)[:90],
             'tagSnapshot': col(tag_snap_idx) if tag_snap_idx >= 0 else '',
+            'paperwork': col(paperwork_idx) if paperwork_idx >= 0 else '',
             # the media cells double as Drive folder links when they hold a URL
             'bphotoUrl': drive_url(col(14)), 'bvideoUrl': drive_url(col(15)),
             'aphotoUrl': drive_url(col(16)), 'avideoUrl': drive_url(col(17)),

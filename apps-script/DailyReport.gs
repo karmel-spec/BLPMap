@@ -132,6 +132,12 @@ function doGet(e) {
       return json_({url: fold ? fold.getUrl() : '', name: fold ? fold.getName() : ''});
     } catch (err) { return json_({error: String(err), url: ''}); }
   }
+  // Paperwork scans (QC checklists etc.) for one piano — filed by year in
+  // one Drive folder, named "Make Serial"; matched by serial substring
+  if (e && e.parameter && e.parameter.fn === 'paperwork') {
+    try { return json_(paperworkScan_(e.parameter.serial)); }
+    catch (err) { return json_({error: String(err), files: []}); }
+  }
   if (e && e.parameter && e.parameter.fn === 'proposal') {
     try { return json_(latestProposal_()); }
     catch (err) { return json_({error: String(err)}); }
@@ -626,6 +632,12 @@ function doPost(e) {
       var sks = setKeyService_(req);
       if (sks.ok) logAct_(who, 'Key service', sks.summary || req.serial, sks.keys || '(cleared)');
       return json_(sks);
+    }
+    if (req.action === 'setpaperwork') {
+      var spw = setPaperwork_(req);
+      if (spw.ok) logAct_(who, 'Paperwork', spw.summary || req.serial,
+        req.kind + (req.url ? ' attached' : ' removed'));
+      return json_(spw);
     }
     if (req.action === 'saveproposal') {
       var svp = saveProposal_(req);
@@ -1711,6 +1723,57 @@ function setKeyService_(req) {
   var val = keep.join(', ');
   sh.getRange(found.row, col).setValue(val);
   return {ok: true, row: found.row, summary: found.summary, keys: val};
+}
+
+/* Paperwork — QC checklist scans live in one shared Drive folder, filed in
+ * year subfolders with names like "Acrosonic 583056". paperworkScan_ finds a
+ * piano's scans by serial (Drive title search, 6h cache); setPaperwork_
+ * stores manual attachments (bass string order, tear down sheet, plating
+ * order…) as JSON in a PAPERWORK column the map serves back out. */
+var PAPERWORK_FOLDER = '1hcITGeJpzoBSk4fMsdnIs-FA0LZMu-Cl';
+function paperworkScan_(serial) {
+  serial = String(serial || '').trim();
+  if (serial.length < 4) return {files: []};
+  var cache = CacheService.getScriptCache();
+  var hit = cache.get('pw_' + serial);
+  if (hit) return JSON.parse(hit);
+  var q = "title contains '" + serial.replace(/'/g, "\\'") + "'";
+  var out = [];
+  var folders = [DriveApp.getFolderById(PAPERWORK_FOLDER)];
+  var subs = folders[0].getFolders();          // year folders, one level down
+  while (subs.hasNext()) folders.push(subs.next());
+  for (var i = 0; i < folders.length && out.length < 12; i++) {
+    var fs = folders[i].searchFiles(q);
+    while (fs.hasNext() && out.length < 12) {
+      var f = fs.next();
+      out.push({name: f.getName(), url: f.getUrl()});
+    }
+    var fo = folders[i].searchFolders(q);      // some pianos get a subfolder
+    while (fo.hasNext() && out.length < 12) {
+      var d = fo.next();
+      out.push({name: d.getName() + ' 📁', url: d.getUrl()});
+    }
+  }
+  var res = {files: out};
+  cache.put('pw_' + serial, JSON.stringify(res), 21600);
+  return res;
+}
+
+function setPaperwork_(req) {
+  var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+  var found = findPiano_(sh, req.serial, req.row);
+  if (found.error) return found;
+  var kind = String(req.kind || '').trim().toLowerCase();
+  if (!kind) return {error: 'kind required'};
+  var col = pianoCol_(sh, 'PAPERWORK');
+  var cur = {};
+  try { cur = JSON.parse(String(sh.getRange(found.row, col).getValue() || '{}')) || {}; }
+  catch (e) { cur = {}; }
+  var url = String(req.url == null ? '' : req.url).trim();
+  if (!url) delete cur[kind];
+  else cur[kind] = {url: url.slice(0, 500), name: String(req.name || '').slice(0, 120)};
+  sh.getRange(found.row, col).setValue(Object.keys(cur).length ? JSON.stringify(cur) : '');
+  return {ok: true, row: found.row, summary: found.summary, paperwork: cur};
 }
 
 function setPayPlan_(req) {
