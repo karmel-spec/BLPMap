@@ -2189,7 +2189,16 @@ function shopClock_(t) {
 function applySchedule_(req) {
   var got = latestProposal_();
   if (!got.ok) return got;
-  if (got.meta.applied && !req.force) {
+  // selective approve: req.techs = ['Doris', …] applies only those; omitted
+  // = every mapped tech. Per-tech idempotency via meta.appliedTechs.
+  var only = null;
+  if (req.techs && req.techs.length) {
+    only = {};
+    req.techs.forEach(function (n) { only[String(n).toLowerCase()] = true; });
+  }
+  var done = {};
+  (got.meta.appliedTechs || []).forEach(function (n) { done[String(n).toLowerCase()] = true; });
+  if (!only && got.meta.applied && !req.force) {
     return {error: 'already applied ' + got.meta.appliedAt + ' — resend with force:true to re-apply'};
   }
   var plan = got.plan;
@@ -2197,9 +2206,14 @@ function applySchedule_(req) {
   if (isNaN(start.getTime())) return {error: 'proposal has no weekStart date'};
   var map = techCalMap_();
   var results = [];
+  var applied = [];
   (plan.techs || []).forEach(function (tch) {
-    var calId = map[String(tch.name || '').toLowerCase()];
+    var key = String(tch.name || '').toLowerCase();
+    if (only && !only[key]) return;
+    if (done[key] && !req.force) { results.push({tech: tch.name, skipped: 'already applied'}); return; }
+    var calId = map[key];
     if (!calId) { results.push({tech: tch.name, skipped: 'no calendar mapped'}); return; }
+    if (req.markOnly) { applied.push(tch.name); results.push({tech: tch.name, events: 0, marked: true}); return; }
     var cal;
     try { cal = CalendarApp.getCalendarById(calId); } catch (e) { cal = null; }
     if (!cal) { results.push({tech: tch.name, error: 'no access to ' + calId}); return; }
@@ -2220,11 +2234,16 @@ function applySchedule_(req) {
       });
     });
     results.push({tech: tch.name, events: made, failed: failed});
+    applied.push(tch.name);
   });
-  got.meta.applied = true;
+  applied.forEach(function (n) { done[String(n).toLowerCase()] = true; });
+  got.meta.appliedTechs = (plan.techs || []).map(function (t) { return t.name; })
+    .filter(function (n) { return done[String(n).toLowerCase()]; });
+  var mappable = (plan.techs || []).filter(function (t) { return map[String(t.name || '').toLowerCase()]; });
+  got.meta.applied = mappable.length > 0 && mappable.every(function (t) { return done[String(t.name).toLowerCase()]; });
   got.meta.appliedAt = new Date().toISOString();
   PropertiesService.getScriptProperties().setProperty('PROPOSAL_META', JSON.stringify(got.meta));
-  return {ok: true, week: plan.week, results: results};
+  return {ok: true, week: plan.week, results: results, appliedTechs: got.meta.appliedTechs, applied: got.meta.applied};
 }
 
 /* ---- the briefing itself ---- */
