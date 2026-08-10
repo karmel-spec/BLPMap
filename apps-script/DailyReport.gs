@@ -2123,32 +2123,41 @@ function smMissingArrivals_(pianos, events) {
   return out;
 }
 
-/* ---- weekly schedule proposal: stored in Drive, embedded in the Shop
-   Manager's Planner page, and (after Brigham approves) written onto the
-   technicians' real Google Calendars ---- */
-var PROPOSAL_FOLDER = 'BLP Schedule Proposals';
+/* ---- weekly schedule proposal: stored on a hidden tab of the report
+   sheet (the anonymous web-app deployment cannot call DriveApp — its
+   grant lacks the Drive scope — but SpreadsheetApp works), embedded in
+   the Shop Manager's Planner page, and (after Brigham approves) written
+   onto the technicians' real Google Calendars ---- */
+var PROPOSAL_TAB = 'Proposal Store';   // A1 = meta JSON, A2.. = plan JSON chunks
 var TECH_CAL_TAB = 'Tech Calendars';   // Name | Calendar ID — editable, no redeploy
-function proposalFolder_() {
-  var it = DriveApp.getFoldersByName(PROPOSAL_FOLDER);
-  return it.hasNext() ? it.next() : DriveApp.createFolder(PROPOSAL_FOLDER);
+var PROPOSAL_CHUNK = 40000;            // stay under the 50k-char cell limit
+function proposalSheet_() {
+  var ss = SpreadsheetApp.openById('11RoeVRETag5rZYX6_tEH-rf6x8JL0JeZU0P5AT0WI-I');
+  var sh = ss.getSheetByName(PROPOSAL_TAB);
+  if (!sh) { sh = ss.insertSheet(PROPOSAL_TAB, ss.getSheets().length); sh.hideSheet(); }
+  return sh;
 }
 function saveProposal_(req) {
   var plan = String(req.plan || '');
   if (!plan || plan.length > 400000) return {error: 'plan missing or too large'};
   try { JSON.parse(plan); } catch (e) { return {error: 'plan is not valid JSON'}; }
-  var name = 'proposal-' + String(req.week || 'week').replace(/[^\w-]+/g, '_') + '.json';
-  var f = proposalFolder_().createFile(name, plan, 'application/json');
   var meta = {week: String(req.week || ''), weekStart: String(req.weekStart || ''),
-              savedAt: new Date().toISOString(), fileId: f.getId(), applied: false};
-  PropertiesService.getScriptProperties().setProperty('PROPOSAL_META', JSON.stringify(meta));
-  return {ok: true, fileId: f.getId(), week: meta.week};
+              savedAt: new Date().toISOString(), store: 'sheet', applied: false};
+  var rows = [[JSON.stringify(meta)]];
+  for (var i = 0; i < plan.length; i += PROPOSAL_CHUNK) rows.push([plan.substr(i, PROPOSAL_CHUNK)]);
+  var sh = proposalSheet_();
+  sh.clearContents();
+  sh.getRange(1, 1, rows.length, 1).setValues(rows);
+  return {ok: true, week: meta.week};
 }
 function latestProposal_() {
-  var raw = PropertiesService.getScriptProperties().getProperty('PROPOSAL_META');
-  if (!raw) return {error: 'no proposal saved yet'};
-  var meta = JSON.parse(raw);
-  var plan = JSON.parse(DriveApp.getFileById(meta.fileId).getBlob().getDataAsString());
-  return {ok: true, meta: meta, plan: plan};
+  var vals = proposalSheet_().getDataRange().getValues();
+  if (!vals.length || !String(vals[0][0] || '')) return {error: 'no proposal saved yet'};
+  var meta = JSON.parse(String(vals[0][0]));
+  var raw = '';
+  for (var i = 1; i < vals.length; i++) raw += String(vals[i][0] || '');
+  if (!raw) return {error: 'proposal store has meta but no plan'};
+  return {ok: true, meta: meta, plan: JSON.parse(raw)};
 }
 function techCalMap_() {
   var ss = SpreadsheetApp.openById('11RoeVRETag5rZYX6_tEH-rf6x8JL0JeZU0P5AT0WI-I');
@@ -2242,7 +2251,7 @@ function applySchedule_(req) {
   var mappable = (plan.techs || []).filter(function (t) { return map[String(t.name || '').toLowerCase()]; });
   got.meta.applied = mappable.length > 0 && mappable.every(function (t) { return done[String(t.name).toLowerCase()]; });
   got.meta.appliedAt = new Date().toISOString();
-  PropertiesService.getScriptProperties().setProperty('PROPOSAL_META', JSON.stringify(got.meta));
+  proposalSheet_().getRange(1, 1).setValue(JSON.stringify(got.meta));
   return {ok: true, week: plan.week, results: results, appliedTechs: got.meta.appliedTechs, applied: got.meta.applied};
 }
 
