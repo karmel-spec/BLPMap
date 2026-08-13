@@ -1293,7 +1293,19 @@ function printShopTag(p) {
     <script>
       const t1 = document.querySelectorAll('.tag')[0], t2 = document.querySelectorAll('.tag')[1];
       const sync = () => { t2.innerHTML = t1.innerHTML; };
-      function doPrint() { sync(); print(); }
+      // wait for every image (both QR copies + logos) to be fully decoded
+      // before printing — otherwise the re-created copy prints as a blank box
+      async function doPrint() {
+        sync();
+        const b = document.querySelector('.bar button');
+        if (b) b.textContent = 'Preparing…';
+        await Promise.all([...document.images].map(im =>
+          im.decode ? im.decode().catch(() => {})
+                    : (im.complete ? Promise.resolve()
+                                   : new Promise(r => { im.onload = im.onerror = r; }))));
+        if (b) b.textContent = '🖨 Print — 2 per page';
+        print();
+      }
       window.onbeforeprint = sync;
       t1.querySelectorAll('.rw b, .nm h1, .nm .sub, .rail span').forEach(el => {
         el.contentEditable = 'true'; el.spellcheck = false;
