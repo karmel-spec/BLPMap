@@ -2214,6 +2214,22 @@ function applySchedule_(req) {
   var start = new Date((plan.weekStart || got.meta.weekStart) + 'T12:00:00');
   if (isNaN(start.getTime())) return {error: 'proposal has no weekStart date'};
   var map = techCalMap_();
+  // standing rule (Brigham 2026-08-17): every scheduled piano event carries the
+  // piano's CURRENT map spot in the Google event's location field (bare value)
+  var spotBySerial = {};
+  try {
+    var live = JSON.parse(UrlFetchApp.fetch(APP_URL + '/api/data').getContentText());
+    (live.pianos || []).forEach(function (p) {
+      if (p.serial && p.location) spotBySerial[String(p.serial)] = String(p.location);
+    });
+  } catch (e) { /* no map data — events just go out without locations */ }
+  function spotFor_(title) {
+    var runs = String(title || '').match(/\d{3,}/g) || [];
+    for (var i = 0; i < runs.length; i++) {
+      if (spotBySerial[runs[i]]) return spotBySerial[runs[i]];
+    }
+    return '';
+  }
   var results = [];
   var applied = [];
   (plan.techs || []).forEach(function (tch) {
@@ -2235,9 +2251,12 @@ function applySchedule_(req) {
         var d1 = new Date(start); d1.setDate(d1.getDate() + di); d1.setHours(t1.h, t1.min, 0, 0);
         var d2 = new Date(start); d2.setDate(d2.getDate() + di); d2.setHours(t2.h, t2.min, 0, 0);
         try {
-          cal.createEvent(String(b[3] || 'Shop work'), d1, d2,
-            {description: (b[4] ? String(b[4]) + '\n' : '')
-              + 'Applied from the Shop Manager schedule proposal (' + plan.week + ')'});
+          var evTitle = String(b[3] || 'Shop work');
+          var opts = {description: (b[4] ? String(b[4]) + '\n' : '')
+            + 'Applied from the Shop Manager schedule proposal (' + plan.week + ')'};
+          var spot = spotFor_(evTitle);
+          if (spot) opts.location = spot;
+          cal.createEvent(evTitle, d1, d2, opts);
           made++;
         } catch (e) { failed++; }
       });
