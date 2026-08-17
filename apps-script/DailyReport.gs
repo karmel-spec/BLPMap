@@ -2243,7 +2243,9 @@ function applySchedule_(req) {
       });
     });
     results.push({tech: tch.name, events: made, failed: failed});
-    applied.push(tch.name);
+    // a tech whose every event-create failed (e.g. read-only calendar access)
+    // must NOT be recorded as applied — that hid Matthew's failure on 8/16
+    if (made > 0 || failed === 0) applied.push(tch.name);
   });
   applied.forEach(function (n) { done[String(n).toLowerCase()] = true; });
   got.meta.appliedTechs = (plan.techs || []).map(function (t) { return t.name; })
