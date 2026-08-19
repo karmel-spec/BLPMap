@@ -139,6 +139,21 @@ const AREA_BINS = [
   {test: l => /conference room|larson home/i.test(l), zones: ['conference room'], key: 'conference'},
   {test: l => /\bwing room 4\b/i.test(l), zones: ['recital hall wing room 4']},
 ];
+// Every destination a tech may type into "new spot #": real map slots plus
+// the named work areas. Anything else gets rejected before the bridge call.
+const MOVE_AREAS = ['Attic', 'Refinishing Shop', 'Sanding Shop', 'Conference Room',
+  'Larson Home', 'Recital Hall Wing Room 4'];
+function moveDests() {
+  const out = [];
+  for (const f of ((S.map && S.map.floors) || []))
+    for (const sl of (f.slots || [])) out.push(sl.id);
+  out.sort((a, b) => a.localeCompare(b, undefined, {numeric: true}));
+  return out.concat(MOVE_AREAS);
+}
+function isValidDest(v) {
+  const n = String(v || '').trim().toLowerCase();
+  return S.slotFloor.has(n) || MOVE_AREAS.some(a => a.toLowerCase() === n);
+}
 // which bin (if any) a piano's location assigns it to
 function areaBinFor(p) {
   if (p.isSlot && S.slotFloor.has((p.location || '').toLowerCase())) return null;
@@ -674,7 +689,9 @@ function matches(p, q) {
           + p.year + ' ' + p.location).toLowerCase().includes(q);
 }
 function logLink(p) {
-  return PIANOLOG_URL + '#piano=' + encodeURIComponent(p.serial || p.summary);
+  // ?q= is the Piano Log's deep link: it pre-filters the list and, when the
+  // serial pinpoints one piano, opens its drawer directly (survives login)
+  return PIANOLOG_URL + '?q=' + encodeURIComponent(p.serial || p.summary);
 }
 // shop-tag QR target: THIS app, deep-linked to the piano's own card. Always
 // the production origin so a tag printed from a dev machine still scans right.
@@ -2172,6 +2189,34 @@ function wirePop(p) {
   const go = pop.querySelector('.mvgo:not(.qgo)');
   if (go) go.onclick = () => movePiano(p, pop.querySelector('.mvin:not(.qin)').value.trim(), pop);
   const inp = pop.querySelector('.mvin:not(.qin)');
+  if (inp) {
+    // only-real-spots autocomplete: suggest as they type, reject the rest
+    const mbox = inp.closest('.movebox');
+    let ac = mbox && mbox.querySelector('.spotac');
+    if (mbox && !ac) { ac = document.createElement('div'); ac.className = 'spotac'; ac.hidden = true; mbox.appendChild(ac); }
+    const renderAc = () => {
+      const q = inp.value.trim().toLowerCase();
+      if (!q || !ac) { if (ac) ac.hidden = true; return; }
+      const all = moveDests();
+      const hits = all.filter(d => d.toLowerCase().startsWith(q))
+        .concat(all.filter(d => !d.toLowerCase().startsWith(q) && d.toLowerCase().includes(q)))
+        .slice(0, 8);
+      ac.innerHTML = hits.length
+        ? hits.map(h => `<div class="spotopt" data-v="${esc(h)}">${esc(h)}</div>`).join('')
+        : '<div class="spotnone">no spot matches \u2014 check the number</div>';
+      ac.hidden = false;
+    };
+    inp.addEventListener('input', renderAc);
+    inp.addEventListener('focus', renderAc);
+    inp.addEventListener('blur', () => setTimeout(() => { if (ac) ac.hidden = true; }, 250));
+    if (ac) ac.onmousedown = e => {
+      const o = e.target.closest('.spotopt');
+      if (!o) return;
+      e.preventDefault();
+      inp.value = o.dataset.v;
+      ac.hidden = true;
+    };
+  }
   if (inp) inp.onkeydown = e => {
     if (e.key === 'Enter') movePiano(p, inp.value.trim(), pop);
   };
@@ -4200,6 +4245,10 @@ initAuth();
 async function movePiano(p, dest, pop) {
   const msg = pop.querySelector('.mvmsg');
   if (!dest) { msg.textContent = 'Type a spot number or area name first.'; return; }
+  if (!isValidDest(dest)) {
+    msg.textContent = '\u201c' + dest + '\u201d isn\u2019t a spot on the map \u2014 pick one from the suggestion list.';
+    return;
+  }
   const known = S.slotFloor.has(dest.toLowerCase());
   popPinned = true;
   const {pin, ok} = writeAuth();
