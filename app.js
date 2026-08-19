@@ -687,14 +687,21 @@ function mapLink(p) {
 let deepLinkDone = '';
 function tryDeepLink() {
   const m = /[#?&]piano=([^&]+)/.exec(location.hash || '');
-  if (!m) return;
-  const ser = decodeURIComponent(m[1]).trim().toLowerCase();
+  let ser = m ? decodeURIComponent(m[1]).trim().toLowerCase() : '';
+  // the Google sign-in redirect strips the hash — remember a scanned piano
+  // for 10 minutes so the card still opens after the round trip
+  if (ser) lsSet('blpDL', ser + '|' + Date.now());
+  else {
+    const st = (lsGet('blpDL') || '').split('|');
+    if (st[0] && Date.now() - (+st[1] || 0) < 600000) ser = st[0];
+  }
   if (!ser || ser === deepLinkDone) return;
   const ps = (S.data && S.data.pianos) || [];
   const p = ps.find(x => (x.serial || '').toLowerCase() === ser && x.active)
     || ps.find(x => (x.serial || '').toLowerCase().includes(ser) && x.active);
   if (!p) return;
   deepLinkDone = ser;
+  lsDel('blpDL');
   setTimeout(() => focusPiano(p), 250);
 }
 window.addEventListener('hashchange', () => { deepLinkDone = ''; tryDeepLink(); });
@@ -4111,7 +4118,12 @@ function initAuth() {
     google.accounts.id.initialize({
       client_id: GOOGLE_CLIENT_ID, callback: onGoogleCred,
       auto_select: true, use_fedcm_for_prompt: true, itp_support: true,
-      use_fedcm_for_button: true,
+      // full-page redirect instead of a popup: iOS Safari's tracking
+      // prevention breaks the popup flow (400 at accounts.google.com after
+      // a QR scan). Google form_posts the credential to gsi-callback, which
+      // stashes it and bounces home; boot() consumes it (blpGsiCred).
+      ux_mode: 'redirect',
+      login_uri: 'https://blpstoremap.netlify.app/.netlify/functions/gsi-callback',
     });
     renderAuth();
     // silently refresh the hourly token for already-signed-in users —
