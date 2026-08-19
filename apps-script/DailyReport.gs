@@ -648,6 +648,11 @@ function doPost(e) {
       if (sks.ok) logAct_(who, 'Key service', sks.summary || req.serial, sks.keys || '(cleared)');
       return json_(sks);
     }
+    if (req.action === 'prequeueapprove') {
+      var pqa = preQueueApprove_(req);
+      if (pqa.ok) logAct_(who, 'Queue APPROVED (deposit in)', pqa.summary || req.serial, pqa.status);
+      return json_(pqa);
+    }
     if (req.action === 'suggest') {
       var sg = addRequest_(req);
       if (sg.ok) logAct_(who, 'App request', sg.id, String(req.type || '') + ': ' + String(req.text || '').slice(0, 90));
@@ -1878,6 +1883,28 @@ function timeLogRows_(days) {
  * report sheet; screenshots land in a "BLP App Requests" Drive folder.
  * Status flow: Requested -> In progress -> Live -> Tested. The requester
  * confirms "Tested" themselves from the map's My Requests list. */
+// Pre-Queue approval is manager-only, enforced HERE (not just in the UI)
+var PQ_ADMINS = ['melissa@brighamlarsonpianos.com', 'brigham@brighamlarsonpianos.com',
+  'karmel@brighamlarsonpianos.com', 'alisa@brighamlarsonpianos.com',
+  'susie@brighamlarsonpianos.com', 'walter@brighamlarsonpianos.com'];
+function preQueueApprove_(req) {
+  var email = String((req.user && req.user.email) || '').toLowerCase();
+  if (PQ_ADMINS.indexOf(email) < 0) {
+    return {error: 'Only admins/managers can approve a piano into the queue (Google sign-in required).'};
+  }
+  var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+  var found = findPiano_(sh, req.serial, req.row);
+  if (found.error) return found;
+  var COL_S = 19;
+  var cur = String(sh.getRange(found.row, COL_S).getValue() || '');
+  if (!/pre[\s-]?queue/i.test(cur)) return {ok: true, row: found.row, summary: found.summary, status: cur};
+  var next = cur.replace(/,?\s*pre[\s-]?queue/i, '').replace(/^\s*,\s*/, '').trim();
+  next = (next ? next + ', ' : '') + 'Queue Approved '
+    + Utilities.formatDate(new Date(), 'America/Denver', 'M/d/yy');
+  sh.getRange(found.row, COL_S).setValue(next);
+  return {ok: true, row: found.row, summary: found.summary, status: next};
+}
+
 var REQUESTS_TAB = 'Requests';
 function requestsSheet_() {
   var ss = SpreadsheetApp.openById('11RoeVRETag5rZYX6_tEH-rf6x8JL0JeZU0P5AT0WI-I');
@@ -2518,6 +2545,17 @@ function buildShopManagerReport_() {
 
   R.blocked = smBlockedByTasks_(pianos, defs);
 
+  // suggestion box: filed or moved in the last 7 days — public credit fuels it
+  R.suggestions = [];
+  try {
+    var reqs = requestsList_().requests || [];
+    var wk = Date.now() - 7 * 86400000;
+    R.suggestions = reqs.filter(function (x) {
+      return new Date(x.date).getTime() >= wk
+        || (x.statusAt && new Date(x.statusAt).getTime() >= wk);
+    }).slice(0, 15);
+  } catch (e) {}
+
   // waiting on… + check-back hygiene
   R.waiting = [];
   pianos.forEach(function (p) {
@@ -2686,6 +2724,18 @@ function shopManagerHtml_(R) {
     + '<b style="color:' + (alerts ? '#9e2020' : '#2e7d4f') + '">' + alerts + '</b> items needing attention'
     + '</p>');
 
+  if (R.suggestions && R.suggestions.length) {
+    var SICON = {bug: '🐛', edit: '✏️', idea: '💡'};
+    var SPILL = {'Requested': ['#eeeeee', '#555555'], 'In progress': ['#fdf3ec', '#9a5b13'],
+                 'Live': ['#eaf2fd', '#2c5d96'], 'Tested': ['#eaf5ec', '#2f7d4f']};
+    sec('💡', 'Suggestions this week', R.suggestions.length,
+      'From the team via the Store Map\u2019s 💡 button \u2014 thank the names you see here.');
+    ul(R.suggestions.map(function (x) {
+      var c = SPILL[x.status] || SPILL.Requested;
+      return '<b>' + x.who + '</b> \u2014 ' + (SICON[x.type] || '💡') + ' '
+        + String(x.text).slice(0, 110) + ' ' + pill(x.status, c[0], c[1]);
+    }));
+  }
   if (R.activity.total) {
     sec('📋', 'Yesterday in the map', R.activity.total, 'Every change is logged under the name that made it.');
     var whos = [];

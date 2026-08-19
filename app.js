@@ -655,6 +655,22 @@ function soldBadge(p, cx, cy, sc) {
   return `<text x="${cx - 8.5 * sc}" y="${cy - 6 * sc}" text-anchor="middle"
           class="soldbadge" font-size="${11 * sc}">✓</text>`;
 }
+// Pre-Queue: piano is AT BLP for shopwork but the $1,000 queue deposit
+// hasn't been received — verbal commitment only, NO work may start.
+// Source of truth: "Pre-Queue" in the Piano Log's status column (S).
+function preQueue(p) { return /pre[\s-]?queue/i.test(p.status || ''); }
+function isAdminUser() {
+  const u = authUser();
+  return !!(u && u.email && ADMINS.some(a => a.email.toLowerCase() === u.email.toLowerCase()));
+}
+function ghostBadge(p, cx, cy, sc) {
+  if (!preQueue(p)) return '';
+  return `<g class="ghostb" pointer-events="none">
+    <circle cx="${cx + 8.5 * sc}" cy="${cy - 6 * sc}" r="${6.6 * sc}" class="gbc"/>
+    <text x="${cx + 8.5 * sc}" y="${cy - 3.4 * sc}" text-anchor="middle" font-size="${7.4 * sc}">🔧</text>
+    <line x1="${cx + 3.9 * sc}" y1="${cy - 1.4 * sc}" x2="${cx + 13.1 * sc}" y2="${cy - 10.6 * sc}" class="gbl"/>
+  </g>`;
+}
 function comingSoon(p) {
   return (p.location || '').trim().replace(/\s+/g, ' ').toLowerCase().startsWith('coming soon');
 }
@@ -1569,7 +1585,7 @@ function renderMap() {
           const hl = S.focusRow === p.row || (q && matches(p, q));
           const dim = q && !matches(p, q);
           s += `<g class="piano ${extra(p)} ${dim ? 'dim' : ''} ${hl ? 'hl' : ''}"
-                data-row="${p.row}">${glyph(p.type, cx, cy, sc)}${phaseText(p, cx, cy, sc)}${mediaBadge(p, cx, cy, sc)}${finBadge(p, cx, cy, sc)}${soldBadge(p, cx, cy, sc)}</g>`;
+                data-row="${p.row}">${glyph(p.type, cx, cy, sc)}${phaseText(p, cx, cy, sc)}${mediaBadge(p, cx, cy, sc)}${finBadge(p, cx, cy, sc)}${soldBadge(p, cx, cy, sc)}${ghostBadge(p, cx, cy, sc)}</g>`;
         });
         return grow === 'up' ? anchorY - rows * rowH : anchorY + rows * rowH;
       };
@@ -1616,7 +1632,7 @@ function renderMap() {
         const hl = S.focusRow === p.row || (q && matches(p, q));
         const dim = q && !matches(p, q);
         s += `<g class="piano ${finClass(p)} ${soldClass(p)} ${st} own-${ownerClass(p)} ${dim ? 'dim' : ''} ${hl ? 'hl' : ''}"
-              data-row="${p.row}">${glyph(p.type, cx, cy, sc)}${phaseText(p, cx, cy, sc)}${mediaBadge(p, cx, cy, sc)}${finBadge(p, cx, cy, sc)}${soldBadge(p, cx, cy, sc)}</g>`;
+              data-row="${p.row}">${glyph(p.type, cx, cy, sc)}${phaseText(p, cx, cy, sc)}${mediaBadge(p, cx, cy, sc)}${finBadge(p, cx, cy, sc)}${soldBadge(p, cx, cy, sc)}${ghostBadge(p, cx, cy, sc)}</g>`;
       });
     } else {
       s += zoneLabelSVG(disp === z.text ? z : {...z, text: disp}, cls);
@@ -1708,7 +1724,7 @@ function renderMap() {
           const hl = S.focusRow === p.row || (q && matches(p, q));
           s += `<g class="piano ${finClass(p)} ${soldClass(p)} ${st} own-${ownerClass(p)} ${q && !matches(p, q) ? 'dim' : ''} ${hl ? 'hl' : ''}"
                 data-slot="${esc(sl.id)}" data-row="${p.row}">
-                <g transform="rotate(90 ${cx} ${cy})">${glyph(p.type, cx, cy, sc)}</g>${phaseText(p, cx, cy, sc)}${mediaBadge(p, cx, cy, sc)}${priceText(p, cx, cy, sc)}${finBadge(p, cx, cy, sc)}${soldBadge(p, cx, cy, sc)}</g>`;
+                <g transform="rotate(90 ${cx} ${cy})">${glyph(p.type, cx, cy, sc)}</g>${phaseText(p, cx, cy, sc)}${mediaBadge(p, cx, cy, sc)}${priceText(p, cx, cy, sc)}${finBadge(p, cx, cy, sc)}${soldBadge(p, cx, cy, sc)}${ghostBadge(p, cx, cy, sc)}</g>`;
         });
       } else {
         const pfs = Math.max(10, Math.min(20, sl.w * 0.4));
@@ -1739,7 +1755,7 @@ function renderMap() {
           const cy = sl.y + sl.h / 2;
           const hl = S.focusRow === p.row || (q && matches(p, q));
           s += `<g class="piano ${finClass(p)} ${soldClass(p)} ${st} own-${ownerClass(p)} ${q && !matches(p, q) ? 'dim' : ''} ${hl ? 'hl' : ''}"
-                data-slot="${esc(sl.id)}" data-row="${p.row}">${glyph(p.type, cx, cy, sc)}${phaseText(p, cx, cy, sc)}${mediaBadge(p, cx, cy, sc)}${priceText(p, cx, cy, sc)}${finBadge(p, cx, cy, sc)}${soldBadge(p, cx, cy, sc)}</g>`;
+                data-slot="${esc(sl.id)}" data-row="${p.row}">${glyph(p.type, cx, cy, sc)}${phaseText(p, cx, cy, sc)}${mediaBadge(p, cx, cy, sc)}${priceText(p, cx, cy, sc)}${finBadge(p, cx, cy, sc)}${soldBadge(p, cx, cy, sc)}${ghostBadge(p, cx, cy, sc)}</g>`;
         });
       } else if (!thin) {
         const pfs = Math.max(9, Math.min(20, sl.h * 0.45));
@@ -1895,7 +1911,7 @@ function renderMap() {
         s += `<rect x="${cx0}" y="${cy0}" width="${iw}" height="${ih}" rx="8"
               class="holdcell ${hl ? 'hl' : ''} ${dim ? 'dim' : ''}" data-row="${p.row}"/>`;
         s += `<g class="piano ${finClass(p)} ${soldClass(p)} ${st} own-${ownerClass(p)} ${dim ? 'dim' : ''} ${hl ? 'hl' : ''}"
-              data-row="${p.row}">${glyph(p.type, cx, iconCy, sc)}${phaseText(p, cx, iconCy, sc)}${mediaBadge(p, cx, iconCy, sc)}${finBadge(p, cx, iconCy, sc)}${soldBadge(p, cx, iconCy, sc)}</g>`;
+              data-row="${p.row}">${glyph(p.type, cx, iconCy, sc)}${phaseText(p, cx, iconCy, sc)}${mediaBadge(p, cx, iconCy, sc)}${finBadge(p, cx, iconCy, sc)}${soldBadge(p, cx, iconCy, sc)}${ghostBadge(p, cx, iconCy, sc)}</g>`;
         let ty = textTop + 9;
         s += `<text x="${cx}" y="${ty}" text-anchor="middle" class="holdname" font-size="10.5">`
           + nameLines.map((L, li) => `<tspan x="${cx}" ${li ? `dy="${NLH}"` : ''}>${esc(L)}</tspan>`).join('')
@@ -2286,6 +2302,9 @@ function popHTML(p) {
     <h3>${esc(makeModel)}</h3>
     <div class="row rowflex"><span>Serial # <b>${esc(p.serial || '—')}</b></span>${typeBtns}</div>
     <div class="typemsg phmsg"></div>
+    ${preQueue(p) ? `<div class="pqwarn">⚠️ <b>PRE-QUEUE</b> — deposit not received. No work is approved on this piano yet.
+      ${isAdminUser() ? `<button class="pqapprove">✅ Approve for queue</button>` : `<i>admin / manager approval required to start work</i>`}
+      <span class="pqmsg"></span></div>` : ''}
     </div>
     <div class="row">Owner <b>${esc(ownerLine)}</b></div>
     <div class="row">Status <b>${esc(p.status || '—')}</b></div>
@@ -2622,6 +2641,10 @@ function wirePop(p) {
     if (oth) { oth.oninput = refresh; oth.onclick = ev => ev.stopPropagation(); }
     if (inBtn) inBtn.onclick = async ev => {
       ev.stopPropagation(); popPinned = true;
+      if (preQueue(p) && !isAdminUser()) {
+        alert('🚫 This piano is PRE-QUEUE \u2014 the deposit hasn\u2019t been received, so no work can start yet. Ask a manager.');
+        return;
+      }
       const ph = chosen();
       if (!ph) {
         alert(sel && sel.value === '__other__'
@@ -2666,6 +2689,26 @@ function wirePop(p) {
       lsSet('sec_' + h.dataset.sec, closed ? 'closed' : 'open');
     };
   });
+  const pqa = pop.querySelector('.pqapprove');
+  if (pqa) pqa.onclick = async ev => {
+    ev.stopPropagation(); popPinned = true;
+    if (!isAdminUser()) return;
+    if (!confirm('Approve ' + (p.serial || 'this piano') + ' for the queue?\n\nThis confirms the $1,000 queue deposit is in — the no-work sign comes off the map and techs may begin.')) return;
+    const pqm = pop.querySelector('.pqmsg');
+    if (pqm) pqm.textContent = ' approving…';
+    const {pin, ok} = writeAuth();
+    if (!ok) return;
+    try {
+      const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+        headers: {'content-type': 'text/plain;charset=utf-8'},
+        body: JSON.stringify({pin, action: 'prequeueapprove', serial: p.serial, row: p.row, ...authFields()})});
+      const j = await r.json();
+      if (!j.ok) throw new Error(j.error || 'failed');
+      p.status = j.status;   // optimistic: banner + ghost drop immediately
+      renderMap();
+      openPop(p.row, S.popAnchor, true);
+    } catch (e) { if (pqm) pqm.textContent = ' ✗ ' + e.message; }
+  };
   const pws = pop.querySelector('.pwscan');
   if (pws) pws.onclick = ev => { ev.stopPropagation(); popPinned = true; scanPaperwork(p, pop); };
   pop.querySelectorAll('.pwadd').forEach(b => {
