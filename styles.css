@@ -695,3 +695,27 @@ td a{color:#9e2020}
 .dn-yes{background:#2f7d4f;color:#fff}
 .dn-out{background:#8e1f1f;color:#fff}
 @media(max-width:640px){#mydock{left:6px;right:6px;bottom:6px}.dockinfo small{display:none}}
+/* suggestion box */
+.sgwrap{max-width:560px}
+.sgform{padding:14px 16px;border-bottom:1px solid #eee}
+.sgtypes{display:flex;gap:8px;margin-bottom:9px}
+.sgt{border:1.5px solid #cfd6dc;background:#fff;border-radius:999px;padding:6px 14px;font:700 13px 'Assistant',sans-serif;cursor:pointer}
+.sgt.on{background:#9e2020;border-color:#9e2020;color:#fff}
+.sgtext{width:100%;box-sizing:border-box;min-height:84px;border:1px solid #cfd6dc;border-radius:9px;padding:9px 11px;font:14px/1.4 'Assistant',sans-serif;resize:vertical}
+.sgrow{display:flex;align-items:center;gap:10px;margin-top:9px}
+.sgshot{border:1px dashed #b9c2cb;border-radius:8px;padding:7px 12px;font-size:12.5px;color:#5c6770;cursor:pointer}
+.sgshotname{font-size:11px;color:#888;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sgsend{background:#2f7d4f;color:#fff;border:0;border-radius:9px;padding:10px 18px;font:800 13.5px 'Assistant',sans-serif;cursor:pointer}
+.sgmsg{margin-top:8px;font-size:12.5px}
+.sgmsg.ok{color:#2f7d4f}.sgmsg.err{color:#c03636}
+.sgmine{padding:12px 16px 16px}
+.sgmine>b{font-size:12px;letter-spacing:1px;text-transform:uppercase;color:#6f6a63}
+.sgminelist{margin-top:8px;display:flex;flex-direction:column;gap:6px;font-size:13px}
+.sgreq{display:flex;align-items:center;gap:9px}
+.sgtxt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sgst{flex:none;font-size:10px;font-weight:800;letter-spacing:.6px;border-radius:999px;padding:3px 9px;text-transform:uppercase}
+.sgst.sRequested{background:#eee;color:#666}
+.sgst.sInprogress{background:#fdf3ec;color:#9a5b13}
+.sgst.sLive{background:#eaf2fd;color:#2c5d96}
+.sgst.sTested{background:#eaf5ec;color:#2f7d4f}
+.sgok{background:#2f7d4f;color:#fff;border:0;border-radius:7px;padding:5px 10px;font:700 11.5px 'Assistant',sans-serif;cursor:pointer}

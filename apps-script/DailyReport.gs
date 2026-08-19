@@ -134,6 +134,10 @@ function doGet(e) {
   }
   // Work clock: all OPEN sessions + today's closed minutes per tech.
   // Feeds the card chip, the My Day dock and the Shop Board live tiles.
+  if (e && e.parameter && e.parameter.fn === 'requests') {
+    try { return json_(requestsList_()); }
+    catch (err) { return json_({error: String(err), requests: []}); }
+  }
   if (e && e.parameter && e.parameter.fn === 'timeclock') {
     try { return json_(timeClockState_()); }
     catch (err) { return json_({error: String(err), open: []}); }
@@ -643,6 +647,16 @@ function doPost(e) {
       var sks = setKeyService_(req);
       if (sks.ok) logAct_(who, 'Key service', sks.summary || req.serial, sks.keys || '(cleared)');
       return json_(sks);
+    }
+    if (req.action === 'suggest') {
+      var sg = addRequest_(req);
+      if (sg.ok) logAct_(who, 'App request', sg.id, String(req.type || '') + ': ' + String(req.text || '').slice(0, 90));
+      return json_(sg);
+    }
+    if (req.action === 'requeststatus') {
+      var rs = setRequestStatus_(req);
+      if (rs.ok) logAct_(who, 'App request ' + rs.status, rs.id, rs.text);
+      return json_(rs);
     }
     if (req.action === 'clockin') {
       var cin = clockIn_(req);
@@ -1857,6 +1871,76 @@ function timeLogRows_(days) {
     }
   }
   return {ok: true, rows: out, days: days};
+}
+
+/* ===================== SUGGESTION BOX (app requests) =====================
+ * Team-sourced bugs/edits/ideas for the web apps. One "Requests" tab on the
+ * report sheet; screenshots land in a "BLP App Requests" Drive folder.
+ * Status flow: Requested -> In progress -> Live -> Tested. The requester
+ * confirms "Tested" themselves from the map's My Requests list. */
+var REQUESTS_TAB = 'Requests';
+function requestsSheet_() {
+  var ss = SpreadsheetApp.openById('11RoeVRETag5rZYX6_tEH-rf6x8JL0JeZU0P5AT0WI-I');
+  var sh = ss.getSheetByName(REQUESTS_TAB);
+  if (!sh) {
+    sh = ss.insertSheet(REQUESTS_TAB, ss.getSheets().length);
+    sh.getRange(1, 1, 1, 10).setValues([['ID', 'Date', 'Who', 'Type', 'Request',
+      'Context', 'Screenshot', 'Status', 'Status By', 'Status At']]);
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+function addRequest_(req) {
+  var sh = requestsSheet_();
+  var who = clockTech_(req) || 'Unknown';
+  var id = 'R' + Date.now().toString(36).toUpperCase();
+  var shot = '';
+  if (req.photo) {
+    try {
+      var it = DriveApp.getFoldersByName('BLP App Requests');
+      var folder = it.hasNext() ? it.next() : DriveApp.createFolder('BLP App Requests');
+      var blob = Utilities.newBlob(Utilities.base64Decode(req.photo),
+        req.photoType || 'image/jpeg', id + '-' + (req.photoName || 'screenshot.jpg'));
+      var f = folder.createFile(blob);
+      f.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      shot = f.getUrl();
+    } catch (e) { shot = ''; }
+  }
+  sh.appendRow([id, new Date().toISOString(), who, String(req.type || 'idea'),
+    String(req.text || '').slice(0, 2000), String(req.context || '').slice(0, 300),
+    shot, 'Requested', '', '']);
+  return {ok: true, id: id, screenshot: shot};
+}
+function setRequestStatus_(req) {
+  var STATUSES = ['Requested', 'In progress', 'Live', 'Tested'];
+  if (STATUSES.indexOf(String(req.status)) < 0) return {error: 'bad status'};
+  var sh = requestsSheet_();
+  var vals = sh.getDataRange().getValues();
+  for (var i = 1; i < vals.length; i++) {
+    if (String(vals[i][0]) === String(req.id)) {
+      sh.getRange(i + 1, 8, 1, 3).setValues([[String(req.status),
+        clockTech_(req) || '', new Date().toISOString()]]);
+      return {ok: true, id: String(req.id), status: String(req.status),
+              who: String(vals[i][2]), text: String(vals[i][4]).slice(0, 140)};
+    }
+  }
+  return {error: 'request not found'};
+}
+function requestsList_() {
+  var sh = requestsSheet_();
+  var last = sh.getLastRow();
+  var out = [];
+  if (last >= 2) {
+    var vals = sh.getRange(Math.max(2, last - 499), 1, Math.min(500, last - 1), 10).getValues();
+    for (var i = vals.length - 1; i >= 0; i--) {
+      var v = vals[i];
+      if (!v[0]) continue;
+      out.push({id: String(v[0]), date: String(v[1]), who: String(v[2]), type: String(v[3]),
+                text: String(v[4]), context: String(v[5]), screenshot: String(v[6]),
+                status: String(v[7]) || 'Requested', statusBy: String(v[8]), statusAt: String(v[9])});
+    }
+  }
+  return {ok: true, requests: out};
 }
 
 /* Paperwork — QC checklist scans live in one shared Drive folder, filed in

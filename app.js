@@ -1941,6 +1941,108 @@ function cancelHide() { clearTimeout(hideTimer); }
 $('#pop').addEventListener('mouseenter', cancelHide);
 $('#pop').addEventListener('mouseleave', scheduleHide);
 
+/* ===================== SUGGESTION BOX =====================
+ * 💡 in the top bar: team members file bugs / edits / ideas about the web
+ * apps, with an optional screenshot and auto-captured context. Requests
+ * live on the report sheet; status flows Requested -> In progress -> Live
+ * -> Tested, and the requester confirms "Tested" from their own list here. */
+function openSuggestBox() {
+  const old = document.querySelector('.sgbox');
+  if (old) { old.remove(); return; }
+  const openSerial = (!$('#pop').hidden && S.popRow)
+    ? (S.data.pianos.find(x => x.row === S.popRow) || {}).serial : '';
+  const ov = document.createElement('div');
+  ov.className = 'tagview sgbox';
+  ov.innerHTML = `<div class="tvbox sgwrap">
+    <div class="tvhead"><div><b>💡 Suggest an improvement</b>
+      <span>bugs, edits, ideas — goes straight onto the fix list</span></div>
+      <button class="tvx">✕</button></div>
+    <div class="sgform">
+      <div class="sgtypes">
+        <button class="sgt on" data-t="bug">🐛 Bug</button>
+        <button class="sgt" data-t="edit">✏️ Edit</button>
+        <button class="sgt" data-t="idea">💡 Idea</button>
+      </div>
+      <textarea class="sgtext" maxlength="1500" placeholder="What's wrong / what would make it better? A sentence or two is plenty."></textarea>
+      <div class="sgrow">
+        <label class="sgshot">📷 Attach screenshot<input type="file" accept="image/*" hidden></label>
+        <span class="sgshotname"></span>
+        <button class="sgsend">Send it 🚀</button>
+      </div>
+      <div class="sgmsg"></div>
+    </div>
+    <div class="sgmine"><b>My requests</b><div class="sgminelist">loading…</div></div>
+  </div>`;
+  document.body.appendChild(ov);
+  ov.onclick = ev => { if (ev.target === ov || ev.target.classList.contains('tvx')) ov.remove(); };
+  let type = 'bug', shotFile = null;
+  ov.querySelectorAll('.sgt').forEach(b => b.onclick = () => {
+    ov.querySelectorAll('.sgt').forEach(x => x.classList.remove('on'));
+    b.classList.add('on'); type = b.dataset.t;
+  });
+  const fin = ov.querySelector('.sgshot input');
+  fin.onchange = () => {
+    shotFile = fin.files && fin.files[0];
+    ov.querySelector('.sgshotname').textContent = shotFile ? shotFile.name.slice(0, 22) : '';
+  };
+  const msg = ov.querySelector('.sgmsg');
+  ov.querySelector('.sgsend').onclick = async () => {
+    const text = ov.querySelector('.sgtext').value.trim();
+    if (!text) { msg.className = 'sgmsg err'; msg.textContent = 'Write a sentence first.'; return; }
+    const {pin, ok} = writeAuth();
+    if (!ok) { msg.className = 'sgmsg err'; msg.textContent = 'Sign in first so we know who to thank.'; return; }
+    msg.className = 'sgmsg'; msg.textContent = shotFile ? 'Uploading screenshot…' : 'Sending…';
+    const body = {pin, action: 'suggest', type, text,
+      context: 'view:' + (S.view || 'map') + (openSerial ? ' · piano #' + openSerial : ''),
+      ...authFields()};
+    try {
+      if (shotFile) {
+        const dataUrl = await downscalePhoto(shotFile, 1600, 0.85);
+        body.photo = dataUrl.split(',')[1]; body.photoType = 'image/jpeg';
+        body.photoName = shotFile.name.replace(/[^\w.-]+/g, '_').slice(0, 40);
+      }
+      const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+        headers: {'content-type': 'text/plain;charset=utf-8'}, body: JSON.stringify(body)});
+      const j = await r.json();
+      if (!j.ok) throw new Error(j.error || 'failed');
+      msg.className = 'sgmsg ok';
+      msg.textContent = '✓ Filed as ' + j.id + ' — thank you! You\u2019ll see it move to Live here when it ships.';
+      ov.querySelector('.sgtext').value = ''; shotFile = null; fin.value = '';
+      ov.querySelector('.sgshotname').textContent = '';
+      loadMyRequests(ov);
+    } catch (e) { msg.className = 'sgmsg err'; msg.textContent = '✗ ' + e.message; }
+  };
+  loadMyRequests(ov);
+}
+async function loadMyRequests(ov) {
+  const box = ov.querySelector('.sgminelist');
+  try {
+    const r = await fetch(BRIDGE_URL + '?fn=requests', {redirect: 'follow'});
+    const j = await r.json();
+    const me = clockName().toLowerCase();
+    const mine = (j.requests || []).filter(x => (x.who || '').toLowerCase() === me).slice(0, 12);
+    if (!mine.length) { box.innerHTML = '<i>none yet — be the first!</i>'; return; }
+    const ICONS = {bug: '🐛', edit: '✏️', idea: '💡'};
+    box.innerHTML = mine.map(x => `<div class="sgreq">
+      <span class="sgst s${esc(x.status.replace(/\s/g, ''))}">${esc(x.status)}</span>
+      <span class="sgtxt">${ICONS[x.type] || '💡'} ${esc(x.text.slice(0, 70))}</span>
+      ${x.status === 'Live' ? `<button class="sgok" data-id="${esc(x.id)}">✅ It works</button>` : ''}
+    </div>`).join('');
+    box.querySelectorAll('.sgok').forEach(b => b.onclick = async () => {
+      const {pin, ok} = writeAuth(); if (!ok) return;
+      b.textContent = '…';
+      await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+        headers: {'content-type': 'text/plain;charset=utf-8'},
+        body: JSON.stringify({pin, action: 'requeststatus', id: b.dataset.id, status: 'Tested', ...authFields()})});
+      loadMyRequests(ov);
+    });
+  } catch (e) { box.innerHTML = '<i>couldn\u2019t load</i>'; }
+}
+setTimeout(() => {
+  const btn = document.getElementById('suggestBtn');
+  if (btn) btn.onclick = openSuggestBox;
+}, 500);
+
 /* ===================== WORK CLOCK =====================
  * Four punch surfaces (card button, QR scan banner, My Day dock, Shop Board)
  * all write the same bridge Time Log. One open session per tech — the
