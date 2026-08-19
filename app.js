@@ -719,6 +719,7 @@ function tryDeepLink() {
   if (!p) return;
   deepLinkDone = ser;
   lsDel('blpDL');
+  S.scanArrived = p.serial;   // spotlight the Work Clock on this card
   setTimeout(() => focusPiano(p), 250);
 }
 window.addEventListener('hashchange', () => { deepLinkDone = ''; tryDeepLink(); });
@@ -1940,6 +1941,130 @@ function cancelHide() { clearTimeout(hideTimer); }
 $('#pop').addEventListener('mouseenter', cancelHide);
 $('#pop').addEventListener('mouseleave', scheduleHide);
 
+/* ===================== WORK CLOCK =====================
+ * Four punch surfaces (card button, QR scan banner, My Day dock, Shop Board)
+ * all write the same bridge Time Log. One open session per tech — the
+ * bridge closes the previous one on every clockin and tells us what closed.
+ * Phase selection is MANDATORY before clocking in ("Other" allows write-in). */
+const NUDGE_MIN = 15;             // quiet minutes before the dock asks "still on it?"
+const CLOCK = {open: null, all: [], today: {}, lastAct: Date.now(), nudged: false};
+function clockName() { const u = authUser(); return u ? String(u.name || '').trim() : ''; }
+function clockElapsed(startIso) {
+  const s = Math.max(0, Math.floor((Date.now() - new Date(startIso)) / 1000));
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), ss = s % 60;
+  return (h ? h + ':' : '') + String(m).padStart(h ? 2 : 1, '0') + ':' + String(ss).padStart(2, '0');
+}
+async function fetchClock() {
+  try {
+    const r = await fetch(BRIDGE_URL + '?fn=timeclock', {redirect: 'follow'});
+    const j = await r.json();
+    if (!j.open) return;
+    CLOCK.all = j.open; CLOCK.today = j.todayMinutes || {};
+    const me = clockName().toLowerCase();
+    const was = CLOCK.open && CLOCK.open.serial;
+    CLOCK.open = j.open.find(o => (o.tech || '').toLowerCase() === me) || null;
+    if ((CLOCK.open && CLOCK.open.serial) !== was) { renderClockChip(); renderDock(); }
+  } catch (e) { /* offline — keep last */ }
+}
+async function punch(action, p, phase, source, endAt) {
+  const {pin, ok} = writeAuth();
+  if (!ok) return {error: 'Sign in first — hours are logged under your name.'};
+  const body = {pin, action, source: source || 'card', ...authFields()};
+  if (p) { body.serial = p.serial; body.row = p.row; body.phase = phase || ''; }
+  if (endAt) body.endAt = endAt;
+  try {
+    const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+      headers: {'content-type': 'text/plain;charset=utf-8'}, body: JSON.stringify(body)});
+    const j = await r.json();
+    if (j.ok) {
+      CLOCK.open = action === 'clockin'
+        ? (j.open || {tech: clockName(), serial: p.serial, phase, start: new Date().toISOString()})
+        : null;
+      CLOCK.nudged = false; CLOCK.lastAct = Date.now();
+      renderClockChip(); renderDock();
+    }
+    return j;
+  } catch (e) { return {error: 'offline — punch not recorded, try again'}; }
+}
+function renderClockChip() {
+  let chip = document.getElementById('clockchip');
+  if (!chip) {
+    const bar = document.querySelector('.bar');
+    if (!bar) return;
+    chip = document.createElement('button');
+    chip.id = 'clockchip'; chip.className = 'clockchip';
+    bar.insertBefore(chip, document.querySelector('.drawerbtn'));
+    chip.onclick = () => {
+      const o = CLOCK.open; if (!o) return;
+      const p = S.data.pianos.find(x => x.serial === o.serial);
+      if (p) focusPiano(p);
+    };
+  }
+  const o = CLOCK.open;
+  chip.hidden = !o;
+  if (o) chip.innerHTML = `<i></i><span class="cctime" data-start="${esc(o.start)}">${clockElapsed(o.start)}</span>
+    <span class="ccser">${esc(o.serial)}</span>`;
+}
+function renderDock() {
+  let dock = document.getElementById('mydock');
+  if (!dock) {
+    dock = document.createElement('div');
+    dock.id = 'mydock'; dock.hidden = true;
+    document.body.appendChild(dock);
+  }
+  const o = CLOCK.open;
+  if (!o) { dock.hidden = true; return; }
+  const recents = (S.recentRows || []).map(r => S.data.pianos.find(x => x.row === r))
+    .filter(x => x && x.serial && x.serial !== o.serial).slice(0, 4);
+  dock.hidden = false;
+  dock.innerHTML = `
+    ${CLOCK.nudged ? `<div class="docknudge">😴 Quiet for ${NUDGE_MIN} min — still on <b>${esc(o.serial)}</b>?
+      <button class="dn-yes">Yes, working</button>
+      <button class="dn-out">Clock out at last activity</button></div>` : ''}
+    <div class="dockrow">
+      <div class="dockinfo"><small>${esc(clockName().split(/\s+/)[0] || 'You')} · ${esc(o.phase || 'working')}</small>
+        <b>${esc(o.piano ? o.piano.slice(0, 30) : o.serial)} · #${esc(o.serial)}</b></div>
+      <span class="docktimer cctime" data-start="${esc(o.start)}">${clockElapsed(o.start)}</span>
+      <button class="dockswitch">Switch ▾</button>
+      <button class="dockout">■ Out</button>
+    </div>
+    <div class="dockmenu" hidden>
+      ${recents.map(x => `<div class="dockopt" data-row="${x.row}">📌 ${esc(x.summary.slice(0, 34))} · #${esc(x.serial)}</div>`).join('')}
+      <div class="dockopt dockfind">🔍 Find a piano on the map…</div>
+    </div>`;
+  const menu = dock.querySelector('.dockmenu');
+  dock.querySelector('.dockswitch').onclick = () => { menu.hidden = !menu.hidden; };
+  dock.querySelector('.dockout').onclick = async () => {
+    const j = await punch('clockout', null, '', 'dock');
+    if (j.error) alert(j.error);
+  };
+  menu.querySelectorAll('.dockopt[data-row]').forEach(el => el.onclick = () => {
+    menu.hidden = true;
+    const p = S.data.pianos.find(x => x.row === +el.dataset.row);
+    if (p) { focusPiano(p); lsSet('sec_clock', 'open'); }
+  });
+  const df = menu.querySelector('.dockfind');
+  if (df) df.onclick = () => { menu.hidden = true; const q = document.querySelector('.search'); if (q) q.focus(); };
+  const ny = dock.querySelector('.dn-yes');
+  if (ny) ny.onclick = () => { CLOCK.nudged = false; CLOCK.lastAct = Date.now(); renderDock(); };
+  const no = dock.querySelector('.dn-out');
+  if (no) no.onclick = async () => {
+    const j = await punch('clockout', null, '', 'dock', new Date(CLOCK.lastAct).toISOString());
+    if (j.error) alert(j.error); else CLOCK.nudged = false;
+  };
+}
+// live tickers + idle nudge
+setInterval(() => {
+  document.querySelectorAll('.cctime').forEach(el => { el.textContent = clockElapsed(el.dataset.start); });
+  if (CLOCK.open && !CLOCK.nudged && Date.now() - CLOCK.lastAct > NUDGE_MIN * 60000) {
+    CLOCK.nudged = true; renderDock();
+  }
+}, 1000);
+['pointerdown', 'keydown'].forEach(ev =>
+  addEventListener(ev, () => { CLOCK.lastAct = Date.now(); }, {passive: true}));
+setInterval(fetchClock, 60000);
+setTimeout(fetchClock, 2500);
+
 /* Collapsible Bold Banner sections — header click toggles the body; the
  * open/closed choice is remembered per section for this device, so a tech
  * who never wants Media open keeps it collapsed on every card. */
@@ -2067,6 +2192,27 @@ function popHTML(p) {
            ${p.serial ? `<button class="predit">${p.price ? '✎ Edit price' : '＋ Add price'}</button>` : ''}</div>`
       : (priceLabel(p) ? `<div class="row">Price <b class="pricecard">${esc(priceLabel(p))}</b></div>` : '')}
 
+    ${p.serial ? (() => {
+      const mine = CLOCK.open;
+      const onThis = mine && mine.serial === p.serial;
+      if (onThis) return secWrap('clock', '⏱ Work Clock', `
+        <div class="row rowflex"><span>Working on</span><b>${esc(mine.phase || '—')}</b></div>
+        <button class="clkbtn clkout">■ Clock out — <span class="cctime" data-start="${esc(mine.start)}">${clockElapsed(mine.start)}</span></button>
+        <div class="clkmsg phmsg"></div>`);
+      const opts = (pianoPhases(p) || PHASES).concat(PHASE_STATES);
+      return secWrap('clock', '⏱ Work Clock', `
+        ${mine ? `<div class="clkwarn">⏱ You're on <b>#${esc(mine.serial)}</b>
+          <span class="cctime" data-start="${esc(mine.start)}">${clockElapsed(mine.start)}</span> — clocking in here closes it.</div>` : ''}
+        <div class="row rowflex"><span>What work?</span>
+          <select class="clkphase">
+            <option value="">— select the work —</option>
+            ${opts.map(ph => `<option>${esc(ph)}</option>`).join('')}
+            <option value="__other__">✏️ Other — write it in…</option>
+          </select></div>
+        <input class="clkother" placeholder="what are you doing on this piano?" maxlength="60" hidden>
+        <button class="clkbtn clkin off">▶ ${mine ? 'Switch here' : 'Clock in'}</button>
+        <div class="clkmsg phmsg"></div>`);
+    })() : ''}
     ${secWrap('loc', '📍 Locations', `
     <div class="row rowflex"><span>Map #</span><b class="mapnum">${esc(p.location || '—')}</b></div>
     ${p.queuePos ? `<div class="row rowflex"><span>Queue #</span>${queueChip}</div>` : ''}
@@ -2354,6 +2500,58 @@ function wirePop(p) {
   if (dt) dt.onclick = ev => { ev.preventDefault(); ev.stopPropagation(); openTechFolder(dt.dataset.serial, dt); };
   const tt = pop.querySelector('.tagthumb');
   if (tt) tt.onclick = ev => { ev.stopPropagation(); openTagSnapshot(p); };
+  (() => {   // Work Clock wiring: phase is mandatory, "Other" allows write-in
+    const sel = pop.querySelector('.clkphase');
+    const oth = pop.querySelector('.clkother');
+    const inBtn = pop.querySelector('.clkin');
+    const outBtn = pop.querySelector('.clkout');
+    const cmsg = pop.querySelector('.clkmsg');
+    const chosen = () => {
+      if (!sel) return '';
+      if (sel.value === '__other__') return (oth.value || '').trim();
+      return sel.value;
+    };
+    const refresh = () => {
+      if (!inBtn) return;
+      if (oth) oth.hidden = sel.value !== '__other__';
+      inBtn.classList.toggle('off', !chosen());
+    };
+    if (sel) { sel.onchange = () => { refresh(); if (sel.value === '__other__' && oth) oth.focus(); }; sel.onclick = ev => ev.stopPropagation(); }
+    if (oth) { oth.oninput = refresh; oth.onclick = ev => ev.stopPropagation(); }
+    if (inBtn) inBtn.onclick = async ev => {
+      ev.stopPropagation(); popPinned = true;
+      const ph = chosen();
+      if (!ph) {
+        alert(sel && sel.value === '__other__'
+          ? 'Write in a word or two for what you\u2019re doing on this piano, then clock in.'
+          : 'Pick the phase you\u2019re about to work on first \u2014 or choose \u201cOther\u201d and write it in.');
+        (sel && sel.value === '__other__' ? oth : sel).focus();
+        return;
+      }
+      cmsg.className = 'clkmsg phmsg'; cmsg.textContent = 'Clocking in\u2026';
+      const j = await punch('clockin', p, ph, S.scanArrived === p.serial ? 'scan' : 'card');
+      if (j.error) { cmsg.className = 'clkmsg phmsg err'; cmsg.textContent = '\u2717 ' + j.error; return; }
+      S.scanArrived = null;
+      openPop(p.row, S.popAnchor, true);
+    };
+    if (outBtn) outBtn.onclick = async ev => {
+      ev.stopPropagation(); popPinned = true;
+      cmsg.className = 'clkmsg phmsg'; cmsg.textContent = 'Clocking out\u2026';
+      const j = await punch('clockout', null, '', 'card');
+      if (j.error) { cmsg.className = 'clkmsg phmsg err'; cmsg.textContent = '\u2717 ' + j.error; return; }
+      openPop(p.row, S.popAnchor, true);
+    };
+    // arrived by QR scan and not clocked in here: open + spotlight the section
+    if (S.scanArrived === p.serial && sel) {
+      const head = pop.querySelector('.sechead[data-sec="clock"]');
+      const bodyEl = pop.querySelector('.secbody[data-sec="clock"]');
+      if (bodyEl && bodyEl.classList.contains('closed')) {
+        bodyEl.classList.remove('closed');
+        if (head) { head.classList.remove('shut'); const ar = head.querySelector('.secarrow'); if (ar) ar.textContent = '\u25be'; }
+      }
+      if (head) head.classList.add('pulse');
+    }
+  })();
   pop.querySelectorAll('.sechead[data-sec]').forEach(h => {
     h.onclick = ev => {
       ev.stopPropagation(); popPinned = true;
@@ -4355,6 +4553,7 @@ async function queuePiano(p, newPos, pop) {
   }
 }
 function openPop(row, el, pinned) {
+  S.recentRows = [row].concat((S.recentRows || []).filter(r => r !== row)).slice(0, 8);
   cancelHide();
   const p = S.data.pianos.find(x => x.row === row);
   if (!p) return;

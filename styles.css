@@ -659,3 +659,39 @@ td a{color:#9e2020}
 .spotopt{padding:7px 11px;font-size:13px;cursor:pointer}
 .spotopt:hover{background:#fdf3f3;color:#9e2020}
 .spotnone{padding:7px 11px;font-size:12px;color:#a05252;font-style:italic}
+/* ===== Work Clock: card section, top chip, My Day dock ===== */
+.clkbtn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;border:0;border-radius:9px;
+  padding:11px;font:800 14px 'Assistant',sans-serif;color:#fff;background:#2f7d4f;cursor:pointer;margin:7px 0 3px}
+.clkbtn.off{background:#9fb8a8;cursor:pointer}
+.clkbtn.clkout{background:#9e2020}
+.clkwarn{background:#fdf3ec;border:1px solid #eecfae;border-radius:8px;padding:7px 9px;font-size:12px;color:#8a5a1c;margin:4px 0}
+.clkphase{font-size:12.5px;border:1px solid #cfd6dc;border-radius:6px;padding:4px 6px;background:#fff;max-width:200px}
+.clkother{display:block;width:100%;box-sizing:border-box;margin-top:6px;border:1px dashed #b9c2cb;border-radius:6px;
+  padding:7px 9px;font:13px 'Assistant',sans-serif}
+.cctime{font-variant-numeric:tabular-nums}
+.sechead.pulse{animation:clkpulse 1.2s ease 3}
+@keyframes clkpulse{0%,100%{background:#8e1f1f}50%{background:#c03636}}
+.clockchip{display:flex;align-items:center;gap:7px;background:#1c1c1e;border:1px solid #2f7d4f;border-radius:999px;
+  color:#fff;padding:6px 13px;font:700 12.5px 'Assistant',sans-serif;cursor:pointer;flex-shrink:0}
+.clockchip i{width:8px;height:8px;border-radius:50%;background:#4ade80;animation:ccblink 2s infinite}
+.clockchip .ccser{color:#a8b8ac;font-weight:600}
+@keyframes ccblink{0%,100%{opacity:1}50%{opacity:.35}}
+#mydock{position:fixed;left:10px;right:10px;bottom:10px;z-index:60;background:#0d0d0d;color:#fff;border-radius:14px;
+  padding:10px 14px;box-shadow:0 8px 26px rgba(0,0,0,.4)}
+.dockrow{display:flex;align-items:center;gap:12px}
+.dockinfo{min-width:0}
+.dockinfo small{display:block;font-size:10.5px;color:#a8a8aa;letter-spacing:.5px}
+.dockinfo b{font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+.docktimer{margin-left:auto;background:#111;border:1px solid #2f7d4f;color:#7fe09a;border-radius:6px;padding:3px 9px;font-weight:800}
+.dockswitch,.dockout{border:0;border-radius:8px;padding:8px 13px;font:800 12.5px 'Assistant',sans-serif;cursor:pointer}
+.dockswitch{background:#2c2c2e;color:#fff}
+.dockout{background:#9e2020;color:#fff}
+.dockmenu{margin-top:9px;border-top:1px solid #262628;padding-top:6px}
+.dockopt{padding:8px 6px;font-size:13px;border-radius:7px;cursor:pointer}
+.dockopt:hover{background:#1d1d1f}
+.docknudge{background:#3a2b12;border:1px solid #6b4c1c;border-radius:9px;padding:8px 11px;font-size:12.5px;margin-bottom:9px;
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.docknudge button{border:0;border-radius:7px;padding:6px 11px;font:700 12px 'Assistant',sans-serif;cursor:pointer}
+.dn-yes{background:#2f7d4f;color:#fff}
+.dn-out{background:#8e1f1f;color:#fff}
+@media(max-width:640px){#mydock{left:6px;right:6px;bottom:6px}.dockinfo small{display:none}}

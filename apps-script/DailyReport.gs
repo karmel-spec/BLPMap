@@ -132,6 +132,17 @@ function doGet(e) {
       return json_({url: fold ? fold.getUrl() : '', name: fold ? fold.getName() : ''});
     } catch (err) { return json_({error: String(err), url: ''}); }
   }
+  // Work clock: all OPEN sessions + today's closed minutes per tech.
+  // Feeds the card chip, the My Day dock and the Shop Board live tiles.
+  if (e && e.parameter && e.parameter.fn === 'timeclock') {
+    try { return json_(timeClockState_()); }
+    catch (err) { return json_({error: String(err), open: []}); }
+  }
+  // Work clock history rows for the Job Costing report (?days=90)
+  if (e && e.parameter && e.parameter.fn === 'timelog') {
+    try { return json_(timeLogRows_(Number(e.parameter.days) || 90)); }
+    catch (err) { return json_({error: String(err), rows: []}); }
+  }
   // Paperwork scans (QC checklists etc.) for one piano — filed by year in
   // one Drive folder, named "Make Serial"; matched by serial substring
   if (e && e.parameter && e.parameter.fn === 'paperwork') {
@@ -632,6 +643,14 @@ function doPost(e) {
       var sks = setKeyService_(req);
       if (sks.ok) logAct_(who, 'Key service', sks.summary || req.serial, sks.keys || '(cleared)');
       return json_(sks);
+    }
+    if (req.action === 'clockin') {
+      var cin = clockIn_(req);
+      return json_(cin);
+    }
+    if (req.action === 'clockout') {
+      var cout = clockOut_(req);
+      return json_(cout);
     }
     if (req.action === 'setpaperwork') {
       var spw = setPaperwork_(req);
@@ -1723,6 +1742,121 @@ function setKeyService_(req) {
   var val = keep.join(', ');
   sh.getRange(found.row, col).setValue(val);
   return {ok: true, row: found.row, summary: found.summary, keys: val};
+}
+
+/* ===================== WORK CLOCK (per-piano time tracking) =====================
+ * One "Time Log" tab on the report sheet is the ledger every punch surface
+ * writes to (card button, QR scan, dock, manager corrections). THE rule:
+ * a tech has at most ONE open session — clockin always closes the previous
+ * open row first and reports what it closed. clockout accepts an optional
+ * backdated endAt (the dock's "clock out at last activity" nudge). */
+var TIME_LOG_TAB = 'Time Log';
+function timeLogSheet_() {
+  var ss = SpreadsheetApp.openById('11RoeVRETag5rZYX6_tEH-rf6x8JL0JeZU0P5AT0WI-I');
+  var sh = ss.getSheetByName(TIME_LOG_TAB);
+  if (!sh) {
+    sh = ss.insertSheet(TIME_LOG_TAB, ss.getSheets().length);
+    sh.getRange(1, 1, 1, 9).setValues([['Tech', 'Serial', 'Piano', 'Phase',
+      'Clock In', 'Clock Out', 'Minutes', 'Source', 'Closed By']]);
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+function clockTech_(req) {
+  var n = String((req.user && req.user.name) || '').replace(/\s*\(.*$/, '').trim();
+  return n;
+}
+function openSessionRow_(sh, tech) {
+  var last = sh.getLastRow();
+  if (last < 2) return null;
+  var from = Math.max(2, last - 400);   // open rows are always near the bottom
+  var vals = sh.getRange(from, 1, last - from + 1, 6).getValues();
+  for (var i = vals.length - 1; i >= 0; i--) {
+    if (String(vals[i][0]).toLowerCase() === tech.toLowerCase() && !vals[i][5]) {
+      return {row: from + i, v: vals[i]};
+    }
+  }
+  return null;
+}
+function closeSession_(sh, open, closedBy, endAt) {
+  var end = endAt ? new Date(endAt) : new Date();
+  var start = new Date(open.v[4]);
+  if (!(end > start)) end = new Date();
+  var mins = Math.max(1, Math.round((end - start) / 60000));
+  sh.getRange(open.row, 6, 1, 2).setValues([[end.toISOString(), mins]]);
+  if (closedBy) sh.getRange(open.row, 9).setValue(String(closedBy));
+  return {serial: String(open.v[1]), piano: String(open.v[2]), phase: String(open.v[3]),
+          start: String(open.v[4]), minutes: mins};
+}
+function clockIn_(req) {
+  var tech = clockTech_(req);
+  if (!tech) return {error: 'no name on this session — sign in first'};
+  if (!req.serial) return {error: 'serial required'};
+  var sh = timeLogSheet_();
+  var closed = null;
+  var open = openSessionRow_(sh, tech);
+  if (open) closed = closeSession_(sh, open, 'switch');
+  var psh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+  var f = findPiano_(psh, req.serial, req.row);
+  var startIso = new Date().toISOString();
+  sh.appendRow([tech, String(req.serial), (f && f.summary) || '', String(req.phase || ''),
+                startIso, '', '', String(req.source || 'card'), '']);
+  return {ok: true, closed: closed,
+          open: {tech: tech, serial: String(req.serial), phase: String(req.phase || ''), start: startIso}};
+}
+function clockOut_(req) {
+  var tech = clockTech_(req);
+  if (!tech) return {error: 'no name on this session — sign in first'};
+  var sh = timeLogSheet_();
+  var open = openSessionRow_(sh, tech);
+  if (!open) return {ok: true, closed: null, note: 'nothing was open'};
+  return {ok: true, closed: closeSession_(sh, open, String(req.reason || ''), req.endAt)};
+}
+function timeClockState_() {
+  var sh = timeLogSheet_();
+  var last = sh.getLastRow();
+  var openList = [], today = {};
+  if (last >= 2) {
+    var from = Math.max(2, last - 600);
+    var vals = sh.getRange(from, 1, last - from + 1, 8).getValues();
+    var midnight = new Date(); midnight.setHours(0, 0, 0, 0);
+    for (var i = 0; i < vals.length; i++) {
+      var v = vals[i];
+      if (!v[0]) continue;
+      var tech = String(v[0]);
+      if (!v[5]) {
+        openList.push({tech: tech, serial: String(v[1]), piano: String(v[2]),
+                       phase: String(v[3]), start: String(v[4]), source: String(v[7])});
+      } else if (new Date(v[5]) >= midnight) {
+        today[tech] = (today[tech] || 0) + (Number(v[6]) || 0);
+      }
+    }
+    // open sessions count toward today too
+    for (var j = 0; j < openList.length; j++) {
+      var o = openList[j];
+      var mins = Math.max(0, Math.round((Date.now() - new Date(o.start)) / 60000));
+      today[o.tech] = (today[o.tech] || 0) + mins;
+    }
+  }
+  return {ok: true, open: openList, todayMinutes: today, at: new Date().toISOString()};
+}
+function timeLogRows_(days) {
+  var sh = timeLogSheet_();
+  var last = sh.getLastRow();
+  var out = [];
+  if (last >= 2) {
+    var vals = sh.getRange(2, 1, last - 1, 8).getValues();
+    var cutoff = Date.now() - Math.min(days, 730) * 86400000;
+    for (var i = 0; i < vals.length && out.length < 8000; i++) {
+      var v = vals[i];
+      if (!v[0] || !v[4]) continue;
+      if (new Date(v[4]).getTime() < cutoff) continue;
+      out.push({tech: String(v[0]), serial: String(v[1]), piano: String(v[2]),
+                phase: String(v[3]), start: String(v[4]), end: String(v[5] || ''),
+                minutes: Number(v[6]) || 0, source: String(v[7] || '')});
+    }
+  }
+  return {ok: true, rows: out, days: days};
 }
 
 /* Paperwork — QC checklist scans live in one shared Drive folder, filed in
