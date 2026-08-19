@@ -4051,10 +4051,9 @@ function authGate() {
   ov.hidden = signedIn;
   if (!signedIn) {
     const gb = document.getElementById('gateBtn');
-    if (gb && window.google?.accounts?.id) {
-      gb.innerHTML = '';
-      google.accounts.id.renderButton(gb,
-        {theme: 'filled_black', size: 'large', text: 'signin_with', width: 240});
+    if (gb) {
+      gb.innerHTML = '<button class="goauth" type="button">Sign in with Google</button>';
+      gb.querySelector('.goauth').onclick = oidcLogin;
     }
   }
 }
@@ -4090,10 +4089,8 @@ function renderAuth() {
       <div id="gsiBtn"></div>
       <button class="authout" id="authOut">sign out</button>`;
     $('#authOut').onclick = signOut;
-    if (window.google?.accounts?.id) {
-      google.accounts.id.renderButton($('#gsiBtn'),
-        {theme: 'outline', size: 'medium', text: 'signin_with', width: 190});
-    }
+    $('#gsiBtn').innerHTML = '<button class="goauth sm" type="button">Sign in with Google</button>';
+    $('#gsiBtn').querySelector('.goauth').onclick = oidcLogin;
   } else if (u) {
     box.innerHTML = `<b>Signed in</b>
       <span class="authname">${u.pic ? `<img class="authpic" src="${esc(u.pic)}" alt="">` : '👤 '}${esc(u.name)}</span>
@@ -4103,10 +4100,8 @@ function renderAuth() {
     box.innerHTML = `<b>Team member</b>
       <div class="authhint">Sign in so changes are logged under your name — no team PIN needed</div>
       <div id="gsiBtn"></div>`;
-    if (window.google?.accounts?.id) {
-      google.accounts.id.renderButton($('#gsiBtn'),
-        {theme: 'outline', size: 'medium', text: 'signin_with', width: 190});
-    }
+    $('#gsiBtn').innerHTML = '<button class="goauth sm" type="button">Sign in with Google</button>';
+    $('#gsiBtn').querySelector('.goauth').onclick = oidcLogin;
   }
 }
 function initAuth() {
@@ -4140,6 +4135,38 @@ function initAuth() {
   document.head.appendChild(s);
   renderAuth();
 }
+/* Google's own sign-in button (GIS) 400s on iOS Safari in both its popup
+ * and redirect modes, so the visible sign-in controls navigate to Google's
+ * plain OAuth page instead — out and back with the ID token in the hash.
+ * Same JWT, same onGoogleCred, works identically in every browser. */
+function oidcLogin() {
+  const nonce = (crypto.randomUUID ? crypto.randomUUID()
+    : String(Math.random()).slice(2) + Date.now());
+  lsSet('blpNonce', nonce);
+  const q = new URLSearchParams({
+    client_id: GOOGLE_CLIENT_ID,
+    redirect_uri: 'https://blpstoremap.netlify.app/',
+    response_type: 'id_token',
+    scope: 'openid email profile',
+    nonce, prompt: 'select_account',
+  });
+  location.href = 'https://accounts.google.com/o/oauth2/v2/auth?' + q;
+}
+function consumeOidcHash() {
+  const m = /[#&]id_token=([^&]+)/.exec(location.hash || '');
+  if (!m) return;
+  history.replaceState(null, '', location.pathname + location.search);
+  try {
+    const tok = m[1];
+    const claims = JSON.parse(atob(tok.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    // nonce must round-trip — rejects any token we didn't just ask for
+    if (claims.nonce && claims.nonce === lsGet('blpNonce')) {
+      lsDel('blpNonce');
+      onGoogleCred({credential: tok});
+    }
+  } catch (e) { /* malformed token — stay signed out */ }
+}
+consumeOidcHash();
 // finish a redirect sign-in: gsi-callback leaves the credential here
 try {
   const redirCred = localStorage.getItem('blpGsiCred');
