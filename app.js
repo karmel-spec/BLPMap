@@ -1162,10 +1162,36 @@ function openTagSnapshot(p) {
 // Everything the tag shows, as a plain object — so the same values can be
 // printed, snapshotted to the sheet, and re-rendered later as the thumbnail
 // of "what is actually taped to this piano right now".
+/* Same content rules as the batch-PDF set (gen_tags.py): pricing never
+ * prints on a shop tag, and note lines about keys/bench/plating/tech/
+ * refinishing land on their own scope row instead of the Notes blob. */
+const TAG_PRICE_RE = /\$\s?\d|\b\d+\s?k\b|price|payment|paid|deposit|invoice|qbo|\bbill\b|\/mo\b|payout|credit card|financ|\b\d{1,3}%/i;
+const TAG_ROUTES = [
+  ['keys', /\bkey(s|top|work)?\b|ivor(y|ies)|ebony key|plastic key/i],
+  ['bench', /\bbench\b|upholst/i],
+  ['plating', /replat|plating|chrome|nickel/i],
+  ['tech', /\bqrs\b|player system|pianodisc|self.?play/i],
+  ['refin', /refinish|lacquer|satin\b|high gloss/i],
+];
+function tagWcut(t, n) { return t.length <= n ? t : t.slice(0, n).replace(/\s+\S*$/, '') + '\u2026'; }
+function tagSplitNotes(raw) {
+  const segs = (raw || '').split(/\s*\n+\s*|\s+\u00b7\s+/)
+    .map(x => x.trim().replace(/\.+$/, '')).filter(Boolean)
+    .filter(x => !TAG_PRICE_RE.test(x));
+  const routed = {}, rest = [];
+  for (const x of segs) {
+    const hit = TAG_ROUTES.find(r => r[1].test(x));
+    if (hit) (routed[hit[0]] = routed[hit[0]] || []).push(tagWcut(x, 120));
+    else rest.push(x);
+  }
+  return {routed, rest: rest.join(' \u00b7 ')};
+}
 function shopTagFields(p) {
   const blob = p.owner || '';
   const plan = (p.plan || '').trim();
   const notes = (p.planNotes || '').trim().replace(/\s*\n+\s*/g, '  \u00b7  ');
+  const sn = tagSplitNotes(notes);
+  const xtra = k => sn.routed[k] ? ' \u2014 ' + tagWcut(sn.routed[k].join(' \u00b7 '), 140) : '';
   const kt = keyTokens(p);
   const mark = k => kt.length ? (kt.includes(k) ? 'Yes' : 'No') : '\u2014';
   return {
@@ -1179,25 +1205,25 @@ function shopTagFields(p) {
       : '\u2014',
     track: trackParts(p.track).list.join(' \u00b7 ') || '\u2014',
     plan: plan.slice(0, 90) || '\u2014',
-    refin: (/refinish/i.test(p.track || '') || /refinish/i.test(plan)) ? 'Yes' : 'No',
+    refin: ((/refinish/i.test(p.track || '') || /refinish/i.test(plan)) ? 'Yes' : 'No') + xtra('refin'),
     lvl: (/level\s*([1-3])/i.exec(plan) || [])[1] || '',
     tech: (/tech/i.test(p.track || '') ? 'Yes' : 'No')
       + ((/qrs/i.test(blob + ' ' + plan + ' ' + notes)
-          ? (/(upgrade|update)/i.test(blob + ' ' + plan) ? ' \u2014 QRS upgrade' : ' \u2014 QRS') : '')),
+          ? (/(upgrade|update)/i.test(blob + ' ' + plan) ? ' \u2014 QRS upgrade' : ' \u2014 QRS') : '')) + xtra('tech'),
     keys: (() => {
       if (kt.length) return KEY_SERVICE.map(k => k + ' ' + mark(k)).join(' \u00b7 ');
       const kw = (p.keywork || '').trim();
       if (kw && !/^(done|\u2713|x+|completed?)[.!\s]*$/i.test(kw)) return kw;   // requested work, verbatim
       if (kw) return 'Done \u2713';
       return '\u2610 Ivory \u00b7 \u2610 Plastic \u00b7 \u2610 Ebony';        // unknown: mark by hand
-    })(),
-    plating: /^y/i.test(p.replate || '') ? 'Yes'
+    })() + xtra('keys'),
+    plating: (/^y/i.test(p.replate || '') ? 'Yes'
       : /^n/i.test(p.replate || '') ? 'No'
-      : /replat|plating/i.test(plan + ' ' + notes) ? 'Yes' : '\u2014',
-    bench: /^y/i.test(p.bench || '') ? 'Yes'
+      : /replat|plating/i.test(plan + ' ' + notes) ? 'Yes' : '\u2014') + xtra('plating'),
+    bench: (/^y/i.test(p.bench || '') ? 'Yes'
       : /^n/i.test(p.bench || '') ? 'No'
-      : (p.bench ? p.bench.slice(0, 26) : '\u2014'),
-    notes: notes.slice(0, 180) || '\u2014',
+      : (p.bench ? p.bench.slice(0, 26) : '\u2014')) + xtra('bench'),
+    notes: tagWcut(sn.rest, 300) || '\u2014',
     qr: mapLink(p),
   };
 }
