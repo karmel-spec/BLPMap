@@ -230,6 +230,7 @@ async function boot() {
   if (d && d.pianos) S.data = d;
   index(); renderAll();
   if (!S.data.stale && S.data.pianos.length) writeCache();
+  tryDeepLink();   // #piano=SERIAL from a scanned shop tag → open that card
   setInterval(async () => {
     try {
       const [m, d2] = await Promise.all([fetchSlots(), fetchData()]);
@@ -675,6 +676,28 @@ function matches(p, q) {
 function logLink(p) {
   return PIANOLOG_URL + '#piano=' + encodeURIComponent(p.serial || p.summary);
 }
+// shop-tag QR target: THIS app, deep-linked to the piano's own card. Always
+// the production origin so a tag printed from a dev machine still scans right.
+function mapLink(p) {
+  return 'https://blpstoremap.netlify.app/#piano=' + encodeURIComponent(p.serial || '');
+}
+/* Deep link from a scanned shop tag: #piano=SERIAL finds the piano, jumps
+ * the map to its spot and opens its data card pinned. Re-fires on hashchange
+ * so scanning a second tag while the app is open also works. */
+let deepLinkDone = '';
+function tryDeepLink() {
+  const m = /[#?&]piano=([^&]+)/.exec(location.hash || '');
+  if (!m) return;
+  const ser = decodeURIComponent(m[1]).trim().toLowerCase();
+  if (!ser || ser === deepLinkDone) return;
+  const ps = (S.data && S.data.pianos) || [];
+  const p = ps.find(x => (x.serial || '').toLowerCase() === ser && x.active)
+    || ps.find(x => (x.serial || '').toLowerCase().includes(ser) && x.active);
+  if (!p) return;
+  deepLinkDone = ser;
+  setTimeout(() => focusPiano(p), 250);
+}
+window.addEventListener('hashchange', () => { deepLinkDone = ''; tryDeepLink(); });
 
 /* ---------- rendering ---------- */
 function renderAll() {
@@ -1175,7 +1198,7 @@ function shopTagFields(p) {
       : /^n/i.test(p.bench || '') ? 'No'
       : (p.bench ? p.bench.slice(0, 26) : '\u2014'),
     notes: notes.slice(0, 180) || '\u2014',
-    qr: logLink(p),
+    qr: mapLink(p),
   };
 }
 // The tag itself. Identical markup for print, thumbnail and the popup — only
