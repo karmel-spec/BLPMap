@@ -5556,6 +5556,21 @@ function zoomAt(k, cx, cy) {
   sc.scrollLeft = px * real - ox;
   sc.scrollTop = py * real - oy;
 }
+/* Mobile: iOS ignores user-scalable=no, so pinching used to zoom the whole
+ * PAGE and strand the header/hamburger off-screen. Block page zoom and
+ * translate a pinch over the map into the map's own zoom instead. */
+(() => {
+  let gz = 1;
+  document.addEventListener('gesturestart', e => { e.preventDefault(); gz = 1; }, {passive: false});
+  document.addEventListener('gesturechange', e => {
+    e.preventDefault();
+    if (!e.target || !e.target.closest || !e.target.closest('#mapscroll')) return;
+    const k = e.scale / gz;
+    gz = e.scale;
+    if (k && isFinite(k)) zoomAt(k, e.clientX, e.clientY);
+  }, {passive: false});
+  document.addEventListener('gestureend', e => e.preventDefault(), {passive: false});
+})();
 $('#zoomIn').onclick = () => zoomAt(1.4);
 $('#zoomOut').onclick = () => zoomAt(1 / 1.4);
 $('#zoomFit').onclick = () => { S.zoom = 1; sizePlan(); };
