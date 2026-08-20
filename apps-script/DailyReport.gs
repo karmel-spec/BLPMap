@@ -1884,7 +1884,8 @@ function timeLogRows_(days) {
  * Status flow: Requested -> In progress -> Live -> Tested. The requester
  * confirms "Tested" themselves from the map's My Requests list. */
 // Pre-Queue approval is manager-only, enforced HERE (not just in the UI)
-var PQ_ADMINS = ['melissa@brighamlarsonpianos.com', 'brigham@brighamlarsonpianos.com',
+var PQ_ADMINS = ['markhales.blp@gmail.com',   // Mark — lead manager, full permissions
+  'melissa@brighamlarsonpianos.com', 'brigham@brighamlarsonpianos.com',
   'karmel@brighamlarsonpianos.com', 'alisa@brighamlarsonpianos.com',
   'susie@brighamlarsonpianos.com', 'walter@brighamlarsonpianos.com'];
 function preQueueApprove_(req) {

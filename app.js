@@ -659,9 +659,26 @@ function soldBadge(p, cx, cy, sc) {
 // hasn't been received — verbal commitment only, NO work may start.
 // Source of truth: "Pre-Queue" in the Piano Log's status column (S).
 function preQueue(p) { return /pre[\s-]?queue/i.test(p.status || ''); }
-function isAdminUser() {
+/* Manager tier — granted ONLY through Google sign-in with these exact BLP
+ * gmails; a typed PIN name never elevates anyone.
+ *   Mark (lead manager): FULL — everything the admins can do here.
+ *   Matthew, Jacob (assistant managers): full EDIT of the Store Map
+ *   (moves, phases, media, clocking — no approval powers). */
+const MANAGER_ROLES = {
+  'markhales.blp@gmail.com': 'full',
+  'matthewwessman.blp@gmail.com': 'edit',
+  'jacobmower.blp@gmail.com': 'edit',
+};
+function userRole() {
   const u = authUser();
-  return !!(u && u.email && ADMINS.some(a => a.email.toLowerCase() === u.email.toLowerCase()));
+  const em = (u && u.email ? u.email : '').toLowerCase();
+  if (!em) return '';
+  if (ADMINS.some(a => a.email.toLowerCase() === em)) return 'admin';
+  return MANAGER_ROLES[em] || '';
+}
+function isAdminUser() {
+  const r = userRole();
+  return r === 'admin' || r === 'full';
 }
 function ghostBadge(p, cx, cy, sc) {
   if (!preQueue(p)) return '';
@@ -4480,7 +4497,9 @@ function renderAuth() {
     $('#gsiBtn').innerHTML = '<button class="goauth sm" type="button">Sign in with Google</button>';
     $('#gsiBtn').querySelector('.goauth').onclick = oidcLogin;
   } else if (u) {
-    box.innerHTML = `<b>Signed in</b>
+    const role = userRole();
+    const roleTag = role === 'admin' ? 'ADMIN' : role === 'full' ? 'MANAGER · FULL' : role === 'edit' ? 'MANAGER · EDIT' : '';
+    box.innerHTML = `<b>Signed in${roleTag ? ` <i class="rolechip">${roleTag}</i>` : ''}</b>
       <span class="authname">${u.pic ? `<img class="authpic" src="${esc(u.pic)}" alt="">` : '👤 '}${esc(u.name)}</span>
       <button class="authout" id="authOut">sign out</button>`;
     $('#authOut').onclick = signOut;

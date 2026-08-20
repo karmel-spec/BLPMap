@@ -733,3 +733,4 @@ td a{color:#9e2020}
   border-radius:50%;border:1px solid #cfd6dc;background:#fff;color:#3a4046;font-size:17px;line-height:1;
   cursor:pointer;box-shadow:0 2px 8px rgba(20,30,40,.16);margin-bottom:-36px}
 .viewclose:hover{border-color:#9e2020;color:#9e2020;background:#fdf7f7}
+.rolechip{font-style:normal;font-size:9px;font-weight:800;letter-spacing:1px;background:#9e2020;color:#fff;border-radius:4px;padding:2px 6px;margin-left:6px;vertical-align:1px}
