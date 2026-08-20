@@ -1044,8 +1044,9 @@ async function scanPaperwork(p, pop) {
 async function setPaperwork(p, kind, url, name, pop) {
   const msg = pop.querySelector('.pwmsg');
   popPinned = true;
-  const {pin, ok} = writeAuth();
-  if (!ok) { if (msg) { msg.className = 'pwmsg phmsg err'; msg.textContent = 'Sign in with Google (menu) first.'; } return; }
+  const wa = writeAuth();
+  if (!wa.ok) { if (msg) { msg.className = 'pwmsg phmsg err'; msg.textContent = wa.renewing ? 'Sign-in expired — renewing, retry in a moment.' : 'Sign in with Google (menu) first.'; } return; }
+  const pin = wa.pin;
   if (msg) { msg.className = 'pwmsg phmsg'; msg.textContent = 'Saving…'; }
   try {
     const r = await fetch(BRIDGE_URL, {
@@ -2022,8 +2023,18 @@ function openSuggestBox() {
   ov.querySelector('.sgsend').onclick = async () => {
     const text = ov.querySelector('.sgtext').value.trim();
     if (!text) { msg.className = 'sgmsg err'; msg.textContent = 'Write a sentence first.'; return; }
-    const {pin, ok} = writeAuth();
-    if (!ok) { msg.className = 'sgmsg err'; msg.textContent = 'Sign in first so we know who to thank.'; return; }
+    const wa = writeAuth();
+    if (!wa.ok) {
+      if (wa.renewing) {
+        lsSet('sgDraft', JSON.stringify({type, text}));
+        msg.className = 'sgmsg';
+        msg.textContent = 'Your sign-in expired — renewing it now, back in a second…';
+      } else {
+        msg.className = 'sgmsg err'; msg.textContent = 'Sign in first so we know who to thank.';
+      }
+      return;
+    }
+    const pin = wa.pin;
     msg.className = 'sgmsg'; msg.textContent = shotFile ? 'Uploading screenshot…' : 'Sending…';
     const body = {pin, action: 'suggest', type, text,
       context: 'view:' + (S.view || 'map') + (openSerial ? ' · piano #' + openSerial : ''),
@@ -2074,6 +2085,22 @@ async function loadMyRequests(ov) {
 setTimeout(() => {
   const btn = document.getElementById('suggestBtn');
   if (btn) btn.onclick = openSuggestBox;
+  // a draft stashed before a sign-in renewal: reopen the box, text intact
+  const d = lsGet('sgDraft');
+  if (d && authUser()) {
+    lsDel('sgDraft');
+    try {
+      const {type, text} = JSON.parse(d);
+      openSuggestBox();
+      const ov = document.querySelector('.sgbox');
+      if (ov) {
+        ov.querySelector('.sgtext').value = text || '';
+        ov.querySelectorAll('.sgt').forEach(x => x.classList.toggle('on', x.dataset.t === type));
+        const m = ov.querySelector('.sgmsg');
+        if (m) { m.className = 'sgmsg ok'; m.textContent = 'Signed back in — hit Send it 🚀 to file your request.'; }
+      }
+    } catch (e) {}
+  }
 }, 500);
 
 /* ===================== WORK CLOCK =====================
@@ -4400,7 +4427,17 @@ function teamPin(forceAsk) {
 // bridge's legacy check). Signed-out users are pointed at the menu.
 function writeAuth() {
   const u = authUser();
-  if (u) return {pin: lsGet('blpPin') || '', ok: true};
+  if (u) {
+    const pin = lsGet('blpPin') || '';
+    // Google session past its hour and no PIN to fall back on: renew the
+    // token via the redirect flow (login_hint skips the account chooser,
+    // so it's a ~2s round trip). The caller's message shows meanwhile.
+    if (!u.pinOnly && !pin && u.exp * 1000 < Date.now() + 30000) {
+      setTimeout(() => oidcLogin(u.email), 400);
+      return {pin: '', ok: false, renewing: true};
+    }
+    return {pin, ok: true};
+  }
   try {
     // surface the sign-in box so "why can't I edit?" answers itself
     $('#side').classList.add('open');
@@ -4546,7 +4583,7 @@ function initAuth() {
  * and redirect modes, so the visible sign-in controls navigate to Google's
  * plain OAuth page instead — out and back with the ID token in the hash.
  * Same JWT, same onGoogleCred, works identically in every browser. */
-function oidcLogin() {
+function oidcLogin(hintEmail) {
   const nonce = (crypto.randomUUID ? crypto.randomUUID()
     : String(Math.random()).slice(2) + Date.now());
   lsSet('blpNonce', nonce);
@@ -4555,8 +4592,11 @@ function oidcLogin() {
     redirect_uri: 'https://blpstoremap.netlify.app/',
     response_type: 'id_token',
     scope: 'openid email profile',
-    nonce, prompt: 'select_account',
+    nonce,
   });
+  // re-auth of a known account: skip the chooser, Google bounces right back
+  if (hintEmail) q.set('login_hint', hintEmail);
+  else q.set('prompt', 'select_account');
   location.href = 'https://accounts.google.com/o/oauth2/v2/auth?' + q;
 }
 function consumeOidcHash() {
