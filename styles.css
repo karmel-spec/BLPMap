@@ -739,3 +739,7 @@ td a{color:#9e2020}
 html,body{touch-action:manipulation;overscroll-behavior:none}
 .mapscroll{touch-action:pan-x pan-y}
 .bar{position:sticky;top:0;z-index:80;padding-top:calc(8px + env(safe-area-inset-top))}
+/* the top-bar name chip doubles as the sign-out button */
+.topwho{cursor:pointer}
+.topwho:hover{opacity:.75}
+.topwho::after{content:" ⏻";font-size:10px;color:#ff8a7e}

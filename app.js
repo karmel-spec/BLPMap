@@ -4503,6 +4503,18 @@ function renderAuth() {
   authGate();
   // top-bar identity chip — who's signed in, always visible
   const tw = $('#topWho');
+  if (tw && !tw.dataset.wired) {
+    tw.dataset.wired = '1';
+    // tap your name to sign out — the shared-device flow: gate comes back
+    // for the next person, and everything they do is logged under THEIR name
+    tw.onclick = () => {
+      const u = authUser();
+      if (!u) return;
+      if (confirm('Sign out ' + (u.name || 'this user') + '?\n\nThe sign-in screen comes back so the next person can log in as themselves.')) {
+        signOut();
+      }
+    };
+  }
   if (tw) {
     const tu = authUser();
     tw.innerHTML = tu
