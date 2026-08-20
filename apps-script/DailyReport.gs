@@ -1807,14 +1807,28 @@ function closeSession_(sh, open, closedBy, endAt) {
   return {serial: String(open.v[1]), piano: String(open.v[2]), phase: String(open.v[3]),
           start: String(open.v[4]), minutes: mins};
 }
-function clockIn_(req) {
+function withClockLock_(fn) {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try { return fn(); } finally { lock.releaseLock(); }
+}
+function clockIn_(req) { return withClockLock_(function () { return clockInLocked_(req); }); }
+function clockInLocked_(req) {
   var tech = clockTech_(req);
   if (!tech) return {error: 'no name on this session — sign in first'};
   if (!req.serial) return {error: 'serial required'};
   var sh = timeLogSheet_();
   var closed = null;
-  var open = openSessionRow_(sh, tech);
-  if (open) closed = closeSession_(sh, open, 'switch');
+  var open;
+  while ((open = openSessionRow_(sh, tech))) {   // a double-click can leave several
+    closed = closeSession_(sh, open, 'switch');
+    if (closed.minutes <= 1 && closed.serial === String(req.serial)) {
+      // same piano within a minute = the same click twice — reuse, don't restack
+      sh.getRange(open.row, 6, 1, 2).setValues([['', '']]);
+      return {ok: true, closed: null,
+              open: {tech: tech, serial: closed.serial, phase: closed.phase, start: closed.start}};
+    }
+  }
   var psh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
   var f = findPiano_(psh, req.serial, req.row);
   var startIso = new Date().toISOString();
@@ -1823,15 +1837,46 @@ function clockIn_(req) {
   return {ok: true, closed: closed,
           open: {tech: tech, serial: String(req.serial), phase: String(req.phase || ''), start: startIso}};
 }
-function clockOut_(req) {
+function clockOut_(req) { return withClockLock_(function () { return clockOutLocked_(req); }); }
+function clockOutLocked_(req) {
   var tech = clockTech_(req);
   if (!tech) return {error: 'no name on this session — sign in first'};
   var sh = timeLogSheet_();
   var open = openSessionRow_(sh, tech);
   if (!open) return {ok: true, closed: null, note: 'nothing was open'};
-  return {ok: true, closed: closeSession_(sh, open, String(req.reason || ''), req.endAt)};
+  var out = closeSession_(sh, open, String(req.reason || ''), req.endAt);
+  var extra;   // close any race-created leftovers too
+  while ((extra = openSessionRow_(sh, tech))) closeSession_(sh, extra, 'duplicate punch (auto)');
+  return {ok: true, closed: out};
+}
+/* Forgotten sessions: anything still open from a PREVIOUS day gets closed
+ * automatically — at 6 PM Denver on its start day (or +1h if it began after
+ * 6 PM), capped at 10 hours. Runs opportunistically, at most every 10 min. */
+function sweepForgottenClocks_() {
+  var cache = CacheService.getScriptCache();
+  if (cache.get('clocksweep')) return 0;
+  cache.put('clocksweep', '1', 600);
+  var sh = timeLogSheet_();
+  var last = sh.getLastRow();
+  if (last < 2) return 0;
+  var from = Math.max(2, last - 400);
+  var vals = sh.getRange(from, 1, last - from + 1, 6).getValues();
+  var todayStr = Utilities.formatDate(new Date(), 'America/Denver', 'yyyy-MM-dd');
+  var n = 0;
+  for (var i = 0; i < vals.length; i++) {
+    if (!vals[i][0] || vals[i][5] || !vals[i][4]) continue;
+    var start = new Date(vals[i][4]);
+    if (Utilities.formatDate(start, 'America/Denver', 'yyyy-MM-dd') === todayStr) continue;
+    var six = new Date(Utilities.formatDate(start, 'America/Denver', "yyyy-MM-dd'T'18:00:00XXX"));
+    var end = six > start ? six : new Date(start.getTime() + 3600000);
+    if (end - start > 36000000) end = new Date(start.getTime() + 36000000);
+    closeSession_(sh, {row: from + i, v: vals[i]}, 'auto: forgot to clock out', end.toISOString());
+    n++;
+  }
+  return n;
 }
 function timeClockState_() {
+  try { sweepForgottenClocks_(); } catch (e) {}
   var sh = timeLogSheet_();
   var last = sh.getLastRow();
   var openList = [], today = {};
