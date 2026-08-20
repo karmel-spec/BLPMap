@@ -2558,6 +2558,24 @@ function buildShopManagerReport_() {
 
   R.blocked = smBlockedByTasks_(pianos, defs);
 
+  // hours clocked yesterday (Work Clock) — adoption nudge + real numbers
+  R.clocked = []; R.clockedTotal = 0;
+  try {
+    var tlRows = timeLogRows_(3).rows;
+    var yd = Utilities.formatDate(new Date(Date.now() - 86400000), 'America/Denver', 'yyyy-MM-dd');
+    var per = {};
+    tlRows.forEach(function (r0) {
+      if (Utilities.formatDate(new Date(r0.start), 'America/Denver', 'yyyy-MM-dd') !== yd) return;
+      if (!per[r0.tech]) per[r0.tech] = {min: 0, pianos: {}};
+      per[r0.tech].min += (r0.minutes || 0);
+      per[r0.tech].pianos[r0.serial + ' ' + (r0.piano || '')] = r0.phase || '';
+    });
+    R.clocked = Object.keys(per).map(function (t) {
+      return {tech: t, hours: Math.round(per[t].min / 6) / 10, pianos: Object.keys(per[t].pianos).length};
+    }).sort(function (a, b) { return b.hours - a.hours; });
+    R.clockedTotal = Math.round(R.clocked.reduce(function (s0, x) { return s0 + x.hours; }, 0) * 10) / 10;
+  } catch (e) {}
+
   // suggestion box: filed or moved in the last 7 days — public credit fuels it
   R.suggestions = [];
   try {
@@ -2737,6 +2755,17 @@ function shopManagerHtml_(R) {
     + '<b style="color:' + (alerts ? '#9e2020' : '#2e7d4f') + '">' + alerts + '</b> items needing attention'
     + '</p>');
 
+  sec('⏱', 'Hours clocked yesterday', R.clockedTotal + ' h',
+    'From the per-piano Work Clock. Live status and job costing: Shop Manager → Shop Board.');
+  if (R.clocked && R.clocked.length) {
+    ul(R.clocked.map(function (x) {
+      return '<b>' + x.tech + '</b> — ' + x.hours + ' h across ' + x.pianos
+        + (x.pianos === 1 ? ' piano' : ' pianos');
+    }));
+  } else {
+    H.push('<p style="margin:0 0 8px;font:12.5px Helvetica,Arial;color:#8a847b">No punches yesterday — '
+      + 'remind the team: the ⏱ Work Clock on every piano card (or scanning the shop tag) is how hours land in job costing.</p>');
+  }
   if (R.suggestions && R.suggestions.length) {
     var SICON = {bug: '🐛', edit: '✏️', idea: '💡'};
     var SPILL = {'Requested': ['#eeeeee', '#555555'], 'In progress': ['#fdf3ec', '#9a5b13'],
@@ -2929,7 +2958,17 @@ function sendShopManagerReportTo_(to, note) {
   return {ok: true, to: to, alerts: alerts, changes: R.activity.total};
 }
 
+function setupShopManagerBriefing() {
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === 'sendShopManagerReport') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('sendShopManagerReport').timeBased()
+    .everyDays(1).atHour(6).nearMinute(30).inTimezone('America/Denver').create();
+  return 'Shop Manager briefing scheduled — weekdays ~6:30 AM to ' + SHOPMGR_TO;
+}
 function sendShopManagerReport() {
+  var dow = Number(Utilities.formatDate(new Date(), 'America/Denver', 'u'));
+  if (dow > 5 && !isManualRun_()) return;   // weekdays only on the trigger
   return sendShopManagerReportTo_(SHOPMGR_TO);
 }
 
