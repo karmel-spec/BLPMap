@@ -728,3 +728,8 @@ td a{color:#9e2020}
 .pqwarn i{font-size:11px;color:#5a4a00}
 .pqapprove{background:#241c00;color:#ffd60a;border:0;border-radius:8px;padding:7px 12px;font:800 12px 'Assistant',sans-serif;cursor:pointer}
 .pqmsg{font-size:11px}
+/* ✕ on every report/panel view — back to the map */
+.viewclose{position:sticky;top:4px;align-self:flex-end;z-index:25;width:36px;height:36px;flex:none;
+  border-radius:50%;border:1px solid #cfd6dc;background:#fff;color:#3a4046;font-size:17px;line-height:1;
+  cursor:pointer;box-shadow:0 2px 8px rgba(20,30,40,.16);margin-bottom:-36px}
+.viewclose:hover{border-color:#9e2020;color:#9e2020;background:#fdf7f7}

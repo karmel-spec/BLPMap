@@ -5334,6 +5334,22 @@ function switchView(v) { S.view = v; showView(v); closeNav(); }
 document.querySelectorAll('.navitem[data-view]').forEach(el =>
   el.onclick = () => switchView(el.dataset.view));
 
+// every non-map view gets a ✕ back to the map (Escape works too)
+['report', 'board', 'cal', 'media', 'shopmap'].forEach(v => {
+  const el = $('#view-' + v);
+  if (el && !el.querySelector('.viewclose')) {
+    const b = document.createElement('button');
+    b.className = 'viewclose';
+    b.title = 'Close — back to the map';
+    b.textContent = '✕';
+    b.onclick = () => switchView('map');
+    el.prepend(b);
+  }
+});
+addEventListener('keydown', e => {
+  if (e.key === 'Escape' && S.view !== 'map' && !document.querySelector('.tagview')) switchView('map');
+});
+
 function openNav() { $('#side').classList.add('open'); $('#scrim').classList.add('show'); }
 function closeNav() { $('#side').classList.remove('open'); $('#scrim').classList.remove('show'); }
 $('#menuBtn').onclick = () =>
