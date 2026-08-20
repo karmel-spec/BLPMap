@@ -1921,7 +1921,19 @@ function requestsSheet_() {
 function addRequest_(req) {
   var sh = requestsSheet_();
   var who = clockTech_(req) || 'Unknown';
-  var id = 'R' + Date.now().toString(36).toUpperCase();
+  // friendly id: MMDDYY + last name + that person's running request count
+  // e.g. 081926wessman01, then 082026wessman02 on their next one
+  var lastName = String(who).trim().split(/\s+/).pop().toLowerCase().replace(/[^a-z]/g, '') || 'team';
+  var n = 0;
+  var lastRow = sh.getLastRow();
+  if (lastRow >= 2) {
+    var whos = sh.getRange(2, 3, lastRow - 1, 1).getValues();
+    for (var w = 0; w < whos.length; w++) {
+      if (String(whos[w][0]).trim().toLowerCase() === String(who).trim().toLowerCase()) n++;
+    }
+  }
+  var id = Utilities.formatDate(new Date(), 'America/Denver', 'MMddyy')
+    + lastName + ('0' + (n + 1)).slice(-2);
   var shot = '';
   if (req.photo) {
     try {
