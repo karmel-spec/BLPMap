@@ -3585,6 +3585,11 @@ function setupShopManagerBriefing() {
     + SHOPMGR_TO + ' | Admin: ' + ADMIN_TO;
 }
 function sendShopManagerReport() {
+  var hour = Number(Utilities.formatDate(new Date(), 'America/Denver', 'H'));
+  // the briefs moved to an evening send. A stale morning trigger still exists
+  // under another account (getProjectTriggers can't delete another user's), so
+  // ignore any firing before noon rather than double-send.
+  if (!isManualRun_() && hour < 12) return;
   // evening send: the brief is for TOMORROW, so skip the evenings before a
   // non-working day (Fri evening's brief would be for Saturday) and let
   // Sunday evening cover Monday
