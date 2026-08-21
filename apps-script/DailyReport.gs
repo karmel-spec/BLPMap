@@ -2696,6 +2696,178 @@ function applySchedule_(req) {
 }
 
 /* ---- the briefing itself ---- */
+/* ---------- Morning Standup (8AM) — celebration + culture block ---------- */
+var SM_SAFETY_TIPS = [
+  'Lifting a grand? Never alone — three points of contact on the skid board, and clear the path first.',
+  'Tilters and dollies: check straps for fraying before the first move of the day, not after.',
+  'Lacquer and finishing areas: respirators on, and check the spray booth exhaust is running before the gun.',
+  'String replacement: eye protection ALWAYS — a breaking bass string carries real force.',
+  'Keep walkways between map spots clear — a dolly path blocked by a bench is how toes get broken.',
+  'Sanding and buffing: dust masks on, and vacuum the station at the end of the shift, not "later".',
+  'Soldering and hot tools: unplug at the outlet when you step away, even "just for a minute".',
+  'Cabinet parts on high shelves: heavy pieces live at waist height — never above shoulder level.',
+  'Extension cords: fully unrolled before load, out of walk paths, and never daisy-chained.',
+  'Chemical strippers: gloves, ventilation, and label every transfer container the moment you pour.',
+  'Ladders: 3 points of contact, never the top step, and a spotter for anything over 8 feet.',
+  'Pinblock and plate work: crane straps rated and inspected — a plate drop is unforgiving.',
+  'Blades and chisels: sharpen at the bench, cap or sheath before they go in the apron.',
+  'End of day: hot rags from oil finishing go in the metal can with water — spontaneous combustion is real.'
+];
+var SM_STANDARDS = [
+  'Every piano leaves cleaner than it arrived — wipe your station and the piano before you clock out of it.',
+  'Photograph before you disassemble. Future-you (and the client) will thank you.',
+  'If you touch it, log it — the Work Clock and activity log are how we prove our craftsmanship story.',
+  'Client parts are sacred: label, bag, and shelf every screw the same day it comes off.',
+  'A phase isn’t done until the checklist says it’s done — no verbal "basically finished".',
+  'See something drifting on another bench? Say something kindly, today, not at the deadline.',
+  'The queue order is a promise to clients — jumping it needs a manager’s yes, every time.',
+  'Tools back on the shadow board before lunch and before close — hunting tools is stolen shop time.',
+  'When in doubt on a call (finish level, part choice), stop and ask — rework costs triple.',
+  'Write notes a stranger could follow — the next tech on this piano might not be you.',
+  'Under-promise, over-deliver: pad the estimate, beat the date.',
+  'Treat every walk-through like the client is watching — because on delivery day, they are.',
+  'A near-miss is a report, not a story for later — we fix hazards the day we meet them.',
+  'Celebrate finished work out loud — a piano leaving the shop is why we’re all here.'
+];
+function smParseMonthDay_(s) {
+  var m = /^(\d{1,2})\s*[\/\-]\s*(\d{1,2})/.exec(String(s || '').trim());
+  if (!m) return null;
+  var mo = +m[1], d = +m[2];
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+  var yr = /[\/\-](\d{2,4})\s*$/.exec(String(s).trim().slice(m[0].length));
+  var y = yr ? +yr[1] : null;
+  if (y !== null && y < 100) y += (y > 30 ? 1900 : 2000);
+  return {mo: mo, d: d, y: y};
+}
+function smStandup_(pianos, R) {
+  var S = {bdays: [], annivs: [], newFaces: [], delivered: [], teamwork: [],
+           champ: null, personalBests: [], safety: '', standard: '', focus: []};
+  var now = new Date();
+  var doy = Math.floor((now - new Date(now.getFullYear(), 0, 0)) / 86400000);
+  S.safety = SM_SAFETY_TIPS[doy % SM_SAFETY_TIPS.length];
+  S.standard = SM_STANDARDS[doy % SM_STANDARDS.length];
+
+  // birthdays + work anniversaries + new team members (Current Team sheet;
+  // only first name, position, and the dates below ever leave this function)
+  try {
+    var ts = SpreadsheetApp.openById('1j1FP78rRj1jrl2z-_vIg95kN3GuG8TI4dpOheSnIoPc')
+      .getSheetByName('Current Team');
+    var tv = ts.getRange(2, 1, Math.max(1, ts.getLastRow() - 1), 25).getValues();
+    var win = [];   // today + next 6 days as {mo, d, off}
+    for (var o = 0; o < 7; o++) {
+      var dt = new Date(now.getTime() + o * 86400000);
+      win.push({mo: dt.getMonth() + 1, d: dt.getDate(), off: o});
+    }
+    function inWin(md) {
+      if (!md) return null;
+      for (var wI = 0; wI < win.length; wI++) {
+        if (win[wI].mo === md.mo && win[wI].d === md.d) return win[wI].off;
+      }
+      return null;
+    }
+    function when(off) { return off === 0 ? 'TODAY 🎉' : off === 1 ? 'tomorrow'
+      : Utilities.formatDate(new Date(now.getTime() + off * 86400000), 'America/Denver', 'EEEE M/d'); }
+    for (var i = 0; i < tv.length; i++) {
+      var first = String(tv[i][0] || '').trim(), last = String(tv[i][1] || '').trim();
+      if (!first) continue;
+      var pos = String(tv[i][3] || '').trim();
+      var bd = smParseMonthDay_(tv[i][24]);
+      var off1 = inWin(bd);
+      if (off1 !== null) {
+        var age = bd.y ? (now.getFullYear() - bd.y) : null;
+        S.bdays.push({name: first + ' ' + last, when: when(off1), off: off1,
+                      age: age && age > 10 && age < 90 ? age : null});
+      }
+      var st = tv[i][6];
+      var sd = (st instanceof Date) ? {mo: st.getMonth() + 1, d: st.getDate(), y: st.getFullYear()}
+                                    : smParseMonthDay_(st);
+      if (sd && sd.y) {
+        var off2 = inWin(sd);
+        var yrs = now.getFullYear() - sd.y;
+        if (off2 !== null && yrs >= 1) {
+          S.annivs.push({name: first + ' ' + last, when: when(off2), off: off2, years: yrs, pos: pos});
+        }
+        var stDate = new Date(sd.y, sd.mo - 1, sd.d);
+        var daysHere = Math.floor((now - stDate) / 86400000);
+        if (daysHere >= 0 && daysHere <= 21) {
+          S.newFaces.push({name: first + ' ' + last, pos: pos, days: daysHere});
+        }
+      }
+    }
+    S.bdays.sort(function (a, b) { return a.off - b.off; });
+    S.annivs.sort(function (a, b) { return a.off - b.off; });
+  } catch (e) {}
+
+  // pianos delivered / completed yesterday — from the activity log
+  try {
+    (R.activity.phases || []).forEach(function (a) {
+      if (/deliver/i.test(String(a.detail || ''))) {
+        S.delivered.push({piano: a.piano, who: a.who});
+      }
+    });
+  } catch (e) {}
+
+  // teamwork: for pianos delivered yesterday or moving today, everyone who
+  // ever clocked time on them — "these N techs built this"
+  try {
+    var tl = timeLogRows_(240).rows || [];
+    var bySerial = {};
+    tl.forEach(function (r0) {
+      if (!r0.serial) return;
+      (bySerial[r0.serial] = bySerial[r0.serial] || {}).x = 1;
+      bySerial[r0.serial][r0.tech] = true;
+    });
+    var outbound = {};
+    S.delivered.forEach(function (d) { outbound[d.piano] = 'delivered yesterday'; });
+    (R.moves || []).forEach(function (e0) {
+      var s1 = String(e0.serial || e0.summary || '');
+      if (s1) outbound[s1] = 'moving today';
+    });
+    for (var key in outbound) {
+      for (var ser in bySerial) {
+        if (key.indexOf(ser) < 0 && ser.indexOf(key) < 0
+            && key.toLowerCase().indexOf(ser.toLowerCase()) < 0) continue;
+        var techs = Object.keys(bySerial[ser]).filter(function (t) { return t !== 'x'; });
+        if (techs.length >= 2) {
+          S.teamwork.push({piano: key, why: outbound[key], techs: techs});
+        }
+        break;
+      }
+    }
+  } catch (e) {}
+
+  // yesterday's Work Clock champion + personal-best days (last 60 days)
+  try {
+    if (R.clocked && R.clocked.length) S.champ = R.clocked[0];
+    var tl2 = timeLogRows_(60).rows || [];
+    var perDay = {};
+    tl2.forEach(function (r0) {
+      var d0 = Utilities.formatDate(new Date(r0.start), 'America/Denver', 'yyyy-MM-dd');
+      (perDay[r0.tech] = perDay[r0.tech] || {})[d0] =
+        (perDay[r0.tech][d0] || 0) + (r0.minutes || 0);
+    });
+    var yd = Utilities.formatDate(new Date(now.getTime() - 86400000), 'America/Denver', 'yyyy-MM-dd');
+    for (var t2 in perDay) {
+      var y0 = perDay[t2][yd] || 0;
+      if (y0 < 120) continue;
+      var best = true;
+      for (var d2 in perDay[t2]) { if (d2 !== yd && perDay[t2][d2] >= y0) { best = false; break; } }
+      if (best) S.personalBests.push({tech: t2, hours: Math.round(y0 / 6) / 10});
+    }
+  } catch (e) {}
+
+  // today's focus: next up in the queue + counts the room should hear
+  try {
+    (R.queueUp || []).slice(0, 3).forEach(function (p) {
+      S.focus.push('Queue #' + p.queuePos + ' — ' + smName_(p) + ' (' + (p.phase || 'no phase') + ')');
+    });
+    if ((R.moves || []).length) S.focus.push((R.moves.length) + ' move' + (R.moves.length > 1 ? 's' : '') + ' on today’s calendar — confirm crews and paths');
+    var od = (R.waiting || []).filter(function (w) { return w.state === 'overdue'; }).length;
+    if (od) S.focus.push(od + ' “waiting on” item' + (od > 1 ? 's' : '') + ' past the check-back date — assign owners');
+  } catch (e) {}
+  return S;
+}
+
 function buildShopManagerReport_() {
   var data = JSON.parse(UrlFetchApp.fetch(APP_URL + '/api/data').getContentText());
   var slots = JSON.parse(UrlFetchApp.fetch(APP_URL + '/data/slots.json').getContentText());
@@ -2875,6 +3047,7 @@ function buildShopManagerReport_() {
     return String(e.date || e.start || '').slice(0, 10) === today;
   });
   R.total = pianos.length;
+  R.standup = smStandup_(pianos, R);
   return R;
 }
 
@@ -2901,11 +3074,58 @@ function shopManagerHtml_(R) {
   }
 
   H.push('<div style="max-width:760px;margin:0 auto;font-family:Helvetica,Arial,sans-serif">');
-  H.push('<div style="background:#0d0d0d;color:#fff;padding:16px 18px;border-radius:8px 8px 0 0">'
-    + '<div style="font-family:Georgia,serif;letter-spacing:3px;font-size:15px">BRIGHAM LARSON PIANOS</div>'
-    + '<div style="font-size:11px;letter-spacing:2px;color:#c9a227;margin-top:3px">SHOP MANAGER BRIEFING · '
-    + R.day.toUpperCase() + '</div></div>');
+  H.push('<div style="text-align:center;background:#faf8f4;border:1.5px solid #121212;border-bottom:none;'
+    + 'border-radius:8px 8px 0 0;padding:20px 18px 14px">'
+    + '<img src="' + APP_URL + '/assets/blp-logo.png" alt="Brigham Larson Pianos" '
+    +   'style="max-height:56px;max-width:260px">'
+    + '<div style="font:700 12px Helvetica,Arial,sans-serif;letter-spacing:3.5px;color:#9e2020;margin-top:12px">'
+    +   'SHOP MANAGER BRIEFING</div>'
+    + '<div style="font-family:Georgia,serif;font-size:21px;color:#2b2f33;margin-top:5px">' + R.day + '</div>'
+    + '<div style="width:64px;height:3px;background:#c9a227;margin:12px auto 0;border-radius:2px"></div>'
+    + '</div>');
   H.push('<div style="border:1.5px solid #121212;border-top:none;border-radius:0 0 8px 8px;padding:16px 18px">');
+
+  // ---------- Morning Standup — first thing the 8AM huddle reads ----------
+  var SU = R.standup || {};
+  H.push('<div style="background:#faf8f4;border:1px solid #e6dfd2;border-radius:10px;padding:14px 16px;margin:2px 0 18px">');
+  H.push('<div style="font:800 13px Helvetica,Arial;letter-spacing:2px;color:#9e2020;margin-bottom:10px">'
+    + '🌅 MORNING STANDUP · 8AM</div>');
+  function su(icon, label, lines) {
+    if (!lines || !lines.length) return;
+    H.push('<div style="margin:0 0 10px"><div style="font:700 12px Helvetica,Arial;color:#6f6a63;'
+      + 'letter-spacing:1px;text-transform:uppercase;margin-bottom:3px">' + icon + ' ' + label + '</div>'
+      + '<ul style="margin:0;padding-left:18px;font:13px/1.6 Helvetica,Arial;color:#2b2f33">'
+      + lines.map(function (t) { return '<li>' + t + '</li>'; }).join('') + '</ul></div>');
+  }
+  su('🎂', 'Birthdays', (SU.bdays || []).map(function (b) {
+    return '<b>' + b.name + '</b> — ' + b.when + (b.age ? ' <span style="color:#8a847b">(turning ' + b.age + ')</span>' : '');
+  }));
+  su('🥂', 'Work anniversaries', (SU.annivs || []).map(function (a) {
+    return '<b>' + a.name + '</b> — ' + a.years + ' year' + (a.years > 1 ? 's' : '') + ' at BLP (' + a.when + ')';
+  }));
+  su('👋', 'Welcome the new faces', (SU.newFaces || []).map(function (n) {
+    return '<b>' + n.name + '</b>' + (n.pos ? ' — ' + n.pos : '')
+      + ' <span style="color:#8a847b">(day ' + (n.days + 1) + ')</span>';
+  }));
+  su('🚚', 'Celebrate — finished & delivered', (SU.delivered || []).map(function (d) {
+    return '<b>' + d.piano + '</b> left the shop yesterday <span style="color:#8a847b">(logged by ' + d.who + ')</span> 🎉';
+  }));
+  su('🤝', 'Teamwork spotlight', (SU.teamwork || []).map(function (t) {
+    return '<b>' + t.piano + '</b> (' + t.why + ') — built by <b>' + t.techs.length + ' techs</b>: '
+      + t.techs.join(', ') + '. Take a bow.';
+  }));
+  var champLines = [];
+  if (SU.champ) champLines.push('<b>' + SU.champ.tech + '</b> led the Work Clock yesterday — '
+    + SU.champ.hours + ' h across ' + SU.champ.pianos + (SU.champ.pianos === 1 ? ' piano' : ' pianos') + ' 🏆');
+  (SU.personalBests || []).forEach(function (pb) {
+    if (SU.champ && pb.tech === SU.champ.tech) return;
+    champLines.push('<b>' + pb.tech + '</b> set a personal-best day — ' + pb.hours + ' h logged 📈');
+  });
+  su('🏆', 'Work Clock wins', champLines);
+  su('🛡', 'Safety minute', SU.safety ? ['<i>' + SU.safety + '</i>'] : []);
+  su('⭐', 'Standard of the day', SU.standard ? ['<i>' + SU.standard + '</i>'] : []);
+  su('🎯', 'Today’s focus', SU.focus || []);
+  H.push('</div>');
 
   // at a glance
   var alerts = R.blocked.length + R.stalled.length + R.noCab.length + R.noTrack.length
