@@ -665,6 +665,10 @@ function doPost(e) {
       if (pqa.ok) logAct_(who, 'Queue APPROVED (deposit in)', pqa.summary || req.serial, pqa.status);
       return json_(pqa);
     }
+    if (req.action === 'briefdoc') {
+      try { return json_(briefDocOnly_()); }
+      catch (e2) { return json_({error: String(e2).slice(0, 300)}); }
+    }
     if (req.action === 'sendbrief') {
       var sb = sendShopManagerReportTo_(SHOPMGR_TO);
       logAct_(who, 'Shop brief sent manually', 'briefing', sb.doc || '');
@@ -3108,8 +3112,8 @@ function sendShopManagerReportTo_(to, note) {
   }
   var subject = (note ? '[SAMPLE] ' : '') + 'Shop Manager Briefing — ' + R.day
     + ' · ' + alerts + ' to review';
-  var docUrl = '';
-  try { docUrl = briefDoc_(subject, html); } catch (e) {}
+  var docUrl = '', docErr = '';
+  try { docUrl = briefDoc_(subject, html); } catch (e) { docErr = String(e).slice(0, 200); }
   if (docUrl) {
     html = '<div style="max-width:760px;margin:0 auto 10px;text-align:right;font:12px Helvetica,Arial">'
       + '<a href="' + docUrl + '">📄 Open this briefing as a Google Doc</a></div>' + html;
@@ -3123,7 +3127,16 @@ function sendShopManagerReportTo_(to, note) {
       + 'Open in HTML for the full briefing.',
     name: 'BLP Store Map',
   });
-  return {ok: true, to: to, alerts: alerts, changes: R.activity.total, doc: docUrl};
+  return {ok: true, to: to, alerts: alerts, changes: R.activity.total, doc: docUrl, docErr: docErr};
+}
+// build + archive today's brief as a Google Doc WITHOUT emailing (for testing
+// and for regenerating a doc on demand)
+function briefDocOnly_() {
+  var R = buildShopManagerReport_();
+  var alerts = R.blocked.length + R.stalled.length + R.noCab.length + R.noTrack.length
+    + R.noPhase.length + R.noAddress.length + R.exitBlocked.length;
+  var subject = 'Shop Manager Briefing — ' + R.day + ' · ' + alerts + ' to review';
+  return {ok: true, doc: briefDoc_(subject, shopManagerHtml_(R))};
 }
 
 function setupShopManagerBriefing() {
