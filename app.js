@@ -760,11 +760,34 @@ function shareSheet(title, url) {
     catch (e) { prompt('Copy the link:', url); }
   };
   const list = ov.querySelector('.shlist');
+  const sel = new Set();
   const renderPh = () => {
-    list.innerHTML = phonesCache.length
-      ? phonesCache.map(t =>
-          `<a class="shper" href="sms:${esc(t.phone)}?&body=${encodeURIComponent(text)}">💬 ${esc(t.name)}</a>`).join('')
-      : '<i>no team phone numbers on file yet (Tech Phones tab)</i>';
+    if (!phonesCache.length) {
+      list.innerHTML = '<i>no team phone numbers on file yet (Tech Phones tab)</i>';
+      return;
+    }
+    const all = sel.size === phonesCache.length;
+    const picked = [...sel].map(i => phonesCache[i]);
+    const emails = picked.map(t => t.email).filter(Boolean);
+    list.innerHTML = `<button class="shper shall ${all ? 'on' : ''}">${all ? '✓ ' : ''}Everyone</button>`
+      + phonesCache.map((t, i) =>
+          `<button class="shper ${sel.has(i) ? 'on' : ''}" data-i="${i}">${sel.has(i) ? '✓ ' : ''}${esc(t.name)}</button>`).join('')
+      + `<div class="shacts">${sel.size
+          ? `<a class="shbtn shgo" href="sms:${picked.map(t => esc(t.phone)).join(',')}?&body=${encodeURIComponent(text)}">💬 Text ${sel.size === 1 ? picked[0].name.split(' ')[0] : sel.size + ' people'}</a>`
+            + (emails.length
+              ? `<a class="shbtn shgo" href="mailto:${emails.map(esc).join(',')}?subject=${encodeURIComponent(title)}&body=${encodeURIComponent(text)}">✉️ Email ${emails.length === 1 ? picked.find(t => t.email).name.split(' ')[0] : emails.length + ' people'}</a>`
+              : '')
+          : '<i>tap names to pick who gets it — then text or email them all at once</i>'}</div>`;
+    list.querySelectorAll('.shper').forEach(b => b.onclick = () => {
+      if (b.classList.contains('shall')) {
+        if (all) sel.clear();
+        else phonesCache.forEach((t, i) => sel.add(i));
+      } else {
+        const i = +b.dataset.i;
+        if (sel.has(i)) sel.delete(i); else sel.add(i);
+      }
+      renderPh();
+    });
   };
   if (phonesCache) { renderPh(); return; }
   const wa = writeAuth();

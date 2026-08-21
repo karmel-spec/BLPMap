@@ -2107,6 +2107,23 @@ function teamPhones_() {
     out.push({name: name, phone: '+' + digits});
   }
   out.sort(function (a, b) { return a.name.localeCompare(b.name); });
+  // BLP email per teammate (Current Team: firstname col A, BLP Email col AE) —
+  // only name/phone/email ever leave this function, nothing else from that sheet
+  try {
+    var ts = SpreadsheetApp.openById('1j1FP78rRj1jrl2z-_vIg95kN3GuG8TI4dpOheSnIoPc')
+      .getSheetByName('Current Team');
+    var tv = ts.getRange(2, 1, Math.max(1, ts.getLastRow() - 1), 31).getValues();
+    var emails = {};
+    for (var k = 0; k < tv.length; k++) {
+      var fn = String(tv[k][0] || '').trim().toLowerCase();
+      var em = String(tv[k][30] || '').trim();
+      if (fn && em.indexOf('@') > 0) emails[fn] = em;
+    }
+    for (var m2 = 0; m2 < out.length; m2++) {
+      var key = out[m2].name.split(' ')[0].toLowerCase();
+      if (emails[key]) out[m2].email = emails[key];
+    }
+  } catch (e) {}
   return {ok: true, phones: out};
 }
 
