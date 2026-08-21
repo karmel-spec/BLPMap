@@ -5510,6 +5510,42 @@ function tasksTable() {
     </table>`;
 }
 
+/* Shop queue, in order — the answer to "who's next?" for any user. */
+function queueMembers() {
+  return S.data.pianos.filter(p => p.active && p.queuePos > 0)
+    .sort((a, b) => a.queuePos - b.queuePos);
+}
+function queueTable() {
+  const f = S.quF || (S.quF = {q: ''});
+  const all = queueMembers();
+  const rows = all.filter(p => !f.q ||
+    (p.summary + ' ' + p.serial + ' ' + (p.track || '') + ' ' + (p.location || ''))
+      .toLowerCase().includes(f.q.toLowerCase()));
+  const pending = S.data.pianos.filter(p => p.active && preQueue(p) && !p.queuePos);
+  const row = p => `<tr class="mrow" data-row="${p.row}" ${p.queuePos === 1
+      ? 'style="background:#eaf5ec"' : ''}>
+      <td style="font-weight:800;white-space:nowrap">#${p.queuePos}${p.queuePos === 1 ? ' · next up' : ''}</td>
+      <td>${esc(((p.year ? p.year + ' ' : '') + ([p.make, p.model].filter(Boolean).join(' ') || p.summary)).slice(0, 36))}<br>
+          <span class="lite" style="color:#8a929a;font-size:11px">${esc(p.serial)}</span></td>
+      <td>${esc(trackParts(p.track).list.join(' · ') || '—')}</td>
+      <td>${esc((effectivePhase(p) || '—').slice(0, 24))}</td>
+      <td>${esc(String(p.location || '—').slice(0, 14))}</td></tr>`;
+  return `<div class="actbar qubar">
+      <input class="quf" data-f="q" placeholder="search piano / serial / track…" value="${esc(f.q)}">
+      <span class="actcount">${rows.length}${f.q ? ' of ' + all.length : ''} in queue</span>
+      ${f.q ? '<button class="quclear">✕ clear</button>' : ''}
+    </div>
+    <table><tr><th>QUEUE</th><th>PIANO</th><th>TRACK</th><th>CURRENT PHASE</th><th>SPOT</th></tr>
+    ${rows.map(row).join('') || '<tr><td colspan="5" class="empty">Nothing matches.</td></tr>'}
+    </table>
+    ${pending.length ? `<p class="pd" style="margin:14px 0 6px">⚠️ <b>Pending shop work — not in the queue yet</b> (deposit not received):</p>
+      <table><tr><th>PIANO</th><th>SPOT</th></tr>
+      ${pending.map(p => `<tr class="mrow" data-row="${p.row}">
+        <td>${esc(((p.year ? p.year + ' ' : '') + ([p.make, p.model].filter(Boolean).join(' ') || p.summary)).slice(0, 36))}
+            <span class="lite" style="color:#8a929a;font-size:11px"> ${esc(p.serial)}</span></td>
+        <td>${esc(String(p.location || '—').slice(0, 14))}</td></tr>`).join('')}</table>` : ''}`;
+}
+
 function briefsTable() {
   if (!S.briefRows) return '<div class="empty">Loading the brief archive…</div>';
   return `<table><tr><th>DATE</th><th>BRIEFING</th><th></th></tr>` +
@@ -5531,6 +5567,10 @@ const REPORT_DEFS = () => [
   {id: 'briefs', icon: '📰', title: 'DAILY SHOP BRIEFS', count: null,
    desc: 'Every morning\u2019s Shop Manager Briefing, archived as a Google Doc — emailed weekdays to shop@, brigham@ and karmel@.',
    html: briefsTable},
+  {id: 'queue', icon: '🎹', title: 'SHOP QUEUE', count: (() => {
+     try { return queueMembers().length; } catch (e) { return null; } })(),
+   desc: 'Every piano in the Custom Shop Work queue, in order — #1 is next up. Click a row to jump to that piano on the map. Pre-Queue pianos (deposit not received) are listed below the queue; they don’t hold a place until approved.',
+   html: queueTable},
   {id: 'tasks', icon: '🧩', title: 'CONCURRENT WORK', count: (() => {
      try { const f = S.tkF || {cat: 'keys'}; return S.data.pianos.filter(p =>
        p.active && p.serial && (p.queuePos || p.phase) && !taskAutoDone(p, f.cat)
@@ -5613,13 +5653,26 @@ function renderReport() {
   });
   const tkc = body.querySelector('.tkclear');
   if (tkc) tkc.onclick = () => { S.tkF = {cat: S.tkF.cat, st: '', q: ''}; renderReport(); };
+  body.querySelectorAll('.quf').forEach(el => {
+    el.oninput = () => {
+      clearTimeout(el._t);
+      el._t = setTimeout(() => {
+        S.quF[el.dataset.f] = el.value;
+        renderReport();
+        const again = body.querySelector(`.quf[data-f="${el.dataset.f}"]`);
+        if (again) { again.focus(); again.setSelectionRange(again.value.length, again.value.length); }
+      }, 350);
+    };
+  });
+  const quc = body.querySelector('.quclear');
+  if (quc) quc.onclick = () => { S.quF = {q: ''}; renderReport(); };
   const ac = body.querySelector('.actclear');
   if (ac) ac.onclick = () => { S.actF = {who: '', act: '', piano: '', q: '', days: 0}; renderReport(); };
   body.querySelectorAll('.printbtn').forEach(b => b.onclick = ev => {
     ev.stopPropagation();
     const def = REPORT_DEFS().find(r => r.id === b.dataset.r);
     let html = def.html();
-    if (def.id === 'activity' || def.id === 'tasks') {
+    if (def.id === 'activity' || def.id === 'tasks' || def.id === 'queue') {
       const i = html.indexOf('<table');
       if (i > 0) html = html.slice(i);   // drop the filter bar from print
     }
