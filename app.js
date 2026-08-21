@@ -2056,8 +2056,7 @@ function openSuggestBox() {
       <button class="tvx">✕</button></div>
     <div class="sgform">
       <div class="sgtypes">
-        <button class="sgt on" data-t="bug">🐛 Bug</button>
-        <button class="sgt" data-t="edit">✏️ Edit</button>
+        <button class="sgt on" data-t="edit">✏️ Edit</button>
         <button class="sgt" data-t="idea">💡 Idea</button>
       </div>
       <textarea class="sgtext" maxlength="1500" placeholder="What's wrong / what would make it better? A sentence or two is plenty."></textarea>
@@ -2072,7 +2071,7 @@ function openSuggestBox() {
   </div>`;
   document.body.appendChild(ov);
   ov.onclick = ev => { if (ev.target === ov || ev.target.classList.contains('tvx')) ov.remove(); };
-  let type = 'bug', shotFile = null;
+  let type = 'edit', shotFile = null;
   ov.querySelectorAll('.sgt').forEach(b => b.onclick = () => {
     ov.querySelectorAll('.sgt').forEach(x => x.classList.remove('on'));
     b.classList.add('on'); type = b.dataset.t;
