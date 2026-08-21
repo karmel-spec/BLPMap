@@ -142,12 +142,6 @@ function doGet(e) {
     try { return json_(pianoHistory_(e.parameter.serial, e.parameter.row)); }
     catch (err) { return json_({error: String(err), loc: [], cab: []}); }
   }
-  if (e && e.parameter && e.parameter.fn === 'standup') {
-    try {
-      return json_(smStandup_([], {activity: {phases: []}, moves: [], clocked: [],
-        queueUp: [], waiting: []}));
-    } catch (err) { return json_({error: String(err)}); }
-  }
   if (e && e.parameter && e.parameter.fn === 'briefs') {
     try { return json_(briefLog_()); }
     catch (err) { return json_({error: String(err), briefs: []}); }
@@ -689,6 +683,10 @@ function doPost(e) {
       var rs = setRequestStatus_(req);
       if (rs.ok) logAct_(who, 'App request ' + rs.status, rs.id, rs.text);
       return json_(rs);
+    }
+    // compact standup digest for the 7:50AM text (Netlify holds Twilio)
+    if (req.action === 'briefsms') {
+      return json_(briefSms_());
     }
     // team phone list for the share sheet — POST-only so the numbers sit
     // behind the same PIN / Google auth as every other write
@@ -3515,6 +3513,54 @@ function adminBriefHtml_(R) {
 function adminAlerts_(R) {
   return R.noPlan.length + R.adminDrift.length + R.mediaBefore.length + R.exitBlocked.length
     + R.noAddress.length + R.soldPending.length + R.missingArrivals.length;
+}
+
+/* The 7:50 AM standup text: today's celebration lines, the safety/standard
+ * prompts, and a link to last night's archived brief. Deliberately light —
+ * no piano-data fetch, so it answers in a second. */
+function briefSms_() {
+  var now = new Date();
+  var R = {refDate: now, activity: {phases: []}, moves: [], clocked: [],
+           queueUp: [], waiting: []};
+  // yesterday's clock leader, so the text can name a win
+  try {
+    var yd = Utilities.formatDate(new Date(now.getTime() - 86400000), 'America/Denver', 'yyyy-MM-dd');
+    var per = {};
+    (timeLogRows_(3).rows || []).forEach(function (r0) {
+      if (Utilities.formatDate(new Date(r0.start), 'America/Denver', 'yyyy-MM-dd') !== yd) return;
+      if (!per[r0.tech]) per[r0.tech] = {min: 0, pianos: {}};
+      per[r0.tech].min += (r0.minutes || 0);
+      per[r0.tech].pianos[r0.serial] = 1;
+    });
+    R.clocked = Object.keys(per).map(function (t) {
+      return {tech: t, hours: Math.round(per[t].min / 6) / 10, pianos: Object.keys(per[t].pianos).length};
+    }).sort(function (a, b) { return b.hours - a.hours; });
+  } catch (e) {}
+
+  var SU = smStandup_([], R);
+  var L = [];
+  L.push('BLP Standup 8AM - ' + Utilities.formatDate(now, 'America/Denver', 'EEE MMM d'));
+  (SU.bdays || []).filter(function (b) { return b.off === 0; }).forEach(function (b) {
+    L.push('BIRTHDAY: ' + b.name + (b.age ? ' turns ' + b.age : '') + ' - celebrate it!');
+  });
+  (SU.annivs || []).filter(function (a) { return a.off === 0; }).forEach(function (a) {
+    L.push('ANNIVERSARY: ' + a.name + ' - ' + a.years + ' yr' + (a.years > 1 ? 's' : '') + ' at BLP');
+  });
+  (SU.newFaces || []).filter(function (n) { return n.days <= 7; }).forEach(function (n) {
+    L.push('WELCOME: ' + n.name + (n.pos ? ' (' + n.pos + ')' : '') + ', day ' + (n.days + 1));
+  });
+  if (SU.champ) L.push('Clock leader yesterday: ' + SU.champ.tech + ' - ' + SU.champ.hours + ' h');
+  if (SU.safety) L.push('Safety: ' + SU.safety);
+  if (SU.standard) L.push('Standard: ' + SU.standard);
+
+  // last night's shop brief, so the full detail is one tap away
+  var url = '';
+  try {
+    var briefs = (briefLog_().briefs || []).filter(function (b) { return b.kind === 'shop'; });
+    if (briefs.length) url = briefs[0].url;
+  } catch (e) {}
+  if (url) L.push('Full brief: ' + url);
+  return {ok: true, text: L.join('\n'), url: url, lines: L.length};
 }
 
 function sendShopManagerReportTo_(to, note, dayOffset) {
