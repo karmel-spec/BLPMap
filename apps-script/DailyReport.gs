@@ -684,6 +684,10 @@ function doPost(e) {
       if (rs.ok) logAct_(who, 'App request ' + rs.status, rs.id, rs.text);
       return json_(rs);
     }
+    // per-tech dashboard: PRs, piano history, anniversary — from the Time Log
+    if (req.action === 'techdash') {
+      return json_(techDash_(String((req.user && req.user.name) || req.name || '')));
+    }
     // compact standup digest for the 7:50AM text (Netlify holds Twilio)
     if (req.action === 'briefsms') {
       return json_(briefSms_());
@@ -3513,6 +3517,96 @@ function adminBriefHtml_(R) {
 function adminAlerts_(R) {
   return R.noPlan.length + R.adminDrift.length + R.mediaBefore.length + R.exitBlocked.length
     + R.noAddress.length + R.soldPending.length + R.missingArrivals.length;
+}
+
+/* Everything the Store Map's My Dashboard needs for one technician,
+ * computed from the Time Log (365 days) + the team sheet. Matched by name
+ * the same way the Work Clock stores it. */
+function techDash_(name) {
+  var norm = name.trim().toLowerCase();
+  var first = norm.split(/\s+/)[0];
+  if (!first) return {ok: false, error: 'no name'};
+  var rows = (timeLogRows_(365).rows || []).filter(function (r) {
+    var t = r.tech.trim().toLowerCase();
+    return t === norm || t.split(/\s+/)[0] === first;
+  });
+
+  // per-piano rollup, newest first
+  var byPiano = {}, order = [];
+  rows.forEach(function (r) {
+    if (!r.serial) return;
+    if (!byPiano[r.serial]) { byPiano[r.serial] = {serial: r.serial, piano: r.piano, phases: {}, minutes: 0, last: ''}; order.push(r.serial); }
+    var b = byPiano[r.serial];
+    b.minutes += r.minutes;
+    if (r.phase) b.phases[r.phase] = true;
+    if (r.start > b.last) b.last = r.start;
+  });
+  var pianos = order.map(function (k) {
+    var b = byPiano[k];
+    return {serial: b.serial, piano: b.piano, phases: Object.keys(b.phases).join(' · '),
+            hours: Math.round(b.minutes / 6) / 10, last: b.last};
+  }).sort(function (a, b) { return b.last < a.last ? -1 : 1; });
+
+  // PRs: best day, best week, most pianos in a week, longest session
+  var perDay = {}, perWeek = {}, weekPianos = {}, longest = null;
+  rows.forEach(function (r) {
+    var d = Utilities.formatDate(new Date(r.start), 'America/Denver', 'yyyy-MM-dd');
+    var w = Utilities.formatDate(new Date(r.start), 'America/Denver', 'YYYY-ww');
+    perDay[d] = (perDay[d] || 0) + r.minutes;
+    perWeek[w] = (perWeek[w] || 0) + r.minutes;
+    (weekPianos[w] = weekPianos[w] || {})[r.serial] = true;
+    if (!longest || r.minutes > longest.minutes) longest = r;
+  });
+  function best(map) {
+    var bk = null, bv = 0;
+    for (var k in map) { if (map[k] > bv) { bv = map[k]; bk = k; } }
+    return bk ? {when: bk, minutes: bv} : null;
+  }
+  var bDay = best(perDay), bWeek = best(perWeek);
+  var bWkP = null;
+  for (var wk in weekPianos) {
+    var n = Object.keys(weekPianos[wk]).length;
+    if (!bWkP || n > bWkP.n) bWkP = {when: wk, n: n};
+  }
+  var today = Utilities.formatDate(new Date(), 'America/Denver', 'yyyy-MM-dd');
+  var prs = {
+    bestDayH: bDay ? Math.round(bDay.minutes / 6) / 10 : 0,
+    bestDayWhen: bDay ? bDay.when : '',
+    bestWeekH: bWeek ? Math.round(bWeek.minutes / 6) / 10 : 0,
+    mostPianosWeek: bWkP ? bWkP.n : 0,
+    longestSessionH: longest ? Math.round(longest.minutes / 6) / 10 : 0,
+    longestSessionPhase: longest ? longest.phase : '',
+    todayH: Math.round((perDay[today] || 0) / 6) / 10,
+    pianosTouched: pianos.length,
+  };
+
+  // anniversary + tenure from the team sheet (start date only leaves here)
+  var anniv = null;
+  try {
+    var ts = SpreadsheetApp.openById('1j1FP78rRj1jrl2z-_vIg95kN3GuG8TI4dpOheSnIoPc')
+      .getSheetByName('Current Team');
+    var tv = ts.getRange(2, 1, Math.max(1, ts.getLastRow() - 1), 7).getValues();
+    for (var i = 0; i < tv.length; i++) {
+      if (String(tv[i][0] || '').trim().toLowerCase() !== first) continue;
+      var st = tv[i][6];
+      var sd = (st instanceof Date) ? st : null;
+      if (!sd) {
+        var pm = smParseMonthDay_(st);
+        if (pm && pm.y) sd = new Date(pm.y, pm.mo - 1, pm.d);
+      }
+      if (sd) {
+        var now = new Date();
+        var next = new Date(now.getFullYear(), sd.getMonth(), sd.getDate());
+        if (next < now) next = new Date(now.getFullYear() + 1, sd.getMonth(), sd.getDate());
+        anniv = {years: next.getFullYear() - sd.getFullYear(),
+                 days: Math.ceil((next - now) / 86400000),
+                 date: Utilities.formatDate(next, 'America/Denver', 'MMM d')};
+      }
+      break;
+    }
+  } catch (e) {}
+
+  return {ok: true, name: name, pianos: pianos.slice(0, 250), prs: prs, anniv: anniv};
 }
 
 /* The 7:50 AM standup text: today's celebration lines, the safety/standard

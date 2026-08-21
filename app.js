@@ -5961,13 +5961,146 @@ function renderBoard() {
   }).join('');
 }
 
+/* ---------- 👤 My Dashboard — the tech's locker-room roster card ----------
+ * Celebrations → black roster card (live clock pill, 🏆 PR badges, tappable
+ * pianos-touched) → on the bench → the four tools (My Week / Friday Report /
+ * Calendar open the shop app in place; Paylogics is external) → personal
+ * records → PR watch. Per-tech numbers come from the bridge (techdash). */
+const SHOP_APP = 'https://blpshop.netlify.app/';
+function dashFrame(hash, title) {
+  const old = document.querySelector('.dfov'); if (old) old.remove();
+  const ov = document.createElement('div');
+  ov.className = 'dfov';
+  ov.innerHTML = `<div class="dfbar"><button class="dfback">‹ Dashboard</button><b>${esc(title)}</b></div>
+    <iframe class="dframe" src="${SHOP_APP}${hash}" title="${esc(title)}"></iframe>`;
+  document.body.appendChild(ov);
+  ov.querySelector('.dfback').onclick = () => ov.remove();
+}
+async function loadTechDash(name) {
+  if (S.dashData && S.dashData.forName === name && Date.now() - S.dashData.at < 300000) return S.dashData;
+  const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+    headers: {'content-type': 'text/plain;charset=utf-8'},
+    body: JSON.stringify({pin: lsGet('blpPin') || '', action: 'techdash',
+      user: {name}, ...authFields()})});
+  const j = await r.json();
+  if (!j.ok) throw new Error(j.error || 'dashboard load failed');
+  S.dashData = {...j, forName: name, at: Date.now()};
+  return S.dashData;
+}
+function dashInitials(name) {
+  return name.split(/\s+/).map(w => w[0] || '').join('').slice(0, 2).toUpperCase();
+}
+function renderDash() {
+  const body = $('#dashBody');
+  if (!body) return;
+  const name = clockName();
+  if (!name) {
+    body.innerHTML = `<h2 class="ph">👤 MY DASHBOARD</h2>
+      <p class="pd">Sign in (Google or team PIN, ☰ menu) and your dashboard builds itself —
+      live Work Clock, personal records, your pianos, and your week.</p>`;
+    return;
+  }
+  const o = CLOCK.open;
+  const pill = o
+    ? `<span class="dlive on">● ON CLOCK <span class="cctime" data-start="${esc(o.start)}">${clockElapsed(o.start)}</span></span>`
+    : `<span class="dlive">○ off the clock</span>`;
+  const d = (S.dashData && S.dashData.forName === name) ? S.dashData : null;
+  const prs = d ? d.prs : null;
+  const anniv = d ? d.anniv : null;
+
+  const celebrate = anniv && anniv.days <= 45
+    ? `<div class="danno">🥂 <b>Work anniversary in ${anniv.days} day${anniv.days === 1 ? '' : 's'}</b> — ${anniv.years} year${anniv.years === 1 ? '' : 's'} at BLP on ${esc(anniv.date)}</div>`
+    : '';
+
+  const prWatch = (() => {
+    if (!prs || !o || !prs.bestDayH) return '';
+    const gap = Math.round((prs.bestDayH - prs.todayH) * 10) / 10;
+    if (gap <= 0) return `<div class="dprband">🏆 <b>New personal best day — ${prs.todayH} h and still on the clock!</b></div>`;
+    if (gap <= 3) return `<div class="dprband">🏆 <b>PR watch:</b> ${gap} h more today beats your best day (${prs.bestDayH} h). Go get it.</div>`;
+    return '';
+  })();
+
+  body.innerHTML = `
+    ${celebrate}
+    <div class="dcard">
+      <div class="dcardtop">
+        <div><div class="dwho">${esc(name)}</div>
+        <div class="dmeta">PIANO TECHNICIAN · BLP</div></div>
+        ${pill}
+      </div>
+      <div class="dprrow">
+        <div class="dpr"><b>${prs ? '🏆 ' + prs.bestDayH + 'h' : '…'}</b><span>best day</span></div>
+        <div class="dpr"><b>${prs ? '🏆 ' + prs.longestSessionH + 'h' : '…'}</b><span>longest session</span></div>
+        <div class="dpr tap" id="dashPianos"><b>${prs ? prs.pianosTouched : '…'}</b><span>pianos touched ›</span></div>
+      </div>
+    </div>
+    <div class="dbench">
+      <h4>⏱ On the bench right now</h4>
+      ${o ? `<div class="dline now"><b>${esc(o.phase || 'Working')} — ${esc(o.piano || '')} #${esc(o.serial)}</b>
+               · <span class="cctime" data-start="${esc(o.start)}">${clockElapsed(o.start)}</span> and counting</div>`
+          : `<div class="dline">Not clocked in — open a piano's card and hit ▶ Clock in.</div>`}
+      <div class="dline dim">Your queue for the week lives in <a class="dlink2" data-h="#myweek">📋 My Week ›</a></div>
+    </div>
+    <div class="dlockers">
+      <div class="dlocker" data-h="#myweek"><span class="ic">📋</span><b>My Week</b><span>work items · carries into Friday</span></div>
+      <div class="dlocker" data-h="#report"><span class="ic">📝</span><b>Friday Report</b><span>report what got done</span></div>
+      <div class="dlocker" data-h="#calendars"><span class="ic">📅</span><b>My Calendar</b><span>assigned vs. reported</span></div>
+      <div class="dlocker" data-pay="1"><span class="ic">💵</span><b>Paylogics ↗</b><span>paystubs · time off</span></div>
+    </div>
+    ${prs ? `<div class="dbench">
+      <h4>🏆 Personal records</h4>
+      <div class="dline">Best day on the clock: <b>${prs.bestDayH} h</b>${prs.bestDayWhen ? ' (' + esc(prs.bestDayWhen.slice(5)) + ')' : ''}</div>
+      <div class="dline">Best week: <b>${prs.bestWeekH} h</b> · Most pianos in a week: <b>${prs.mostPianosWeek}</b></div>
+      <div class="dline">Longest focused session: <b>${prs.longestSessionH} h</b>${prs.longestSessionPhase ? ' on ' + esc(prs.longestSessionPhase) : ''}</div>
+      <div class="dline">Today so far: <b>${prs.todayH} h</b></div>
+    </div>` : '<div class="dbench"><h4>🏆 Personal records</h4><div class="dline dim">crunching your Time Log…</div></div>'}
+    ${prWatch}
+    <p class="dsoon">coming soon: report history · phase-time PRs as the Work Clock fills in</p>`;
+
+  body.querySelectorAll('.dlocker[data-h], .dlink2').forEach(el => el.onclick = () => {
+    const h = el.dataset.h;
+    const titles = {'#myweek': '📋 My Week', '#report': '📝 My Friday Report', '#calendars': '📅 My Calendar'};
+    dashFrame(h, titles[h] || 'Shop App');
+  });
+  const pay = body.querySelector('[data-pay]');
+  if (pay) pay.onclick = () => window.open('https://identity.myisolved.com', '_blank', 'noopener');
+  const pt = body.querySelector('#dashPianos');
+  if (pt) pt.onclick = () => {
+    if (!d || !d.pianos) return;
+    const old = document.querySelector('.dsheetov'); if (old) old.remove();
+    const ov = document.createElement('div');
+    ov.className = 'dsheetov';
+    ov.innerHTML = `<div class="dsheet"><button class="dsx">✕</button>
+      <h3>🎹 Pianos ${esc(name.split(' ')[0])} has worked on</h3>
+      <div class="dssub">${d.pianos.length} piano${d.pianos.length === 1 ? '' : 's'} · from the Work Clock · newest first</div>
+      <table><tr><th>PIANO</th><th>PHASES</th><th>HOURS</th></tr>
+      ${d.pianos.map(p => `<tr><td>${esc(p.piano || '—')}<br><small>#${esc(p.serial)}</small></td>
+        <td>${esc(p.phases || '—')}</td><td>${p.hours}</td></tr>`).join('')
+       || '<tr><td colspan="3">No clocked pianos yet — they appear as you clock in.</td></tr>'}
+      </table></div>`;
+    document.body.appendChild(ov);
+    ov.querySelector('.dsx').onclick = () => ov.remove();
+    ov.onclick = ev => { if (ev.target === ov) ov.remove(); };
+  };
+
+  if (!d) {
+    loadTechDash(name)
+      .then(() => { if (S.view === 'dash') renderDash(); })
+      .catch(e => {
+        const pr = body.querySelector('.dbench:last-of-type .dline');
+        if (pr) pr.textContent = 'couldn’t load your Time Log — ' + e.message;
+      });
+  }
+}
+
 /* ---------- views / nav / drawers ---------- */
 function showView(v) {
-  ['map', 'report', 'board', 'cal', 'media', 'shopmap', 'archive'].forEach(x => $('#view-' + x).hidden = x !== v);
+  ['map', 'report', 'board', 'cal', 'media', 'shopmap', 'archive', 'dash'].forEach(x => $('#view-' + x).hidden = x !== v);
   if (v === 'archive') renderArchive();
   document.querySelectorAll('.navitem[data-view]').forEach(el =>
     el.classList.toggle('on', el.dataset.view === v));
   if (v === 'shopmap') renderShopMap();
+  if (v === 'dash') renderDash();
 }
 function switchView(v) { S.view = v; showView(v); closeNav(); }
 document.querySelectorAll('.navitem[data-view]').forEach(el =>
@@ -5989,7 +6122,7 @@ $('.logo').onclick = goHome;
 $('.logo').style.cursor = 'pointer';
 
 // every non-map view gets a ✕ back to the map (Escape works too)
-['report', 'board', 'cal', 'media', 'shopmap', 'archive'].forEach(v => {
+['report', 'board', 'cal', 'media', 'shopmap', 'archive', 'dash'].forEach(v => {
   const el = $('#view-' + v);
   if (el && !el.querySelector('.viewclose')) {
     const b = document.createElement('button');
