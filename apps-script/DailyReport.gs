@@ -2259,6 +2259,7 @@ function payMilestone_(req) {
  * Run sendShopManagerReport() manually, or sendShopManagerReportTo('a@b.com')
  * to send a sample somewhere else. */
 var SHOPMGR_TO = 'shop@brighamlarsonpianos.com,brigham@brighamlarsonpianos.com,karmel@brighamlarsonpianos.com';
+var ADMIN_TO = 'brigham@brighamlarsonpianos.com,karmel@brighamlarsonpianos.com';   // Admin Morning Brief
 var TRACKDEFS_URL = 'https://blpsalesapp.netlify.app/.netlify/functions/track-defs';
 var TASKS_URL = 'https://blpsalesapp.netlify.app/.netlify/functions/piano-tasks';
 // phase -> the specialty area that staffs it (mirrors the Store Map card)
@@ -3142,8 +3143,7 @@ function shopManagerHtml_(R) {
   H.push('</div>');
 
   // at a glance
-  var alerts = R.blocked.length + R.noCab.length + R.noTrack.length
-    + R.noPhase.length + R.noAddress.length + R.exitBlocked.length;
+  var alerts = R.blocked.length + R.noCab.length + R.noTrack.length + R.noPhase.length;
   H.push('<p style="font:13px/1.6 Helvetica,Arial;color:#2b2f33;margin:0 0 4px">'
     + '<b>' + R.activity.total + '</b> changes logged since yesterday · '
     + '<b>' + R.moves.length + '</b> moves today · '
@@ -3246,36 +3246,6 @@ function shopManagerHtml_(R) {
   if (R.noCab.length) gaps.push('<b>' + R.noCab.length + '</b> past PRSB with <b>no cabinetry shelf</b> recorded: '
     + R.noCab.slice(0, 8).map(function (p) { return smName_(p) + ' (#' + smSpot_(p) + ')'; }).join('; '));
   if (gaps.length) { sec('⚠️', 'Data gaps', null, 'Small fixes that keep the map and reports honest.'); ul(gaps); }
-
-  if (R.noAddress.length) {
-    sec('📍', 'No delivery address found', R.noAddress.length,
-      'The Shop Work Map can\'t pin these — add a "City, ST" to the owner cell in the Piano Log.');
-    ul(R.noAddress.slice(0, 15).map(function (p) { return ref(p); }));
-  }
-
-  if (R.mediaBefore.length || R.exitBlocked.length) {
-    sec('📷', 'Media', R.mediaBefore.length + R.exitBlocked.length);
-    var m = [];
-    if (R.exitBlocked.length) m.push('<b style="color:#9e2020">Exit blocked — at QC or later, after media missing:</b><br>'
-      + '<span style="font-size:12px">' + R.exitBlocked.slice(0, 10).map(function (p) {
-          return smName_(p) + ' (#' + smSpot_(p) + ')'; }).join('; ') + '</span>');
-    if (R.mediaBefore.length) m.push('<b>' + R.mediaBefore.length + '</b> shop-work pianos still need before photos/video');
-    ul(m);
-  }
-
-  if (R.noPlan.length || R.adminDrift.length) {
-    sec('💰', 'Admin & payments', R.noPlan.length + R.adminDrift.length);
-    var a = [];
-    if (R.noPlan.length) a.push('<b style="color:#9e2020">' + R.noPlan.length
-      + ' past 25% complete with no payment plan set</b> — milestone emails stay off until one is chosen:<br>'
-      + '<span style="font-size:12px">' + R.noPlan.slice(0, 10).map(function (p) {
-          return smName_(p) + ' (#' + smSpot_(p) + ')'; }).join('; ') + '</span>');
-    R.adminDrift.slice(0, 10).forEach(function (d) {
-      a.push(ref(d.p) + '<br><span style="font-size:12px;color:#8a6a00">admin steps not checked: '
-        + d.want.join(', ') + '</span>');
-    });
-    ul(a);
-  }
 
   if (R.soldPending.length) {
     sec('✓', 'Sold / completed — awaiting delivery', R.soldPending.length,
@@ -3392,10 +3362,105 @@ function briefLog_() {
   }
   return {ok: true, briefs: out};
 }
+
+/* ---------- Admin Morning Brief — payments, media, delivery logistics ---------- */
+function adminBriefHtml_(R) {
+  var H = [];
+  function sec(icon, title, count, note) {
+    H.push('<h2 style="font:700 13px/1.4 Helvetica,Arial,sans-serif;letter-spacing:1.5px;'
+      + 'text-transform:uppercase;color:#6f6a63;background:#f4f1ec;border-left:4px solid #2c5d96;'
+      + 'margin:22px 0 8px;padding:7px 11px">' + icon + ' ' + title
+      + (count != null ? ' <span style="color:#2c5d96">(' + count + ')</span>' : '') + '</h2>');
+    if (note) H.push('<p style="margin:0 0 8px;font:12px Helvetica,Arial;color:#8a847b">' + note + '</p>');
+  }
+  function ul(items) {
+    H.push('<ul style="margin:0 0 4px;padding-left:18px;font:13px/1.65 Helvetica,Arial;color:#2b2f33">'
+      + items.map(function (t) { return '<li>' + t + '</li>'; }).join('') + '</ul>');
+  }
+  function ref(p) {
+    return '<b>' + smName_(p) + '</b> <span style="color:#8a847b">· map #' + smSpot_(p)
+      + (p.serial ? ' · ' + p.serial : '') + '</span>';
+  }
+  H.push('<div style="max-width:760px;margin:0 auto;font-family:Helvetica,Arial,sans-serif">');
+  H.push('<div style="text-align:center;background:#f4f7fb;border:1.5px solid #121212;border-bottom:none;'
+    + 'border-radius:8px 8px 0 0;padding:20px 18px 14px">'
+    + '<img src="' + APP_URL + '/assets/blp-logo.png" alt="Brigham Larson Pianos" '
+    +   'style="max-height:56px;max-width:260px">'
+    + '<div style="font:700 12px Helvetica,Arial,sans-serif;letter-spacing:3.5px;color:#2c5d96;margin-top:12px">'
+    +   'ADMIN MORNING BRIEFING</div>'
+    + '<div style="font-family:Georgia,serif;font-size:21px;color:#2b2f33;margin-top:5px">' + R.day + '</div>'
+    + '<div style="width:64px;height:3px;background:#c9a227;margin:12px auto 0;border-radius:2px"></div>'
+    + '</div>');
+  H.push('<div style="border:1.5px solid #121212;border-top:none;border-radius:0 0 8px 8px;padding:16px 18px">');
+
+  if (R.noPlan.length || R.adminDrift.length) {
+    sec('💰', 'Admin & payments', R.noPlan.length + R.adminDrift.length);
+    var a = [];
+    if (R.noPlan.length) a.push('<b style="color:#9e2020">' + R.noPlan.length
+      + ' past 25% complete with no payment plan set</b> — milestone emails stay off until one is chosen:<br>'
+      + '<span style="font-size:12px">' + R.noPlan.slice(0, 10).map(function (p) {
+          return smName_(p) + ' (#' + smSpot_(p) + ')'; }).join('; ') + '</span>');
+    R.adminDrift.slice(0, 10).forEach(function (d) {
+      a.push(ref(d.p) + '<br><span style="font-size:12px;color:#8a6a00">admin steps not checked: '
+        + d.want.join(', ') + '</span>');
+    });
+    ul(a);
+  }
+
+  if (R.mediaBefore.length || R.exitBlocked.length) {
+    sec('📷', 'Media', R.mediaBefore.length + R.exitBlocked.length);
+    var m = [];
+    if (R.exitBlocked.length) m.push('<b style="color:#9e2020">Exit blocked — at QC or later, after media missing:</b><br>'
+      + '<span style="font-size:12px">' + R.exitBlocked.slice(0, 10).map(function (p) {
+          return smName_(p) + ' (#' + smSpot_(p) + ')'; }).join('; ') + '</span>');
+    if (R.mediaBefore.length) m.push('<b>' + R.mediaBefore.length + '</b> shop-work pianos still need before photos/video');
+    ul(m);
+  }
+
+  if (R.noAddress.length) {
+    sec('📍', 'No delivery address found', R.noAddress.length,
+      'The Shop Work Map can\'t pin these — add a "City, ST" to the owner cell in the Piano Log.');
+    ul(R.noAddress.slice(0, 15).map(function (p) { return ref(p); }));
+  }
+
+  if (R.soldPending.length) {
+    sec('✓', 'Sold / completed — awaiting delivery', R.soldPending.length,
+      'Gold ring on the map. Do not re-sell or re-price these.');
+    ul(R.soldPending.map(function (p) { return ref(p); }));
+  }
+
+  if (R.missingArrivals.length) {
+    sec('🚚', 'Arrivals with no Piano Log row', R.missingArrivals.length,
+      'The moving calendar is picking these up, but no owner cell matches the client — add a Coming Soon row so they land on the map when they arrive.');
+    ul(R.missingArrivals.map(function (a0) {
+      return '<b>' + a0.name + '</b> — ' + a0.date
+        + ' <span style="font-size:12px;color:#6f6a63">“' + a0.summary + '”</span>';
+    }));
+  }
+
+  sec('📚', 'Deep dives', null, 'Tap to open the live report — each has filters, share (↗), and print.');
+  ul([
+    '<a href="' + APP_URL + '/#report=media" style="color:#2c5d96;font-weight:700">📸 Media Needed</a>',
+    '<a href="' + APP_URL + '/#report=waiting" style="color:#2c5d96;font-weight:700">⏳ Waiting On</a>',
+    '<a href="' + APP_URL + '/#report=activity" style="color:#2c5d96;font-weight:700">📝 Activity Log</a>',
+    '<a href="' + APP_URL + '/#report=briefs" style="color:#2c5d96;font-weight:700">📰 Daily Shop Briefs</a>'
+  ]);
+
+  H.push('<p style="margin:22px 0 0;padding-top:10px;border-top:1px solid #e4e0d8;'
+    + 'font:11.5px Helvetica,Arial;color:#8a847b">Generated from the live Store Map · '
+    + '<a href="' + APP_URL + '" style="color:#2c5d96">open the map</a> · '
+    + R.total + ' active pianos</p>');
+  H.push('</div></div>');
+  return H.join('');
+}
+function adminAlerts_(R) {
+  return R.noPlan.length + R.adminDrift.length + R.mediaBefore.length + R.exitBlocked.length
+    + R.noAddress.length + R.soldPending.length + R.missingArrivals.length;
+}
+
 function sendShopManagerReportTo_(to, note) {
   var R = buildShopManagerReport_();
-  var alerts = R.blocked.length + R.noCab.length + R.noTrack.length
-    + R.noPhase.length + R.noAddress.length + R.exitBlocked.length;
+  var alerts = R.blocked.length + R.noCab.length + R.noTrack.length + R.noPhase.length;
   var html = shopManagerHtml_(R);
   if (note) {
     html = '<div style="max-width:760px;margin:0 auto 10px;padding:10px 14px;background:#fdf3ec;'
@@ -3419,14 +3484,32 @@ function sendShopManagerReportTo_(to, note) {
       + 'Open in HTML for the full briefing.',
     name: 'BLP Store Map',
   });
-  return {ok: true, to: to, alerts: alerts, changes: R.activity.total, doc: docUrl, docErr: docErr};
+  // the Admin Morning Brief rides the same build — payments, media, logistics
+  var adm = {sent: false};
+  if (!note) {
+    try {
+      var aHtml = adminBriefHtml_(R);
+      var aAlerts = adminAlerts_(R);
+      var aSubject = 'Admin Morning Briefing — ' + R.day + ' · ' + aAlerts + ' to review';
+      var aDoc = '';
+      try { aDoc = briefDoc_(aSubject, aHtml); } catch (e2) {}
+      if (aDoc) {
+        aHtml = '<div style="max-width:760px;margin:0 auto 10px;text-align:right;font:12px Helvetica,Arial">'
+          + '<a href="' + aDoc + '">📄 Open this briefing as a Google Doc</a></div>' + aHtml;
+      }
+      MailApp.sendEmail({to: ADMIN_TO, subject: aSubject, htmlBody: aHtml,
+        body: 'Admin Morning Briefing ' + R.day + ' — ' + aAlerts + ' items. Open in HTML.',
+        name: 'BLP Store Map'});
+      adm = {sent: true, to: ADMIN_TO, alerts: aAlerts, doc: aDoc};
+    } catch (e3) { adm = {sent: false, err: String(e3).slice(0, 160)}; }
+  }
+  return {ok: true, to: to, alerts: alerts, changes: R.activity.total, doc: docUrl, docErr: docErr, admin: adm};
 }
 // build + archive today's brief as a Google Doc WITHOUT emailing (for testing
 // and for regenerating a doc on demand)
 function briefDocOnly_() {
   var R = buildShopManagerReport_();
-  var alerts = R.blocked.length + R.noCab.length + R.noTrack.length
-    + R.noPhase.length + R.noAddress.length + R.exitBlocked.length;
+  var alerts = R.blocked.length + R.noCab.length + R.noTrack.length + R.noPhase.length;
   var subject = 'Shop Manager Briefing — ' + R.day + ' · ' + alerts + ' to review';
   return {ok: true, doc: briefDoc_(subject, shopManagerHtml_(R))};
 }
