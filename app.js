@@ -5599,6 +5599,36 @@ function tasksTable() {
     </table>`;
 }
 
+/* 🐢 sitting longer than the standard — mirrors the (retired) briefing
+ * section: days in the building vs 2× the typical span for the phase. */
+const STALL_DAYS = {
+  'CAP': 21, 'PRSB & Plate Refinishing': 21, 'Lacquer Soundboard': 10,
+  'Restringing': 14, 'Chip Tuning': 5, 'DHRT': 30, '1st Tuning': 5,
+  'Refinishing': 30, 'QC & Assembly': 10, '2nd Tuning': 5,
+  'Exit Prep - Admin': 7, 'Assessment': 7, 'New Arrival - Admin': 5,
+};
+function stalledPianos() {
+  return S.data.pianos
+    .filter(p => p.active && inShopwork(p) && STALL_DAYS[p.phase] && p.entered)
+    .map(p => ({p, lim: STALL_DAYS[p.phase],
+      age: Math.floor((Date.now() - new Date(p.entered + 'T12:00')) / 86400000)}))
+    .filter(x => x.age > x.lim * 2)
+    .sort((a, b) => b.age - a.age);
+}
+function stalledTable() {
+  const rows = stalledPianos();
+  return `<table><tr><th>PIANO</th><th>SPOT</th><th>PHASE</th><th>DAYS IN BUILDING</th><th>PHASE STANDARD</th></tr>
+    ${rows.map(({p, age, lim}) => `<tr class="mrow" data-row="${p.row}">
+      <td>${esc(((p.year ? p.year + ' ' : '') + ([p.make, p.model].filter(Boolean).join(' ') || p.summary)).slice(0, 36))}<br>
+          <span class="lite" style="color:#8a929a;font-size:11px">${esc(p.serial)}</span></td>
+      <td>${esc(String(p.location || '—').slice(0, 14))}</td>
+      <td>${esc(p.phase)}</td>
+      <td><b style="color:#9e2020">${age} days</b></td>
+      <td>~${lim} days</td></tr>`).join('')
+    || '<tr><td colspan="5" class="empty">Nothing is sitting past its standard — great pace. 🎉</td></tr>'}
+    </table>`;
+}
+
 /* Shop queue, in order — the answer to "who's next?" for any user. */
 function queueMembers() {
   return S.data.pianos.filter(p => p.active && p.queuePos > 0)
@@ -5667,6 +5697,10 @@ const REPORT_DEFS = () => [
      catch (e) { return null; } })(),
    desc: 'Hardware and order tasks per piano, in queue order. Pick a category (keytops, plating, bass strings…) and a status — "needs attention" is the to-do list, top of the queue first. The count badge tracks the selected category.',
    html: tasksTable},
+  {id: 'stalled', icon: '🐢', title: 'SITTING TOO LONG', count: (() => {
+     try { return stalledPianos().length; } catch (e) { return null; } })(),
+   desc: 'Custom Shopwork pianos in the building more than twice the typical span for their current phase — the 🐢 list that used to live inside the daily brief. Click a row to jump to the piano.',
+   html: stalledTable},
   {id: 'unplaced', icon: '⚠️', title: 'UNPLACED PIANOS', count: unplaced().length,
    desc: 'Active pianos whose Piano Log location (column U) is empty or doesn’t match any spot or known area.',
    html: unplacedTable},

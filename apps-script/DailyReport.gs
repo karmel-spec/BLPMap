@@ -3128,7 +3128,7 @@ function shopManagerHtml_(R) {
   H.push('</div>');
 
   // at a glance
-  var alerts = R.blocked.length + R.stalled.length + R.noCab.length + R.noTrack.length
+  var alerts = R.blocked.length + R.noCab.length + R.noTrack.length
     + R.noPhase.length + R.noAddress.length + R.exitBlocked.length;
   H.push('<p style="font:13px/1.6 Helvetica,Arial;color:#2b2f33;margin:0 0 4px">'
     + '<b>' + R.activity.total + '</b> changes logged since yesterday · '
@@ -3205,14 +3205,8 @@ function shopManagerHtml_(R) {
     }));
   }
 
-  if (R.stalled.length) {
-    sec('🐢', 'Sitting longer than the standard', R.stalled.length,
-      'Days since arrival vs. the typical span for the phase they are in.');
-    ul(R.stalled.slice(0, 12).map(function (s) {
-      return ref(s.p) + '<br>' + pill(s.p.phase + ' · ' + s.age + ' days in the building',
-        '#fbeaea', '#9e2020');
-    }));
-  }
+  // (the 🐢 "sitting longer than the standard" list moved to its own
+  //  Store Map report — linked in the footer below)
 
   if (R.openSpots.length && R.queueUp.length) {
     sec('🔄', 'Open spots — next up in the queue', null,
@@ -3308,6 +3302,29 @@ function shopManagerHtml_(R) {
     ul(h);
   }
 
+  // all Store Map reports, numbered + linked, with live counts where we have them
+  var RPT_LINKS = [
+    ['briefs', '📰 Daily Shop Briefs', null],
+    ['queue', '🎹 Shop Queue', null],
+    ['tasks', '🧩 Concurrent Work', null],
+    ['stalled', '🐢 Sitting Too Long', R.stalled.length],
+    ['unplaced', '⚠️ Unplaced Pianos', R.unplaced.length],
+    ['dups', '🔁 Duplicate Spot Numbers', R.dupSpots.length],
+    ['stage', '🔧 Missing Shop Stage', null],
+    ['media', '📸 Media Needed', null],
+    ['cabinetry', '🗄 Cabinetry', null],
+    ['duplicates', '🗑 Marked Duplicates', null],
+    ['waiting', '⏳ Waiting On', R.waiting.length],
+    ['activity', '📝 Activity Log', null]
+  ];
+  sec('📚', 'All Store Map reports', null,
+    'Tap any report to open it directly — each has filters, share (↗), and print.');
+  H.push('<ol style="margin:0 0 4px;padding-left:22px;font:13px/1.9 Helvetica,Arial;color:#2b2f33">'
+    + RPT_LINKS.map(function (r0) {
+        return '<li><a href="' + APP_URL + '/#report=' + r0[0] + '" style="color:#9e2020;font-weight:700">'
+          + r0[1] + '</a>' + (r0[2] ? ' <span style="color:#8a847b">(' + r0[2] + ')</span>' : '') + '</li>';
+      }).join('') + '</ol>');
+
   H.push('<p style="margin:22px 0 0;padding-top:10px;border-top:1px solid #e4e0d8;'
     + 'font:11.5px Helvetica,Arial;color:#8a847b">Generated from the live Store Map · '
     + '<a href="' + APP_URL + '" style="color:#9e2020">open the map</a> · '
@@ -3363,7 +3380,7 @@ function briefLog_() {
 }
 function sendShopManagerReportTo_(to, note) {
   var R = buildShopManagerReport_();
-  var alerts = R.blocked.length + R.stalled.length + R.noCab.length + R.noTrack.length
+  var alerts = R.blocked.length + R.noCab.length + R.noTrack.length
     + R.noPhase.length + R.noAddress.length + R.exitBlocked.length;
   var html = shopManagerHtml_(R);
   if (note) {
@@ -3394,7 +3411,7 @@ function sendShopManagerReportTo_(to, note) {
 // and for regenerating a doc on demand)
 function briefDocOnly_() {
   var R = buildShopManagerReport_();
-  var alerts = R.blocked.length + R.stalled.length + R.noCab.length + R.noTrack.length
+  var alerts = R.blocked.length + R.noCab.length + R.noTrack.length
     + R.noPhase.length + R.noAddress.length + R.exitBlocked.length;
   var subject = 'Shop Manager Briefing — ' + R.day + ' · ' + alerts + ' to review';
   return {ok: true, doc: briefDoc_(subject, shopManagerHtml_(R))};
