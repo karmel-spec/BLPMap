@@ -5440,6 +5440,22 @@ function taskVal(p, k) {
   if (k === 'plating') return (p.replate || '').trim();
   return ((p.tasks || {})[k] || '').trim();
 }
+/* Phase-inferred completion: the shop's own sequence proves some tasks.
+ *   bass strings — done once Restringing is completed or passed
+ *   decals      — done once Refinishing is completed or passed
+ *   keytops     — done once the piano reaches QC & Assembly or farther */
+function taskAutoDone(p, cat) {
+  if (cat !== 'bass' && cat !== 'decals' && cat !== 'keys') return false;
+  const seq = pianoPhases(p) || PHASES;
+  const cur = seq.indexOf(effectivePhase(p));
+  const doneList = (p.phasesDone || '').toLowerCase();
+  const completed = name => doneList.includes(name.toLowerCase());
+  const past = name => { const i = seq.indexOf(name); return (i >= 0 && cur > i) || completed(name); };
+  if (cat === 'bass') return past('Restringing');
+  if (cat === 'decals') return past('Refinishing');
+  const qi = seq.indexOf('QC & Assembly');
+  return (qi >= 0 && cur >= qi) || completed('QC & Assembly');
+}
 function taskStatus(v) {
   if (!v) return 'needed';
   if (/^(x|n\/?a|no)[.!\s]*$/i.test(v)) return 'n/a';
@@ -5456,7 +5472,10 @@ function taskRows() {
     .filter(p => p.active && p.serial && (p.queuePos || p.phase))
     .map(p => {
       const v = taskVal(p, f.cat);
-      return {p, v, st: taskStatus(v)};
+      const auto = taskAutoDone(p, f.cat);
+      return {p, v: auto && !/receiv|done|complete|installed|finished|✓/i.test(v)
+        ? (v ? v + ' · ' : '') + '✓ auto — phase confirms it' : v,
+        st: auto ? 'done' : taskStatus(v)};
     })
     .filter(r => (!f.st || r.st === f.st)
       && (!f.q || (r.p.summary + ' ' + r.p.serial + ' ' + r.v).toLowerCase().includes(f.q.toLowerCase())))
@@ -5494,7 +5513,8 @@ function tasksTable() {
 const REPORT_DEFS = () => [
   {id: 'tasks', icon: '🧩', title: 'CONCURRENT WORK', count: (() => {
      try { const f = S.tkF || {cat: 'keys'}; return S.data.pianos.filter(p =>
-       p.active && p.serial && (p.queuePos || p.phase) && taskStatus(taskVal(p, f.cat)) === 'needed').length; }
+       p.active && p.serial && (p.queuePos || p.phase) && !taskAutoDone(p, f.cat)
+       && taskStatus(taskVal(p, f.cat)) === 'needed').length; }
      catch (e) { return null; } })(),
    desc: 'Hardware and order tasks per piano, in queue order. Pick a category (keytops, plating, bass strings…) and a status — "needs attention" is the to-do list, top of the queue first. The count badge tracks the selected category.',
    html: tasksTable},
