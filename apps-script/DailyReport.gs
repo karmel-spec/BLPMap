@@ -3138,7 +3138,9 @@ function shopManagerHtml_(R) {
   });
   su('🏆', 'Work Clock wins', champLines);
   su('🛡', 'Safety minute', SU.safety ? ['<i>' + SU.safety + '</i>'] : []);
-  su('⭐', 'Standard of the day', SU.standard ? ['<i>' + SU.standard + '</i>'] : []);
+  su('⭐', 'Standard of the day', SU.standard ? ['<i>' + SU.standard + '</i>'
+    + ' <a href="https://blpshop.netlify.app/#policies-stime-management" '
+    + 'style="color:#9e2020;font-size:12px;white-space:nowrap">full standards ↗</a>'] : []);
   su('🎯', 'Today’s focus', SU.focus || []);
   H.push('</div>');
 
