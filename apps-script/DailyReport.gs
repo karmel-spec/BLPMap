@@ -2777,7 +2777,15 @@ function smStandup_(pianos, R) {
       var first = String(tv[i][0] || '').trim(), last = String(tv[i][1] || '').trim();
       if (!first) continue;
       var pos = String(tv[i][3] || '').trim();
-      var bd = smParseMonthDay_(tv[i][24]);
+      // birthdate cells arrive as Date objects when the cell is date-formatted,
+      // as strings otherwise — and a year the sheet invented (e.g. "10/27"
+      // parsing to the current year) is not a real birth year
+      var bdRaw = tv[i][24];
+      var bd = (bdRaw instanceof Date)
+        ? {mo: bdRaw.getMonth() + 1, d: bdRaw.getDate(),
+           y: (bdRaw.getFullYear() > 1930 && bdRaw.getFullYear() <= now.getFullYear() - 8)
+              ? bdRaw.getFullYear() : null}
+        : smParseMonthDay_(bdRaw);
       var off1 = inWin(bd);
       if (off1 !== null) {
         var age = bd.y ? (now.getFullYear() - bd.y) : null;
