@@ -2765,13 +2765,21 @@ function smStandup_(pianos, R) {
       var dt = new Date(now.getTime() + o * 86400000);
       win.push({mo: dt.getMonth() + 1, d: dt.getDate(), off: o});
     }
-    function inWin(md) {
+    // anniversaries are rarer than birthdays — a 7-day window sits empty most
+    // mornings, so give them a full month of runway to always have a spot
+    var winAnniv = [];
+    for (var o2 = 0; o2 < 30; o2++) {
+      var dt2 = new Date(now.getTime() + o2 * 86400000);
+      winAnniv.push({mo: dt2.getMonth() + 1, d: dt2.getDate(), off: o2});
+    }
+    function inWinArr(md, arr) {
       if (!md) return null;
-      for (var wI = 0; wI < win.length; wI++) {
-        if (win[wI].mo === md.mo && win[wI].d === md.d) return win[wI].off;
+      for (var wI = 0; wI < arr.length; wI++) {
+        if (arr[wI].mo === md.mo && arr[wI].d === md.d) return arr[wI].off;
       }
       return null;
     }
+    function inWin(md) { return inWinArr(md, win); }
     function when(off) { return off === 0 ? 'TODAY 🎉' : off === 1 ? 'tomorrow'
       : Utilities.formatDate(new Date(now.getTime() + off * 86400000), 'America/Denver', 'EEEE M/d'); }
     for (var i = 0; i < tv.length; i++) {
@@ -2797,7 +2805,7 @@ function smStandup_(pianos, R) {
       var sd = (st instanceof Date) ? {mo: st.getMonth() + 1, d: st.getDate(), y: st.getFullYear()}
                                     : smParseMonthDay_(st);
       if (sd && sd.y) {
-        var off2 = inWin(sd);
+        var off2 = inWinArr(sd, winAnniv);
         var yrs = now.getFullYear() - sd.y;
         if (off2 !== null && yrs >= 1) {
           S.annivs.push({name: first + ' ' + last, when: when(off2), off: off2, years: yrs, pos: pos});
@@ -3066,10 +3074,16 @@ function buildShopManagerReport_() {
   return R;
 }
 
+function smTocId_(title) {
+  return 'sec-' + title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-+|-+$)/g, '');
+}
 function shopManagerHtml_(R) {
   var H = [];
+  var TOC = [];
   function sec(icon, title, count, note) {
-    H.push('<h2 style="font:700 13px/1.4 Helvetica,Arial,sans-serif;letter-spacing:1.5px;'
+    var id = smTocId_(title);
+    TOC.push({id: id, label: icon + ' ' + title});
+    H.push('<h2 id="' + id + '" style="font:700 13px/1.4 Helvetica,Arial,sans-serif;letter-spacing:1.5px;'
       + 'text-transform:uppercase;color:#6f6a63;background:#f4f1ec;border-left:4px solid #9e2020;'
       + 'margin:22px 0 8px;padding:7px 11px">' + icon + ' ' + title
       + (count != null ? ' <span style="color:#9e2020">(' + count + ')</span>' : '') + '</h2>');
@@ -3090,19 +3104,24 @@ function shopManagerHtml_(R) {
 
   H.push('<div style="max-width:760px;margin:0 auto;font-family:Helvetica,Arial,sans-serif">');
   H.push('<div style="text-align:center;background:#faf8f4;border:1.5px solid #121212;border-bottom:none;'
-    + 'border-radius:8px 8px 0 0;padding:20px 18px 14px">'
+    + 'border-radius:8px 8px 0 0;padding:16px 18px 12px">'
     + '<img src="' + APP_URL + '/assets/blp-logo.png" alt="Brigham Larson Pianos" '
-    +   'style="max-height:56px;max-width:260px">'
-    + '<div style="font:700 12px Helvetica,Arial,sans-serif;letter-spacing:3.5px;color:#9e2020;margin-top:12px">'
+    +   'style="max-height:30px;max-width:140px">'
+    + '<div style="font:700 12px Helvetica,Arial,sans-serif;letter-spacing:3.5px;color:#9e2020;margin-top:10px">'
     +   'SHOP MANAGER BRIEFING</div>'
-    + '<div style="font-family:Georgia,serif;font-size:21px;color:#2b2f33;margin-top:5px">' + R.day + '</div>'
-    + '<div style="width:64px;height:3px;background:#c9a227;margin:12px auto 0;border-radius:2px"></div>'
+    + '<div style="font:700 15px Helvetica,Arial,sans-serif;color:#2b2f33;margin-top:5px">' + R.day + '</div>'
+    + '<div style="width:64px;height:3px;background:#c9a227;margin:10px auto 0;border-radius:2px"></div>'
     + '</div>');
   H.push('<div style="border:1.5px solid #121212;border-top:none;border-radius:0 0 8px 8px;padding:16px 18px">');
 
+  // "Jump to a section" — spliced in below once every section (and its id)
+  // has been rendered, so the links always match a real anchor
+  var tocInsertAt = H.length;
+
   // ---------- Morning Standup — first thing the 8AM huddle reads ----------
   var SU = R.standup || {};
-  H.push('<div style="background:#faf8f4;border:1px solid #e6dfd2;border-radius:10px;padding:14px 16px;margin:2px 0 18px">');
+  TOC.push({id: 'sec-morning-standup', label: '🌅 Morning Standup'});
+  H.push('<div id="sec-morning-standup" style="background:#faf8f4;border:1px solid #e6dfd2;border-radius:10px;padding:14px 16px;margin:2px 0 18px">');
   H.push('<div style="font:800 13px Helvetica,Arial;letter-spacing:2px;color:#9e2020;margin-bottom:10px">'
     + '🌅 MORNING STANDUP · 8AM</div>');
   function su(icon, label, lines) {
@@ -3115,7 +3134,7 @@ function shopManagerHtml_(R) {
   su('🎂', 'Birthdays', (SU.bdays || []).map(function (b) {
     return '<b>' + b.name + '</b> — ' + b.when + (b.age ? ' <span style="color:#8a847b">(turning ' + b.age + ')</span>' : '');
   }));
-  su('🥂', 'Work anniversaries', (SU.annivs || []).map(function (a) {
+  su('🥂', 'Upcoming work anniversaries', (SU.annivs || []).map(function (a) {
     return '<b>' + a.name + '</b> — ' + a.years + ' year' + (a.years > 1 ? 's' : '') + ' at BLP (' + a.when + ')';
   }));
   su('👋', 'Welcome the new faces', (SU.newFaces || []).map(function (n) {
@@ -3143,6 +3162,9 @@ function shopManagerHtml_(R) {
     + 'style="color:#9e2020;font-size:12px;white-space:nowrap">full standards ↗</a>'] : []);
   su('🎯', 'Today’s focus', SU.focus || []);
   H.push('</div>');
+
+  // page 2 starts here — every other section's header lands on its own page
+  H.push('<div style="page-break-before:always;height:0;margin:0;padding:0;line-height:0">&nbsp;</div>');
 
   // at a glance
   var alerts = R.blocked.length + R.noCab.length + R.noTrack.length + R.noPhase.length;
@@ -3316,7 +3338,23 @@ function shopManagerHtml_(R) {
     + '<a href="' + APP_URL + '" style="color:#9e2020">open the map</a> · '
     + R.total + ' active pianos</p>');
   H.push('</div></div>');
+
+  // now that every section (and its anchor) is known, splice the jump-links
+  // bar in at the top — right after the header, right before Morning Standup
+  H.splice(tocInsertAt, 0, smTocHtml_(TOC, '#9e2020', '#faf4f0', '#f0dede'));
   return H.join('');
+}
+function smTocHtml_(TOC, color, bg, border) {
+  if (!TOC.length) return '';
+  return '<div style="background:#fff;border:1px solid #e4e0d8;border-radius:8px;padding:12px 16px;margin:0 0 16px">'
+    + '<div style="font:700 11px Helvetica,Arial;letter-spacing:1.5px;text-transform:uppercase;'
+    + 'color:#8a847b;margin-bottom:8px">Jump to a section</div>'
+    + '<div style="display:flex;flex-wrap:wrap;gap:7px">'
+    + TOC.map(function (t) {
+        return '<a href="#' + t.id + '" style="font:12px Helvetica,Arial;color:' + color
+          + ';text-decoration:none;background:' + bg + ';border:1px solid ' + border
+          + ';border-radius:999px;padding:4px 10px;white-space:nowrap">' + t.label + '</a>';
+      }).join('') + '</div></div>';
 }
 
 /* Every briefing is also saved as a Google Doc (Drive REST convert) in a
@@ -3368,8 +3406,11 @@ function briefLog_() {
 /* ---------- Admin Morning Brief — payments, media, delivery logistics ---------- */
 function adminBriefHtml_(R) {
   var H = [];
+  var TOC = [];
   function sec(icon, title, count, note) {
-    H.push('<h2 style="font:700 13px/1.4 Helvetica,Arial,sans-serif;letter-spacing:1.5px;'
+    var id = smTocId_(title);
+    TOC.push({id: id, label: icon + ' ' + title});
+    H.push('<h2 id="' + id + '" style="font:700 13px/1.4 Helvetica,Arial,sans-serif;letter-spacing:1.5px;'
       + 'text-transform:uppercase;color:#6f6a63;background:#f4f1ec;border-left:4px solid #2c5d96;'
       + 'margin:22px 0 8px;padding:7px 11px">' + icon + ' ' + title
       + (count != null ? ' <span style="color:#2c5d96">(' + count + ')</span>' : '') + '</h2>');
@@ -3385,15 +3426,16 @@ function adminBriefHtml_(R) {
   }
   H.push('<div style="max-width:760px;margin:0 auto;font-family:Helvetica,Arial,sans-serif">');
   H.push('<div style="text-align:center;background:#f4f7fb;border:1.5px solid #121212;border-bottom:none;'
-    + 'border-radius:8px 8px 0 0;padding:20px 18px 14px">'
+    + 'border-radius:8px 8px 0 0;padding:16px 18px 12px">'
     + '<img src="' + APP_URL + '/assets/blp-logo.png" alt="Brigham Larson Pianos" '
-    +   'style="max-height:56px;max-width:260px">'
-    + '<div style="font:700 12px Helvetica,Arial,sans-serif;letter-spacing:3.5px;color:#2c5d96;margin-top:12px">'
+    +   'style="max-height:30px;max-width:140px">'
+    + '<div style="font:700 12px Helvetica,Arial,sans-serif;letter-spacing:3.5px;color:#2c5d96;margin-top:10px">'
     +   'ADMIN MORNING BRIEFING</div>'
-    + '<div style="font-family:Georgia,serif;font-size:21px;color:#2b2f33;margin-top:5px">' + R.day + '</div>'
-    + '<div style="width:64px;height:3px;background:#c9a227;margin:12px auto 0;border-radius:2px"></div>'
+    + '<div style="font:700 15px Helvetica,Arial,sans-serif;color:#2b2f33;margin-top:5px">' + R.day + '</div>'
+    + '<div style="width:64px;height:3px;background:#c9a227;margin:10px auto 0;border-radius:2px"></div>'
     + '</div>');
   H.push('<div style="border:1.5px solid #121212;border-top:none;border-radius:0 0 8px 8px;padding:16px 18px">');
+  var tocInsertAt = H.length;
 
   if (R.noPlan.length || R.adminDrift.length) {
     sec('💰', 'Admin & payments', R.noPlan.length + R.adminDrift.length);
@@ -3453,6 +3495,7 @@ function adminBriefHtml_(R) {
     + '<a href="' + APP_URL + '" style="color:#2c5d96">open the map</a> · '
     + R.total + ' active pianos</p>');
   H.push('</div></div>');
+  H.splice(tocInsertAt, 0, smTocHtml_(TOC, '#2c5d96', '#f0f4fa', '#dbe6f2'));
   return H.join('');
 }
 function adminAlerts_(R) {

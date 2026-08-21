@@ -5957,6 +5957,21 @@ function switchView(v) { S.view = v; showView(v); closeNav(); }
 document.querySelectorAll('.navitem[data-view]').forEach(el =>
   el.onclick = () => switchView(el.dataset.view));
 
+// tapping the BLP logo is a hard reset to "just opened the app" — first
+// floor, full-width zoom, no search, no open card/report, nav drawer closed
+function goHome() {
+  history.replaceState(null, '', location.pathname);
+  S.floor = 0; S.search = ''; S.zoom = 1; S.focusRow = null; S.openReport = null;
+  popPinned = false; $('#pop').hidden = true;
+  const search = $('#search'); if (search) search.value = '';
+  $('#searchac').hidden = true;
+  closeNav();
+  switchView('map');
+  renderTabs(); renderMap(); sizePlan();
+}
+$('.logo').onclick = goHome;
+$('.logo').style.cursor = 'pointer';
+
 // every non-map view gets a ✕ back to the map (Escape works too)
 ['report', 'board', 'cal', 'media', 'shopmap', 'archive'].forEach(v => {
   const el = $('#view-' + v);
