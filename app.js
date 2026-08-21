@@ -6034,7 +6034,7 @@ function renderDash() {
         <div class="dpr tap" id="dashPianos"><b>${prs ? prs.pianosTouched : '…'}</b><span>pianos touched ›</span></div>
       </div>
     </div>
-    <div class="dbench">
+    <div class="dbench db-bench">
       <h4>⏱ On the bench right now</h4>
       ${o ? `<div class="dline now"><b>${esc(o.phase || 'Working')} — ${esc(o.piano || '')} #${esc(o.serial)}</b>
                · <span class="cctime" data-start="${esc(o.start)}">${clockElapsed(o.start)}</span> and counting</div>`
@@ -6047,13 +6047,13 @@ function renderDash() {
       <div class="dlocker" data-h="#calendars"><span class="ic">📅</span><b>My Calendar</b><span>assigned vs. reported</span></div>
       <div class="dlocker" data-pay="1"><span class="ic">💵</span><b>Paylogics ↗</b><span>paystubs · time off</span></div>
     </div>
-    ${prs ? `<div class="dbench">
+    ${prs ? `<div class="dbench db-recs">
       <h4>🏆 Personal records</h4>
       <div class="dline">Best day on the clock: <b>${prs.bestDayH} h</b>${prs.bestDayWhen ? ' (' + esc(prs.bestDayWhen.slice(5)) + ')' : ''}</div>
       <div class="dline">Best week: <b>${prs.bestWeekH} h</b> · Most pianos in a week: <b>${prs.mostPianosWeek}</b></div>
       <div class="dline">Longest focused session: <b>${prs.longestSessionH} h</b>${prs.longestSessionPhase ? ' on ' + esc(prs.longestSessionPhase) : ''}</div>
       <div class="dline">Today so far: <b>${prs.todayH} h</b></div>
-    </div>` : '<div class="dbench"><h4>🏆 Personal records</h4><div class="dline dim">crunching your Time Log…</div></div>'}
+    </div>` : '<div class="dbench db-recs"><h4>🏆 Personal records</h4><div class="dline dim">crunching your Time Log…</div></div>'}
     ${prWatch}
     <p class="dsoon">coming soon: report history · phase-time PRs as the Work Clock fills in</p>`;
 

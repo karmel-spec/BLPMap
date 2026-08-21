@@ -862,3 +862,29 @@ body{top:0!important}
 .dsheet td{padding:8px 4px;border-bottom:1px solid #f0ece2;color:#2b2f33}
 .dsheet td small{color:#8a847b}
 .dsx{float:right;border:none;background:none;font-size:16px;color:#8a847b;cursor:pointer}
+
+/*/* My Dashboard on wide screens (>=860px): a real web layout — roster card + records
+   in a left rail, bench + tools spread on the right. Same DOM as mobile. */
+@media (min-width:860px){
+  .dashpanel{max-width:1060px}
+  #dashBody{display:grid;grid-template-columns:minmax(340px,400px) 1fr;gap:16px;align-items:start;
+    grid-template-areas:"anno anno" "card bench" "recs lockers" "prband lockers" "soon soon"}
+  .danno{grid-area:anno;margin:2px 0 0}
+  .dcard{grid-area:card;margin:0;padding:24px 22px}
+  .dwho{font-size:27px}
+  .dprrow{margin-top:20px}
+  .dpr{padding:12px 8px}
+  .dpr b{font-size:17px}
+  .dpr span{font-size:10px}
+  .db-bench{grid-area:bench;margin:0;padding:16px 20px}
+  .dlockers{grid-area:lockers;margin:0;gap:14px;align-content:start}
+  .dlocker{padding:20px 18px}
+  .dlocker b{font-size:15px}
+  .dlocker span{font-size:12px}
+  .db-recs{grid-area:recs;margin:0}
+  .dprband{grid-area:prband;margin:0}
+  .dsoon{grid-area:soon}
+  .dline{font-size:13.5px}
+  .dsheet{border-radius:18px;max-width:640px;margin:auto;max-height:80vh}
+  .dsheetov{align-items:center}
+}
