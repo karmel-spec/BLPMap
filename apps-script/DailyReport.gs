@@ -3151,7 +3151,7 @@ function shopManagerHtml_(R) {
     var SICON = {bug: '🐛', edit: '✏️', idea: '💡'};
     var SPILL = {'Requested': ['#eeeeee', '#555555'], 'In progress': ['#fdf3ec', '#9a5b13'],
                  'Live': ['#eaf2fd', '#2c5d96'], 'Tested': ['#eaf5ec', '#2f7d4f']};
-    sec('💡', 'Suggestions this week', R.suggestions.length,
+    sec('💡', 'App suggestions this week', R.suggestions.length,
       'From the team via the Store Map\u2019s 💡 button \u2014 thank the names you see here.');
     ul(R.suggestions.map(function (x) {
       var c = SPILL[x.status] || SPILL.Requested;
