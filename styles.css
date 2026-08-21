@@ -766,3 +766,23 @@ html,body{touch-action:manipulation;overscroll-behavior:none}
 .actcount{font-size:11.5px;color:#8a929a;margin-left:auto}
 .actclear{border:0;background:none;color:#9e2020;font:700 11.5px 'Assistant',sans-serif;cursor:pointer}
 .archsearch{margin:8px 0;width:min(380px,100%);background:#fff;color:#121212;border-color:#cfd6dc}
+
+/* ---------- share sheet (↗ on piano cards + reports) ---------- */
+.pop .shr{position:absolute;top:7px;right:36px;color:#9aa2ab;cursor:pointer;font-size:15px;font-weight:800}
+.popsticky .shr{top:9px}
+.pop .shr:hover{color:#9e2020}
+.sharebtn{flex-shrink:0;margin-top:8px;margin-right:6px;border:1px solid #cfd6dc;background:#f7f8f9;border-radius:8px;font-size:11.5px;font-weight:700;padding:6px 12px;cursor:pointer}
+.sharebtn:hover{border-color:#9e2020;color:#9e2020}
+.shov{position:fixed;inset:0;background:rgba(20,22,25,.45);z-index:220;display:flex;align-items:center;justify-content:center;padding:18px}
+.shcard{background:#fff;border-radius:14px;box-shadow:0 18px 50px rgba(0,0,0,.3);width:min(360px,92vw);max-height:82vh;overflow:auto;padding:16px 18px}
+.shhead{display:flex;align-items:center;justify-content:space-between;font-size:15px;margin-bottom:4px}
+.shhead .shx{cursor:pointer;color:#9aa2ab;font-size:15px;padding:2px 4px}
+.shwhat{color:#5a626b;font-size:12.5px;margin-bottom:12px;line-height:1.4}
+.shbtn{display:block;width:100%;text-align:left;border:1px solid #cfd6dc;background:#f7f8f9;border-radius:10px;font-size:13.5px;font-weight:700;padding:10px 12px;cursor:pointer;margin-bottom:8px}
+.shbtn:hover{border-color:#9e2020;color:#9e2020}
+.shteam{margin-top:10px;font-size:12.5px}
+.shteam>b{display:block;margin-bottom:6px}
+.shlist{display:flex;flex-wrap:wrap;gap:6px}
+.shlist i{color:#8a929a}
+.shper{display:inline-block;border:1px solid #cfd6dc;border-radius:999px;padding:6px 12px;font-size:12.5px;font-weight:700;text-decoration:none;color:#20242a;background:#f7f8f9}
+.shper:hover{border-color:#9e2020;color:#9e2020}

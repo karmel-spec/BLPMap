@@ -246,6 +246,7 @@ async function boot() {
   index(); renderAll();
   if (!S.data.stale && S.data.pianos.length) writeCache();
   tryDeepLink();   // #piano=SERIAL from a scanned shop tag → open that card
+  tryReportLink(); // #report=<id> from a shared link → open that report
   setInterval(async () => {
     try {
       const [m, d2] = await Promise.all([fetchSlots(), fetchData()]);
@@ -731,6 +732,59 @@ function logLink(p) {
 function mapLink(p) {
   return 'https://blpstoremap.netlify.app/#piano=' + encodeURIComponent(p.serial || '');
 }
+/* ---------- share (↗) — text a piano or report to a teammate ---------- */
+let phonesCache = null;
+function shareSheet(title, url) {
+  const text = title + ' — ' + url;
+  const old = document.querySelector('.shov');
+  if (old) old.remove();
+  const ov = document.createElement('div');
+  ov.className = 'shov';
+  ov.innerHTML = `<div class="shcard">
+    <div class="shhead"><b>↗ Share</b><span class="shx" title="close">✕</span></div>
+    <div class="shwhat">${esc(title)}</div>
+    ${navigator.share ? `<button class="shbtn shnative">📲 Share… (text, email, AirDrop)</button>` : ''}
+    <button class="shbtn shcopy">📋 Copy link</button>
+    <div class="shteam"><b>💬 Text it to a teammate</b><div class="shlist"><i>loading the team list…</i></div></div>
+  </div>`;
+  document.body.appendChild(ov);
+  ov.onclick = ev => {
+    if (ev.target === ov || ev.target.classList.contains('shx')) ov.remove();
+  };
+  const nb = ov.querySelector('.shnative');
+  if (nb) nb.onclick = async () => {
+    try { await navigator.share({title, text, url}); ov.remove(); } catch (e) { /* user cancelled */ }
+  };
+  ov.querySelector('.shcopy').onclick = async ev => {
+    try { await navigator.clipboard.writeText(url); ev.target.textContent = '✓ Link copied'; }
+    catch (e) { prompt('Copy the link:', url); }
+  };
+  const list = ov.querySelector('.shlist');
+  const renderPh = () => {
+    list.innerHTML = phonesCache.length
+      ? phonesCache.map(t =>
+          `<a class="shper" href="sms:${esc(t.phone)}?&body=${encodeURIComponent(text)}">💬 ${esc(t.name)}</a>`).join('')
+      : '<i>no team phone numbers on file yet (Tech Phones tab)</i>';
+  };
+  if (phonesCache) { renderPh(); return; }
+  const wa = writeAuth();
+  if (!wa.ok) {
+    list.innerHTML = `<i>${wa.renewing ? 'sign-in renewing — reopen in a moment'
+      : 'sign in first to text teammates directly'} — Share / Copy above still work</i>`;
+    return;
+  }
+  fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+    headers: {'content-type': 'text/plain;charset=utf-8'},
+    body: JSON.stringify({pin: wa.pin, action: 'phones', ...authFields()})})
+    .then(r => r.json())
+    .then(j => { phonesCache = j.phones || []; renderPh(); })
+    .catch(() => { list.innerHTML = '<i>couldn’t load the team list — use Share / Copy above</i>'; });
+}
+function sharePiano(p) {
+  const name = [p.year, p.make, p.model].filter(Boolean).join(' ') || p.summary || 'Piano';
+  shareSheet(`${name} · serial ${p.serial || '—'}${p.location ? ' · spot ' + p.location : ''}`, mapLink(p));
+}
+
 /* Deep link from a scanned shop tag: #piano=SERIAL finds the piano, jumps
  * the map to its spot and opens its data card pinned. Re-fires on hashchange
  * so scanning a second tag while the app is open also works. */
@@ -755,7 +809,17 @@ function tryDeepLink() {
   S.scanArrived = p.serial;   // spotlight the Work Clock on this card
   setTimeout(() => focusPiano(p), 250);
 }
-window.addEventListener('hashchange', () => { deepLinkDone = ''; tryDeepLink(); });
+/* #report=<id> deep link — a shared report link opens straight to that report */
+function tryReportLink() {
+  const m = /[#&]report=([a-z]+)/.exec(location.hash || '');
+  if (!m || !REPORT_DEFS().some(r => r.id === m[1])) return;
+  S.openReport = m[1];
+  if (m[1] === 'activity' && !S.activityRows) loadActivity();
+  if (m[1] === 'briefs' && !S.briefRows) loadBriefs();
+  switchView('report');
+  renderReport();
+}
+window.addEventListener('hashchange', () => { deepLinkDone = ''; tryDeepLink(); tryReportLink(); });
 
 /* ---------- rendering ---------- */
 function renderAll() {
@@ -2404,6 +2468,7 @@ function popHTML(p) {
   return `<div class="popgrip l" title="drag to resize"></div><div class="popgrip r" title="drag to resize"></div>
     <div class="popsticky">
     <span class="x">✕</span>
+    <span class="shr" title="share this piano — text it to a teammate">↗</span>
     <span class="tag ${st}">${tags[st]}</span>
     <h3>${esc(makeModel)}</h3>
     <div class="row rowflex"><span>Serial # <b>${esc(p.serial || '—')}</b></span>${typeBtns}</div>
@@ -2541,6 +2606,7 @@ function wirePop(p) {
   const pop = $('#pop');
   pop.onclick = ev => {
     if (ev.target.classList.contains('x')) { pop.hidden = true; popPinned = false; return; }
+    if (ev.target.classList.contains('shr')) { sharePiano(p); return; }
     // only the explicit "Open Piano Log" button navigates — every other
     // control on the card (tuning, phases, media, tags, move) stays put
     if (!ev.target.closest('.btn')) return;
@@ -5619,6 +5685,7 @@ function renderReport() {
       </button>
       <div class="rptbody" ${open === r.id ? '' : 'hidden'}>
         <div class="rpthead"><p class="pd">${r.desc}</p>
+          <button class="sharebtn" data-r="${r.id}">↗ Share</button>
           <button class="printbtn" data-r="${r.id}">🖨 Print</button></div>
         <div class="tscroll">${open === r.id ? r.html() : ''}</div>
       </div>
@@ -5668,6 +5735,12 @@ function renderReport() {
   if (quc) quc.onclick = () => { S.quF = {q: ''}; renderReport(); };
   const ac = body.querySelector('.actclear');
   if (ac) ac.onclick = () => { S.actF = {who: '', act: '', piano: '', q: '', days: 0}; renderReport(); };
+  body.querySelectorAll('.sharebtn').forEach(b => b.onclick = ev => {
+    ev.stopPropagation();
+    const def = REPORT_DEFS().find(r => r.id === b.dataset.r);
+    shareSheet(def.icon + ' ' + def.title + ' — BLP Store Map report',
+      'https://blpstoremap.netlify.app/#report=' + def.id);
+  });
   body.querySelectorAll('.printbtn').forEach(b => b.onclick = ev => {
     ev.stopPropagation();
     const def = REPORT_DEFS().find(r => r.id === b.dataset.r);

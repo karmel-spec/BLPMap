@@ -684,6 +684,11 @@ function doPost(e) {
       if (rs.ok) logAct_(who, 'App request ' + rs.status, rs.id, rs.text);
       return json_(rs);
     }
+    // team phone list for the share sheet — POST-only so the numbers sit
+    // behind the same PIN / Google auth as every other write
+    if (req.action === 'phones') {
+      return json_(teamPhones_());
+    }
     if (req.action === 'clockin') {
       var cin = clockIn_(req);
       return json_(cin);
@@ -2086,6 +2091,25 @@ function setRequestStatus_(req) {
   }
   return {error: 'request not found'};
 }
+/* Tech Phones tab -> [{name, phone}] so the share sheet can open a text
+ * to a teammate with the link prefilled. Digits normalized to +1XXXXXXXXXX. */
+function teamPhones_() {
+  var ss = SpreadsheetApp.openById('11RoeVRETag5rZYX6_tEH-rf6x8JL0JeZU0P5AT0WI-I');
+  var sh = ss.getSheetByName('Tech Phones');
+  if (!sh) return {ok: true, phones: []};
+  var vals = sh.getRange(2, 1, Math.max(1, sh.getLastRow() - 1), 2).getValues();
+  var out = [];
+  for (var i = 0; i < vals.length; i++) {
+    var name = String(vals[i][0] || '').trim();
+    var digits = String(vals[i][1] || '').replace(/\D/g, '');
+    if (!name || digits.length < 10) continue;
+    if (digits.length === 10) digits = '1' + digits;
+    out.push({name: name, phone: '+' + digits});
+  }
+  out.sort(function (a, b) { return a.name.localeCompare(b.name); });
+  return {ok: true, phones: out};
+}
+
 function requestsList_() {
   var sh = requestsSheet_();
   var last = sh.getLastRow();
@@ -3369,4 +3393,9 @@ function queueMove_(req) {
   } finally {
     lock.releaseLock();
   }
+}
+
+/** One-time: run me from the editor to grant the Drive scope briefDoc_ needs. */
+function authorizeBriefDoc() {
+  Logger.log(DriveApp.getRootFolder().getName());
 }
