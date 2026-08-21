@@ -142,6 +142,10 @@ function doGet(e) {
     try { return json_(pianoHistory_(e.parameter.serial, e.parameter.row)); }
     catch (err) { return json_({error: String(err), loc: [], cab: []}); }
   }
+  if (e && e.parameter && e.parameter.fn === 'briefs') {
+    try { return json_(briefLog_()); }
+    catch (err) { return json_({error: String(err), briefs: []}); }
+  }
   if (e && e.parameter && e.parameter.fn === 'timeclock') {
     try { return json_(timeClockState_()); }
     catch (err) { return json_({error: String(err), open: []}); }
@@ -660,6 +664,11 @@ function doPost(e) {
       var pqa = preQueueApprove_(req);
       if (pqa.ok) logAct_(who, 'Queue APPROVED (deposit in)', pqa.summary || req.serial, pqa.status);
       return json_(pqa);
+    }
+    if (req.action === 'sendbrief') {
+      var sb = sendShopManagerReportTo_(SHOPMGR_TO);
+      logAct_(who, 'Shop brief sent manually', 'briefing', sb.doc || '');
+      return json_(sb);
     }
     if (req.action === 'suggest') {
       var sg = addRequest_(req);
@@ -2198,7 +2207,7 @@ function payMilestone_(req) {
  * a quiet day is a short email.
  * Run sendShopManagerReport() manually, or sendShopManagerReportTo('a@b.com')
  * to send a sample somewhere else. */
-var SHOPMGR_TO = 'shop@brighamlarsonpianos.com';
+var SHOPMGR_TO = 'shop@brighamlarsonpianos.com,brigham@brighamlarsonpianos.com,karmel@brighamlarsonpianos.com';
 var TRACKDEFS_URL = 'https://blpsalesapp.netlify.app/.netlify/functions/track-defs';
 var TASKS_URL = 'https://blpsalesapp.netlify.app/.netlify/functions/piano-tasks';
 // phase -> the specialty area that staffs it (mirrors the Store Map card)
@@ -3042,6 +3051,51 @@ function shopManagerHtml_(R) {
   return H.join('');
 }
 
+/* Every briefing is also saved as a Google Doc (Drive REST convert) in a
+ * "BLP Shop Briefs" folder, link-shared, and logged to the report sheet's
+ * "Brief Log" tab — the Store Map's Daily Briefs report lists those links. */
+function briefDoc_(subject, html) {
+  var it = DriveApp.getFoldersByName('BLP Shop Briefs');
+  var folder = it.hasNext() ? it.next() : DriveApp.createFolder('BLP Shop Briefs');
+  var meta = {name: subject, mimeType: 'application/vnd.google-apps.document',
+              parents: [folder.getId()]};
+  var boundary = 'blpbrief' + Date.now();
+  var body = '--' + boundary + '\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n'
+    + JSON.stringify(meta)
+    + '\r\n--' + boundary + '\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n'
+    + html + '\r\n--' + boundary + '--';
+  var res = UrlFetchApp.fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink', {
+    method: 'post',
+    contentType: 'multipart/related; boundary=' + boundary,
+    payload: body,
+    headers: {Authorization: 'Bearer ' + ScriptApp.getOAuthToken()},
+  });
+  var f = JSON.parse(res.getContentText());
+  try { DriveApp.getFileById(f.id).setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch (e) {}
+  var url = f.webViewLink || ('https://docs.google.com/document/d/' + f.id + '/edit');
+  var ss = SpreadsheetApp.openById('11RoeVRETag5rZYX6_tEH-rf6x8JL0JeZU0P5AT0WI-I');
+  var sh = ss.getSheetByName('Brief Log');
+  if (!sh) {
+    sh = ss.insertSheet('Brief Log', ss.getSheets().length);
+    sh.getRange(1, 1, 1, 3).setValues([['Date', 'Subject', 'Doc URL']]);
+    sh.setFrozenRows(1);
+  }
+  sh.appendRow([new Date().toISOString(), subject, url]);
+  return url;
+}
+function briefLog_() {
+  var ss = SpreadsheetApp.openById('11RoeVRETag5rZYX6_tEH-rf6x8JL0JeZU0P5AT0WI-I');
+  var sh = ss.getSheetByName('Brief Log');
+  var out = [];
+  if (sh && sh.getLastRow() >= 2) {
+    var n = Math.min(30, sh.getLastRow() - 1);
+    var vals = sh.getRange(sh.getLastRow() - n + 1, 1, n, 3).getValues();
+    for (var i = vals.length - 1; i >= 0; i--) {
+      out.push({date: String(vals[i][0]), subject: String(vals[i][1]), url: String(vals[i][2])});
+    }
+  }
+  return {ok: true, briefs: out};
+}
 function sendShopManagerReportTo_(to, note) {
   var R = buildShopManagerReport_();
   var alerts = R.blocked.length + R.stalled.length + R.noCab.length + R.noTrack.length
@@ -3052,17 +3106,24 @@ function sendShopManagerReportTo_(to, note) {
       + 'border:1px solid #eecfae;border-radius:8px;font:13px Helvetica,Arial;color:#6b5030">'
       + note + '</div>' + html;
   }
+  var subject = (note ? '[SAMPLE] ' : '') + 'Shop Manager Briefing — ' + R.day
+    + ' · ' + alerts + ' to review';
+  var docUrl = '';
+  try { docUrl = briefDoc_(subject, html); } catch (e) {}
+  if (docUrl) {
+    html = '<div style="max-width:760px;margin:0 auto 10px;text-align:right;font:12px Helvetica,Arial">'
+      + '<a href="' + docUrl + '">📄 Open this briefing as a Google Doc</a></div>' + html;
+  }
   MailApp.sendEmail({
     to: to,
-    subject: (note ? '[SAMPLE] ' : '') + 'Shop Manager Briefing — ' + R.day
-      + ' · ' + alerts + ' to review',
+    subject: subject,
     htmlBody: html,
     body: 'Shop Manager Briefing ' + R.day + '\n'
       + R.activity.total + ' changes logged, ' + alerts + ' items needing attention.\n'
       + 'Open in HTML for the full briefing.',
     name: 'BLP Store Map',
   });
-  return {ok: true, to: to, alerts: alerts, changes: R.activity.total};
+  return {ok: true, to: to, alerts: alerts, changes: R.activity.total, doc: docUrl};
 }
 
 function setupShopManagerBriefing() {

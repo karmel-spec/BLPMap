@@ -5510,7 +5510,27 @@ function tasksTable() {
     </table>`;
 }
 
+function briefsTable() {
+  if (!S.briefRows) return '<div class="empty">Loading the brief archive…</div>';
+  return `<table><tr><th>DATE</th><th>BRIEFING</th><th></th></tr>` +
+    (S.briefRows.map(b => `<tr>
+      <td style="white-space:nowrap">${esc((b.date || '').slice(0, 10))}</td>
+      <td>${esc(b.subject)}</td>
+      <td><a target="_blank" rel="noopener" href="${esc(b.url)}">open doc ↗</a></td></tr>`).join('')
+     || '<tr><td colspan="3" class="empty">No briefs archived yet — the first one lands with tomorrow morning\u2019s send.</td></tr>') + '</table>';
+}
+async function loadBriefs() {
+  try {
+    const r = await fetch(BRIDGE_URL + '?fn=briefs', {redirect: 'follow'});
+    S.briefRows = (await r.json()).briefs || [];
+  } catch (e) { S.briefRows = []; }
+  renderReport();
+}
+
 const REPORT_DEFS = () => [
+  {id: 'briefs', icon: '📰', title: 'DAILY SHOP BRIEFS', count: null,
+   desc: 'Every morning\u2019s Shop Manager Briefing, archived as a Google Doc — emailed weekdays to shop@, brigham@ and karmel@.',
+   html: briefsTable},
   {id: 'tasks', icon: '🧩', title: 'CONCURRENT WORK', count: (() => {
      try { const f = S.tkF || {cat: 'keys'}; return S.data.pianos.filter(p =>
        p.active && p.serial && (p.queuePos || p.phase) && !taskAutoDone(p, f.cat)
@@ -5567,6 +5587,7 @@ function renderReport() {
     const id = b.closest('.rpt').dataset.r;
     S.openReport = S.openReport === id ? null : id;
     if (S.openReport === 'activity' && !S.activityRows) loadActivity();
+    if (S.openReport === 'briefs' && !S.briefRows) loadBriefs();
     renderReport();
   });
   body.querySelectorAll('.actf').forEach(el => {
