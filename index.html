@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Store Map — Brigham Larson Pianos</title>
 <link rel="icon" href="assets/blp-logo.png">
-<link rel="stylesheet" href="styles.css?v=120">
+<link rel="stylesheet" href="styles.css?v=121">
 </head>
 <body>
 
@@ -79,6 +79,7 @@
     <div class="navitem" data-view="report"><span class="ic">⚠️</span>Reports</div>
     <div class="navitem" data-view="media"><span class="ic">📸</span>Media</div>
     <div class="navitem" data-view="shopmap"><span class="ic">📍</span>Shop Work Map</div>
+    <div class="navitem" data-view="archive"><span class="ic">📦</span>Delivered Archive</div>
     <div class="crew">
       <b>Move Crew Today</b><span id="crew">—</span>
       <span id="crewMoves" class="crewmoves">— Moves Today</span>
@@ -170,6 +171,14 @@
     </div>
   </div>
 
+  <div class="view panelview" id="view-archive" hidden>
+    <div class="panel">
+      <h2 class="ph">📦 DELIVERED ARCHIVE</h2>
+      <p class="pd">Pianos that have been delivered (moved below the SOLD banner in the Piano Log). Off the map, but every data card is still here and searchable.</p>
+      <input class="search archsearch" id="archSearch" placeholder="search archive — serial, make, owner…">
+      <div id="archBody"></div>
+    </div>
+  </div>
   <div class="view panelview" id="view-shopmap" hidden>
     <div class="panel">
       <h2 class="ph">📍 CURRENT SHOP WORK — DELIVERY / ORIGIN MAP</h2>
@@ -182,6 +191,6 @@
   </div>
 </div>
 
-<script src="app.js?v=132"></script>
+<script src="app.js?v=133"></script>
 </body>
 </html>

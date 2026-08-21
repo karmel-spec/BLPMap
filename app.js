@@ -65,7 +65,7 @@ const BRIDGE_URL =
 // empty string hides the sign-in UI entirely.
 const GOOGLE_CLIENT_ID = '110628682621-v65mkaoanv87sp75ggdfcrglfr7bkr8p.apps.googleusercontent.com';
 const PRICETAGS_URL = 'https://blppricetags.netlify.app/';
-const SLOT_RE = /^\d+[a-zA-Z]?$/;
+const SLOT_RE = /^\d+(?:\.\d)?[a-zA-Z]?$/;
 // named areas in col U that are legitimate (not "unplaced") even though
 // they aren't numbered slots on the map
 const KNOWN_AREAS = ['showroom', 'pre-sale showroom', 'third floor', 'storage',
@@ -823,7 +823,9 @@ function focusPiano(p) {
   S.focusRow = p.row;
   const placed = p.isSlot && S.slotFloor.has(p.location.toLowerCase());
   const inBin = areaBinFor(p);   // parked in a named work-area zone
-  const fi = placed ? S.slotFloor.get(p.location.toLowerCase())
+  const tmpm = /^temp spot @([12])f/i.exec((p.location || '').trim());
+  const fi = tmpm ? +tmpm[1] - 1
+    : placed ? S.slotFloor.get(p.location.toLowerCase())
     : inBin ? floorForBin(inBin)
     : (comingSoon(p) || outForService(p)) ? 0   // front-door/parking-lot zones live on floor 0
     : 1;                   // attic/rented live on floor 1
@@ -832,7 +834,7 @@ function focusPiano(p) {
   const f = S.map.floors[S.floor];
   const sl = placed ? f.slots.find(x => x.id.toLowerCase() === p.location.toLowerCase()) : null;
   const target = sl ? {x: sl.x + sl.w / 2, y: sl.y + sl.h / 2}
-    : (S.binXY || {})[p.row] || (S.rentXY || {})[p.row] || (S.comingXY || {})[p.row] || (S.serviceXY || {})[p.row] || (S.holdingXY || {})[p.row];
+    : (S.tempXY || {})[p.row] || (S.binXY || {})[p.row] || (S.rentXY || {})[p.row] || (S.comingXY || {})[p.row] || (S.serviceXY || {})[p.row] || (S.holdingXY || {})[p.row];
   if (target) {
     S.zoom = Math.max(S.zoom, 2.4); sizePlan();
     const sc = $('#mapscroll');
@@ -952,6 +954,11 @@ function mediaCard(p) {
     ${line('After photos', 'aphoto', p.aphoto, late)}
     ${line('After video', 'avideo', p.avideo, late)}
     ${folderRow}
+    ${p.serial ? `<div class="tagbtns mediaadd">
+      <button class="tagbtn maddbtn" data-kind="before">📷 Add before photos</button>
+      <button class="tagbtn maddbtn" data-kind="after">📷 Add after photos</button>
+      <input type="file" class="maddin" accept="image/*" multiple hidden>
+    </div>` : ''}
     <div class="mdmsg"></div>
   </div>`;
 }
@@ -1941,10 +1948,66 @@ function renderMap() {
       });
     }
   }
+  // temporary map spots: pianos parked on open floor space by a manager.
+  // location format "Temp spot @1F 512,340" — they draw as dashed boxes and
+  // vanish the moment the piano moves to a real spot or is delivered.
+  S.tempXY = {};
+  S.data.pianos.forEach(p => {
+    if (!p.active) return;
+    const m = /^temp spot @([12])f\s+(\d+),(\d+)/i.exec((p.location || '').trim());
+    if (!m) return;
+    const fl = +m[1] - 1, x = +m[2], y = +m[3];
+    S.tempXY[p.row] = {x, y, floor: fl};
+    if (fl !== S.floor) return;
+    const hl = S.focusRow === p.row || (q && matches(p, q));
+    const dim = q && !matches(p, q);
+    s += `<g class="piano tempspot ${extra(p)} ${dim ? 'dim' : ''} ${hl ? 'hl' : ''}" data-row="${p.row}">
+      <rect x="${x - 30}" y="${y - 26}" width="60" height="52" rx="7" class="temprect"/>
+      <text x="${x}" y="${y - 30}" text-anchor="middle" class="templbl" font-size="9">TEMP</text>
+      ${glyph(p.type, x, y + 3, 1.05)}${phaseText(p, x, y + 3, 1.05)}${ghostBadge(p, x, y + 3, 1.05)}</g>`;
+  });
   S.drawW = drawW; S.drawH = drawH;
 
   const svg = $('#plan');
   svg.innerHTML = s;
+  // temp-spot placement mode: one tap on open floor places the piano
+  if (S.tempPlace) {
+    svg.style.cursor = 'crosshair';
+    svg.addEventListener('click', async function place(ev) {
+      if (!S.tempPlace) return;
+      if (ev.target.closest('.piano') || ev.target.closest('.slot.hit')) return;   // must be open space
+      ev.stopPropagation();
+      svg.removeEventListener('click', place, true);
+      const pt = svg.createSVGPoint();
+      pt.x = ev.clientX; pt.y = ev.clientY;
+      const c = pt.matrixTransform(svg.getScreenCTM().inverse());
+      const job = S.tempPlace;
+      S.tempPlace = null;
+      svg.style.cursor = '';
+      const bar = document.getElementById('tempbar');
+      if (bar) bar.remove();
+      let serial = job.serial || prompt('Serial # of the piano for this temp spot:') || '';
+      serial = serial.trim();
+      if (!serial) { renderMap(); return; }
+      const p = S.data.pianos.find(x => (x.serial || '').toLowerCase() === serial.toLowerCase() && x.active);
+      if (!p) { alert('No active piano with serial ' + serial + '.'); renderMap(); return; }
+      const locStr = 'Temp spot @' + (S.floor + 1) + 'F ' + Math.round(c.x) + ',' + Math.round(c.y);
+      if (!confirm('Park #' + p.serial + ' (' + p.summary.slice(0, 30) + ') at this temp spot?\n\nIt disappears automatically when the piano moves to a real spot or is delivered.')) { renderMap(); return; }
+      const wa = writeAuth();
+      if (!wa.ok) { renderMap(); return; }
+      try {
+        const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+          headers: {'content-type': 'text/plain;charset=utf-8'},
+          body: JSON.stringify({pin: wa.pin, action: 'move', serial: p.serial, row: p.row,
+            newLocation: locStr, ...authFields()})});
+        const j = await r.json();
+        if (!j.moved) throw new Error(j.error || 'move failed');
+        p.location = locStr;
+        renderMap();
+        setTimeout(() => focusPiano(p), 200);
+      } catch (e) { alert('✗ ' + e.message); renderMap(); }
+    }, true);
+  }
   svg.querySelectorAll('.cabunitbox, .cabunitnum, .cabcntc, .cabcnt2').forEach(el =>
     el.addEventListener('click', ev => { ev.stopPropagation(); openCabUnitModal(el.dataset.unit); }));
   sizePlan();
@@ -2354,7 +2417,7 @@ function popHTML(p) {
     <div class="row">Status <b>${esc(p.status || '—')}</b></div>
     ${effectivePhase(p) === 'For Sale'
       ? `<div class="row rowflex"><span>Price <b class="pricecard">${priceLabel(p) ? esc(priceLabel(p)) : '—'}</b></span>
-           ${p.serial ? `<button class="predit">${p.price ? '✎ Edit price' : '＋ Add price'}</button>` : ''}</div>`
+           ${p.serial && isAdminUser() ? `<button class="predit">${p.price ? '✎ Edit price' : '＋ Add price'}</button>` : ''}</div>`
       : (priceLabel(p) ? `<div class="row">Price <b class="pricecard">${esc(priceLabel(p))}</b></div>` : '')}
 
     ${p.serial ? (() => {
@@ -2387,7 +2450,8 @@ function popHTML(p) {
         <span class="trkchips cabchips">${cabTokens(p).map(t =>
           `<span class="cabchip" title="${esc(cabPretty(t))}">${esc(t)}<i class="cabdel" data-t="${esc(t)}">✕</i></span>`).join('')}
           <button class="cabadd">＋ shelf</button>
-        </span></div><div class="cabmsg phmsg"></div>` : ''}`)}
+        </span></div><div class="cabmsg phmsg"></div>` : ''}
+    ${p.serial ? `<button class="lhbtn">🕘 Location history</button><div class="lhout"></div>` : ''}`)}
 
     ${(body => p.serial ? secWrap('shop', '🔨 Shop Progress', body) : body)(`
     ${tracker}
@@ -2434,6 +2498,7 @@ function popHTML(p) {
         <button data-req="price">💲 Price Change</button>
         <button data-req="priority">⚡ Priority Scheduling</button>
         <button data-req="brigham">🗒 Brigham Task</button>
+        ${(isAdminUser() || userRole()) ? `<button data-req="tempspot">📍 Temp map spot</button>` : ''}
         <button data-req="dup" class="reqdanger">🗑 Mark as Duplicate</button>
       </div>` : ''}
     <div class="tagbtns">
@@ -2721,6 +2786,26 @@ function wirePop(p) {
       if (head) head.classList.add('pulse');
     }
   })();
+  const tsBtn = pop.querySelector('[data-req="tempspot"]');
+  if (tsBtn) tsBtn.onclick = ev => {
+    ev.stopPropagation();
+    if (!(isAdminUser() || userRole())) return;
+    $('#pop').hidden = true; popPinned = false;
+    S.tempPlace = {row: p.row, serial: p.serial};
+    if (S.view !== 'map') switchView('map');
+    let bar = document.getElementById('tempbar');
+    if (!bar) {
+      bar = document.createElement('div');
+      bar.id = 'tempbar';
+      document.body.appendChild(bar);
+    }
+    bar.innerHTML = `📍 Tap an OPEN floor space to park <b>#${esc(p.serial)}</b> there as a temp spot
+      <button id="tempcancel">cancel</button>`;
+    bar.querySelector('#tempcancel').onclick = () => {
+      S.tempPlace = null; bar.remove(); renderMap();
+    };
+    renderMap();
+  };
   pop.querySelectorAll('.sechead[data-sec]').forEach(h => {
     h.onclick = ev => {
       ev.stopPropagation(); popPinned = true;
@@ -2733,6 +2818,35 @@ function wirePop(p) {
       lsSet('sec_' + h.dataset.sec, closed ? 'closed' : 'open');
     };
   });
+  const lhb = pop.querySelector('.lhbtn');
+  if (lhb) lhb.onclick = async ev => {
+    ev.stopPropagation(); popPinned = true;
+    const out = pop.querySelector('.lhout');
+    if (!out.hidden && out.innerHTML) { out.innerHTML = ''; return; }
+    lhb.textContent = '🕘 loading…';
+    try {
+      if (!S.histCache) S.histCache = new Map();
+      let h = S.histCache.get(p.serial);
+      if (!h) {
+        const r = await fetch(BRIDGE_URL + '?fn=history&serial=' + encodeURIComponent(p.serial)
+          + '&row=' + p.row, {redirect: 'follow'});
+        h = await r.json();
+        S.histCache.set(p.serial, h);
+      }
+      lhb.textContent = '🕘 Location history';
+      const li = x => `<div class="lhrow"><b>${esc(x.detail)}</b><span>${esc(x.when)} · ${esc(x.who)}</span></div>`;
+      // one location its whole life = no history to show
+      out.innerHTML =
+        (h.loc && h.loc.length
+          ? `<div class="lhsec">Spots</div>` + h.loc.map(li).join('')
+          : `<div class="lhnone">No moves recorded — this piano has stayed put.</div>`)
+        + (h.cab && h.cab.length > 1
+          ? `<div class="lhsec">Cabinetry</div>` + h.cab.map(li).join('') : '');
+    } catch (e) {
+      lhb.textContent = '🕘 Location history';
+      out.innerHTML = '<div class="lhnone">history unavailable — try again</div>';
+    }
+  };
   const pqa = pop.querySelector('.pqapprove');
   if (pqa) pqa.onclick = async ev => {
     ev.stopPropagation(); popPinned = true;
@@ -2753,6 +2867,46 @@ function wirePop(p) {
       openPop(p.row, S.popAnchor, true);
     } catch (e) { if (pqm) pqm.textContent = ' ✗ ' + e.message; }
   };
+  (() => {
+    const fin = pop.querySelector('.maddin');
+    if (!fin) return;
+    let kind = 'before';
+    pop.querySelectorAll('.maddbtn').forEach(b => b.onclick = ev => {
+      ev.stopPropagation(); popPinned = true;
+      kind = b.dataset.kind; fin.click();
+    });
+    fin.onclick = ev => ev.stopPropagation();
+    fin.onchange = async () => {
+      const files = [...(fin.files || [])].slice(0, 8);
+      if (!files.length) return;
+      const msg = pop.querySelector('.mdmsg');
+      const wa = writeAuth();
+      if (!wa.ok) { msg.className = 'mdmsg err'; msg.textContent = wa.renewing ? 'Sign-in expired — renewing, retry in a moment.' : 'Sign in first.'; return; }
+      let done = 0;
+      for (const f of files) {
+        msg.className = 'mdmsg'; msg.textContent = `Uploading ${kind} photo ${done + 1}/${files.length}…`;
+        try {
+          const dataUrl = await downscalePhoto(f, 2048, 0.85);   // web/Shopify-ready JPEG
+          const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+            headers: {'content-type': 'text/plain;charset=utf-8'},
+            body: JSON.stringify({pin: wa.pin, action: 'photo', kind, serial: p.serial, row: p.row,
+              stage: kind === 'before' ? 'Before' : 'After', mime: 'image/jpeg',
+              data: dataUrl.split(',')[1], ...authFields()})});
+          const j = await r.json();
+          if (!j.saved) throw new Error(j.error || 'upload failed');
+          done++;
+        } catch (e) {
+          msg.className = 'mdmsg err'; msg.textContent = '✗ ' + e.message + (done ? ` (${done} uploaded)` : '');
+          fin.value = ''; return;
+        }
+      }
+      fin.value = '';
+      msg.className = 'mdmsg ok';
+      msg.textContent = `✓ ${done} ${kind} photo${done > 1 ? 's' : ''} filed to the ${kind === 'before' ? 'Before' : 'After'} folder`;
+      if (kind === 'before') { p.bphoto = true; } else { p.aphoto = true; }
+      setTimeout(() => { if (!$('#pop').hidden) openPop(p.row, S.popAnchor, true); }, 1200);
+    };
+  })();
   const pws = pop.querySelector('.pwscan');
   if (pws) pws.onclick = ev => { ev.stopPropagation(); popPinned = true; scanPaperwork(p, pop); };
   pop.querySelectorAll('.pwadd').forEach(b => {
@@ -5222,12 +5376,46 @@ function waitingTable() {
       <td><a target="_blank" rel="noopener" href="${logLink(p)}">log ↗</a></td></tr>`).join('')
      || '<tr><td colspan="7" class="empty">No pianos are waiting on anything. 🎉</td></tr>') + '</table>';
 }
+/* Activity report with filters: person, action type, piano, date window,
+ * and free-text search across every column. */
+function actFiltered(rows) {
+  const f = S.actF || (S.actF = {who: '', act: '', piano: '', q: '', days: 0});
+  const cutoff = f.days ? Date.now() - f.days * 86400000 : 0;
+  return rows.filter(r => {
+    if (f.who && r[1] !== f.who) return false;
+    if (f.act && r[2] !== f.act) return false;
+    if (f.piano && !(String(r[3]) + ' ' + String(r[4])).toLowerCase().includes(f.piano.toLowerCase())) return false;
+    if (f.q && !r.join(' ').toLowerCase().includes(f.q.toLowerCase())) return false;
+    if (cutoff) {
+      const d = new Date(r[0]);
+      if (!isNaN(d) && d.getTime() < cutoff) return false;
+    }
+    return true;
+  });
+}
 function activityTable(rows) {
   if (!rows) return '<div class="empty">Loading the activity log…</div>';
-  return `<table><tr><th>WHEN</th><th>WHO</th><th>ACTION</th><th>PIANO</th><th>DETAILS</th></tr>` +
-    (rows.map(r => `<tr><td style="white-space:nowrap">${esc(r[0])}</td><td>${esc(r[1])}</td>
+  const f = S.actF || (S.actF = {who: '', act: '', piano: '', q: '', days: 0});
+  const whos = [...new Set(rows.map(r => r[1]).filter(Boolean))].sort();
+  const acts = [...new Set(rows.map(r => r[2]).filter(Boolean))].sort();
+  const shown = actFiltered(rows);
+  const sel = (id, label, opts, cur) => `<select class="actf" data-f="${id}">
+    <option value="">${label}</option>
+    ${opts.map(o => `<option ${o === cur ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>`;
+  return `<div class="actbar">
+      ${sel('who', 'everyone', whos, f.who)}
+      ${sel('act', 'all actions', acts, f.act)}
+      <input class="actf" data-f="piano" placeholder="piano / serial…" value="${esc(f.piano)}">
+      <input class="actf" data-f="q" placeholder="search anything…" value="${esc(f.q)}">
+      <span class="actdays">${[[0, 'all'], [1, '24h'], [7, '7d'], [30, '30d']].map(([d, l]) =>
+        `<button class="actd ${f.days === d ? 'on' : ''}" data-d="${d}">${l}</button>`).join('')}</span>
+      <span class="actcount">${shown.length}${shown.length !== rows.length ? ' of ' + rows.length : ''} entries</span>
+      ${(f.who || f.act || f.piano || f.q || f.days) ? '<button class="actclear">✕ clear</button>' : ''}
+    </div>
+    <table><tr><th>WHEN</th><th>WHO</th><th>ACTION</th><th>PIANO</th><th>DETAILS</th></tr>` +
+    (shown.map(r => `<tr><td style="white-space:nowrap">${esc(r[0])}</td><td>${esc(r[1])}</td>
       <td>${esc(r[2])}</td><td>${esc(r[3])}</td><td>${esc(r[4])}</td></tr>`).join('')
-     || '<tr><td colspan="5" class="empty">No activity yet — changes made in the map will appear here.</td></tr>') + '</table>';
+     || `<tr><td colspan="5" class="empty">${rows.length ? 'Nothing matches these filters.' : 'No activity yet — changes made in the map will appear here.'}</td></tr>`) + '</table>';
 }
 
 const REPORT_DEFS = () => [
@@ -5282,10 +5470,28 @@ function renderReport() {
     if (S.openReport === 'activity' && !S.activityRows) loadActivity();
     renderReport();
   });
+  body.querySelectorAll('.actf').forEach(el => {
+    const apply = () => {
+      S.actF[el.dataset.f] = el.value;
+      renderReport();
+      const again = body.querySelector(`.actf[data-f="${el.dataset.f}"]`);
+      if (again && again.tagName === 'INPUT') { again.focus(); again.setSelectionRange(again.value.length, again.value.length); }
+    };
+    if (el.tagName === 'SELECT') el.onchange = apply;
+    else el.oninput = () => { clearTimeout(el._t); el._t = setTimeout(apply, 350); };
+  });
+  body.querySelectorAll('.actd').forEach(b => b.onclick = () => { S.actF.days = +b.dataset.d; renderReport(); });
+  const ac = body.querySelector('.actclear');
+  if (ac) ac.onclick = () => { S.actF = {who: '', act: '', piano: '', q: '', days: 0}; renderReport(); };
   body.querySelectorAll('.printbtn').forEach(b => b.onclick = ev => {
     ev.stopPropagation();
     const def = REPORT_DEFS().find(r => r.id === b.dataset.r);
-    printReport(def.icon + ' ' + def.title, def.html());
+    let html = def.html();
+    if (def.id === 'activity') {
+      const i = html.indexOf('<table');
+      if (i > 0) html = html.slice(i);   // drop the filter bar from print
+    }
+    printReport(def.icon + ' ' + def.title, html);
   });
   body.querySelectorAll('.mrow').forEach(tr => tr.onclick = ev => {
     if (ev.target.closest('a')) return;
@@ -5310,6 +5516,36 @@ function renderReport() {
     restoreDuplicate(+b.dataset.row, b.dataset.serial, b);
   });
 }
+
+/* Delivered archive: sold-section rows, searchable, cards still open */
+function renderArchive() {
+  const el = $('#archBody');
+  if (!el) return;
+  const q = ($('#archSearch').value || '').trim().toLowerCase();
+  const rows = (S.data.pianos || []).filter(p => p.archived)
+    .filter(p => !q || (p.summary + ' ' + p.serial + ' ' + p.make + ' ' + p.model + ' '
+      + p.year + ' ' + (p.owner || '')).toLowerCase().includes(q));
+  el.innerHTML = `<div class="curmsg">${rows.length} archived piano${rows.length === 1 ? '' : 's'}${q ? ' matching' : ''}</div>
+    <div class="tscroll"><table>
+    <tr><th>PIANO</th><th>SERIAL</th><th>OWNER</th><th>LAST LOCATION</th><th></th></tr>
+    ${rows.slice(0, 400).map(p => `<tr class="archrow" data-row="${p.row}">
+      <td>${esc((p.year ? p.year + ' ' : '') + ([p.make, p.model].filter(Boolean).join(' ') || p.summary).slice(0, 40))}</td>
+      <td>${esc(p.serial)}</td>
+      <td>${esc(ownerNameOf(p) || '—')}</td>
+      <td>${esc((p.location || '—').slice(0, 26))}</td>
+      <td><a target="_blank" rel="noopener" href="${logLink(p)}">log ↗</a></td></tr>`).join('')
+      || '<tr><td colspan="5" class="empty">Nothing here yet.</td></tr>'}
+    </table></div>`;
+  el.querySelectorAll('.archrow').forEach(tr => tr.onclick = ev => {
+    if (ev.target.closest('a')) return;
+    const p = S.data.pianos.find(x => x.row === +tr.dataset.row);
+    if (p) { popPinned = true; openPop(p.row, $('#archBody'), true); }
+  });
+}
+setTimeout(() => {
+  const asrch = $('#archSearch');
+  if (asrch) asrch.oninput = () => { clearTimeout(asrch._t); asrch._t = setTimeout(renderArchive, 250); };
+}, 600);
 
 async function loadActivity() {
   try {
@@ -5396,7 +5632,8 @@ function renderBoard() {
 
 /* ---------- views / nav / drawers ---------- */
 function showView(v) {
-  ['map', 'report', 'board', 'cal', 'media', 'shopmap'].forEach(x => $('#view-' + x).hidden = x !== v);
+  ['map', 'report', 'board', 'cal', 'media', 'shopmap', 'archive'].forEach(x => $('#view-' + x).hidden = x !== v);
+  if (v === 'archive') renderArchive();
   document.querySelectorAll('.navitem[data-view]').forEach(el =>
     el.classList.toggle('on', el.dataset.view === v));
   if (v === 'shopmap') renderShopMap();
@@ -5406,7 +5643,7 @@ document.querySelectorAll('.navitem[data-view]').forEach(el =>
   el.onclick = () => switchView(el.dataset.view));
 
 // every non-map view gets a ✕ back to the map (Escape works too)
-['report', 'board', 'cal', 'media', 'shopmap'].forEach(v => {
+['report', 'board', 'cal', 'media', 'shopmap', 'archive'].forEach(v => {
   const el = $('#view-' + v);
   if (el && !el.querySelector('.viewclose')) {
     const b = document.createElement('button');

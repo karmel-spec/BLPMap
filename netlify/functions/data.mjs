@@ -70,7 +70,7 @@ function driveUrl(v) {
 }
 
 /* ---------- piano log ---------- */
-const SLOT_RE = /^\d+[a-zA-Z]?$/;
+const SLOT_RE = /^\d+(?:\.\d)?[a-zA-Z]?$/;
 function parsePianos(text) {
   const rows = parseCSV(text);
   const pianos = [];
@@ -134,7 +134,7 @@ function parsePianos(text) {
       }
       continue;
     }
-    if (soldZone) continue;
+    const archived = soldZone;   // delivered/sold rows: off the map, kept for the archive view
     if (['SHOPIFY', 'ADMIN', 'WEB'].includes(summary.toUpperCase())
         || ['ADMIN', 'LOCATION / STATUS'].includes(col(20).toUpperCase())
         || col(21).includes('Arrival Date')) continue;
@@ -159,11 +159,11 @@ function parsePianos(text) {
     const dates = parseDates(col(21)).filter(d => d <= todayUTC);
     const entered = dates.length ? new Date(Math.max(...dates)) : null;
     const isNew = !!entered && (todayUTC - entered) / 86400000 <= 7;
-    const active = !ol.includes('never received')
+    const active = !archived && !ol.includes('never received')
       && !status.toLowerCase().includes('never received')
       && !ol.includes('duplicate');
     pianos.push({
-      row: i + 1, section, owner: col(1), serial,
+      row: i + 1, section, owner: col(1), serial, archived,
       summary: summary || [col(4), col(5), col(6)].filter(Boolean).join(' '),
       year: col(4), make: col(5), model: col(6), size: col(7),
       type: (typeOvIdx >= 0 && col(typeOvIdx)) || pianoType(col(9), summary + ' ' + col(6)),

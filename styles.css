@@ -743,3 +743,26 @@ html,body{touch-action:manipulation;overscroll-behavior:none}
 .topwho{cursor:pointer}
 .topwho:hover{opacity:.75}
 .topwho::after{content:" ⏻";font-size:10px;color:#ff8a7e}
+/* temp spots */
+.temprect{fill:#fffdf2;stroke:#c99a2e;stroke-width:2;stroke-dasharray:7 5}
+.templbl{fill:#c99a2e;font-weight:800;letter-spacing:2px}
+#tempbar{position:fixed;top:60px;left:50%;transform:translateX(-50%);z-index:90;background:#c99a2e;color:#241c00;
+  border-radius:999px;padding:9px 18px;font:700 13px 'Assistant',sans-serif;box-shadow:0 4px 14px rgba(0,0,0,.3);display:flex;gap:12px;align-items:center}
+#tempbar button{border:0;border-radius:7px;background:#241c00;color:#ffd60a;padding:5px 11px;font:700 11.5px 'Assistant',sans-serif;cursor:pointer}
+/* location history */
+.lhbtn{font-size:11px;border:1px solid #dfe3e7;border-radius:6px;background:#f4f6f8;color:#33526f;padding:3px 9px;cursor:pointer;margin-top:6px}
+.lhout .lhsec{font-size:9.5px;font-weight:800;letter-spacing:1.4px;color:#6f6a63;text-transform:uppercase;margin:7px 0 3px}
+.lhrow{font-size:11.5px;padding:3px 0;border-top:1px solid #f0ede8}
+.lhrow b{display:block;font-weight:600;color:#222}
+.lhrow span{color:#8a929a;font-size:10.5px}
+.lhnone{font-size:11.5px;color:#8a929a;font-style:italic;padding:4px 0}
+/* activity filters */
+.actbar{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin:2px 0 10px}
+.actbar select,.actbar input{border:1px solid #cfd6dc;border-radius:7px;padding:6px 9px;font:12.5px 'Assistant',sans-serif;background:#fff}
+.actbar input{width:150px}
+.actdays{display:flex;gap:4px}
+.actd{border:1px solid #cfd6dc;background:#fff;border-radius:999px;padding:5px 11px;font:700 11px 'Assistant',sans-serif;cursor:pointer;color:#6f7a84}
+.actd.on{background:#9e2020;border-color:#9e2020;color:#fff}
+.actcount{font-size:11.5px;color:#8a929a;margin-left:auto}
+.actclear{border:0;background:none;color:#9e2020;font:700 11.5px 'Assistant',sans-serif;cursor:pointer}
+.archsearch{margin:8px 0;width:min(380px,100%);background:#fff;color:#121212;border-color:#cfd6dc}

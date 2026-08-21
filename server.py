@@ -45,7 +45,7 @@ REPORT_ACCOUNT = _CFG.get('gog_account', 'info@brighamlarsonpianos.com')
 DAILY_EMAIL = _CFG.get('daily_email', True)
 CACHE_SECS = 120
 
-SLOT_RE = re.compile(r'^\d+[a-zA-Z]?$')
+SLOT_RE = re.compile(r'^\d+(?:\.\d)?[a-zA-Z]?$')
 DATE_RE = re.compile(r'(\d{1,2})/(\d{1,2})/(\d{2,4})')
 ACTIVE_MARKERS = ('for sale', 'for rent', 'current shop work', 'available',
                   'in shop', 'storage', 'consign')
@@ -182,8 +182,7 @@ def parse_pianos(raw):
                 if head.strip().upper() == 'SOLD':
                     sold_zone = True
             continue
-        if sold_zone:
-            continue  # moved to the SOLD rows = exited the building
+        archived = sold_zone  # delivered/sold: off the map, kept for the archive
         # skip the sheet's sub-header rows
         if summary.upper() in ('SHOPIFY', 'ADMIN', 'WEB') \
                 or col(20).upper() in ('ADMIN', 'LOCATION / STATUS') \
@@ -208,11 +207,13 @@ def parse_pianos(raw):
         ol = col(1).lower()
         # Above the SOLD divider a piano is physically here (even "SOLD OR
         # COMPLETED (but not gone yet)") unless the row is pure bookkeeping.
-        active = ('never received' not in ol
+        active = (not archived
+                  and 'never received' not in ol
                   and 'never received' not in status.lower()
                   and 'duplicate' not in ol)
         pianos.append({
             'row': i,
+            'archived': archived,
             'section': section,
             'owner': col(1),
             'serial': serial,

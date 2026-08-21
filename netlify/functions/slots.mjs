@@ -9,7 +9,7 @@ import ExcelJS from 'exceljs';
 const XLSX_URL =
   'https://docs.google.com/spreadsheets/d/12qMhAHxkRlacel5Q7qxCOwYShgDRD3O46D1cYCrlfwA/export?format=xlsx';
 const FLOORS = ['First floor', 'Second floor'];
-const SLOT_RE = /^\d+[a-zA-Z]?$/;
+const SLOT_RE = /^\d+(?:\.\d)?[a-zA-Z]?$/;
 const COL_PX = 7.0, ROW_PX = 4 / 3;
 const WALL_STYLES = new Set(['medium', 'thick', 'double']);
 const CACHE_MS = 6 * 3600 * 1000;

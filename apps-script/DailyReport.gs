@@ -138,6 +138,10 @@ function doGet(e) {
     try { return json_(requestsList_()); }
     catch (err) { return json_({error: String(err), requests: []}); }
   }
+  if (e && e.parameter && e.parameter.fn === 'history') {
+    try { return json_(pianoHistory_(e.parameter.serial, e.parameter.row)); }
+    catch (err) { return json_({error: String(err), loc: [], cab: []}); }
+  }
   if (e && e.parameter && e.parameter.fn === 'timeclock') {
     try { return json_(timeClockState_()); }
     catch (err) { return json_({error: String(err), open: []}); }
@@ -577,6 +581,10 @@ function doPost(e) {
       return json_(mv);
     }
     if (req.action === 'setprice') {
+      var prEmail = String((req.user && req.user.email) || '').toLowerCase();
+      if (PQ_ADMINS.indexOf(prEmail) < 0) {
+        return json_({error: 'Only admins/owners can change sale prices (Google sign-in required).'});
+      }
       var pr = setPrice_(req, who);
       if (pr.ok) logAct_(who, 'Price set', pr.summary || req.serial,
         (pr.previous || '(none)') + ' → ' + pr.price);
@@ -724,8 +732,9 @@ function doPost(e) {
     }
     if (req.action === 'photo') {
       var pt = savePhoto_(req, who);
-      if (pt.saved) logAct_(who, 'Progress photo', pt.summary || req.serial,
-        (req.stage || '(no phase)') + ' → ' + pt.name);
+      if (pt.saved) logAct_(who,
+        req.kind === 'before' ? 'Before photo' : req.kind === 'after' ? 'After photo' : 'Progress photo',
+        pt.summary || req.serial, (req.stage || '(no phase)') + ' → ' + pt.name);
       return json_(pt);
     }
     if (req.action === 'queue') {
@@ -790,7 +799,13 @@ function savePhoto_(req, who) {
   var found = findPiano_(sh, req.serial, req.row);
   if (found.error) return found;
   var serial = String(req.serial || '').trim();
-  var tech = techFolderFor_(sh, found.row, serial);
+  var kind = String(req.kind || 'tech').toLowerCase();   // tech | before | after
+  var tech;
+  if (kind === 'before' || kind === 'after') {
+    tech = mediaFolderFor_(sh, found.row, serial, kind);
+  } else {
+    tech = techFolderFor_(sh, found.row, serial);
+  }
   if (!tech) return {error: 'no Drive folder found for this piano — add its link to the Main Folder column in the Piano Log'};
 
   var stageSlug = String(req.stage || '').replace(/[^\w &-]+/g, '').trim()
@@ -820,6 +835,25 @@ function savePhoto_(req, who) {
 // Resolve the piano's "Tech" photos subfolder. Prefers the Main Folder link on
 // the piano's row (located by header text, so the column can move); falls back
 // to searching the photos root tree for a folder whose name carries the serial.
+/* Before/After photo folders: use the folder already linked in the media
+ * cell (col 14 = before, col 16 = after) if there is one; otherwise create
+ * a "Before Photos"/"After Photos" subfolder beside Tech and write its link
+ * back into the cell — which also flips the card's media state to done. */
+function mediaFolderFor_(sh, row, serial, kind) {
+  var col = kind === 'before' ? 14 : 16;   // 1-based: N=14, P=16
+  var cell = String(sh.getRange(row, col).getValue() || '');
+  var m = /folders\/([A-Za-z0-9_-]+)/.exec(cell);
+  if (m) { try { return DriveApp.getFolderById(m[1]); } catch (e) {} }
+  var tech = techFolderFor_(sh, row, serial);
+  if (!tech) return null;
+  var parentIt = tech.getParents();
+  var parent = parentIt.hasNext() ? parentIt.next() : tech;
+  var name = kind === 'before' ? 'Before Photos' : 'After Photos';
+  var it = parent.getFoldersByName(name);
+  var folder = it.hasNext() ? it.next() : parent.createFolder(name);
+  try { sh.getRange(row, col).setValue(folder.getUrl()); } catch (e) {}
+  return folder;
+}
 function techFolderFor_(sh, row, serial) {
   var folder = null;
   var hdr = sh.getRange(2, 1, 1, sh.getLastColumn()).getValues()[0];
@@ -1874,6 +1908,34 @@ function sweepForgottenClocks_() {
     n++;
   }
   return n;
+}
+/* Every place a piano has lived, straight from the ACTIVITY LOG (moves,
+ * attic bumps, SOLD relocation) plus its cabinetry-shelf changes. */
+function pianoHistory_(serial, rowOverride) {
+  serial = String(serial || '').trim();
+  var psh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+  var f = findPiano_(psh, serial, rowOverride);
+  var summary = (f && f.summary) || '';
+  var sh = SpreadsheetApp.openById(PIANO_LOG_ID).getSheetByName('ACTIVITY LOG');
+  var loc = [], cab = [];
+  if (sh && sh.getLastRow() >= 2) {
+    var vals = sh.getRange(2, 1, sh.getLastRow() - 1, 5).getValues();
+    var LOC = {'Moved': 1, 'Bumped to attic': 1, 'Moved to SOLD section': 1};
+    for (var i = vals.length - 1; i >= 0 && (loc.length < 40 || cab.length < 40); i--) {
+      var v = vals[i];
+      var pianoCell = String(v[3] || '');
+      var hit = (summary && pianoCell === summary) || pianoCell === serial
+        || (serial && String(v[4] || '').indexOf(serial) >= 0 && pianoCell.indexOf(serial) >= 0);
+      if (!hit && serial && pianoCell.indexOf(serial) >= 0) hit = true;
+      if (!hit) continue;
+      var row = {when: (v[0] instanceof Date)
+          ? Utilities.formatDate(v[0], 'America/Denver', 'MMM d, yyyy h:mm a') : String(v[0]),
+        who: String(v[1] || ''), detail: String(v[4] || '').slice(0, 160)};
+      if (LOC[String(v[2])] && loc.length < 40) loc.push(row);
+      else if (String(v[2]) === 'Cabinetry location' && cab.length < 40) cab.push(row);
+    }
+  }
+  return {ok: true, loc: loc, cab: cab};
 }
 function timeClockState_() {
   try { sweepForgottenClocks_(); } catch (e) {}
