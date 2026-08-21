@@ -6046,7 +6046,7 @@ function loadTranslator() {
   const list = $('#langList');
   if (list) {
     list.innerHTML = LANGS.map(([c, name]) =>
-      `<button class="langchip ${saved === c || (!saved && c === 'en') ? 'on' : ''}" data-l="${c}">${name}</button>`).join('');
+      `<button class="langchip notranslate ${saved === c || (!saved && c === 'en') ? 'on' : ''}" data-l="${c}" translate="no">${name}</button>`).join('');
     list.querySelectorAll('.langchip').forEach(b => b.onclick = () => setLang(b.dataset.l));
   }
   const btn = $('#langBtn');
