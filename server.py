@@ -232,6 +232,12 @@ def parse_pianos(raw):
             'keywork': col(51)[:90],
             'tagSnapshot': col(tag_snap_idx) if tag_snap_idx >= 0 else '',
             'paperwork': col(paperwork_idx) if paperwork_idx >= 0 else '',
+            'tasks': {
+                'bass': col(38)[:80], 'decals': col(39)[:80], 'parts': col(40)[:80],
+                'pedals': col(41)[:80], 'pedaltrim': col(42)[:80], 'lock': col(43)[:80],
+                'strikeplate': col(44)[:80], 'escutcheon': col(45)[:80], 'decor': col(46)[:80],
+                'hinges': col(47)[:80], 'screws': col(48)[:80], 'otherhw': col(49)[:80],
+            },
             # everything else the Piano Log holds for this row that the card
             # doesn't already surface — keyed by the sheet's own header names
             'logExtras': {

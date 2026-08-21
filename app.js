@@ -5417,7 +5417,87 @@ function activityTable(rows) {
      || `<tr><td colspan="5" class="empty">${rows.length ? 'Nothing matches these filters.' : 'No activity yet — changes made in the map will appear here.'}</td></tr>`) + '</table>';
 }
 
+/* Concurrent-work report: hardware/order tasks per piano, queue order,
+ * filterable by category (keytops, plating, bass strings…) and status. */
+const TASK_CATS = [
+  ['keys', '🎹 Keytops / key service'],
+  ['plating', '✨ Plating'],
+  ['bass', '🎼 Bass strings'],
+  ['decals', '🏷 Decals'],
+  ['parts', '🔩 Parts'],
+  ['pedals', 'Pedals'],
+  ['pedaltrim', 'Pedal trim'],
+  ['lock', 'Lock'],
+  ['strikeplate', 'Strike plate'],
+  ['escutcheon', 'Escutcheon'],
+  ['decor', 'Decor'],
+  ['hinges', 'Hinges'],
+  ['screws', 'Screws'],
+  ['otherhw', 'Other hardware'],
+];
+function taskVal(p, k) {
+  if (k === 'keys') return (p.keywork || p.keyService || '').trim();
+  if (k === 'plating') return (p.replate || '').trim();
+  return ((p.tasks || {})[k] || '').trim();
+}
+function taskStatus(v) {
+  if (!v) return 'needed';
+  if (/^(x|n\/?a|no)[.!\s]*$/i.test(v)) return 'n/a';
+  if (/receiv|done|complete|installed|finished|✓|arrived|back from/i.test(v)) return 'done';
+  if (/order|sent|shipp|out to|out for|waiting|in progress|at plater/i.test(v)) return 'ordered';
+  if (/^y(es)?[.!\s]*$/i.test(v)) return 'needed';
+  return 'noted';
+}
+const TASK_ST = [['', 'all statuses'], ['needed', '🔴 needs attention'], ['noted', '📝 noted'],
+  ['ordered', '📦 ordered / out'], ['done', '✅ done / received'], ['n/a', '— not applicable']];
+function taskRows() {
+  const f = S.tkF || (S.tkF = {cat: 'keys', st: '', q: ''});
+  return S.data.pianos
+    .filter(p => p.active && p.serial && (p.queuePos || p.phase))
+    .map(p => {
+      const v = taskVal(p, f.cat);
+      return {p, v, st: taskStatus(v)};
+    })
+    .filter(r => (!f.st || r.st === f.st)
+      && (!f.q || (r.p.summary + ' ' + r.p.serial + ' ' + r.v).toLowerCase().includes(f.q.toLowerCase())))
+    .sort((a, b) => (a.p.queuePos || 999) - (b.p.queuePos || 999) || a.p.row - b.p.row);
+}
+function tasksTable() {
+  const f = S.tkF || (S.tkF = {cat: 'keys', st: '', q: ''});
+  const rows = taskRows();
+  const PILL = {needed: ['#fdecec', '#a03030'], noted: ['#fdf3ec', '#9a5b13'],
+    ordered: ['#eaf2fd', '#2c5d96'], done: ['#eaf5ec', '#2f7d4f'], 'n/a': ['#eee', '#888']};
+  return `<div class="actbar tkbar">
+      <select class="tkf" data-f="cat">${TASK_CATS.map(([k, l]) =>
+        `<option value="${k}" ${f.cat === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>
+      <select class="tkf" data-f="st">${TASK_ST.map(([k, l]) =>
+        `<option value="${k}" ${f.st === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>
+      <input class="tkf" data-f="q" placeholder="search piano / note…" value="${esc(f.q)}">
+      <span class="actcount">${rows.length} piano${rows.length === 1 ? '' : 's'}, queue order</span>
+      ${(f.st || f.q) ? '<button class="tkclear">✕ clear</button>' : ''}
+    </div>
+    <table><tr><th>QUEUE</th><th>PIANO</th><th>SPOT</th><th>PHASE</th><th>STATUS</th><th>NOTE ON FILE</th></tr>
+    ${rows.map(({p, v, st}) => {
+      const c = PILL[st];
+      return `<tr class="mrow" data-row="${p.row}">
+        <td>${p.queuePos ? '#' + p.queuePos : '—'}</td>
+        <td>${esc(((p.year ? p.year + ' ' : '') + ([p.make, p.model].filter(Boolean).join(' ') || p.summary)).slice(0, 36))}<br>
+            <span class="lite" style="color:#8a929a;font-size:11px">${esc(p.serial)}</span></td>
+        <td>${esc(String(p.location || '—').slice(0, 14))}</td>
+        <td>${esc((p.phase || '—').slice(0, 22))}</td>
+        <td><span style="background:${c[0]};color:${c[1]};border-radius:999px;padding:2px 9px;font-size:11px;font-weight:800;white-space:nowrap">${st === 'needed' ? 'NEEDS ATTENTION' : st.toUpperCase()}</span></td>
+        <td>${esc(v || '—')}</td></tr>`;
+    }).join('') || '<tr><td colspan="6" class="empty">Nothing matches.</td></tr>'}
+    </table>`;
+}
+
 const REPORT_DEFS = () => [
+  {id: 'tasks', icon: '🧩', title: 'CONCURRENT WORK', count: (() => {
+     try { const f = S.tkF || {cat: 'keys'}; return S.data.pianos.filter(p =>
+       p.active && p.serial && (p.queuePos || p.phase) && taskStatus(taskVal(p, f.cat)) === 'needed').length; }
+     catch (e) { return null; } })(),
+   desc: 'Hardware and order tasks per piano, in queue order. Pick a category (keytops, plating, bass strings…) and a status — "needs attention" is the to-do list, top of the queue first. The count badge tracks the selected category.',
+   html: tasksTable},
   {id: 'unplaced', icon: '⚠️', title: 'UNPLACED PIANOS', count: unplaced().length,
    desc: 'Active pianos whose Piano Log location (column U) is empty or doesn’t match any spot or known area.',
    html: unplacedTable},
@@ -5480,13 +5560,25 @@ function renderReport() {
     else el.oninput = () => { clearTimeout(el._t); el._t = setTimeout(apply, 350); };
   });
   body.querySelectorAll('.actd').forEach(b => b.onclick = () => { S.actF.days = +b.dataset.d; renderReport(); });
+  body.querySelectorAll('.tkf').forEach(el => {
+    const apply = () => {
+      S.tkF[el.dataset.f] = el.value;
+      renderReport();
+      const again = body.querySelector(`.tkf[data-f="${el.dataset.f}"]`);
+      if (again && again.tagName === 'INPUT') { again.focus(); again.setSelectionRange(again.value.length, again.value.length); }
+    };
+    if (el.tagName === 'SELECT') el.onchange = apply;
+    else el.oninput = () => { clearTimeout(el._t); el._t = setTimeout(apply, 350); };
+  });
+  const tkc = body.querySelector('.tkclear');
+  if (tkc) tkc.onclick = () => { S.tkF = {cat: S.tkF.cat, st: '', q: ''}; renderReport(); };
   const ac = body.querySelector('.actclear');
   if (ac) ac.onclick = () => { S.actF = {who: '', act: '', piano: '', q: '', days: 0}; renderReport(); };
   body.querySelectorAll('.printbtn').forEach(b => b.onclick = ev => {
     ev.stopPropagation();
     const def = REPORT_DEFS().find(r => r.id === b.dataset.r);
     let html = def.html();
-    if (def.id === 'activity') {
+    if (def.id === 'activity' || def.id === 'tasks') {
       const i = html.indexOf('<table');
       if (i > 0) html = html.slice(i);   // drop the filter bar from print
     }

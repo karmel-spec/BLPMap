@@ -179,6 +179,13 @@ function parsePianos(text) {
       keywork: col(51).slice(0, 90),
       tagSnapshot: tagSnapIdx >= 0 ? col(tagSnapIdx) : '',
       paperwork: paperworkIdx >= 0 ? col(paperworkIdx) : '',
+      // concurrent-task cells (hardware/order columns) for the tasks report
+      tasks: {
+        bass: col(38).slice(0, 80), decals: col(39).slice(0, 80), parts: col(40).slice(0, 80),
+        pedals: col(41).slice(0, 80), pedaltrim: col(42).slice(0, 80), lock: col(43).slice(0, 80),
+        strikeplate: col(44).slice(0, 80), escutcheon: col(45).slice(0, 80), decor: col(46).slice(0, 80),
+        hinges: col(47).slice(0, 80), screws: col(48).slice(0, 80), otherhw: col(49).slice(0, 80),
+      },
       // everything else the Piano Log holds for this row that the card
       // doesn't already surface — keyed by the sheet's own header names
       logExtras: (() => {
