@@ -142,6 +142,12 @@ function doGet(e) {
     try { return json_(pianoHistory_(e.parameter.serial, e.parameter.row)); }
     catch (err) { return json_({error: String(err), loc: [], cab: []}); }
   }
+  if (e && e.parameter && e.parameter.fn === 'standup') {
+    try {
+      return json_(smStandup_([], {activity: {phases: []}, moves: [], clocked: [],
+        queueUp: [], waiting: []}));
+    } catch (err) { return json_({error: String(err)}); }
+  }
   if (e && e.parameter && e.parameter.fn === 'briefs') {
     try { return json_(briefLog_()); }
     catch (err) { return json_({error: String(err), briefs: []}); }
@@ -2741,7 +2747,7 @@ function smParseMonthDay_(s) {
 }
 function smStandup_(pianos, R) {
   var S = {bdays: [], annivs: [], newFaces: [], delivered: [], teamwork: [],
-           champ: null, personalBests: [], safety: '', standard: '', focus: []};
+           champ: null, personalBests: [], safety: '', standard: '', focus: [], dbg: []};
   var now = new Date();
   var doy = Math.floor((now - new Date(now.getFullYear(), 0, 0)) / 86400000);
   S.safety = SM_SAFETY_TIPS[doy % SM_SAFETY_TIPS.length];
@@ -2796,7 +2802,7 @@ function smStandup_(pianos, R) {
     }
     S.bdays.sort(function (a, b) { return a.off - b.off; });
     S.annivs.sort(function (a, b) { return a.off - b.off; });
-  } catch (e) {}
+  } catch (e) { S.dbg.push(String(e)); }
 
   // pianos delivered / completed yesterday — from the activity log
   try {
@@ -2805,7 +2811,7 @@ function smStandup_(pianos, R) {
         S.delivered.push({piano: a.piano, who: a.who});
       }
     });
-  } catch (e) {}
+  } catch (e) { S.dbg.push(String(e)); }
 
   // teamwork: for pianos delivered yesterday or moving today, everyone who
   // ever clocked time on them — "these N techs built this"
@@ -2834,7 +2840,7 @@ function smStandup_(pianos, R) {
         break;
       }
     }
-  } catch (e) {}
+  } catch (e) { S.dbg.push(String(e)); }
 
   // yesterday's Work Clock champion + personal-best days (last 60 days)
   try {
@@ -2854,7 +2860,7 @@ function smStandup_(pianos, R) {
       for (var d2 in perDay[t2]) { if (d2 !== yd && perDay[t2][d2] >= y0) { best = false; break; } }
       if (best) S.personalBests.push({tech: t2, hours: Math.round(y0 / 6) / 10});
     }
-  } catch (e) {}
+  } catch (e) { S.dbg.push(String(e)); }
 
   // today's focus: next up in the queue + counts the room should hear
   try {
@@ -2864,7 +2870,7 @@ function smStandup_(pianos, R) {
     if ((R.moves || []).length) S.focus.push((R.moves.length) + ' move' + (R.moves.length > 1 ? 's' : '') + ' on today’s calendar — confirm crews and paths');
     var od = (R.waiting || []).filter(function (w) { return w.state === 'overdue'; }).length;
     if (od) S.focus.push(od + ' “waiting on” item' + (od > 1 ? 's' : '') + ' past the check-back date — assign owners');
-  } catch (e) {}
+  } catch (e) { S.dbg.push(String(e)); }
   return S;
 }
 
