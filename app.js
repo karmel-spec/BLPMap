@@ -6004,6 +6004,55 @@ addEventListener('keydown', e => {
   if (e.key === 'Escape' && S.view !== 'map' && !document.querySelector('.tagview')) switchView('map');
 });
 
+/* ---------- 🌐 language selector — Google page-translate, our menu ----------
+ * The whole app (cards, reports, briefs links) renders in English; picking a
+ * language sets Google Translate's googtrans cookie and loads its element,
+ * which machine-translates the page in place and keeps translating every
+ * re-render. "English" clears the cookie and reloads clean. */
+const LANGS = [['en', 'English'], ['es', 'Español']];
+function gtCookieClear() {
+  ['', '; domain=' + location.hostname, '; domain=.' + location.hostname].forEach(d => {
+    document.cookie = 'googtrans=; path=/' + d + '; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+  });
+}
+function setLang(code) {
+  if (code === 'en') { gtCookieClear(); lsDel('blpLang'); location.reload(); return; }
+  gtCookieClear();
+  document.cookie = 'googtrans=/en/' + code + '; path=/';
+  lsSet('blpLang', code);
+  location.reload();   // the widget reads the cookie on load and translates
+}
+function loadTranslator() {
+  if (document.getElementById('gtwrap')) return;
+  const holder = document.createElement('div');
+  holder.id = 'gtwrap';
+  document.body.appendChild(holder);
+  window.googleTranslateElementInit = () => {
+    /* global google */
+    new google.translate.TranslateElement({pageLanguage: 'en', autoDisplay: false}, 'gtwrap');
+  };
+  const s = document.createElement('script');
+  s.src = 'https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit';
+  document.head.appendChild(s);
+}
+(() => {
+  const saved = lsGet('blpLang') || '';
+  const cur = $('#langCur');
+  if (cur) cur.textContent = (LANGS.find(l => l[0] === saved) || [])[1] || '';
+  if (saved && saved !== 'en') {
+    if (!/googtrans=/.test(document.cookie)) document.cookie = 'googtrans=/en/' + saved + '; path=/';
+    loadTranslator();
+  }
+  const list = $('#langList');
+  if (list) {
+    list.innerHTML = LANGS.map(([c, name]) =>
+      `<button class="langchip ${saved === c || (!saved && c === 'en') ? 'on' : ''}" data-l="${c}">${name}</button>`).join('');
+    list.querySelectorAll('.langchip').forEach(b => b.onclick = () => setLang(b.dataset.l));
+  }
+  const btn = $('#langBtn');
+  if (btn) btn.onclick = () => { list.hidden = !list.hidden; };
+})();
+
 function openNav() { $('#side').classList.add('open'); $('#scrim').classList.add('show'); }
 function closeNav() { $('#side').classList.remove('open'); $('#scrim').classList.remove('show'); }
 $('#menuBtn').onclick = () =>
