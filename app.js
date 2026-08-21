@@ -5666,13 +5666,25 @@ function queueTable() {
 }
 
 function briefsTable() {
-  if (!S.briefRows) return '<div class="empty">Loading the brief archive…</div>';
-  return `<table><tr><th>DATE</th><th>BRIEFING</th><th></th></tr>` +
-    (S.briefRows.map(b => `<tr>
-      <td style="white-space:nowrap">${esc((b.date || '').slice(0, 10))}</td>
-      <td>${esc(b.subject)}</td>
-      <td><a target="_blank" rel="noopener" href="${esc(b.url)}">open doc ↗</a></td></tr>`).join('')
-     || '<tr><td colspan="3" class="empty">No briefs archived yet — the first one lands with tomorrow morning\u2019s send.</td></tr>') + '</table>';
+  if (!S.briefRows) return '<div class="empty">Loading the brief archive\u2026</div>';
+  const list = (kind, label, note) => {
+    const rows = S.briefRows.filter(b => (b.kind || 'shop') === kind);
+    return `<h4 class="bfhd">${label}</h4>
+      <p class="pd bfnote">${note}</p>
+      <table><tr><th>DATE</th><th>BRIEFING</th><th></th></tr>
+      ${rows.map(b => `<tr>
+        <td style="white-space:nowrap">${esc((b.date || '').slice(0, 10))}</td>
+        <td>${esc(b.subject)}</td>
+        <td style="white-space:nowrap"><a target="_blank" rel="noopener" href="${esc(b.url)}">open doc \u2197</a>
+          <button class="bfshare" data-url="${esc(b.url)}" data-title="${esc(b.subject)}"
+            title="share just this briefing">\u2197 share</button></td></tr>`).join('')
+       || '<tr><td colspan="3" class="empty">Nothing archived yet \u2014 the next one lands with this evening\u2019s 7PM send.</td></tr>'}
+      </table>`;
+  };
+  return list('shop', '\ud83c\udf05 Shop Manager Briefings',
+      'Emailed by 7PM the night before to shop@, brigham@ and karmel@ \u2014 opens with the next morning\u2019s standup.')
+    + list('admin', '\ud83d\udcbc Admin Morning Briefings',
+      'Emailed by 7PM the night before to info@, karmel@ and brigham@ \u2014 payments, media and delivery logistics.');
 }
 async function loadBriefs() {
   try {
@@ -5684,7 +5696,7 @@ async function loadBriefs() {
 
 const REPORT_DEFS = () => [
   {id: 'briefs', icon: '📰', title: 'DAILY SHOP BRIEFS', count: null,
-   desc: 'Every morning\u2019s Shop Manager Briefing, archived as a Google Doc — emailed weekdays to shop@, brigham@ and karmel@.',
+   desc: 'Both nightly briefings, archived as Google Docs and listed separately — Shop Manager and Admin. Each row has its own ↗ share button, so you can send one day\u2019s briefing without sharing the whole archive.',
    html: briefsTable},
   {id: 'queue', icon: '🎹', title: 'SHOP QUEUE', count: (() => {
      try { return queueMembers().length; } catch (e) { return null; } })(),
@@ -5790,6 +5802,10 @@ function renderReport() {
   });
   const quc = body.querySelector('.quclear');
   if (quc) quc.onclick = () => { S.quF = {q: ''}; renderReport(); };
+  body.querySelectorAll('.bfshare').forEach(b => b.onclick = ev => {
+    ev.stopPropagation();
+    shareSheet(b.dataset.title, b.dataset.url);
+  });
   const ac = body.querySelector('.actclear');
   if (ac) ac.onclick = () => { S.actF = {who: '', act: '', piano: '', q: '', days: 0}; renderReport(); };
   body.querySelectorAll('.sharebtn').forEach(b => b.onclick = ev => {

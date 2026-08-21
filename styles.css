@@ -791,3 +791,10 @@ html,body{touch-action:manipulation;overscroll-behavior:none}
 .shacts .shgo{display:block;text-decoration:none;text-align:center;background:#eaf5ec;border-color:#2f7d4f;color:#2f7d4f}
 .shacts .shgo:hover{background:#2f7d4f;color:#fff}
 .shacts i{color:#8a929a;font-size:12px}
+
+/* Daily Briefs report — two lists (shop / admin) with per-row share */
+.bfhd{margin:16px 0 2px;font:800 13px Helvetica,Arial;letter-spacing:.4px;color:#20242a}
+.bfhd:first-child{margin-top:2px}
+.bfnote{margin:0 0 8px !important}
+.bfshare{margin-left:8px;border:1px solid #cfd6dc;background:#f7f8f9;border-radius:7px;font-size:11px;font-weight:700;padding:3px 8px;cursor:pointer}
+.bfshare:hover{border-color:#9e2020;color:#9e2020}

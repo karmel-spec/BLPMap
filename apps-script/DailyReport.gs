@@ -2259,7 +2259,7 @@ function payMilestone_(req) {
  * Run sendShopManagerReport() manually, or sendShopManagerReportTo('a@b.com')
  * to send a sample somewhere else. */
 var SHOPMGR_TO = 'shop@brighamlarsonpianos.com,brigham@brighamlarsonpianos.com,karmel@brighamlarsonpianos.com';
-var ADMIN_TO = 'brigham@brighamlarsonpianos.com,karmel@brighamlarsonpianos.com';   // Admin Morning Brief
+var ADMIN_TO = 'info@brighamlarsonpianos.com,karmel@brighamlarsonpianos.com,brigham@brighamlarsonpianos.com';   // Admin Morning Brief
 var TRACKDEFS_URL = 'https://blpsalesapp.netlify.app/.netlify/functions/track-defs';
 var TASKS_URL = 'https://blpsalesapp.netlify.app/.netlify/functions/piano-tasks';
 // phase -> the specialty area that staffs it (mirrors the Store Map card)
@@ -2749,7 +2749,9 @@ function smParseMonthDay_(s) {
 function smStandup_(pianos, R) {
   var S = {bdays: [], annivs: [], newFaces: [], delivered: [], teamwork: [],
            champ: null, personalBests: [], safety: '', standard: '', focus: [], dbg: []};
-  var now = new Date();
+  // anchor every date window on the brief's own date, so an evening send
+  // celebrates the birthdays of the morning it's prepping for
+  var now = (R && R.refDate) ? R.refDate : new Date();
   var doy = Math.floor((now - new Date(now.getFullYear(), 0, 0)) / 86400000);
   S.safety = SM_SAFETY_TIPS[doy % SM_SAFETY_TIPS.length];
   S.standard = SM_STANDARDS[doy % SM_STANDARDS.length];
@@ -2891,14 +2893,20 @@ function smStandup_(pianos, R) {
   return S;
 }
 
-function buildShopManagerReport_() {
+// dayOffset: 0 = classic same-morning send (brief describes "today");
+// 1 = sent the evening before, ~7PM, so the brief describes "tomorrow" —
+// the day of the standup it's actually prepping the team for.
+function buildShopManagerReport_(dayOffset) {
+  dayOffset = dayOffset || 0;
+  var refDate = new Date(Date.now() + dayOffset * 86400000);
   var data = JSON.parse(UrlFetchApp.fetch(APP_URL + '/api/data').getContentText());
   var slots = JSON.parse(UrlFetchApp.fetch(APP_URL + '/data/slots.json').getContentText());
   var defs = null;
   try { defs = JSON.parse(UrlFetchApp.fetch(TRACKDEFS_URL).getContentText()); } catch (e) {}
   var pianos = (data.pianos || []).filter(function (p) { return p.active !== false; });
-  var today = smDenverDay_();
-  var R = {day: Utilities.formatDate(new Date(), 'America/Denver', 'EEEE, MMMM d, yyyy')};
+  var today = smDenverDay_(refDate);
+  var R = {day: Utilities.formatDate(refDate, 'America/Denver', 'EEEE, MMMM d, yyyy'),
+           dayOffset: dayOffset, refDate: refDate};
 
   R.activity = smYesterdayActivity_();
 
@@ -2918,7 +2926,9 @@ function buildShopManagerReport_() {
   R.clocked = []; R.clockedTotal = 0;
   try {
     var tlRows = timeLogRows_(3).rows;
-    var yd = Utilities.formatDate(new Date(Date.now() - 86400000), 'America/Denver', 'yyyy-MM-dd');
+    // the day before the brief's own date — for an evening send that's the
+    // shift just finishing, which is exactly what the morning wants to hear
+    var yd = Utilities.formatDate(new Date(refDate.getTime() - 86400000), 'America/Denver', 'yyyy-MM-dd');
     var per = {};
     tlRows.forEach(function (r0) {
       if (Utilities.formatDate(new Date(r0.start), 'America/Denver', 'yyyy-MM-dd') !== yd) return;
@@ -3360,7 +3370,7 @@ function smTocHtml_(TOC, color, bg, border) {
 /* Every briefing is also saved as a Google Doc (Drive REST convert) in a
  * "BLP Shop Briefs" folder, link-shared, and logged to the report sheet's
  * "Brief Log" tab — the Store Map's Daily Briefs report lists those links. */
-function briefDoc_(subject, html) {
+function briefDoc_(subject, html, kind) {
   var it = DriveApp.getFoldersByName('BLP Shop Briefs');
   var folder = it.hasNext() ? it.next() : DriveApp.createFolder('BLP Shop Briefs');
   var meta = {name: subject, mimeType: 'application/vnd.google-apps.document',
@@ -3383,10 +3393,10 @@ function briefDoc_(subject, html) {
   var sh = ss.getSheetByName('Brief Log');
   if (!sh) {
     sh = ss.insertSheet('Brief Log', ss.getSheets().length);
-    sh.getRange(1, 1, 1, 3).setValues([['Date', 'Subject', 'Doc URL']]);
+    sh.getRange(1, 1, 1, 4).setValues([['Date', 'Subject', 'Doc URL', 'Kind']]);
     sh.setFrozenRows(1);
   }
-  sh.appendRow([new Date().toISOString(), subject, url]);
+  sh.appendRow([new Date().toISOString(), subject, url, kind || 'shop']);
   return url;
 }
 function briefLog_() {
@@ -3394,10 +3404,14 @@ function briefLog_() {
   var sh = ss.getSheetByName('Brief Log');
   var out = [];
   if (sh && sh.getLastRow() >= 2) {
-    var n = Math.min(30, sh.getLastRow() - 1);
-    var vals = sh.getRange(sh.getLastRow() - n + 1, 1, n, 3).getValues();
+    var n = Math.min(60, sh.getLastRow() - 1);
+    var vals = sh.getRange(sh.getLastRow() - n + 1, 1, n, 4).getValues();
     for (var i = vals.length - 1; i >= 0; i--) {
-      out.push({date: String(vals[i][0]), subject: String(vals[i][1]), url: String(vals[i][2])});
+      var subj = String(vals[i][1]);
+      // rows written before the Kind column existed: sniff the subject
+      var kind = String(vals[i][3] || '').toLowerCase();
+      if (kind !== 'shop' && kind !== 'admin') kind = /admin/i.test(subj) ? 'admin' : 'shop';
+      out.push({date: String(vals[i][0]), subject: subj, url: String(vals[i][2]), kind: kind});
     }
   }
   return {ok: true, briefs: out};
@@ -3503,8 +3517,8 @@ function adminAlerts_(R) {
     + R.noAddress.length + R.soldPending.length + R.missingArrivals.length;
 }
 
-function sendShopManagerReportTo_(to, note) {
-  var R = buildShopManagerReport_();
+function sendShopManagerReportTo_(to, note, dayOffset) {
+  var R = buildShopManagerReport_(dayOffset);
   var alerts = R.blocked.length + R.noCab.length + R.noTrack.length + R.noPhase.length;
   var html = shopManagerHtml_(R);
   if (note) {
@@ -3515,7 +3529,7 @@ function sendShopManagerReportTo_(to, note) {
   var subject = (note ? '[SAMPLE] ' : '') + 'Shop Manager Briefing — ' + R.day
     + ' · ' + alerts + ' to review';
   var docUrl = '', docErr = '';
-  try { docUrl = briefDoc_(subject, html); } catch (e) { docErr = String(e).slice(0, 200); }
+  try { docUrl = briefDoc_(subject, html, 'shop'); } catch (e) { docErr = String(e).slice(0, 200); }
   if (docUrl) {
     html = '<div style="max-width:760px;margin:0 auto 10px;text-align:right;font:12px Helvetica,Arial">'
       + '<a href="' + docUrl + '">📄 Open this briefing as a Google Doc</a></div>' + html;
@@ -3537,7 +3551,7 @@ function sendShopManagerReportTo_(to, note) {
       var aAlerts = adminAlerts_(R);
       var aSubject = 'Admin Morning Briefing — ' + R.day + ' · ' + aAlerts + ' to review';
       var aDoc = '';
-      try { aDoc = briefDoc_(aSubject, aHtml); } catch (e2) {}
+      try { aDoc = briefDoc_(aSubject, aHtml, 'admin'); } catch (e2) {}
       if (aDoc) {
         aHtml = '<div style="max-width:760px;margin:0 auto 10px;text-align:right;font:12px Helvetica,Arial">'
           + '<a href="' + aDoc + '">📄 Open this briefing as a Google Doc</a></div>' + aHtml;
@@ -3552,25 +3566,31 @@ function sendShopManagerReportTo_(to, note) {
 }
 // build + archive today's brief as a Google Doc WITHOUT emailing (for testing
 // and for regenerating a doc on demand)
-function briefDocOnly_() {
-  var R = buildShopManagerReport_();
+function briefDocOnly_(dayOffset) {
+  var R = buildShopManagerReport_(dayOffset);
   var alerts = R.blocked.length + R.noCab.length + R.noTrack.length + R.noPhase.length;
   var subject = 'Shop Manager Briefing — ' + R.day + ' · ' + alerts + ' to review';
-  return {ok: true, doc: briefDoc_(subject, shopManagerHtml_(R))};
+  return {ok: true, doc: briefDoc_(subject, shopManagerHtml_(R), 'shop')};
 }
 
 function setupShopManagerBriefing() {
   ScriptApp.getProjectTriggers().forEach(function (t) {
     if (t.getHandlerFunction() === 'sendShopManagerReport') ScriptApp.deleteTrigger(t);
   });
+  // 6–7 PM Denver the EVENING BEFORE: both briefs land before the team goes
+  // home, describing the next working day's standup
   ScriptApp.newTrigger('sendShopManagerReport').timeBased()
-    .everyDays(1).atHour(6).nearMinute(30).inTimezone('America/Denver').create();
-  return 'Shop Manager briefing scheduled — weekdays ~6:30 AM to ' + SHOPMGR_TO;
+    .everyDays(1).atHour(18).nearMinute(30).inTimezone('America/Denver').create();
+  return 'Briefings scheduled — evenings ~6:30 PM for the next morning. Shop: '
+    + SHOPMGR_TO + ' | Admin: ' + ADMIN_TO;
 }
 function sendShopManagerReport() {
-  var dow = Number(Utilities.formatDate(new Date(), 'America/Denver', 'u'));
-  if (dow > 5 && !isManualRun_()) return;   // weekdays only on the trigger
-  return sendShopManagerReportTo_(SHOPMGR_TO);
+  // evening send: the brief is for TOMORROW, so skip the evenings before a
+  // non-working day (Fri evening's brief would be for Saturday) and let
+  // Sunday evening cover Monday
+  var dow = Number(Utilities.formatDate(new Date(), 'America/Denver', 'u'));  // 1=Mon..7=Sun
+  if (!isManualRun_() && (dow === 5 || dow === 6)) return;   // Fri/Sat evenings off
+  return sendShopManagerReportTo_(SHOPMGR_TO, null, 1);
 }
 
 function setCabinetry_(req) {
