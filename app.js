@@ -1435,7 +1435,7 @@ function printShopTag(p) {
     .bar button { background: #B43333; color: #fff; border: 0; border-radius: 6px;
                   padding: 8px 18px; font: inherit; font-weight: 700; cursor: pointer; }
     .sheet { width: 8.2in; margin: 0 auto; padding: 14px 0; }
-    .tag { width: 8.06in; height: 5.02in; background: #fff; display: flex; overflow: hidden;
+    .tag { width: 8.06in; height: 4.72in; background: #fff; display: flex; overflow: hidden;
            box-shadow: 0 4px 14px rgba(0,0,0,.18); page-break-inside: avoid; }
     .cut { display: none; align-items: center; color: #999; font-size: 8pt; gap: 6px; height: .24in; }
     .cut::before, .cut::after { content: ""; flex: 1; border-top: 1px dashed #bbb; }
@@ -1484,7 +1484,9 @@ function printShopTag(p) {
       body { background: #fff; }
       .bar { display: none; }
       .sheet { width: auto; margin: 0; padding: 0; }
-      .tag { box-shadow: none; }
+      /* blank margin above and below each half — room for the black
+         mounting tape once the sheet is cut (Melissa's request) */
+      .tag { box-shadow: none; margin: .3in auto; }
       .cut { display: flex; }
       .copy2 { display: flex; }
     }
@@ -2152,6 +2154,7 @@ function openSuggestBox() {
         <span class="sgshotname"></span>
         <button class="sgsend">Send it 🚀</button>
       </div>
+      <div class="sgprev" hidden><img alt="screenshot preview"><button class="sgprevx" title="remove screenshot">✕</button></div>
       <div class="sgmsg"></div>
     </div>
     <div class="sgmine"><b>My requests</b><div class="sgminelist">loading…</div></div>
@@ -2164,10 +2167,22 @@ function openSuggestBox() {
     b.classList.add('on'); type = b.dataset.t;
   });
   const fin = ov.querySelector('.sgshot input');
+  const prev = ov.querySelector('.sgprev'), prevImg = prev.querySelector('img');
+  const clearShot = () => {
+    shotFile = null; fin.value = '';
+    ov.querySelector('.sgshotname').textContent = '';
+    prevImg.removeAttribute('src'); prev.hidden = true;
+  };
   fin.onchange = () => {
     shotFile = fin.files && fin.files[0];
     ov.querySelector('.sgshotname').textContent = shotFile ? shotFile.name.slice(0, 22) : '';
+    if (shotFile) {   // inline thumbnail so you can see what you're sending
+      const rd = new FileReader();
+      rd.onload = () => { if (shotFile) { prevImg.src = rd.result; prev.hidden = false; } };
+      rd.readAsDataURL(shotFile);
+    } else { prevImg.removeAttribute('src'); prev.hidden = true; }
   };
+  prev.querySelector('.sgprevx').onclick = clearShot;
   const msg = ov.querySelector('.sgmsg');
   ov.querySelector('.sgsend').onclick = async () => {
     const text = ov.querySelector('.sgtext').value.trim();
@@ -2200,8 +2215,7 @@ function openSuggestBox() {
       if (!j.ok) throw new Error(j.error || 'failed');
       msg.className = 'sgmsg ok';
       msg.textContent = '✓ Filed as ' + j.id + ' — thank you! You\u2019ll see it move to Live here when it ships.';
-      ov.querySelector('.sgtext').value = ''; shotFile = null; fin.value = '';
-      ov.querySelector('.sgshotname').textContent = '';
+      ov.querySelector('.sgtext').value = ''; clearShot();
       loadMyRequests(ov);
     } catch (e) { msg.className = 'sgmsg err'; msg.textContent = '✗ ' + e.message; }
   };
@@ -2316,6 +2330,7 @@ function renderClockChip() {
   if (o) chip.innerHTML = `<i></i><span class="cctime" data-start="${esc(o.start)}">${clockElapsed(o.start)}</span>
     <span class="ccser">${esc(o.serial)}</span>`;
 }
+let dockMin = false;   // dock collapsed to a slim pill (so it doesn't cover the zoom controls)
 function renderDock() {
   let dock = document.getElementById('mydock');
   if (!dock) {
@@ -2325,9 +2340,17 @@ function renderDock() {
   }
   const o = CLOCK.open;
   if (!o) { dock.hidden = true; return; }
+  dock.hidden = false;
+  if (dockMin && !CLOCK.nudged) {   // an idle nudge always expands so it's seen
+    dock.classList.add('dockmini');
+    dock.innerHTML = `<button class="dockpill" title="expand the work clock">⏱
+      <span class="cctime" data-start="${esc(o.start)}">${clockElapsed(o.start)}</span> ▴</button>`;
+    dock.querySelector('.dockpill').onclick = () => { dockMin = false; renderDock(); };
+    return;
+  }
+  dock.classList.remove('dockmini');
   const recents = (S.recentRows || []).map(r => S.data.pianos.find(x => x.row === r))
     .filter(x => x && x.serial && x.serial !== o.serial).slice(0, 4);
-  dock.hidden = false;
   dock.innerHTML = `
     ${CLOCK.nudged ? `<div class="docknudge">😴 Quiet for ${NUDGE_MIN} min — still on <b>${esc(o.serial)}</b>?
       <button class="dn-yes">Yes, working</button>
@@ -2338,12 +2361,14 @@ function renderDock() {
       <span class="docktimer cctime" data-start="${esc(o.start)}">${clockElapsed(o.start)}</span>
       <button class="dockswitch">Switch ▾</button>
       <button class="dockout">■ Out</button>
+      <button class="dockfold" title="minimize — shrink to just the timer">▾</button>
     </div>
     <div class="dockmenu" hidden>
       ${recents.map(x => `<div class="dockopt" data-row="${x.row}">📌 ${esc(x.summary.slice(0, 34))} · #${esc(x.serial)}</div>`).join('')}
       <div class="dockopt dockfind">🔍 Find a piano on the map…</div>
     </div>`;
   const menu = dock.querySelector('.dockmenu');
+  dock.querySelector('.dockfold').onclick = () => { dockMin = true; renderDock(); };
   dock.querySelector('.dockswitch').onclick = () => { menu.hidden = !menu.hidden; };
   dock.querySelector('.dockout').onclick = async () => {
     const j = await punch('clockout', null, '', 'dock');
@@ -2523,7 +2548,13 @@ function popHTML(p) {
              `<option value="${esc(ph)}" ${effPh === ph ? 'selected' : ''}>${i + 1} · ${esc(ph)}</option>`).join('')}
            ${PHASE_STATES.map(ph =>
              `<option value="${esc(ph)}" ${effPh === ph ? 'selected' : ''}>${esc(ph)}</option>`).join('')}
-         </select></div>${gotoLine(p, effPh)}<div class="phmsg"></div>`
+         </select></div>${gotoLine(p, effPh)}<div class="phmsg"></div>
+       <div class="row phrow platerow">Plate
+         <select class="platesel">
+           <option value="" ${!(p.plateStatus || '').trim() ? 'selected' : ''}>— not tracked —</option>
+           ${PLATE_STAGES.map(v =>
+             `<option ${p.plateStatus === v ? 'selected' : ''}>${esc(v)}</option>`).join('')}
+         </select></div><div class="platemsg phmsg"></div>`
     : '';
   // opt-IN: blank asks, Yes shows the history button, No shows nothing at all
   const crVal = (p.clientReports || '').trim().toLowerCase();
@@ -2599,6 +2630,7 @@ function popHTML(p) {
           <select class="clkphase">
             <option value="">— select the work —</option>
             ${opts.map(ph => `<option>${esc(ph)}</option>`).join('')}
+            <option>Admin / Misc</option>
             <option value="__other__">✏️ Other — write it in…</option>
           </select></div>
         <input class="clkother" placeholder="what are you doing on this piano?" maxlength="60" hidden>
@@ -2624,13 +2656,6 @@ function popHTML(p) {
           `<button class="trk keybtn ${keyTokens(p).includes(t) ? 'on' : ''}" data-k="${t}">${esc(t)}</button>`).join('')}
         </span></div><div class="keymsg phmsg"></div>` : ''}
     ${phaser}
-    ${p.serial ? (() => {
-      const dl = (p.phasesDone || '').split(',').map(t => t.trim()).filter(Boolean);
-      return `<div class="row trkrow" title="phases already completed — tap to toggle">Done
-        <span class="trkchips">${(pianoPhases(p) || PHASES).filter(ph => ph !== 'Delivered').map((ph, i) =>
-          `<button class="trk dn ${dl.includes(ph) ? 'on' : ''}" data-ph="${esc(ph)}" title="${esc(ph)}">${i + 1}${dl.includes(ph) ? '✓' : ''}</button>`).join('')}
-        </span></div><div class="dnmsg phmsg"></div>`;
-    })() : ''}
     ${tasksBox(p)}
     ${(p.phase || '').startsWith('Waiting') ? `<div class="row waitnote">Waiting on
         <b>${esc(p.waitNote || p.phase.replace('Waiting on ', ''))}</b>
@@ -2769,6 +2794,25 @@ function wirePop(p) {
     qin.onkeydown = e => { if (e.key === 'Enter') queuePiano(p, parseInt(qin.value, 10), pop); };
   }
 
+  const plsel = pop.querySelector('.platesel');
+  if (plsel) plsel.onchange = async () => {
+    const msg = pop.querySelector('.platemsg');
+    const {pin, ok} = writeAuth();
+    if (!ok) { msg.textContent = 'Sign in first.'; return; }
+    plsel.disabled = true; msg.textContent = 'Saving…';
+    try {
+      const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+        headers: {'content-type': 'text/plain;charset=utf-8'},
+        body: JSON.stringify({pin, action: 'setplatestatus', serial: p.serial, row: p.row,
+          plateStatus: plsel.value, ...authFields()})});
+      const j = await r.json();
+      if (j.error) throw new Error(j.error);
+      p.plateStatus = plsel.value;
+      msg.textContent = '✓ saved';
+      setTimeout(() => { if (msg.isConnected) msg.textContent = ''; }, 1800);
+    } catch (e) { msg.textContent = '✗ ' + e.message; }
+    plsel.disabled = false;
+  };
   const ps = pop.querySelector('.phsel');
   if (ps) {
     ps.onclick = ev => ev.stopPropagation();
@@ -2832,10 +2876,6 @@ function wirePop(p) {
   pop.querySelectorAll('.cabdel').forEach(b => b.onclick = ev => {
     ev.stopPropagation();
     saveCabinetry(p, cabTokens(p).filter(t => t !== b.dataset.t), pop);
-  });
-  pop.querySelectorAll('.trk.dn').forEach(b => b.onclick = ev => {
-    ev.stopPropagation();
-    toggleDone(p, b.dataset.ph, pop);
   });
   const pe = pop.querySelector('.predit');
   if (pe) pe.onclick = ev => { ev.stopPropagation(); openPriceModal(p); };
@@ -4792,17 +4832,12 @@ const ADMIN_EMAILS = OWNER_EMAILS.concat(['melissa@brighamlarsonpianos.com',
   'alisa@brighamlarsonpianos.com', 'susie@brighamlarsonpianos.com', 'walter@brighamlarsonpianos.com']);
 const PAYROLL_ADMIN_EMAILS = OWNER_EMAILS.concat(['melissa@brighamlarsonpianos.com']);
 const TIMELOG_ADMIN_EMAILS = OWNER_EMAILS.concat(
-  ['markhales.blp@gmail.com', 'matthewwessman.blp@gmail.com']);   // + Jacob: add his email here AND in the bridge
+  ['markhales.blp@gmail.com', 'matthewwessman.blp@gmail.com', 'jacobmower.blp@gmail.com']);
 function userEmail() { const u = authUser(); return u && u.email ? String(u.email).toLowerCase() : ''; }
 function isOwner() { return OWNER_EMAILS.includes(userEmail()); }
 function isAdminUser() { return ADMIN_EMAILS.includes(userEmail()); }
 function isPayrollAdmin() { return PAYROLL_ADMIN_EMAILS.includes(userEmail()); }
-function isTimelogAdmin() {
-  if (TIMELOG_ADMIN_EMAILS.includes(userEmail())) return true;
-  const u = authUser();   // Jacob fallback until his email is on the lists (bridge does the same)
-  return !!(u && /^jacob\b/i.test(String(u.name || ''))
-    && /(@brighamlarsonpianos\.com|\.blp@gmail\.com)$/.test(userEmail()));
-}
+function isTimelogAdmin() { return TIMELOG_ADMIN_EMAILS.includes(userEmail()); }
 function onGoogleCred(resp) {
   try {
     const claims = JSON.parse(atob(resp.credential.split('.')[1]
@@ -4843,15 +4878,49 @@ function renderAuth() {
   const tw = $('#topWho');
   if (tw && !tw.dataset.wired) {
     tw.dataset.wired = '1';
-    // tap your name to sign out — the shared-device flow: gate comes back
-    // for the next person, and everything they do is logged under THEIR name
+    // tap your name for a small account menu — who's signed in (name, email,
+    // role) plus Sign out. Signing out brings the gate back for the next
+    // person, so everything they do is logged under THEIR name.
     tw.onclick = () => {
+      const m = $('#whoTopMenu');
       const u = authUser();
       if (!u) return;
-      if (confirm('Sign out ' + (u.name || 'this user') + '?\n\nThe sign-in screen comes back so the next person can log in as themselves.')) {
-        signOut();
+      if (!m) {   // menu container missing — fall back to the old direct flow
+        if (confirm('Sign out ' + (u.name || 'this user') + '?\n\nThe sign-in screen comes back so the next person can log in as themselves.')) signOut();
+        return;
       }
+      if (!m.hidden) { m.hidden = true; return; }
+      const role = userRole();
+      const roleTag = role === 'admin' ? 'ADMIN' : role === 'full' ? 'MANAGER · FULL' : role === 'edit' ? 'MANAGER · EDIT' : '';
+      const expired = !u.pinOnly && u.exp * 1000 < Date.now();
+      m.innerHTML = `<div class="whohead">
+          ${u.pic ? `<img class="authpic" src="${esc(u.pic)}" alt="">` : '<span>👤</span>'}
+          <div><b>${esc(u.name || '')}</b>
+            ${u.email ? `<small>${esc(u.email)}</small>` : ''}
+            ${roleTag ? `<small><i class="rolechip">${roleTag}</i></small>` : (u.pinOnly ? '<small>signed in · team PIN</small>' : '')}
+            ${expired ? '<small class="whoexp">session expired — sign in again (☰ menu)</small>' : ''}</div>
+        </div>
+        <button class="whoout">⏻ Sign out</button>`;
+      m.querySelector('.whoout').onclick = () => {
+        m.hidden = true;
+        if (confirm('Sign out ' + (u.name || 'this user') + '?\n\nThe sign-in screen comes back so the next person can log in as themselves.')) signOut();
+      };
+      m.hidden = false;
+      const r = tw.getBoundingClientRect();   // pin under the chip, clamped in the viewport
+      const menuW = Math.max(190, m.offsetWidth || 0);
+      const right = Math.min(
+        Math.max(8, window.innerWidth - r.right),
+        Math.max(8, window.innerWidth - menuW - 8));
+      m.style.position = 'fixed';
+      m.style.top = (r.bottom + 6) + 'px';
+      m.style.right = right + 'px';
+      m.style.left = 'auto';
     };
+    document.addEventListener('click', e => {
+      if (!e.target.closest('#topWho') && !e.target.closest('#whoTopMenu')) {
+        const m = $('#whoTopMenu'); if (m) m.hidden = true;
+      }
+    });
   }
   if (tw) {
     const tu = authUser();
@@ -4994,7 +5063,7 @@ initAuth();
   }
 }
 
-async function movePiano(p, dest, pop) {
+async function movePiano(p, dest, pop, confirmed) {
   const msg = pop.querySelector('.mvmsg');
   if (!dest) { msg.textContent = 'Type a spot number or area name first.'; return; }
   if (!isValidDest(dest)) {
@@ -5002,6 +5071,24 @@ async function movePiano(p, dest, pop) {
     return;
   }
   const known = S.slotFloor.has(dest.toLowerCase());
+  // moving onto a numbered spot someone else holds bumps them to the attic
+  // (the bridge's bumpOthers_) \u2014 confirm inline first. Inline, not
+  // window.confirm, which is blocked in some embedded browsers.
+  const occupants = (known && SLOT_RE.test(dest))
+    ? (S.bySlot.get(dest.toLowerCase()) || []).filter(x => x.row !== p.row)
+    : [];
+  if (occupants.length && !confirmed) {
+    popPinned = true;
+    const names = occupants.map(x => (x.summary || (x.serial ? '#' + x.serial : 'a piano')).slice(0, 34)).join(', ');
+    const mine = (p.summary || (p.serial ? '#' + p.serial : 'this piano')).slice(0, 34);
+    msg.className = 'mvmsg';
+    msg.innerHTML = `Spot ${esc(dest)} currently holds <b>${esc(names)}</b>. `
+      + `Move <b>${esc(mine)}</b> there and bump ${occupants.length > 1 ? 'them' : 'it'} to the Attic?`
+      + `<span class="mvconfirm"><button class="mvyes">\u2713 Move &amp; bump</button><button class="mvno">Cancel</button></span>`;
+    msg.querySelector('.mvyes').onclick = ev => { ev.stopPropagation(); movePiano(p, dest, pop, true); };
+    msg.querySelector('.mvno').onclick = ev => { ev.stopPropagation(); msg.className = 'mvmsg'; msg.textContent = ''; };
+    return;
+  }
   popPinned = true;
   const {pin, ok} = writeAuth();
   if (!ok) { msg.textContent = 'A team PIN is required to move pianos.'; return; }
@@ -5604,6 +5691,21 @@ function activityTable(rows) {
 
 /* Concurrent-work report: hardware/order tasks per piano, queue order,
  * filterable by category (keytops, plating, bass strings…) and status. */
+/* Plate lifecycle (mirrors the bridge's PLATE_STATUSES) — plates leave for
+ * Curtis Harper's shop and come back; tracked in the Piano Log's
+ * PLATE STATUS column, set from the card's Shop Progress section. */
+const PLATE_STAGES = ['In piano', 'Removed', 'Plate storage — BEFORE',
+                      'At Curtis Harper', 'Plate storage — AFTER', 'Back in piano'];
+function plateBadge(v) {
+  v = (v || '').trim();
+  if (!v) return '<span class="lite" style="color:#8a929a">not tracked</span>';
+  const c = /curtis/i.test(v) ? ['#f3ecfd', '#6b3fa0']
+    : /before/i.test(v) ? ['#fdf3ec', '#9a5b13']
+    : /after/i.test(v) ? ['#eaf2fd', '#2c5d96']
+    : /back in/i.test(v) ? ['#eaf5ec', '#2f7d4f']
+    : /removed/i.test(v) ? ['#fdecec', '#a03030'] : ['#eee', '#555'];
+  return `<span style="background:${c[0]};color:${c[1]};border-radius:999px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap">${esc(v)}</span>`;
+}
 const TASK_CATS = [
   ['keys', '🎹 Keytops / key service'],
   ['plating', '✨ Plating'],
@@ -5663,6 +5765,8 @@ function taskRows() {
         st: auto ? 'done' : taskStatus(v)};
     })
     .filter(r => (!f.st || r.st === f.st)
+      && (f.cat !== 'plating' || !f.pl
+          || (f.pl === '__none__' ? !(r.p.plateStatus || '').trim() : r.p.plateStatus === f.pl))
       && (!f.q || (r.p.summary + ' ' + r.p.serial + ' ' + r.v).toLowerCase().includes(f.q.toLowerCase())))
     .sort((a, b) => (a.p.queuePos || 999) - (b.p.queuePos || 999) || a.p.row - b.p.row);
 }
@@ -5676,11 +5780,15 @@ function tasksTable() {
         `<option value="${k}" ${f.cat === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>
       <select class="tkf" data-f="st">${TASK_ST.map(([k, l]) =>
         `<option value="${k}" ${f.st === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>
+      ${f.cat === 'plating' ? `<select class="tkf" data-f="pl">
+        <option value="">plate: anywhere</option>
+        ${PLATE_STAGES.map(v => `<option ${f.pl === v ? 'selected' : ''}>${esc(v)}</option>`).join('')}
+        <option value="__none__" ${f.pl === '__none__' ? 'selected' : ''}>plate: not tracked yet</option></select>` : ''}
       <input class="tkf" data-f="q" placeholder="search piano / note…" value="${esc(f.q)}">
       <span class="actcount">${rows.length} piano${rows.length === 1 ? '' : 's'}, queue order</span>
-      ${(f.st || f.q) ? '<button class="tkclear">✕ clear</button>' : ''}
+      ${(f.st || f.q || f.pl) ? '<button class="tkclear">✕ clear</button>' : ''}
     </div>
-    <table><tr><th>QUEUE</th><th>PIANO</th><th>SPOT</th><th>PHASE</th><th>STATUS</th><th>NOTE ON FILE</th></tr>
+    <table><tr><th>QUEUE</th><th>PIANO</th><th>SPOT</th><th>PHASE</th>${f.cat === 'plating' ? '<th>PLATE LOCATION</th>' : ''}<th>STATUS</th><th>NOTE ON FILE</th></tr>
     ${rows.map(({p, v, st}) => {
       const c = PILL[st];
       return `<tr class="mrow" data-row="${p.row}">
@@ -5689,9 +5797,10 @@ function tasksTable() {
             <span class="lite" style="color:#8a929a;font-size:11px">${esc(p.serial)}</span></td>
         <td>${esc(String(p.location || '—').slice(0, 14))}</td>
         <td>${esc((p.phase || '—').slice(0, 22))}</td>
+        ${f.cat === 'plating' ? `<td>${plateBadge(p.plateStatus)}</td>` : ''}
         <td><span style="background:${c[0]};color:${c[1]};border-radius:999px;padding:2px 9px;font-size:11px;font-weight:800;white-space:nowrap">${st === 'needed' ? 'NEEDS ATTENTION' : st.toUpperCase()}</span></td>
         <td>${esc(v || '—')}</td></tr>`;
-    }).join('') || '<tr><td colspan="6" class="empty">Nothing matches.</td></tr>'}
+    }).join('') || `<tr><td colspan="${f.cat === 'plating' ? 7 : 6}" class="empty">Nothing matches.</td></tr>`}
     </table>`;
 }
 
@@ -5737,6 +5846,18 @@ function queueTable() {
     (p.summary + ' ' + p.serial + ' ' + (p.track || '') + ' ' + (p.location || ''))
       .toLowerCase().includes(f.q.toLowerCase()));
   const pending = S.data.pianos.filter(p => p.active && preQueue(p) && !p.queuePos);
+  // ASSIGNED TO: live open work-clock session first, else the most recent
+  // tech in the Time Log for that serial (loaded lazily when this report opens)
+  const assignedCell = p => {
+    const live = (CLOCK.all || []).find(o => o.serial === p.serial);
+    if (live) return `<td><span class="qulive">● ${esc((live.tech || '').split(/\s+/)[0] || live.tech)} now</span></td>`;
+    if (!S.tlRows) return '<td>…</td>';
+    let last = null;
+    S.tlRows.forEach(r => {
+      if (r.serial === p.serial && r.tech && (!last || new Date(r.start) > new Date(last.start))) last = r;
+    });
+    return last ? `<td><span class="qurecent">recent: ${esc(last.tech)}</span></td>` : '<td>—</td>';
+  };
   const row = p => `<tr class="mrow" data-row="${p.row}" ${p.queuePos === 1
       ? 'style="background:#eaf5ec"' : ''}>
       <td style="font-weight:800;white-space:nowrap">#${p.queuePos}${p.queuePos === 1 ? ' · next up' : ''}</td>
@@ -5744,14 +5865,15 @@ function queueTable() {
           <span class="lite" style="color:#8a929a;font-size:11px">${esc(p.serial)}</span></td>
       <td>${esc(trackParts(p.track).list.join(' · ') || '—')}</td>
       <td>${esc((effectivePhase(p) || '—').slice(0, 24))}</td>
+      ${assignedCell(p)}
       <td>${esc(String(p.location || '—').slice(0, 14))}</td></tr>`;
   return `<div class="actbar qubar">
       <input class="quf" data-f="q" placeholder="search piano / serial / track…" value="${esc(f.q)}">
       <span class="actcount">${rows.length}${f.q ? ' of ' + all.length : ''} in queue</span>
       ${f.q ? '<button class="quclear">✕ clear</button>' : ''}
     </div>
-    <table><tr><th>QUEUE</th><th>PIANO</th><th>TRACK</th><th>CURRENT PHASE</th><th>SPOT</th></tr>
-    ${rows.map(row).join('') || '<tr><td colspan="5" class="empty">Nothing matches.</td></tr>'}
+    <table><tr><th>QUEUE</th><th>PIANO</th><th>TRACK</th><th>CURRENT PHASE</th><th>ASSIGNED TO</th><th>SPOT</th></tr>
+    ${rows.map(row).join('') || '<tr><td colspan="6" class="empty">Nothing matches.</td></tr>'}
     </table>
     ${pending.length ? `<p class="pd" style="margin:14px 0 6px">⚠️ <b>Pending shop work — not in the queue yet</b> (deposit not received):</p>
       <table><tr><th>PIANO</th><th>SPOT</th></tr>
@@ -6155,6 +6277,7 @@ function renderReport() {
     if ((S.openReport === 'briefs' || S.openReport === 'adminbriefs') && !S.briefRows) loadBriefs();
     if (S.openReport === 'paytime' && !S.payRows) loadPayroll();
     if (S.openReport === 'jobcost' && !S.tlRows) loadTimeLog();
+    if (S.openReport === 'queue' && !S.tlRows) loadTimeLog();   // ASSIGNED TO column
     if (S.openReport === 'clockadjust') {
       if (!S.fixRows) loadClockFixes();
       if (!S.payRows) loadPayroll();
@@ -6241,7 +6364,7 @@ function renderReport() {
     else el.oninput = () => { clearTimeout(el._t); el._t = setTimeout(apply, 350); };
   });
   const tkc = body.querySelector('.tkclear');
-  if (tkc) tkc.onclick = () => { S.tkF = {cat: S.tkF.cat, st: '', q: ''}; renderReport(); };
+  if (tkc) tkc.onclick = () => { S.tkF = {cat: S.tkF.cat, st: '', q: '', pl: ''}; renderReport(); };
   body.querySelectorAll('.quf').forEach(el => {
     el.oninput = () => {
       clearTimeout(el._t);
@@ -6697,14 +6820,132 @@ async function openTrainingDoc(t) {
   if (panel) panel.scrollTop = 0;
 }
 
+/* ===================== WHITEBOARD (parts / supplies / tools requests) =====
+ * The shop's wall board, digital — same Netlify function + sheet tab as the
+ * Shop App's Whiteboard, so both apps (and the Shop Manager) see one board.
+ * Lifecycle: requested → Ordered (waiting area) → Arrived.
+ * Auth: the function's shop password; changes attributed to the signed-in
+ * Store Map user (clockName), falling back to "Team". */
+const WHITEBOARD_API = 'https://blpsalesapp.netlify.app/.netlify/functions/whiteboard';
+const WB_KEY = 'pianoman';
+const WB = {rows: null, loading: false, err: null, busy: false, showArrived: false};
+const WB_COLS = [['Parts', 'running low on'], ['Supplies', ''], ['Tools', 'suggestions & upgrades']];
+const wbWho = () => clockName() || 'Team';
+async function wbFetch(bg) {
+  if (WB.loading) return;
+  WB.loading = true; WB.err = null;
+  if (!bg) renderWhiteboard();
+  try {
+    const r = await fetch(WHITEBOARD_API + '?key=' + encodeURIComponent(WB_KEY));
+    const j = await r.json();
+    if (j.error) WB.err = 'Couldn’t reach the whiteboard: ' + j.error;
+    else WB.rows = j.rows;
+  } catch (e) { if (!bg) WB.err = 'Couldn’t reach the whiteboard: ' + String(e.message || e); }
+  WB.loading = false; renderWhiteboard();
+}
+async function wbPost(body) {
+  const r = await fetch(WHITEBOARD_API, {method: 'POST',
+    headers: {'content-type': 'application/json'},
+    body: JSON.stringify({key: WB_KEY, by: wbWho(), ...body})});
+  const j = await r.json();
+  if (!j.ok) throw new Error(j.error || ('HTTP ' + r.status));
+}
+function wbItemHTML(r) {
+  return `<div class="wbitem ${r.arrived ? 'done' : ''}" data-row="${r.row}">
+    <span style="flex:1"><span class="wtxt">${esc(r.item)}</span>
+      ${r.note ? `<span class="wnote">${esc(r.note)}</span>` : ''}
+      <span class="wmeta">${esc(r.by)}${r.added ? ' · ' + esc(r.added) : ''}</span></span>
+    <span style="display:flex;gap:5px;flex-direction:column;align-items:flex-end">
+      <button class="tpillw ${r.ordered ? 'on' : ''}" data-row="${r.row}" data-act="ordered" data-on="${r.ordered ? '1' : ''}"
+        title="${esc(r.orderedAt)}">Ordered${r.ordered ? ' ✓' : ''}</button>
+      <button class="tpillw ${r.arrived ? 'on' : ''}" data-row="${r.row}" data-act="arrived" data-on="${r.arrived ? '1' : ''}"
+        title="${esc(r.arrivedAt)}">Arrived${r.arrived ? ' ✓' : ''}</button>
+    </span></div>`;
+}
+function wbBoardHTML() {
+  const rows = WB.rows || [];
+  return `<div class="wbgrid">
+    ${WB_COLS.map(([col, note]) => {
+      const inCol = rows.filter(r => r.column.toLowerCase() === col.toLowerCase());
+      const open = inCol.filter(r => !r.ordered && !r.arrived);
+      const ordered = inCol.filter(r => r.ordered && !r.arrived);
+      const arrived = inCol.filter(r => r.arrived);
+      return `<div class="wbcol"><h3>${esc(col)}${note ? `<small>${esc(note)}</small>` : ''}</h3>
+        <div class="wbadd"><input maxlength="200" placeholder="what do we need?" data-col="${esc(col)}">
+          <button data-col="${esc(col)}">+ add</button></div>
+        ${open.map(wbItemHTML).join('') || `<div class="wbnone">nothing on the board</div>`}
+        ${ordered.length ? `<div class="wbsect">📦 Ordered — waiting to arrive</div>` + ordered.map(wbItemHTML).join('') : ''}
+        ${WB.showArrived && arrived.length ? `<div class="wbsect">✓ Arrived</div>` + arrived.map(wbItemHTML).join('') : ''}
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+function wbWire(v) {
+  const rerender = renderWhiteboard, refetch = () => wbFetch(true);
+  v.querySelectorAll('.wbadd button').forEach(b => b.onclick = async () => {
+    const inp = v.querySelector(`.wbadd input[data-col="${b.dataset.col}"]`);
+    const item = inp.value.trim(); if (!item) { inp.focus(); return; }
+    b.disabled = true;
+    try {
+      await wbPost({action: 'add', column: b.dataset.col, item});
+      WB.rows.push({row: 0, column: b.dataset.col, item, note: '', by: wbWho(),
+        added: new Date().toLocaleDateString('en-US'), ordered: false, orderedAt: '', arrived: false, arrivedAt: ''});
+      inp.value = ''; rerender(); refetch();
+    } catch (e) { const m = v.querySelector('.wbmsg'); if (m) { m.className = 'wbmsg err'; m.textContent = '✗ ' + (e.message || e); } b.disabled = false; }
+  });
+  v.querySelectorAll('.tpillw').forEach(btn => btn.onclick = async ev => {
+    ev.stopPropagation();
+    if (WB.busy) return;
+    const row = +btn.dataset.row; if (!row) return;
+    WB.busy = true;
+    const rec = WB.rows.find(r => r.row === row);
+    const act = btn.dataset.act, on = !btn.dataset.on;
+    const stamp = new Date().toLocaleDateString('en-US') + ' · ' + wbWho();
+    const prev = rec && {ordered: rec.ordered, orderedAt: rec.orderedAt, arrived: rec.arrived, arrivedAt: rec.arrivedAt};
+    if (rec) { if (act === 'ordered') { rec.ordered = on; rec.orderedAt = on ? stamp : ''; } else { rec.arrived = on; rec.arrivedAt = on ? stamp : ''; } }
+    rerender();
+    try { await wbPost({action: act, row, on}); }
+    catch (e) {
+      if (rec && prev) Object.assign(rec, prev);
+      rerender();
+      const m = v.querySelector('.wbmsg'); if (m) { m.className = 'wbmsg err'; m.textContent = '✗ ' + (e.message || e); }
+    }
+    WB.busy = false;
+  });
+}
+function renderWhiteboard() {
+  const v = $('#wbBody'); if (!v) return;
+  // don't clobber a column input someone is typing in (background refreshes)
+  if (document.activeElement && v.contains(document.activeElement) &&
+      /^(SELECT|INPUT|TEXTAREA)$/.test(document.activeElement.tagName)) return;
+  const y = window.scrollY;
+  v.innerHTML = `
+    <div class="wbtop">
+      <button class="wbctl wbToggleDone">${WB.showArrived ? 'Hide arrived items' : 'Show arrived items'}</button>
+      <button class="wbctl wbRefresh">Refresh</button>
+    </div>
+    <div class="wbmsg${WB.err ? ' err' : ''}">${WB.err ? esc(WB.err) : (WB.loading && !WB.rows ? 'Loading…' : '')}</div>
+    ${WB.rows ? wbBoardHTML() : ''}`;
+  window.scrollTo(0, y);
+  v.querySelector('.wbRefresh').onclick = () => { WB.err = null; wbFetch(true); };
+  v.querySelector('.wbToggleDone').onclick = () => { WB.showArrived = !WB.showArrived; renderWhiteboard(); };
+  if (WB.rows) wbWire(v);
+  if (!WB.rows && !WB.loading && !WB.err) wbFetch();
+}
+setTimeout(() => {
+  const b = document.getElementById('wbBtn');
+  if (b) b.onclick = () => switchView('whiteboard');
+}, 0);
+
 /* ---------- views / nav / drawers ---------- */
 function showView(v) {
-  ['map', 'report', 'board', 'cal', 'media', 'shopmap', 'archive', 'dash', 'training', 'trainingdoc'].forEach(x => $('#view-' + x).hidden = x !== v);
+  ['map', 'report', 'board', 'cal', 'media', 'shopmap', 'archive', 'dash', 'whiteboard', 'training', 'trainingdoc'].forEach(x => $('#view-' + x).hidden = x !== v);
   if (v === 'archive') renderArchive();
   document.querySelectorAll('.navitem[data-view]').forEach(el =>
     el.classList.toggle('on', el.dataset.view === v));
   if (v === 'shopmap') renderShopMap();
   if (v === 'dash') renderDash();
+  if (v === 'whiteboard') renderWhiteboard();   // first open fetches the board
 }
 function switchView(v) { S.view = v; showView(v); closeNav(); }
 document.querySelectorAll('.navitem[data-view]').forEach(el =>
@@ -6726,7 +6967,7 @@ $('.logo').onclick = goHome;
 $('.logo').style.cursor = 'pointer';
 
 // every non-map view gets a ✕ back to the map (Escape works too)
-['report', 'board', 'cal', 'media', 'shopmap', 'archive', 'dash', 'training', 'trainingdoc'].forEach(v => {
+['report', 'board', 'cal', 'media', 'shopmap', 'archive', 'dash', 'whiteboard', 'training', 'trainingdoc'].forEach(v => {
   const el = $('#view-' + v);
   if (el && !el.querySelector('.viewclose')) {
     const b = document.createElement('button');

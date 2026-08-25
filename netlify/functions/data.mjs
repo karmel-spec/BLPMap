@@ -95,6 +95,8 @@ function parsePianos(text) {
     ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'CABINETRY') : -1;
   const typeOvIdx = rows[1]
     ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'TYPE OVERRIDE') : -1;
+  const plateIdx = rows[1]
+    ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'PLATE STATUS') : -1;
   const payPlanIdx = rows[1]
     ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'PAYMENT PLAN') : -1;
   const payMsIdx = rows[1]
@@ -134,7 +136,11 @@ function parsePianos(text) {
       }
       continue;
     }
-    const archived = soldZone;   // delivered/sold rows: off the map, kept for the archive view
+    // delivered/sold rows: off the map, kept for the archive view — a phase
+    // of "Delivered" archives immediately, without waiting for the row to be
+    // moved below the SOLD divider
+    const phaseRaw = phaseIdx >= 0 ? col(phaseIdx) : '';
+    const archived = soldZone || /delivered/i.test(phaseRaw);
     if (['SHOPIFY', 'ADMIN', 'WEB'].includes(summary.toUpperCase())
         || ['ADMIN', 'LOCATION / STATUS'].includes(col(20).toUpperCase())
         || col(21).includes('Arrival Date')) continue;
@@ -217,6 +223,7 @@ function parsePianos(text) {
       clientReports: crIdx >= 0 ? col(crIdx) : '',
       checkBack: cbIdx >= 0 ? col(cbIdx) : '',
       cabinetry: cabIdx >= 0 ? col(cabIdx) : '',
+      plateStatus: plateIdx >= 0 ? col(plateIdx) : '',
       bphoto: med(13), aphoto: med(15), bvideo: med(16), avideo: med(17),
       queuePos: 0, queueTotal: 0,
       isNew, active,

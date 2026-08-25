@@ -704,6 +704,15 @@ td a{color:#9e2020}
 .dn-yes{background:#2f7d4f;color:#fff}
 .dn-out{background:#8e1f1f;color:#fff}
 @media(max-width:640px){#mydock{left:6px;right:6px;bottom:6px}.dockinfo small{display:none}}
+/* minimized dock — slim timer pill so the map's zoom controls stay reachable */
+.dockfold{border:0;border-radius:8px;padding:8px 10px;font:800 13px 'Assistant',sans-serif;cursor:pointer;
+  background:#2c2c2e;color:#a8a8aa;flex:none}
+.dockfold:hover{color:#fff}
+#mydock.dockmini{left:auto;right:10px;bottom:10px;padding:0;border-radius:999px;background:none;box-shadow:none}
+#mydock.dockmini .dockpill{display:flex;align-items:center;gap:7px;border:1px solid #2f7d4f;border-radius:999px;
+  background:#0d0d0d;color:#7fe09a;padding:8px 14px;font:800 13px 'Assistant',sans-serif;cursor:pointer;
+  box-shadow:0 8px 26px rgba(0,0,0,.4)}
+@media(max-width:640px){#mydock.dockmini{left:auto;right:6px;bottom:6px}}
 /* suggestion box */
 .sgwrap{max-width:560px}
 .sgform{padding:14px 16px;border-bottom:1px solid #eee}
@@ -969,5 +978,64 @@ tr.adjediting td{background:#fdf8ee}
 .cf-note{width:100%;font:500 13px/1.45 inherit;font-family:inherit;padding:8px 10px;margin:8px 0;
   border:1px solid #d7dbdf;border-radius:8px;resize:vertical}
 
-/* 📝 whiteboard shortcut — opens the shop app's parts/supplies/tools board */
-a.wbbtn{text-decoration:none;display:inline-flex;align-items:center;line-height:1}
+/* 📝 whiteboard — parts / supplies / tools request board (shared with the Shop App) */
+.wbtop{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.wbctl{border:1px solid #cfd6dc;background:#fff;border-radius:8px;padding:6px 12px;
+  font:700 12px 'Assistant',sans-serif;color:#3a4046;cursor:pointer}
+.wbctl:hover{border-color:#9e2020;color:#9e2020}
+.wbmsg{min-height:16px;margin:6px 0 8px;font-size:12.5px;color:#8a929a}
+.wbmsg.err{color:#9e2020}
+.wbgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;align-items:start}
+@media (max-width:900px){.wbgrid{grid-template-columns:1fr}}
+.wbcol{background:#fafbfc;border:1px solid #e3e6e9;border-radius:10px;overflow:hidden}
+.wbcol>h3{margin:0;padding:11px 14px 8px;font-size:13px;letter-spacing:1.5px;text-transform:uppercase;
+  color:#3a4046;border-bottom:2px solid #9e2020;display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.wbcol>h3 small{font-size:10.5px;letter-spacing:.2px;text-transform:none;color:#8a929a;font-weight:500;text-align:right}
+.wbadd{display:flex;gap:7px;padding:9px 11px;background:#fff;border-bottom:1px solid #e3e6e9}
+.wbadd input{flex:1;border:1px solid #cfd6dc;border-radius:7px;padding:7px 10px;
+  font:13px 'Assistant',sans-serif;min-width:0}
+.wbadd button{flex:none;border:0;background:#9e2020;color:#fff;border-radius:7px;padding:7px 12px;
+  font:700 12px 'Assistant',sans-serif;cursor:pointer;white-space:nowrap}
+.wbadd button:hover{background:#831a1a}
+.wbadd button:disabled{opacity:.6;cursor:default}
+.wbitem{padding:9px 13px;border-bottom:1px solid #eceff1;display:flex;gap:10px;align-items:flex-start}
+.wbitem:last-child{border-bottom:0}
+.wbitem .wtxt{font-size:13.5px;color:#1c1c1e;overflow-wrap:anywhere}
+.wbitem.done .wtxt{color:#9aa3ac;text-decoration:line-through}
+.wbitem .wnote{display:block;font-size:11px;color:#9e2020;font-weight:700}
+.wbitem .wmeta{display:block;font-size:10.5px;color:#8a929a}
+.wbnone{padding:15px 13px;color:#8a929a;font-size:12.5px;font-style:italic}
+.wbsect{padding:6px 13px;background:#f1f3f5;border-top:1px solid #e3e6e9;border-bottom:1px solid #e3e6e9;
+  font-size:10.5px;letter-spacing:1px;text-transform:uppercase;color:#5c6770;font-weight:800}
+.tpillw{border:1px solid #cfd6dc;border-radius:999px;background:#fff;padding:3px 10px;
+  font:700 11px 'Assistant',sans-serif;color:#5c6770;cursor:pointer;white-space:nowrap}
+.tpillw.on{background:#eaf5ec;border-color:#2f7d4f;color:#2f7d4f}
+
+/* 💡 suggestion box — inline screenshot preview before sending */
+.sgprev{position:relative;display:inline-block;margin-top:9px}
+.sgprev img{display:block;max-height:140px;max-width:100%;border-radius:9px;border:1px solid #cfd6dc}
+.sgprevx{position:absolute;top:-8px;right:-8px;width:22px;height:22px;border-radius:50%;
+  border:1px solid #cfd6dc;background:#fff;color:#3a4046;font-size:12px;line-height:1;
+  cursor:pointer;box-shadow:0 1px 4px rgba(20,30,40,.2);padding:0}
+.sgprevx:hover{border-color:#9e2020;color:#9e2020}
+
+/* shop queue report — ASSIGNED TO column */
+.qulive{color:#2f7d4f;font-weight:800;white-space:nowrap}
+.qurecent{color:#8a929a;font-size:11.5px;white-space:nowrap}
+
+/* 👤 account dropdown under the top-bar name chip */
+.whomenu .whohead{display:flex;gap:9px;align-items:center;padding:10px 12px;border-bottom:1px solid #f0f2f4;background:#fafbfc}
+.whomenu .whohead img{width:30px;height:30px;border-radius:50%}
+.whomenu .whohead b{display:block;font-size:12.5px;color:#2b2f33}
+.whomenu .whohead small{display:block;font-size:11px;color:#8a929a;font-weight:500}
+.whomenu .whohead .whoexp{color:#9e2020;font-weight:700}
+.whomenu .whoout{color:#9e2020}
+
+/* move-to-occupied-spot inline confirmation (window.confirm is blocked
+   in some embedded browsers, so it lives in the card's .mvmsg line) */
+.mvconfirm{display:inline-flex;gap:6px;margin-left:7px;vertical-align:middle}
+.mvconfirm button{border:0;border-radius:7px;padding:4px 10px;font:700 11.5px 'Assistant',sans-serif;cursor:pointer}
+.mvconfirm .mvyes{background:#9e2020;color:#fff}
+.mvconfirm .mvyes:hover{background:#831a1a}
+.mvconfirm .mvno{background:#fff;border:1px solid #cfd6dc;color:#3a4046}
+.mvconfirm .mvno:hover{border-color:#8a929a}

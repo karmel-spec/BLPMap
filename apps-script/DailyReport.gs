@@ -155,6 +155,17 @@ function doGet(e) {
     try { return json_(timeLogRows_(Number(e.parameter.days) || 90)); }
     catch (err) { return json_({error: String(err), rows: []}); }
   }
+  // Shop Board roster overrides (Roster tab of the report sheet) — served
+  // here because the Shop Reports Bridge deployment is owner-locked
+  if (e && e.parameter && e.parameter.fn === 'shoproster') {
+    try { return json_(shopRosterList_()); }
+    catch (err) { return json_({error: String(err), roster: []}); }
+  }
+  // Rerunnable: link-share all archived brief docs (managers get access)
+  if (e && e.parameter && e.parameter.fn === 'sharebriefs') {
+    try { return json_(shareAllBriefs_()); }
+    catch (err) { return json_({error: String(err)}); }
+  }
   // Clock-fix requests (team asks admin/managers to adjust a punch)
   if (e && e.parameter && e.parameter.fn === 'clockfixes') {
     try { return json_(clockFixRows_()); }
@@ -539,7 +550,11 @@ function doPost(e) {
     var gOk = g && g.email && (/@brighamlarsonpianos\.com$/i.test(g.email)
       || /\.blp@gmail\.com$/i.test(g.email)
       || TEAM_EMAILS.indexOf(g.email.toLowerCase()) >= 0);
-    if (req.secret !== BRIDGE_SECRET && req.pin !== TEAM_PIN && !gOk) {
+    // the shop apps' shared password doubles as a team PIN here so the
+    // Shop Manager's bridge calls (App Requests etc.) work for
+    // password-gate users too — same team, same trust level
+    var pinOk = req.pin === TEAM_PIN || String(req.pin || '').trim().toLowerCase() === 'pianoman';
+    if (req.secret !== BRIDGE_SECRET && !pinOk && !gOk) {
       return json_({error: 'unauthorized'});
     }
     req._g = g || null;   // verified Google identity for permission-gated actions
@@ -773,6 +788,16 @@ function doPost(e) {
       if (pms.ok && !pms.skipped) logAct_(who, 'Payment milestone email', req.summary || req.serial,
         pms.milestone + '% — emailed ' + (pms.emailed || ''));
       return json_(pms);
+    }
+    if (req.action === 'shoprosterset') {
+      var srs = shopRosterSet_(String(req.tech || ''), String(req.status || 'active'));
+      if (srs.ok) logAct_(who, 'Roster ' + srs.status, srs.tech, 'Shop Board roster override');
+      return json_(srs);
+    }
+    if (req.action === 'setplatestatus') {
+      var pls = setPlateStatus_(req);
+      if (pls.ok) logAct_(who, 'Plate status', pls.summary || req.serial, pls.plateStatus || '(cleared)');
+      return json_(pls);
     }
     if (req.action === 'setcabinetry') {
       var cb2 = setCabinetry_(req);
@@ -2184,7 +2209,7 @@ function payrollRows_(days) {
 var OWNER_EMAILS = ['brigham@brighamlarsonpianos.com', 'karmel@brighamlarsonpianos.com'];
 var PAYROLL_ADMIN_EMAILS = OWNER_EMAILS.concat(['melissa@brighamlarsonpianos.com']);
 var TIMELOG_ADMIN_EMAILS = OWNER_EMAILS.concat(
-  ['markhales.blp@gmail.com', 'matthewwessman.blp@gmail.com']);   // + Jacob: add his email here
+  ['markhales.blp@gmail.com', 'matthewwessman.blp@gmail.com', 'jacobmower.blp@gmail.com']);
 function blpAccount_(g) {
   return g && g.email && (/@brighamlarsonpianos\.com$/i.test(g.email) || /\.blp@gmail\.com$/i.test(g.email));
 }
@@ -3678,7 +3703,7 @@ function briefDoc_(subject, html, kind) {
     headers: {Authorization: 'Bearer ' + ScriptApp.getOAuthToken()},
   });
   var f = JSON.parse(res.getContentText());
-  try { DriveApp.getFileById(f.id).setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch (e) {}
+  shareAnyoneWithLink_(f.id);
   var url = f.webViewLink || ('https://docs.google.com/document/d/' + f.id + '/edit');
   var ss = SpreadsheetApp.openById('11RoeVRETag5rZYX6_tEH-rf6x8JL0JeZU0P5AT0WI-I');
   var sh = ss.getSheetByName('Brief Log');
@@ -4041,6 +4066,100 @@ function setCabinetry_(req) {
   var val = String(req.cabinetry == null ? '' : req.cabinetry).trim();
   sh.getRange(found.row, col).setValue(val);
   return {ok: true, row: found.row, summary: found.summary, cabinetry: val};
+}
+
+/* Shop Board roster overrides: the "Roster" tab on the report sheet
+ * (Name | Status | Updated) — active adds a name, inactive hides it from
+ * the Shop Manager's Shop Board / Weekly Review / cleaning rotation. */
+function shopRosterTab_() {
+  var ss = SpreadsheetApp.openById('11RoeVRETag5rZYX6_tEH-rf6x8JL0JeZU0P5AT0WI-I');
+  var sh = ss.getSheetByName('Roster');
+  if (!sh) {
+    sh = ss.insertSheet('Roster', ss.getSheets().length);
+    sh.getRange(1, 1, 1, 3).setValues([['Name', 'Status', 'Updated']]);
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+function shopRosterList_() {
+  var sh = shopRosterTab_();
+  var out = [];
+  if (sh.getLastRow() >= 2) {
+    var vals = sh.getRange(2, 1, sh.getLastRow() - 1, 2).getValues();
+    for (var i = 0; i < vals.length; i++) {
+      if (!String(vals[i][0]).trim()) continue;
+      out.push({name: String(vals[i][0]).trim(),
+                status: /inactive/i.test(String(vals[i][1])) ? 'inactive' : 'active'});
+    }
+  }
+  return {ok: true, roster: out};
+}
+function shopRosterSet_(tech, status) {
+  if (!tech) return {error: 'missing tech'};
+  status = /inactive/i.test(status) ? 'inactive' : 'active';
+  var sh = shopRosterTab_();
+  var today = new Date().toISOString().slice(0, 10);
+  if (sh.getLastRow() >= 2) {
+    var vals = sh.getRange(2, 1, sh.getLastRow() - 1, 1).getValues();
+    for (var i = 0; i < vals.length; i++) {
+      if (String(vals[i][0]).trim().toLowerCase() === tech.trim().toLowerCase()) {
+        sh.getRange(i + 2, 2, 1, 2).setValues([[status, today]]);
+        return {ok: true, tech: tech.trim(), status: status, updated: true};
+      }
+    }
+  }
+  sh.appendRow([tech.trim(), status, today]);
+  return {ok: true, tech: tech.trim(), status: status, added: true};
+}
+
+/* Plate lifecycle per piano ('PLATE STATUS' col, header row 2): plates leave
+ * for Curtis Harper's shop and come back — the Concurrent Work report's
+ * plating view shows where each plate is. */
+var PLATE_STATUSES = ['', 'In piano', 'Removed', 'Plate storage — BEFORE',
+                      'At Curtis Harper', 'Plate storage — AFTER', 'Back in piano'];
+function setPlateStatus_(req) {
+  var val = String(req.plateStatus == null ? '' : req.plateStatus).trim();
+  if (PLATE_STATUSES.indexOf(val) < 0) return {error: 'bad plate status: ' + val};
+  var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+  var found = findPiano_(sh, req.serial, req.row);
+  if (found.error) return found;
+  var last = sh.getLastColumn();
+  var hdr = sh.getRange(2, 1, 1, last).getValues()[0];
+  var col = -1;
+  for (var c = 0; c < hdr.length; c++) {
+    if (String(hdr[c] || '').trim().toUpperCase() === 'PLATE STATUS') { col = c + 1; break; }
+  }
+  if (col < 0) { sh.getRange(2, last + 1).setValue('PLATE STATUS'); col = last + 1; }
+  sh.getRange(found.row, col).setValue(val);
+  return {ok: true, row: found.row, summary: found.summary, plateStatus: val};
+}
+
+/* Make a Drive file readable by anyone with the link (REST — DriveApp's
+ * setSharing silently failed under this script's grants, which left the
+ * nightly brief docs locked until Brigham shared them by hand). */
+function shareAnyoneWithLink_(fileId) {
+  try {
+    UrlFetchApp.fetch('https://www.googleapis.com/drive/v3/files/' + fileId + '/permissions', {
+      method: 'post', contentType: 'application/json',
+      payload: JSON.stringify({role: 'reader', type: 'anyone'}),
+      headers: {Authorization: 'Bearer ' + ScriptApp.getOAuthToken()},
+      muteHttpExceptions: true,
+    });
+  } catch (e) { /* sharing is best-effort — the doc itself still exists */ }
+}
+/* One-shot / rerunnable sweep: link-share every archived brief doc. */
+function shareAllBriefs_() {
+  var ss = SpreadsheetApp.openById('11RoeVRETag5rZYX6_tEH-rf6x8JL0JeZU0P5AT0WI-I');
+  var sh = ss.getSheetByName('Brief Log');
+  var n = 0;
+  if (sh && sh.getLastRow() >= 2) {
+    var vals = sh.getRange(2, 3, sh.getLastRow() - 1, 1).getValues();
+    for (var i = 0; i < vals.length; i++) {
+      var m = /\/document\/d\/([\w-]+)/.exec(String(vals[i][0] || ''));
+      if (m) { shareAnyoneWithLink_(m[1]); n++; }
+    }
+  }
+  return {ok: true, shared: n};
 }
 
 function setClientReports_(req) {

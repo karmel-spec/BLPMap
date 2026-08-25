@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Store Map — Brigham Larson Pianos</title>
 <link rel="icon" href="assets/blp-logo.png">
-<link rel="stylesheet" href="styles.css?v=134">
+<link rel="stylesheet" href="styles.css?v=135">
 </head>
 <body>
 
@@ -60,10 +60,10 @@
       <a href="https://www.brighamlarsonpianos.com/" target="_blank" rel="noopener">🌐 BLP Website</a>
     </div>
   </div>
-  <span class="topwho" id="topWho" title="tap to sign out"></span>
+  <span class="topwho" id="topWho" title="account — tap for menu"></span>
+  <div class="reqmenu topmenu whomenu" id="whoTopMenu" hidden></div>
   <button class="iconbtn drawerbtn" id="movesBtn">🚚 <b id="movesBadge">0</b></button>
-  <a class="iconbtn wbbtn" href="https://blpshop.netlify.app/#whiteboard" target="_blank" rel="noopener"
-     title="Shop Whiteboard — request supplies, tools & parts">📝</a>
+  <button class="iconbtn" id="wbBtn" title="Whiteboard — request supplies, tools & parts">📝</button>
   <button class="iconbtn" id="suggestBtn" title="Suggest an improvement">💡</button>
   <button class="iconbtn" id="menuBtn" aria-label="Menu">☰</button>
 </header>
@@ -83,6 +83,7 @@
     <div class="navitem" data-view="media"><span class="ic">📸</span>Media</div>
     <div class="navitem" data-view="shopmap"><span class="ic">📍</span>Shop Work Map</div>
     <div class="navitem" data-view="archive"><span class="ic">📦</span>Delivered Archive</div>
+    <div class="navitem" data-view="whiteboard"><span class="ic">📝</span>Whiteboard</div>
     <div class="navitem" data-view="training"><span class="ic">🎓</span>Training</div>
     <div class="navitem" id="langBtn"><span class="ic">🌐</span>Language / Idioma<span class="ext" id="langCur"></span></div>
     <div class="langlist" id="langList" hidden></div>
@@ -201,6 +202,15 @@
       </div>
     </div>
   </div>
+  <div class="view panelview" id="view-whiteboard" hidden>
+    <div class="panel">
+      <h2 class="ph">📝 WHITEBOARD</h2>
+      <p class="pd">The shop's wall board, digital — request parts, supplies &amp; tools in the right
+        column, then tap the pills as things get ordered and arrive. Shared live with the
+        Shop App and the Shop Manager.</p>
+      <div id="wbBody"></div>
+    </div>
+  </div>
   <div class="view panelview" id="view-training" hidden>
     <div class="panel">
       <h2 class="ph">🎓 TRAINING</h2>
@@ -218,6 +228,6 @@
   </div>
 </div>
 
-<script src="app.js?v=155"></script>
+<script src="app.js?v=156"></script>
 </body>
 </html>

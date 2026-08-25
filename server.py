@@ -127,6 +127,8 @@ def parse_pianos(raw):
                     if h.strip().upper() == 'CABINETRY'), -1)
     type_ov_idx = next((i for i, h in enumerate(hdr)
                         if h.strip().upper() == 'TYPE OVERRIDE'), -1)
+    plate_idx = next((i for i, h in enumerate(hdr)
+                      if h.strip().upper() == 'PLATE STATUS'), -1)
     pay_plan_idx = next((i for i, h in enumerate(hdr)
                          if h.strip().upper() == 'PAYMENT PLAN'), -1)
     pay_ms_idx = next((i for i, h in enumerate(hdr)
@@ -182,7 +184,8 @@ def parse_pianos(raw):
                 if head.strip().upper() == 'SOLD':
                     sold_zone = True
             continue
-        archived = sold_zone  # delivered/sold: off the map, kept for the archive
+        phase_raw = col(phase_idx) if phase_idx >= 0 else ''
+        archived = sold_zone or 'delivered' in phase_raw.lower()  # delivered/sold: off the map, kept for the archive
         # skip the sheet's sub-header rows
         if summary.upper() in ('SHOPIFY', 'ADMIN', 'WEB') \
                 or col(20).upper() in ('ADMIN', 'LOCATION / STATUS') \
@@ -265,6 +268,7 @@ def parse_pianos(raw):
             'clientReports': col(cr_idx) if cr_idx >= 0 else '',
             'checkBack': col(cb_idx) if cb_idx >= 0 else '',
             'cabinetry': col(cab_idx) if cab_idx >= 0 else '',
+            'plateStatus': col(plate_idx) if plate_idx >= 0 else '',
             'bphoto': med(13), 'aphoto': med(15),
             'bvideo': med(16), 'avideo': med(17),
             'queuePos': 0,
