@@ -5803,7 +5803,7 @@ function taskStatus(v) {
   return 'noted';
 }
 const TASK_ST = [['', 'all statuses'], ['needed', '🔴 needs attention'], ['noted', '📝 noted'],
-  ['ordered', '📦 ordered / out'], ['done', '✅ done / received'], ['n/a', '— not applicable']];
+  ['ordered', '📦 ordered / out'], ['done', '✅ completed / received'], ['n/a', '— not applicable']];
 function taskRows() {
   const f = S.tkF || (S.tkF = {cat: 'keys', st: '', q: ''});
   return S.data.pianos
