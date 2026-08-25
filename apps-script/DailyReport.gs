@@ -2403,8 +2403,12 @@ function addRequest_(req) {
   }
   var id = Utilities.formatDate(new Date(), 'America/Denver', 'MMddyy')
     + lastName + ('0' + (n + 1)).slice(-2);
-  var shot = '';
-  if (req.photo) {
+  // preferred path (8/25): the client pre-uploads via the sales-app service
+  // account (request-shot) — this web app's own token has NO Drive scope in
+  // the anonymous deployment, so the REST upload below always failed silently
+  var shot = /^https:\/\/drive\.google\.com\//.test(String(req.screenshotUrl || ''))
+    ? String(req.screenshotUrl) : '';
+  if (!shot && req.photo) {
     // Drive REST, not DriveApp — DriveApp throws in the anonymous web-app
     // context, which silently ate every screenshot the team attached
     try {

@@ -2205,9 +2205,18 @@ function openSuggestBox() {
       ...authFields()};
     try {
       if (shotFile) {
+        // upload through the sales-app service account — the bridge's own
+        // Drive token has no Drive scope in the anonymous web app, which
+        // silently ate every screenshot the team attached (fixed 8/25)
         const dataUrl = await downscalePhoto(shotFile, 1600, 0.85);
-        body.photo = dataUrl.split(',')[1]; body.photoType = 'image/jpeg';
-        body.photoName = shotFile.name.replace(/[^\w.-]+/g, '_').slice(0, 40);
+        const up = await fetch('https://blpsalesapp.netlify.app/.netlify/functions/request-shot', {
+          method: 'POST', headers: {'content-type': 'application/json'},
+          body: JSON.stringify({key: pin, id: Date.now().toString(36),
+            photo: dataUrl.split(',')[1], photoType: 'image/jpeg',
+            photoName: shotFile.name.replace(/[^\w.-]+/g, '_').slice(0, 40)})});
+        const uj = await up.json().catch(() => ({}));
+        if (uj.url) body.screenshotUrl = uj.url;
+        else msg.textContent = 'Screenshot upload failed — sending the request without it…';
       }
       const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
         headers: {'content-type': 'text/plain;charset=utf-8'}, body: JSON.stringify(body)});
@@ -2373,11 +2382,31 @@ function renderDock() {
     </div>
     <div class="dockmenu" hidden>
       ${recents.map(x => `<div class="dockopt" data-row="${x.row}">📌 ${esc(x.summary.slice(0, 34))} · #${esc(x.serial)}</div>`).join('')}
-      <div class="dockopt dockfind">🔍 Find a piano on the map…</div>
+      <input class="dockfindin" placeholder="🔍 type a serial, name or spot…" autocomplete="off"
+        style="width:100%;box-sizing:border-box;margin:6px 0 2px;padding:8px 10px;border:2px solid #c9a227;border-radius:8px;font:inherit;font-size:13px">
+      <div class="dockfindres"></div>
     </div>`;
   const menu = dock.querySelector('.dockmenu');
   dock.querySelector('.dockfold').onclick = () => { dockMin = true; renderDock(); };
-  dock.querySelector('.dockswitch').onclick = () => { menu.hidden = !menu.hidden; };
+  dock.querySelector('.dockswitch').onclick = () => {
+    menu.hidden = !menu.hidden;
+    // typing happens RIGHT HERE in the menu, not up in the header search
+    // (Mark 8/25: keystrokes were landing in the top bar)
+    if (!menu.hidden) setTimeout(() => { const i = menu.querySelector('.dockfindin'); if (i) i.focus(); }, 50);
+  };
+  const dfin = menu.querySelector('.dockfindin'), dres = menu.querySelector('.dockfindres');
+  if (dfin) dfin.oninput = () => {
+    const q = dfin.value.trim().toLowerCase();
+    if (q.length < 2) { dres.innerHTML = ''; return; }
+    const hits = S.data.pianos.filter(p => p.active && p.serial && matches(p, q)).slice(0, 6);
+    dres.innerHTML = hits.map(x => `<div class="dockopt" data-row="${x.row}">🎹 ${esc(String(x.summary || '').slice(0, 32))} · #${esc(x.serial)}${x.location ? ' · ' + esc(String(x.location)) : ''}</div>`).join('')
+      || '<div class="dockopt" style="cursor:default;color:#999">no match</div>';
+    dres.querySelectorAll('.dockopt[data-row]').forEach(el => el.onclick = () => {
+      menu.hidden = true;
+      const p = S.data.pianos.find(x => x.row === +el.dataset.row);
+      if (p) { focusPiano(p); lsSet('sec_clock', 'open'); }
+    });
+  };
   dock.querySelector('.dockout').onclick = async () => {
     const j = await punch('clockout', null, '', 'dock');
     if (j.error) alert(j.error);
@@ -2387,8 +2416,6 @@ function renderDock() {
     const p = S.data.pianos.find(x => x.row === +el.dataset.row);
     if (p) { focusPiano(p); lsSet('sec_clock', 'open'); }
   });
-  const df = menu.querySelector('.dockfind');
-  if (df) df.onclick = () => { menu.hidden = true; const q = document.querySelector('.search'); if (q) q.focus(); };
   const ny = dock.querySelector('.dn-yes');
   if (ny) ny.onclick = () => { CLOCK.nudged = false; CLOCK.lastAct = Date.now(); renderDock(); };
   const no = dock.querySelector('.dn-out');
@@ -7070,6 +7097,58 @@ $('#movesBtn').onclick = () => { S.feedOpen = !S.feedOpen; if (S.view !== 'map')
 $('#movesClose').onclick = () => { S.feedOpen = false; syncFeed(); };
 
 $('#legendBtn').onclick = () => { const p = $('#legendPanel'); p.hidden = !p.hidden; };
+/* Legend items are clickable (Brigham 8/25): each opens the list of pianos in
+ * that state, same predicates the map paints with; a row jumps to the piano. */
+const LEGEND_LISTS = {
+  photos:   {t: '📷 Needs photos',   f: p => !notYetArrived(p) && mediaNeeds(p).photo},
+  video:    {t: '🎥 Needs video',    f: p => !notYetArrived(p) && mediaNeeds(p).video},
+  sched:    {t: '🟣 Move scheduled', f: p => pianoStatus(p) === 'sched'},
+  move:     {t: '🔴 In transit',     f: p => pianoStatus(p) === 'move'},
+  new:      {t: '🩷 New (first 7 days)', f: p => !!p.isNew},
+  sale:     {t: '🟢 For sale',       f: p => (p.phase || '') === 'For Sale'},
+  coming:   {t: '🟡 Coming soon',    f: p => comingSoon(p)},
+  rented:   {t: '🟠 Rented',         f: p => isRented(p)},
+  tune:     {t: '🔵 On the tuning calendar', f: p => !!tuningInfo(p).next},
+  financed: {t: '💚 Private financing', f: p => isPrivateFinancing(p)},
+  larson:   {t: '🩵 Larson Family',  f: p => /conference room|larson home/i.test(p.location || '') && !isPrivateFinancing(p)},
+  soldpend: {t: '🏅 Sold / completed — awaiting delivery', f: p => soldPending(p)},
+};
+function openLegendList(key) {
+  const def = LEGEND_LISTS[key]; if (!def) return;
+  const list = ((S.data && S.data.pianos) || []).filter(p => p.active && def.f(p))
+    .sort((a, b) => String(a.location || 'zz').localeCompare(String(b.location || 'zz'), undefined, {numeric: true}));
+  let panel = $('#lgListPanel');
+  if (!panel) {
+    panel = document.createElement('div');
+    panel.id = 'lgListPanel';
+    panel.style.cssText = 'position:absolute;right:12px;bottom:52px;z-index:60;background:#fff;'
+      + 'border:1px solid #d8d2c8;border-radius:12px;box-shadow:0 12px 30px rgba(0,0,0,.18);'
+      + 'padding:12px 14px;width:min(430px,92%);max-height:62%;overflow:auto;font-size:12.5px';
+    document.querySelector('.mapcard').appendChild(panel);
+  }
+  panel.innerHTML = `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+      <b style="font-size:13px">${def.t}</b>
+      <span style="color:#8a847b">${list.length} piano${list.length === 1 ? '' : 's'}</span>
+      <span id="lgListX" style="margin-left:auto;cursor:pointer;padding:2px 8px">✕</span></div>
+    ${list.map(p => `<div class="lgrow" data-row="${p.row}" style="display:flex;gap:8px;padding:6px 4px;`
+        + `border-top:1px solid #f0ece5;cursor:pointer;align-items:baseline">
+        <b style="min-width:44px">${esc(String(p.location || '—'))}</b>
+        <span style="flex:1">${esc(String(p.summary || '').slice(0, 44))}</span>
+        <span style="color:#8a847b">#${esc(String(p.serial || '—'))}</span></div>`).join('')
+      || '<div style="color:#8a847b;padding:8px 0">None right now. 🎉</div>'}`;
+  panel.hidden = false;
+  panel.querySelector('#lgListX').onclick = () => { panel.hidden = true; };
+  panel.querySelectorAll('.lgrow').forEach(r => r.onclick = () => {
+    const p = S.data.pianos.find(x => String(x.row) === r.dataset.row);
+    if (!p) return;
+    panel.hidden = true; $('#legendPanel').hidden = true;
+    focusPiano(p);
+  });
+}
+$('#legendPanel').addEventListener('click', e => {
+  const q = e.target.closest('.lgq');
+  if (q) openLegendList(q.dataset.lg);
+});
 
 // top-bar 🏢 BLP Apps menu — links to the other BLP webapps
 const appsTopBtn = $('#appsTopBtn');
