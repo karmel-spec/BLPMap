@@ -6093,9 +6093,44 @@ function renderDash() {
   }
 }
 
+/* ---------- training ---------- */
+// Guides & handbooks shown on the 🎓 Training view. The first entry is this
+// app's own user guide (doubles as the app's help link). To add a training,
+// append {title, desc, href} here — `video` is optional and adds a
+// "▶ watch video" link next to the doc link. Nothing else to touch.
+const TRAININGS = [
+  {
+    title: 'Store Map User Guide',
+    desc: 'How to use the BLP Store Map: signing in, finding pianos, clocking work time, paperwork & photos.',
+    href: 'https://docs.google.com/document/d/1aq3oTa6pxr6AhquS7pbJakAY4q4iPc_nUJW4yLMXDOM/edit?usp=sharing',
+    video: 'https://youtu.be/1zDlnks5CC0',
+  },
+  {
+    title: 'BLP Restoration Handbook',
+    desc: 'The complete BLP restoration handbook.',
+    href: 'https://docs.google.com/document/d/1at8y6h6pphLmAL5gaE2TzfHeDv5Xn9xdbWVdozvxhxA/edit',
+  },
+  {
+    title: 'Professional Standards & Team Culture',
+    desc: 'BLP professional standards: punctuality, dress code, safety, workplace conduct & cleanliness.',
+    href: 'https://docs.google.com/document/d/1PYw5R8o9k8iLtCIfRkWVcno2hqqYQcS5-8izyM4Fbsk/edit',
+  },
+];
+function renderTraining() {
+  const el = $('#trainingBody');
+  if (!el) return;
+  el.innerHTML = TRAININGS.map(t =>
+    `<div class="trainrow">
+       <b>${esc(t.title)}</b><span>${esc(t.desc)}</span>
+       <a class="tact" href="${esc(t.href)}" target="_blank" rel="noopener">open ↗</a>${
+       t.video ? `<a class="tact" href="${esc(t.video)}" target="_blank" rel="noopener">▶ watch video</a>` : ''
+     }</div>`).join('');
+}
+renderTraining();
+
 /* ---------- views / nav / drawers ---------- */
 function showView(v) {
-  ['map', 'report', 'board', 'cal', 'media', 'shopmap', 'archive', 'dash'].forEach(x => $('#view-' + x).hidden = x !== v);
+  ['map', 'report', 'board', 'cal', 'media', 'shopmap', 'archive', 'dash', 'training'].forEach(x => $('#view-' + x).hidden = x !== v);
   if (v === 'archive') renderArchive();
   document.querySelectorAll('.navitem[data-view]').forEach(el =>
     el.classList.toggle('on', el.dataset.view === v));
@@ -6122,7 +6157,7 @@ $('.logo').onclick = goHome;
 $('.logo').style.cursor = 'pointer';
 
 // every non-map view gets a ✕ back to the map (Escape works too)
-['report', 'board', 'cal', 'media', 'shopmap', 'archive', 'dash'].forEach(v => {
+['report', 'board', 'cal', 'media', 'shopmap', 'archive', 'dash', 'training'].forEach(v => {
   const el = $('#view-' + v);
   if (el && !el.querySelector('.viewclose')) {
     const b = document.createElement('button');

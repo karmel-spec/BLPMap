@@ -888,3 +888,15 @@ body{top:0!important}
   .dsheet{border-radius:18px;max-width:640px;margin:auto;max-height:80vh}
   .dsheetov{align-items:center}
 }
+
+/* ---------- Training view ---------- */
+#trainingBody{display:flex;flex-direction:column;gap:10px;max-width:720px}
+.trainrow{display:block;background:#fafbfc;border:1px solid #e3e6e9;border-radius:10px;
+  padding:13px 16px;color:inherit;
+  transition:border-color .15s,box-shadow .15s,background .15s}
+.trainrow:hover{background:#fff;border-color:#c9a0a0;box-shadow:0 2px 6px rgba(20,30,40,.08)}
+.trainrow b{display:block;font-size:14px;color:#23282d;letter-spacing:.2px}
+.trainrow span{display:block;font-size:12.5px;color:#8a929a;margin-top:3px;line-height:1.45}
+.trainrow .tact{display:inline-block;font-size:11.5px;font-weight:600;color:#9e2020;
+  margin:7px 16px 0 0;text-decoration:none}
+.trainrow .tact:hover{text-decoration:underline}
