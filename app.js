@@ -1951,36 +1951,55 @@ function renderMap() {
       csnBottom = CZ.y + czh;
     }
   }
+  // gold cast-iron plate glyph — a harp-shaped outline with string holes,
+  // used when a piano's PLATE (not the piano) is out at Curtis Harper's
+  function plateGlyph(cx, cy, sc) {
+    const w = 24 * sc, h = 20 * sc;
+    return `<path d="M ${cx - w / 2} ${cy + h / 2} L ${cx - w / 2} ${cy - h / 5}
+        Q ${cx - w / 2} ${cy - h / 2} ${cx - w / 5} ${cy - h / 2}
+        L ${cx + w / 2.6} ${cy - h / 2} Q ${cx + w / 2} ${cy - h / 2} ${cx + w / 2} ${cy - h / 4}
+        L ${cx + w / 7} ${cy + h / 2} Z"
+        fill="#c9a227" stroke="#8a6f1a" stroke-width="${1.3 * sc}" stroke-linejoin="round"/>`
+      + [[-w / 4, h / 8], [-w / 24, -h / 24], [w / 6, -h / 5]].map(([dx, dy]) =>
+          `<circle cx="${cx + dx}" cy="${cy + dy}" r="${1.9 * sc}" fill="#f4efe2"/>`).join('');
+  }
   // ---- OUT FOR SERVICE zone (1st floor): pianos out at an external tech's
   // shop, parked in the same front-door/parking-lot area, just below
   // Coming Soon
   S.serviceXY = {};
   if (S.floor === 0) {
     const ofl = outForServicePianos();
-    if (ofl.length) {
+    // plates out at Curtis Harper's ride along (Brigham 8/26): the PIANO keeps
+    // its real map spot — only a gold plate icon shows here, marking that its
+    // plate has left the building
+    const plateOut = S.data.pianos.filter(p => p.active && p.serial
+      && /curtis harper/i.test(p.plateStatus || '') && !outForService(p));
+    const items = [...ofl.map(p => ({p, plate: false})), ...plateOut.map(p => ({p, plate: true}))];
+    if (items.length) {
       const SZ = {x: 1480, y: csnBottom + 16, x2: 2020};
       const szw = SZ.x2 - SZ.x;
       const shH = 34, nameH = 26;
       const sLay = bigIconLayout(szw - 12);
       const scols = sLay.cols, ssc = sLay.sc, sch = sLay.pitch + nameH;
-      const srows = Math.ceil(ofl.length / scols);
+      const srows = Math.ceil(items.length / scols);
       const szh = shH + srows * sch + 10;
       s += `<rect x="${SZ.x}" y="${SZ.y}" width="${szw}" height="${szh}" rx="8" class="ofszone"/>`;
-      s += `<text x="${SZ.x + szw / 2}" y="${SZ.y + 24}" text-anchor="middle" class="ofstitle" font-size="16">OUT FOR SERVICE (${ofl.length})</text>`;
+      s += `<text x="${SZ.x + szw / 2}" y="${SZ.y + 24}" text-anchor="middle" class="ofstitle" font-size="16">OUT FOR SERVICE (${items.length})</text>`;
       const scw = szw / scols;
-      ofl.forEach((p, idx) => {
+      items.forEach(({p, plate}, idx) => {
         const cx0 = SZ.x + (idx % scols) * scw;
         const cy0 = SZ.y + shH + Math.floor(idx / scols) * sch;
         const cx = cx0 + scw / 2;
         const hl = S.focusRow === p.row || (q && matches(p, q));
         const dim = q && !matches(p, q);
-        const nm = (p.year ? p.year + ' ' : '')
-          + ([p.make, p.model].filter(Boolean).join(' ') || p.summary || '');
+        const nm = ((p.year ? p.year + ' ' : '')
+          + ([p.make, p.model].filter(Boolean).join(' ') || p.summary || ''))
+          + (plate ? ' — PLATE' : '');
         const nameLines = wrapCap(nm, scw - 8, 9, 1);
         const iconCy = cy0 + (sch - nameH) / 2;
-        S.serviceXY[p.row] = {x: cx, y: cy0 + sch / 2};
+        if (!plate) S.serviceXY[p.row] = {x: cx, y: cy0 + sch / 2};
         s += `<g class="piano own-${ownerClass(p)} ${dim ? 'dim' : ''} ${hl ? 'hl' : ''}"
-              data-row="${p.row}">${glyph(p.type, cx, iconCy, ssc)}</g>`;
+              data-row="${p.row}">${plate ? plateGlyph(cx, iconCy, ssc) : glyph(p.type, cx, iconCy, ssc)}</g>`;
         s += `<text x="${cx}" y="${cy0 + sch - 6}" text-anchor="middle" class="ofsname" font-size="9">`
           + nameLines.map(L => esc(L)).join('') + `</text>`;
       });
@@ -2496,7 +2515,7 @@ function fmtHM(mins) {
 }
 // "my clock is wrong" request — any team member; lands on the 🛠 Time Clock
 // Adjustments list for Melissa / the shop managers to correct
-function clockFixModal() {
+function clockFixModal(prefill) {
   const old = document.querySelector('.dsheetov'); if (old) old.remove();
   const ov = document.createElement('div');
   ov.className = 'dsheetov';
@@ -2507,7 +2526,7 @@ function clockFixModal() {
       <option value="pay">My day clock (payroll)</option>
       <option value="piano">A piano work clock</option></select>
       <input type="text" class="cf-serial" placeholder="piano serial" style="display:none"></div>
-    <textarea class="cf-note" rows="4" placeholder="e.g. Forgot to clock out Tuesday — I actually left at 4:30 PM"></textarea>
+    <textarea class="cf-note" rows="4" placeholder="e.g. Forgot to clock out Tuesday — I actually left at 4:30 PM">${esc(prefill || '')}</textarea>
     <div class="rfbar"><button class="csvbtn cf-send">Send request</button><span class="cf-msg phmsg"></span></div>
   </div>`;
   document.body.appendChild(ov);
@@ -5855,6 +5874,73 @@ function tasksTable() {
     </table>`;
 }
 
+/* Concurrent-task QUEUES (Brigham 8/26): six ordered mini-queues — who's NEXT
+ * and everyone after them in shop-queue order — one per task, so each stream
+ * (keytops, plates out, refinishing, plating+buffing, decals, bass strings)
+ * has a clean, accurate to-do list. */
+function refinPending(p) {
+  const tr = (p.track || '').toLowerCase();
+  if (!/refinish|rebuild|hybrid/.test(tr)) return false;
+  const seq = pianoPhases(p) || PHASES;
+  const ri = seq.indexOf('Refinishing');
+  if (ri < 0) return false;
+  if ((p.phasesDone || '').toLowerCase().includes('refinishing')) return false;
+  const cur = seq.indexOf(effectivePhase(p));
+  return cur < ri;   // parking states (cur = -1) count as not-there-yet
+}
+const TQ_DEFS = [
+  {key: 'keys', icon: '🎹', title: 'KEY SERVICE / KEYTOPS',
+   need: p => !taskAutoDone(p, 'keys') && ['needed', 'noted'].includes(taskStatus(taskVal(p, 'keys'))),
+   note: p => taskVal(p, 'keys')},
+  {key: 'plates', icon: '⚙️', title: 'PLATES TO CURTIS HARPER',
+   need: p => ['Removed', 'Plate storage — BEFORE'].includes((p.plateStatus || '').trim()),
+   note: p => p.plateStatus},
+  {key: 'refin', icon: '🎨', title: 'REFINISHING — ON DECK',
+   need: refinPending,
+   note: p => 'now: ' + (effectivePhase(p) || '—')},
+  {key: 'plating', icon: '✨', title: 'PLATING TO ORDER + BUFFING',
+   need: p => ['needed', 'noted'].includes(taskStatus(taskVal(p, 'plating'))),
+   note: p => taskVal(p, 'plating')},
+  {key: 'decals', icon: '🏷', title: 'DECALS TO ORDER',
+   need: p => !taskAutoDone(p, 'decals') && ['needed', 'noted'].includes(taskStatus(taskVal(p, 'decals'))),
+   note: p => taskVal(p, 'decals')},
+  {key: 'bass', icon: '🎼', title: 'BASS STRINGS TO ORDER',
+   need: p => !taskAutoDone(p, 'bass') && ['needed', 'noted'].includes(taskStatus(taskVal(p, 'bass'))),
+   note: p => taskVal(p, 'bass')},
+];
+function taskQueueLists() {
+  const pool = S.data.pianos
+    .filter(p => p.active && p.serial && (p.queuePos || p.phase))
+    .sort((a, b) => (a.queuePos || 999) - (b.queuePos || 999) || a.row - b.row);
+  return TQ_DEFS.map(d => ({d, list: pool.filter(d.need)}));
+}
+function taskQueuesTable() {
+  const qs = taskQueueLists();
+  const pianoName = p => ((p.year ? p.year + ' ' : '')
+    + ([p.make, p.model].filter(Boolean).join(' ') || p.summary || '')).slice(0, 34);
+  return `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:14px">` +
+    qs.map(({d, list}) => {
+      const next = list[0];
+      return `<div style="border:1px solid #dfe3e8;border-radius:10px;padding:12px 14px;background:#fff">
+        <h4 style="margin:0 0 8px;font-size:13px;letter-spacing:.5px">${d.icon} ${d.title}
+          <span class="pc ${list.length ? '' : 'zero'}" style="margin-left:6px">${list.length}</span></h4>
+        ${next ? `<div class="mrow" data-row="${next.row}" style="cursor:pointer;background:#fdf6e3;border:1.5px solid #c9a227;border-radius:8px;padding:8px 10px;margin-bottom:8px">
+            <b style="font-size:12.5px">NEXT UP${next.queuePos ? ' · queue #' + next.queuePos : ''}:</b>
+            ${esc(pianoName(next))} <span style="color:#8a929a">#${esc(next.serial)}
+            · spot ${esc(String(next.location || '—'))}</span>
+            ${d.note(next) ? `<div style="font-size:11px;color:#6f6a63">${esc(String(d.note(next)).slice(0, 60))}</div>` : ''}
+          </div>` : `<div style="color:#8a929a;font-size:12px;padding:6px 0">Queue is clear. 🎉</div>`}
+        ${list.slice(1).map((p, i) => `<div class="mrow" data-row="${p.row}"
+            style="cursor:pointer;display:flex;gap:7px;padding:4px 2px;border-top:1px solid #f0f2f4;font-size:11.5px;align-items:baseline">
+            <b style="min-width:22px;color:#8a929a">${i + 2}.</b>
+            <span style="min-width:34px;color:#8a929a">${p.queuePos ? 'Q-' + p.queuePos : '—'}</span>
+            <span style="flex:1">${esc(pianoName(p))}</span>
+            <span style="color:#8a929a">#${esc(p.serial)}</span>
+          </div>`).join('')}
+      </div>`;
+    }).join('') + `</div>`;
+}
+
 /* 🐢 sitting longer than the standard — mirrors the (retired) briefing
  * section: days in the building vs 2× the typical span for the phase. */
 const STALL_DAYS = {
@@ -6266,6 +6352,10 @@ const REPORT_DEFS = () => [
      catch (e) { return null; } })(),
    desc: 'Hardware and order tasks per piano, in queue order. Pick a category (keytops, plating, bass strings…) and a status — "needs attention" is the to-do list, top of the queue first. The count badge tracks the selected category.',
    html: tasksTable},
+  {id: 'taskqueues', sec: 'shop', icon: '🎯', title: 'TASK QUEUES', count: (() => {
+     try { return taskQueueLists().reduce((s, q) => s + q.list.length, 0); } catch (e) { return null; } })(),
+   desc: 'Six ordered to-do queues — key service, plates to Curtis Harper, refinishing on deck, plating + buffing, decals, bass strings. Each shows who’s NEXT and everyone behind them in shop-queue order. Click any row to jump to the piano.',
+   html: taskQueuesTable},
   {id: 'stalled', sec: 'shop', icon: '🐢', title: 'SITTING TOO LONG', count: (() => {
      try { return stalledPianos().length; } catch (e) { return null; } })(),
    desc: 'Custom Shopwork pianos in the building more than twice the typical span for their current phase — the 🐢 list that used to live inside the daily brief. Click a row to jump to the piano.',
@@ -6709,12 +6799,31 @@ function renderDash() {
   if (pb) pb.onclick = async () => {
     pb.disabled = true;
     pb.textContent = pb.classList.contains('payin') ? 'Clocking in…' : 'Clocking out…';
-    const j = await dayPunch(pb.classList.contains('payin') ? 'dayin' : 'dayout');
-    if (j && j.error) {
+    const dir = pb.classList.contains('payin') ? 'in' : 'out';
+    const j = await dayPunch(dir === 'in' ? 'dayin' : 'dayout');
+    if (j && j.error === 'geofence') {
+      // outside the fence with a confident GPS fix: the punch was refused —
+      // offer the manager time-adjustment path instead (Brigham 8/26)
+      const pm = body.querySelector('.paymsg');
+      if (pm) {
+        pm.className = 'paymsg err';
+        pm.innerHTML = `📍 You're ${esc(String(j.awayMiles))} mi from the shop — you need to be at
+          work to clock ${dir}. <a href="#" class="geo-fix" style="font-weight:700">Request a
+          manager time adjustment ›</a>`;
+        pm.querySelector('.geo-fix').onclick = e => {
+          e.preventDefault();
+          clockFixModal(`I tried to clock ${dir} at `
+            + new Date().toLocaleTimeString('en-US', {hour: 'numeric', minute: '2-digit'})
+            + ` but was away from the shop (${j.awayMiles} mi). My actual clock-${dir} time should be: `);
+        };
+      }
+      pb.disabled = false;
+      pb.textContent = dir === 'in' ? '▶ Clock in for the day' : '■ Clock out for the day';
+    } else if (j && j.error) {
       const pm = body.querySelector('.paymsg');
       if (pm) { pm.className = 'paymsg err'; pm.textContent = j.error; }
       pb.disabled = false;
-      pb.textContent = pb.classList.contains('payin') ? '▶ Clock in for the day' : '■ Clock out for the day';
+      pb.textContent = dir === 'in' ? '▶ Clock in for the day' : '■ Clock out for the day';
     } else renderDash();
   };
   body.querySelectorAll('.dlocker[data-h], .dlink2').forEach(el => el.onclick = () => {

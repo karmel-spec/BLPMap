@@ -2128,11 +2128,25 @@ function sweepForgottenPay_(sh) {
                  'auto: forgot to clock out — review before payroll');
   }
 }
-/* Soft geofence for payroll punches: the app sends the phone's location
- * with each punch; we record how far from the store it was. Punches are
- * NEVER blocked — away punches just get a flag for payroll review. */
+/* Geofence for payroll punches: the app sends the phone's location with
+ * each punch. DAY clock-ins/outs from a confident GPS fix outside the fence
+ * are BLOCKED (Brigham 8/26) — the app offers a manager time-adjustment
+ * request instead. No fix / denied / desktop → allowed but flagged, so the
+ * shop computers keep working. Piano punches stay soft (flag only). */
 var STORE_LAT = 40.269752, STORE_LNG = -111.682881;   // 1497 S State St, Orem
 var FENCE_METERS = 300;
+function geoAwayMiles_(req) {
+  var g = req.geo;
+  if (!g || typeof g === 'string') return 0;    // no GPS fix → allow
+  var lat = Number(g.lat), lng = Number(g.lng);
+  if (!isFinite(lat) || !isFinite(lng)) return 0;
+  var R = 6371000, toR = Math.PI / 180;
+  var dLat = (lat - STORE_LAT) * toR, dLng = (lng - STORE_LNG) * toR;
+  var a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
+    + Math.cos(STORE_LAT * toR) * Math.cos(lat * toR) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  var m = 2 * R * Math.asin(Math.sqrt(a));
+  return m > FENCE_METERS + (Number(g.acc) || 0) ? m / 1609.34 : 0;
+}
 function geoNote_(req, dir) {
   var g = req.geo;
   if (!g) return '';
@@ -2156,6 +2170,8 @@ function dayIn_(req) {
     var open = openPayRow_(sh, tech);
     if (open) return {ok: true, already: true,
                       open: {tech: tech, start: String(open.v[2])}};
+    var awayIn = geoAwayMiles_(req);
+    if (awayIn) return {error: 'geofence', awayMiles: Math.round(awayIn * 10) / 10};
     var now = new Date();
     var startIso = now.toISOString();
     sh.appendRow([tech, Utilities.formatDate(now, 'America/Denver', 'yyyy-MM-dd'),
@@ -2170,6 +2186,8 @@ function dayOut_(req) {
     var sh = payrollSheet_();
     var open = openPayRow_(sh, tech);
     if (!open) return {ok: true, closed: null, note: 'no open day'};
+    var awayOut = geoAwayMiles_(req);
+    if (awayOut) return {error: 'geofence', awayMiles: Math.round(awayOut * 10) / 10};
     var gn = geoNote_(req, 'out');
     var oldNote = String(sh.getRange(open.row, 7).getValue() || '');
     var out = closePayRow_(sh, open, req.endAt,
