@@ -2420,6 +2420,38 @@ function fmtHM(mins) {
   const h = Math.floor(mins / 60), m = Math.round(mins % 60);
   return h ? `${h}h ${String(m).padStart(2, '0')}m` : `${m}m`;
 }
+// "my clock is wrong" request — any team member; lands on the 🛠 Time Clock
+// Adjustments list for Melissa / the shop managers to correct
+function clockFixModal() {
+  const old = document.querySelector('.dsheetov'); if (old) old.remove();
+  const ov = document.createElement('div');
+  ov.className = 'dsheetov';
+  ov.innerHTML = `<div class="dsheet"><button class="dsx">✕</button>
+    <h3>🛠 Request a time fix</h3>
+    <div class="dssub">Goes straight to the adjustments list — include the day and the correct times.</div>
+    <div class="rfbar"><select class="cf-clock">
+      <option value="pay">My day clock (payroll)</option>
+      <option value="piano">A piano work clock</option></select>
+      <input type="text" class="cf-serial" placeholder="piano serial" style="display:none"></div>
+    <textarea class="cf-note" rows="4" placeholder="e.g. Forgot to clock out Tuesday — I actually left at 4:30 PM"></textarea>
+    <div class="rfbar"><button class="csvbtn cf-send">Send request</button><span class="cf-msg phmsg"></span></div>
+  </div>`;
+  document.body.appendChild(ov);
+  ov.querySelector('.dsx').onclick = () => ov.remove();
+  const sel = ov.querySelector('.cf-clock'), ser = ov.querySelector('.cf-serial');
+  sel.onchange = () => { ser.style.display = sel.value === 'piano' ? '' : 'none'; };
+  ov.querySelector('.cf-send').onclick = async () => {
+    const note = ov.querySelector('.cf-note').value.trim();
+    const msg = ov.querySelector('.cf-msg');
+    if (!note) { msg.textContent = 'describe what needs fixing'; return; }
+    msg.textContent = 'sending…';
+    const j = await adjustPost({action: 'clockfix', clock: sel.value, serial: ser.value.trim(), note});
+    if (j.error) { msg.textContent = j.error; return; }
+    ov.querySelector('.dsheet').innerHTML =
+      '<h3>✅ Request sent</h3><div class="dssub">It’s on the adjustments list — the fix will show on your dashboard once it’s made.</div>';
+    setTimeout(() => ov.remove(), 2600);
+  };
+}
 
 /* Collapsible Bold Banner sections — header click toggles the body; the
  * open/closed choice is remembered per section for this device, so a tech
@@ -2647,7 +2679,7 @@ function popHTML(p) {
           ${drift ? '<i>\u26a0</i>' : ''}</button>`;
       })()}
     </div>
-    ${secWrap('log', '📖 Piano Log', logExtrasBody(p), false)}`;
+    ${isAdminUser() ? secWrap('log', '📖 Piano Log', logExtrasBody(p), false) : ''}`;
 }
 /* Everything the Piano Log row holds that the card doesn't already show,
  * keyed by the sheet's own column headers (server sends only non-empty
@@ -4752,6 +4784,25 @@ function authFields() {
   if (u.exp * 1000 > Date.now() + 30000) out.idToken = u.tok;
   return out;
 }
+
+/* ---------- permissions — mirrors the bridge's lists (UI gating only;
+ * the bridge re-verifies the Google token on every gated write) ---------- */
+const OWNER_EMAILS = ['brigham@brighamlarsonpianos.com', 'karmel@brighamlarsonpianos.com'];
+const ADMIN_EMAILS = OWNER_EMAILS.concat(['melissa@brighamlarsonpianos.com',
+  'alisa@brighamlarsonpianos.com', 'susie@brighamlarsonpianos.com', 'walter@brighamlarsonpianos.com']);
+const PAYROLL_ADMIN_EMAILS = OWNER_EMAILS.concat(['melissa@brighamlarsonpianos.com']);
+const TIMELOG_ADMIN_EMAILS = OWNER_EMAILS.concat(
+  ['markhales.blp@gmail.com', 'matthewwessman.blp@gmail.com']);   // + Jacob: add his email here AND in the bridge
+function userEmail() { const u = authUser(); return u && u.email ? String(u.email).toLowerCase() : ''; }
+function isOwner() { return OWNER_EMAILS.includes(userEmail()); }
+function isAdminUser() { return ADMIN_EMAILS.includes(userEmail()); }
+function isPayrollAdmin() { return PAYROLL_ADMIN_EMAILS.includes(userEmail()); }
+function isTimelogAdmin() {
+  if (TIMELOG_ADMIN_EMAILS.includes(userEmail())) return true;
+  const u = authUser();   // Jacob fallback until his email is on the lists (bridge does the same)
+  return !!(u && /^jacob\b/i.test(String(u.name || ''))
+    && /(@brighamlarsonpianos\.com|\.blp@gmail\.com)$/.test(userEmail()));
+}
 function onGoogleCred(resp) {
   try {
     const claims = JSON.parse(atob(resp.credential.split('.')[1]
@@ -5926,17 +5977,107 @@ function jobCostTable() {
      || '<tr><td colspan="3" class="empty">No work-clock sessions match these filters.</td></tr>'}</table>`;
 }
 
+/* ---------- 🛠 time clock adjustments (permission-gated edit surface) ------ */
+async function loadClockFixes() {
+  try {
+    const r = await fetch(BRIDGE_URL + '?fn=clockfixes', {redirect: 'follow'});
+    S.fixRows = (await r.json()).rows || [];
+  } catch (e) { S.fixRows = []; }
+  renderReport();
+}
+function toLocalInput(iso) {
+  if (!iso) return '';
+  const d = new Date(iso), p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+async function adjustPost(body) {
+  const {pin, ok} = writeAuth();
+  if (!ok) return {error: 'Sign in first.'};
+  try {
+    const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+      headers: {'content-type': 'text/plain;charset=utf-8'},
+      body: JSON.stringify({pin, ...authFields(), ...body})});
+    return await r.json();
+  } catch (e) { return {error: 'offline — try again'}; }
+}
+function adjRow(clock, r, label, sub) {
+  const ed = S.adjEdit && S.adjEdit.clock === clock && S.adjEdit.row === r.row;
+  if (!ed) {
+    return `<tr><td>${label}</td><td>${sub}</td>
+      <td>${fmtT(r.start)} → ${r.end ? fmtT(r.end) : '<b style="color:#2e7d4f">open</b>'}</td>
+      <td>${r.minutes ? fmtHM(r.minutes) : '—'}</td>
+      <td><button class="adjedit" data-clock="${clock}" data-row="${r.row}">✎ adjust</button></td></tr>`;
+  }
+  return `<tr class="adjediting"><td>${label}</td><td>${sub}</td>
+    <td colspan="3"><span class="rfd">start <input type="datetime-local" class="adjstart" value="${toLocalInput(r.start)}"></span>
+      <span class="rfd">end <input type="datetime-local" class="adjend" value="${toLocalInput(r.end)}"></span>
+      <button class="csvbtn adjsave" data-clock="${clock}" data-row="${r.row}">Save</button>
+      <button class="adjedit adjcancel">cancel</button>
+      <span class="adjmsg phmsg"></span></td></tr>`;
+}
+function clockAdjustTable() {
+  if (!S.fixRows || !S.payRows || !S.tlRows) return '<div class="empty">Loading clocks…</div>';
+  const canPay = isPayrollAdmin(), canTl = isTimelogAdmin();
+  const cutoff = Date.now() - 14 * 86400000;
+  const openFix = S.fixRows.filter(r => r.status === 'open');
+  const doneFix = S.fixRows.filter(r => r.status !== 'open').slice(0, 8);
+  const fixes = `<h4 class="bfhd">Fix requests from the team</h4>
+    <table><tr><th>WHEN</th><th>WHO</th><th>CLOCK</th><th>WHAT NEEDS FIXING</th><th></th></tr>
+    ${openFix.map(r => `<tr><td style="white-space:nowrap">${esc(r.when)}</td><td>${esc(r.who.replace(/<[^>]*>/g, ''))}</td>
+       <td>${esc(r.clock)}${r.serial ? ' #' + esc(r.serial) : ''}</td><td>${esc(r.note)}</td>
+       <td><button class="csvbtn cfxres" data-row="${r.row}">✓ Resolved</button></td></tr>`).join('')
+     || '<tr><td colspan="5" class="empty">No open requests 🎉</td></tr>'}
+    ${doneFix.map(r => `<tr style="color:#8a929a"><td style="white-space:nowrap">${esc(r.when)}</td>
+       <td>${esc(r.who.replace(/<[^>]*>/g, ''))}</td><td>${esc(r.clock)}</td><td>${esc(r.note)}</td><td>${esc(r.status)}</td></tr>`).join('')}
+    </table>`;
+  let pay = '';
+  if (canPay) {
+    const rows = S.payRows.filter(r => new Date(r.start) >= cutoff);
+    pay = `<h4 class="bfhd">Payroll day punches — last 14 days (owners & Melissa)</h4>
+      <table><tr><th>DATE</th><th>TEAM MEMBER</th><th>IN → OUT</th><th>HOURS</th><th></th></tr>
+      ${rows.map(r => adjRow('pay', r, esc(r.date), esc(r.tech))).join('')
+       || '<tr><td colspan="5" class="empty">No punches yet.</td></tr>'}</table>
+      <div class="rfbar adjaddbar" data-clock="pay"><b>+ missed day punch:</b>
+        <input type="text" class="a-tech" placeholder="team member name">
+        <span class="rfd">in <input type="datetime-local" class="a-start"></span>
+        <span class="rfd">out <input type="datetime-local" class="a-end"></span>
+        <button class="csvbtn adjaddbtn">Add</button><span class="adjmsg phmsg"></span></div>`;
+  }
+  let tl = '';
+  if (canTl) {
+    const rows = S.tlRows.filter(r => new Date(r.start) >= cutoff);
+    tl = `<h4 class="bfhd">Piano Work Clock sessions — last 14 days (owners & shop managers)</h4>
+      <table><tr><th>PIANO</th><th>TECH · PHASE</th><th>IN → OUT</th><th>HOURS</th><th></th></tr>
+      ${rows.map(r => adjRow('piano', r,
+          `${esc(r.piano || '—')}<br><small>#${esc(r.serial)}</small>`,
+          `${esc(r.tech)}<br><small>${esc(r.phase || '')}</small>`)).join('')
+       || '<tr><td colspan="5" class="empty">No sessions yet.</td></tr>'}</table>
+      <div class="rfbar adjaddbar" data-clock="piano"><b>+ missed piano session:</b>
+        <input type="text" class="a-tech" placeholder="tech name">
+        <input type="text" class="a-serial" placeholder="piano serial">
+        <input type="text" class="a-phase" placeholder="phase">
+        <span class="rfd">in <input type="datetime-local" class="a-start"></span>
+        <span class="rfd">out <input type="datetime-local" class="a-end"></span>
+        <button class="csvbtn adjaddbtn">Add</button><span class="adjmsg phmsg"></span></div>`;
+  }
+  return fixes + pay + tl;
+}
+
 const REPORT_DEFS = () => [
   // ---- ADMIN REPORTS ----
   {id: 'adminbriefs', sec: 'admin', icon: '💼', title: 'ADMIN DAILY BRIEF', count: null,
    desc: 'The nightly Admin briefing, archived as Google Docs — payments, media and delivery logistics. Each row has its own ↗ share button.',
    html: () => briefsTable('admin')},
-  {id: 'paytime', sec: 'admin', icon: '⏰', title: 'TIME CLOCK — PAYROLL', count: null,
+  {id: 'paytime', sec: 'admin', show: isPayrollAdmin, icon: '⏰', title: 'TIME CLOCK — PAYROLL', count: null,
    desc: 'Team clock-in / clock-out for payroll: every arrival-and-exit punch from the dashboard Payroll Clock, filterable by team member and date, with daily punches or weekly/monthly totals, plus that member\u2019s hours by piano and by category of work from the piano Work Clock. Red rows were auto-closed (forgot to clock out) — review before running payroll. The CSV buttons export spreadsheets.',
    html: payTimeTable},
-  {id: 'jobcost', sec: 'admin', icon: '💰', title: 'JOB COSTING — PER PIANO', count: null,
+  {id: 'jobcost', sec: 'admin', show: isOwner, icon: '💰', title: 'JOB COSTING — PER PIANO', count: null,
    desc: 'Shop hours per piano from the Work Clock ledger, broken down by technician and phase — filter by piano, technician, phase, or date range, then export CSV spreadsheets (summary or raw sessions) for job costing.',
    html: jobCostTable},
+  {id: 'clockadjust', sec: 'admin', show: () => isPayrollAdmin() || isTimelogAdmin(), icon: '🛠', title: 'TIME CLOCK ADJUSTMENTS', count: (() => {
+     try { return S.fixRows ? S.fixRows.filter(r => r.status === 'open').length : null; } catch (e) { return null; } })(),
+   desc: 'Fix mistakes and forgotten punches. Team fix requests land here; payroll day punches are editable by owners & Melissa, piano Work Clock sessions by owners & the shop managers (Mark, Matthew, Jacob). Every adjustment is stamped with who changed it.',
+   html: clockAdjustTable},
   // ---- SHOP REPORTS ----
   {id: 'briefs', sec: 'shop', icon: '📰', title: 'SHOP MANAGER DAILY BRIEF', count: null,
    desc: 'The nightly Shop Manager briefing, archived as Google Docs — opens with the next morning\u2019s standup. Each row has its own ↗ share button, so you can send one day\u2019s briefing without sharing the whole archive.',
@@ -6002,12 +6143,11 @@ function renderReport() {
         <div class="tscroll">${open === r.id ? r.html() : ''}</div>
       </div>
     </div>`;
-  const defs = REPORT_DEFS();
+  const defs = REPORT_DEFS().filter(r => !r.show || r.show());
+  const admin = defs.filter(r => r.sec === 'admin'), shop = defs.filter(r => r.sec !== 'admin');
   body.innerHTML =
-    `<h3 class="rsec">🔑 ADMIN REPORTS</h3>`
-    + defs.filter(r => r.sec === 'admin').map(rptCard).join('')
-    + `<h3 class="rsec">🔧 SHOP REPORTS</h3>`
-    + defs.filter(r => r.sec !== 'admin').map(rptCard).join('');
+    (admin.length ? `<h3 class="rsec">🔑 ADMIN REPORTS</h3>` + admin.map(rptCard).join('') : '')
+    + `<h3 class="rsec">🔧 SHOP REPORTS</h3>` + shop.map(rptCard).join('');
   body.querySelectorAll('.rptbtn').forEach(b => b.onclick = () => {
     const id = b.closest('.rpt').dataset.r;
     S.openReport = S.openReport === id ? null : id;
@@ -6015,7 +6155,51 @@ function renderReport() {
     if ((S.openReport === 'briefs' || S.openReport === 'adminbriefs') && !S.briefRows) loadBriefs();
     if (S.openReport === 'paytime' && !S.payRows) loadPayroll();
     if (S.openReport === 'jobcost' && !S.tlRows) loadTimeLog();
+    if (S.openReport === 'clockadjust') {
+      if (!S.fixRows) loadClockFixes();
+      if (!S.payRows) loadPayroll();
+      if (!S.tlRows) loadTimeLog();
+    }
     renderReport();
+  });
+  // 🛠 adjustments wiring: resolve requests, inline start/end edits, add-missed forms
+  body.querySelectorAll('.cfxres').forEach(b => b.onclick = async () => {
+    b.disabled = true;
+    const j = await adjustPost({action: 'resolveclockfix', row: +b.dataset.row});
+    if (j.error) { alert(j.error); b.disabled = false; return; }
+    S.fixRows = null; loadClockFixes();
+  });
+  body.querySelectorAll('.adjedit').forEach(b => b.onclick = () => {
+    S.adjEdit = b.classList.contains('adjcancel') ? null
+      : {clock: b.dataset.clock, row: +b.dataset.row};
+    renderReport();
+  });
+  body.querySelectorAll('.adjsave').forEach(b => b.onclick = async () => {
+    const tr = b.closest('tr');
+    const start = tr.querySelector('.adjstart').value, end = tr.querySelector('.adjend').value;
+    const msg = tr.querySelector('.adjmsg');
+    if (!start) { msg.textContent = 'start time required'; return; }
+    b.disabled = true; msg.textContent = 'saving…';
+    const j = await adjustPost({action: 'adjustclock', clock: b.dataset.clock, row: +b.dataset.row,
+      start: new Date(start).toISOString(), end: end ? new Date(end).toISOString() : ''});
+    if (j.error) { msg.textContent = j.error; b.disabled = false; return; }
+    S.adjEdit = null; S.payRows = null; S.tlRows = null;
+    loadPayroll();
+  });
+  body.querySelectorAll('.adjaddbar .adjaddbtn').forEach(b => b.onclick = async () => {
+    const bar = b.closest('.adjaddbar'), clock = bar.dataset.clock;
+    const val = c => { const el = bar.querySelector(c); return el ? el.value.trim() : ''; };
+    const msg = bar.querySelector('.adjmsg');
+    const tech = val('.a-tech'), start = val('.a-start'), end = val('.a-end');
+    if (!tech || !start) { msg.textContent = 'name and start time required'; return; }
+    if (clock === 'piano' && !val('.a-serial')) { msg.textContent = 'piano serial required'; return; }
+    b.disabled = true; msg.textContent = 'adding…';
+    const j = await adjustPost({action: 'adjustclock', clock, add: true, tech,
+      serial: val('.a-serial'), phase: val('.a-phase'),
+      start: new Date(start).toISOString(), end: end ? new Date(end).toISOString() : ''});
+    if (j.error) { msg.textContent = j.error; b.disabled = false; return; }
+    S.payRows = null; S.tlRows = null;
+    loadPayroll();
   });
   body.querySelectorAll('.rptf').forEach(el => {
     const apply = () => {
@@ -6285,8 +6469,9 @@ function renderDash() {
       ${po ? `<button class="paybtn payout">■ Clock out for the day</button>`
            : `<button class="paybtn payin">▶ Clock in for the day</button>`}
       <div class="paymsg"></div>
-      <div class="dline dim">Arrival-to-exit for payroll — separate from the per-piano ⏱ Work Clock.
-        Admin pulls these punches in ☰ Reports → ⏰ Time Clock.</div>
+      <div class="dline"><a class="tact cfixlink" href="#">🛠 Request a time fix</a>
+        <span class="dim" style="font-size:11.5px">— forgot a punch, or a time is wrong (day clock or piano clock)</span></div>
+      <div class="dline dim">Arrival-to-exit for payroll — separate from the per-piano ⏱ Work Clock.</div>
     </div>`;
   const d = (S.dashData && S.dashData.forName === name) ? S.dashData : null;
   const prs = d ? d.prs : null;
@@ -6342,6 +6527,8 @@ function renderDash() {
     ${prWatch}
     <p class="dsoon">coming soon: report history · phase-time PRs as the Work Clock fills in</p>`;
 
+  const cfx = body.querySelector('.cfixlink');
+  if (cfx) cfx.onclick = e => { e.preventDefault(); clockFixModal(); };
   const pb = body.querySelector('.paybtn');
   if (pb) pb.onclick = async () => {
     pb.disabled = true;

@@ -155,6 +155,11 @@ function doGet(e) {
     try { return json_(timeLogRows_(Number(e.parameter.days) || 90)); }
     catch (err) { return json_({error: String(err), rows: []}); }
   }
+  // Clock-fix requests (team asks admin/managers to adjust a punch)
+  if (e && e.parameter && e.parameter.fn === 'clockfixes') {
+    try { return json_(clockFixRows_()); }
+    catch (err) { return json_({error: String(err), rows: []}); }
+  }
   // Payroll day-clock: state for the dashboard button, rows for the report
   if (e && e.parameter && e.parameter.fn === 'payroll') {
     try { return json_(payrollState_()); }
@@ -537,6 +542,7 @@ function doPost(e) {
     if (req.secret !== BRIDGE_SECRET && req.pin !== TEAM_PIN && !gOk) {
       return json_({error: 'unauthorized'});
     }
+    req._g = g || null;   // verified Google identity for permission-gated actions
     var who = g ? ((g.name || g.email) + (g.email ? ' <' + g.email + '>' : ''))
                 : who_(req);
     if (req.action === 'deltune') {
@@ -719,6 +725,21 @@ function doPost(e) {
     }
     if (req.action === 'dayout') {
       return json_(dayOut_(req));
+    }
+    if (req.action === 'adjustclock') {
+      var adj = adjustClock_(req);
+      if (adj.ok) logAct_(who, 'Clock adjusted', adj.piano || adj.tech || '',
+        (req.clock === 'pay' ? 'payroll' : 'piano') + (req.add ? ' session added' : ' row ' + req.row) +
+        ' → ' + String(req.start || '').slice(0, 16) + ' – ' + String(req.end || '').slice(0, 16));
+      return json_(adj);
+    }
+    if (req.action === 'clockfix') {
+      var cfx = clockFixRequest_(req, who);
+      if (cfx.ok) logAct_(who, 'Clock fix requested', req.serial || '(day clock)', String(req.note || '').slice(0, 120));
+      return json_(cfx);
+    }
+    if (req.action === 'resolveclockfix') {
+      return json_(resolveClockFix_(req, who));
     }
     if (req.action === 'setpaperwork') {
       var spw = setPaperwork_(req);
@@ -2018,7 +2039,7 @@ function timeLogRows_(days) {
       var v = vals[i];
       if (!v[0] || !v[4]) continue;
       if (new Date(v[4]).getTime() < cutoff) continue;
-      out.push({tech: String(v[0]), serial: String(v[1]), piano: String(v[2]),
+      out.push({row: i + 2, tech: String(v[0]), serial: String(v[1]), piano: String(v[2]),
                 phase: String(v[3]), start: String(v[4]), end: String(v[5] || ''),
                 minutes: Number(v[6]) || 0, source: String(v[7] || '')});
     }
@@ -2146,11 +2167,137 @@ function payrollRows_(days) {
       if (new Date(v[2]).getTime() < cutoff) continue;
       var d = (v[1] instanceof Date)
         ? Utilities.formatDate(v[1], 'America/Denver', 'yyyy-MM-dd') : String(v[1]);
-      out.push({tech: String(v[0]), date: d, start: String(v[2]), end: String(v[3] || ''),
+      out.push({row: i + 2, tech: String(v[0]), date: d, start: String(v[2]), end: String(v[3] || ''),
                 minutes: Number(v[4]) || 0, source: String(v[5] || ''), note: String(v[6] || '')});
     }
   }
   return {ok: true, rows: out, days: days};
+}
+
+/* ============== CLOCK PERMISSIONS + ADJUSTMENTS + FIX REQUESTS ==============
+ * Job-costing (piano Time Log) edits: owners + managers Mark/Matthew/Jacob.
+ * Payroll punch edits: owners + Melissa. Permission = VERIFIED Google email
+ * (req._g from doPost) — the PIN alone never grants these.
+ * Jacob's sign-in email isn't on file yet: until it's added to
+ * TIMELOG_ADMIN_EMAILS, any BLP-verified Google account whose first name is
+ * Jacob qualifies (token-verified name, BLP domain only). */
+var OWNER_EMAILS = ['brigham@brighamlarsonpianos.com', 'karmel@brighamlarsonpianos.com'];
+var PAYROLL_ADMIN_EMAILS = OWNER_EMAILS.concat(['melissa@brighamlarsonpianos.com']);
+var TIMELOG_ADMIN_EMAILS = OWNER_EMAILS.concat(
+  ['markhales.blp@gmail.com', 'matthewwessman.blp@gmail.com']);   // + Jacob: add his email here
+function blpAccount_(g) {
+  return g && g.email && (/@brighamlarsonpianos\.com$/i.test(g.email) || /\.blp@gmail\.com$/i.test(g.email));
+}
+function payrollAdmin_(g) {
+  return !!(g && g.email && PAYROLL_ADMIN_EMAILS.indexOf(g.email.toLowerCase()) >= 0);
+}
+function timelogAdmin_(g) {
+  if (g && g.email && TIMELOG_ADMIN_EMAILS.indexOf(g.email.toLowerCase()) >= 0) return true;
+  return !!(blpAccount_(g) && /^jacob\b/i.test(String(g.name || '')));   // Jacob fallback (see note)
+}
+/* Edit an existing punch's start/end (row = sheet row from the rows
+ * endpoints) or, with add:true, append a missed session outright. */
+function adjustClock_(req) {
+  return withClockLock_(function () {
+    var g = req._g;
+    var isPay = req.clock === 'pay';
+    if (isPay ? !payrollAdmin_(g) : !timelogAdmin_(g)) {
+      return {error: isPay
+        ? 'Only owners and Melissa can adjust payroll punches (Google sign-in required).'
+        : 'Only owners and the shop managers can adjust piano clock times (Google sign-in required).'};
+    }
+    var start = new Date(req.start), end = req.end ? new Date(req.end) : null;
+    if (isNaN(start)) return {error: 'bad start time'};
+    if (end && !(end > start)) return {error: 'end must be after start'};
+    var mins = end ? Math.max(1, Math.round((end - start) / 60000)) : '';
+    var stamp = 'adjusted by ' + ((g.name || g.email)) + ' ' +
+      Utilities.formatDate(new Date(), 'America/Denver', 'M/d h:mm a');
+    if (isPay) {
+      var sh = payrollSheet_();
+      if (req.add) {
+        if (!req.tech) return {error: 'tech required'};
+        sh.appendRow([String(req.tech),
+          Utilities.formatDate(start, 'America/Denver', 'yyyy-MM-dd'),
+          start.toISOString(), end ? end.toISOString() : '', mins, 'adjust', 'added: ' + stamp.slice(9)]);
+        return {ok: true, tech: String(req.tech)};
+      }
+      var row = Number(req.row);
+      if (!(row >= 2) || row > sh.getLastRow()) return {error: 'bad row'};
+      sh.getRange(row, 2).setValue(Utilities.formatDate(start, 'America/Denver', 'yyyy-MM-dd'));
+      sh.getRange(row, 3, 1, 3).setValues([[start.toISOString(), end ? end.toISOString() : '', mins]]);
+      var oldNote = String(sh.getRange(row, 7).getValue() || '');
+      sh.getRange(row, 7).setValue((oldNote ? oldNote + ' · ' : '') + stamp);
+      return {ok: true, tech: String(sh.getRange(row, 1).getValue())};
+    }
+    var tsh = timeLogSheet_();
+    if (req.add) {
+      if (!req.tech || !req.serial) return {error: 'tech and piano serial required'};
+      var psh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+      var f = findPiano_(psh, req.serial, null);
+      tsh.appendRow([String(req.tech), String(req.serial), (f && f.summary) || '',
+        String(req.phase || ''), start.toISOString(), end ? end.toISOString() : '', mins,
+        'adjust', 'added: ' + stamp.slice(9)]);
+      return {ok: true, tech: String(req.tech), piano: (f && f.summary) || String(req.serial)};
+    }
+    var trow = Number(req.row);
+    if (!(trow >= 2) || trow > tsh.getLastRow()) return {error: 'bad row'};
+    tsh.getRange(trow, 5, 1, 3).setValues([[start.toISOString(), end ? end.toISOString() : '', mins]]);
+    var oldBy = String(tsh.getRange(trow, 9).getValue() || '');
+    tsh.getRange(trow, 9).setValue((oldBy ? oldBy + ' · ' : '') + stamp);
+    return {ok: true, tech: String(tsh.getRange(trow, 1).getValue()),
+            piano: String(tsh.getRange(trow, 3).getValue())};
+  });
+}
+/* Team-member "please fix my clock" requests — one tab, worked from the
+ * 🛠 Time Clock Adjustments report. Any signed-in team member may file. */
+var CLOCK_FIX_TAB = 'Clock Fix Requests';
+function clockFixSheet_() {
+  var ss = SpreadsheetApp.openById('11RoeVRETag5rZYX6_tEH-rf6x8JL0JeZU0P5AT0WI-I');
+  var sh = ss.getSheetByName(CLOCK_FIX_TAB);
+  if (!sh) {
+    sh = ss.insertSheet(CLOCK_FIX_TAB, ss.getSheets().length);
+    sh.getRange(1, 1, 1, 6).setValues([['When', 'Who', 'Clock', 'Piano serial', 'What needs fixing', 'Status']]);
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+function clockFixRequest_(req, who) {
+  var note = String(req.note || '').trim();
+  if (!note) return {error: 'say what needs fixing (date + correct times helps)'};
+  var sh = clockFixSheet_();
+  sh.appendRow([new Date(), String(who || ''), req.clock === 'pay' ? 'Day clock' : 'Piano clock',
+                String(req.serial || ''), note.slice(0, 400), 'open']);
+  return {ok: true};
+}
+function resolveClockFix_(req, who) {
+  var g = req._g;
+  if (!payrollAdmin_(g) && !timelogAdmin_(g)) {
+    return {error: 'Only owners, Melissa, or the shop managers can resolve fix requests.'};
+  }
+  var sh = clockFixSheet_();
+  var row = Number(req.row);
+  if (!(row >= 2) || row > sh.getLastRow()) return {error: 'bad row'};
+  sh.getRange(row, 6).setValue('resolved by ' + ((g.name || g.email)) + ' ' +
+    Utilities.formatDate(new Date(), 'America/Denver', 'M/d'));
+  return {ok: true};
+}
+function clockFixRows_() {
+  var sh = clockFixSheet_();
+  var last = sh.getLastRow();
+  var out = [];
+  if (last >= 2) {
+    var vals = sh.getRange(2, 1, last - 1, 6).getValues();
+    for (var i = 0; i < vals.length; i++) {
+      var v = vals[i];
+      if (!v[0]) continue;
+      out.push({row: i + 2,
+        when: (v[0] instanceof Date) ? Utilities.formatDate(v[0], 'America/Denver', 'MMM d, h:mm a') : String(v[0]),
+        who: String(v[1] || ''), clock: String(v[2] || ''), serial: String(v[3] || ''),
+        note: String(v[4] || ''), status: String(v[5] || 'open')});
+    }
+  }
+  out.reverse();
+  return {ok: true, rows: out.slice(0, 200)};
 }
 
 /* ===================== SUGGESTION BOX (app requests) =====================
