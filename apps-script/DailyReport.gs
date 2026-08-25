@@ -3652,6 +3652,16 @@ function shopManagerHtml_(R) {
                x.status === 'Tested' ? '#2f7d4f' : '#2c5d96');
     }));
   }
+  // print-ready batches — edit this list to add/remove links from the brief
+  var PRINTABLES = [
+    '<a href="https://blpsalesapp.netlify.app/.netlify/functions/request-shot?id=shoptagbatch-C9uY7E_uivhq">'
+    + '115 shop tags — storage &amp; idle pianos (2 per page, ready to print)</a> '
+    + '<span style="color:#8a847b">prepared 8/25</span>',
+  ];
+  if (PRINTABLES.length) {
+    sec('📎', 'Printables', PRINTABLES.length, 'Print-ready batches — open, print, done.');
+    ul(PRINTABLES);
+  }
   if (R.clientReady && R.clientReady.length) {
     sec('🤝', 'Client reports ready to send', R.clientReady.length,
       'Opt-in client-report pianos with shop activity this week — review the draft and email it from the Shop Manager’s Client Reports page.');
