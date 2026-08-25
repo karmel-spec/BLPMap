@@ -155,6 +155,15 @@ function doGet(e) {
     try { return json_(timeLogRows_(Number(e.parameter.days) || 90)); }
     catch (err) { return json_({error: String(err), rows: []}); }
   }
+  // Payroll day-clock: state for the dashboard button, rows for the report
+  if (e && e.parameter && e.parameter.fn === 'payroll') {
+    try { return json_(payrollState_()); }
+    catch (err) { return json_({error: String(err), open: [], today: []}); }
+  }
+  if (e && e.parameter && e.parameter.fn === 'payrollrows') {
+    try { return json_(payrollRows_(Number(e.parameter.days) || 95)); }
+    catch (err) { return json_({error: String(err), rows: []}); }
+  }
   // Paperwork scans (QC checklists etc.) for one piano — filed by year in
   // one Drive folder, named "Make Serial"; matched by serial substring
   if (e && e.parameter && e.parameter.fn === 'paperwork') {
@@ -704,6 +713,12 @@ function doPost(e) {
     if (req.action === 'clockout') {
       var cout = clockOut_(req);
       return json_(cout);
+    }
+    if (req.action === 'dayin') {
+      return json_(dayIn_(req));
+    }
+    if (req.action === 'dayout') {
+      return json_(dayOut_(req));
     }
     if (req.action === 'setpaperwork') {
       var spw = setPaperwork_(req);
@@ -2006,6 +2021,133 @@ function timeLogRows_(days) {
       out.push({tech: String(v[0]), serial: String(v[1]), piano: String(v[2]),
                 phase: String(v[3]), start: String(v[4]), end: String(v[5] || ''),
                 minutes: Number(v[6]) || 0, source: String(v[7] || '')});
+    }
+  }
+  return {ok: true, rows: out, days: days};
+}
+
+/* ===================== PAYROLL CLOCK (day in / day out) =====================
+ * Separate from the per-piano Work Clock: one "Payroll Clock" tab records a
+ * tech's whole paid day — clock in on arrival, clock out at end of day.
+ * One open day row per tech; a punch left open from a previous day is
+ * auto-closed at 6 PM Denver of its start day (12 h cap) with a note so
+ * admin reviews it before payroll. */
+var PAYROLL_TAB = 'Payroll Clock';
+function payrollSheet_() {
+  var ss = SpreadsheetApp.openById('11RoeVRETag5rZYX6_tEH-rf6x8JL0JeZU0P5AT0WI-I');
+  var sh = ss.getSheetByName(PAYROLL_TAB);
+  if (!sh) {
+    sh = ss.insertSheet(PAYROLL_TAB, ss.getSheets().length);
+    sh.getRange(1, 1, 1, 7).setValues([['Tech', 'Date', 'Clock In', 'Clock Out', 'Minutes', 'Source', 'Note']]);
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+function openPayRow_(sh, tech) {
+  var last = sh.getLastRow();
+  if (last < 2) return null;
+  var from = Math.max(2, last - 200);
+  var vals = sh.getRange(from, 1, last - from + 1, 4).getValues();
+  for (var i = vals.length - 1; i >= 0; i--) {
+    if (String(vals[i][0]).toLowerCase() === tech.toLowerCase() && vals[i][2] && !vals[i][3]) {
+      return {row: from + i, v: vals[i]};
+    }
+  }
+  return null;
+}
+function closePayRow_(sh, open, endAt, note) {
+  var end = endAt ? new Date(endAt) : new Date();
+  var start = new Date(open.v[2]);
+  if (!(end > start)) end = new Date();
+  var mins = Math.max(1, Math.round((end - start) / 60000));
+  sh.getRange(open.row, 4, 1, 2).setValues([[end.toISOString(), mins]]);
+  if (note) sh.getRange(open.row, 7).setValue(String(note));
+  return {tech: String(open.v[0]), date: String(open.v[1]), start: String(open.v[2]),
+          end: end.toISOString(), minutes: mins};
+}
+function sweepForgottenPay_(sh) {
+  var last = sh.getLastRow();
+  if (last < 2) return;
+  var from = Math.max(2, last - 200);
+  var vals = sh.getRange(from, 1, last - from + 1, 4).getValues();
+  var todayStr = Utilities.formatDate(new Date(), 'America/Denver', 'yyyy-MM-dd');
+  for (var i = 0; i < vals.length; i++) {
+    if (!vals[i][0] || !vals[i][2] || vals[i][3]) continue;
+    var start = new Date(vals[i][2]);
+    if (Utilities.formatDate(start, 'America/Denver', 'yyyy-MM-dd') === todayStr) continue;
+    var six = new Date(Utilities.formatDate(start, 'America/Denver', "yyyy-MM-dd'T'18:00:00XXX"));
+    var end = six > start ? six : new Date(start.getTime() + 3600000);
+    if (end - start > 43200000) end = new Date(start.getTime() + 43200000);
+    closePayRow_(sh, {row: from + i, v: vals[i]}, end.toISOString(),
+                 'auto: forgot to clock out — review before payroll');
+  }
+}
+function dayIn_(req) {
+  return withClockLock_(function () {
+    var tech = clockTech_(req);
+    if (!tech) return {error: 'no name on this session — sign in first'};
+    var sh = payrollSheet_();
+    sweepForgottenPay_(sh);
+    var open = openPayRow_(sh, tech);
+    if (open) return {ok: true, already: true,
+                      open: {tech: tech, start: String(open.v[2])}};
+    var now = new Date();
+    var startIso = now.toISOString();
+    sh.appendRow([tech, Utilities.formatDate(now, 'America/Denver', 'yyyy-MM-dd'),
+                  startIso, '', '', String(req.source || 'dash'), '']);
+    return {ok: true, open: {tech: tech, start: startIso}};
+  });
+}
+function dayOut_(req) {
+  return withClockLock_(function () {
+    var tech = clockTech_(req);
+    if (!tech) return {error: 'no name on this session — sign in first'};
+    var sh = payrollSheet_();
+    var open = openPayRow_(sh, tech);
+    if (!open) return {ok: true, closed: null, note: 'no open day'};
+    var out = closePayRow_(sh, open, req.endAt, '');
+    var extra;   // double-punch leftovers
+    while ((extra = openPayRow_(sh, tech))) closePayRow_(sh, extra, null, 'duplicate punch (auto)');
+    return {ok: true, closed: out};
+  });
+}
+function payrollState_() {
+  var sh = payrollSheet_();
+  sweepForgottenPay_(sh);
+  var last = sh.getLastRow();
+  var open = [], today = [];
+  var todayStr = Utilities.formatDate(new Date(), 'America/Denver', 'yyyy-MM-dd');
+  if (last >= 2) {
+    var from = Math.max(2, last - 200);
+    var vals = sh.getRange(from, 1, last - from + 1, 5).getValues();
+    for (var i = 0; i < vals.length; i++) {
+      var v = vals[i];
+      if (!v[0] || !v[2]) continue;
+      if (v[2] && !v[3]) open.push({tech: String(v[0]), start: String(v[2])});
+      if (String(v[1]) === todayStr || (v[1] instanceof Date &&
+          Utilities.formatDate(v[1], 'America/Denver', 'yyyy-MM-dd') === todayStr)) {
+        today.push({tech: String(v[0]), start: String(v[2]),
+                    end: String(v[3] || ''), minutes: Number(v[4]) || 0});
+      }
+    }
+  }
+  return {ok: true, open: open, today: today};
+}
+function payrollRows_(days) {
+  var sh = payrollSheet_();
+  var last = sh.getLastRow();
+  var out = [];
+  if (last >= 2) {
+    var vals = sh.getRange(2, 1, last - 1, 7).getValues();
+    var cutoff = Date.now() - Math.min(days, 730) * 86400000;
+    for (var i = 0; i < vals.length && out.length < 8000; i++) {
+      var v = vals[i];
+      if (!v[0] || !v[2]) continue;
+      if (new Date(v[2]).getTime() < cutoff) continue;
+      var d = (v[1] instanceof Date)
+        ? Utilities.formatDate(v[1], 'America/Denver', 'yyyy-MM-dd') : String(v[1]);
+      out.push({tech: String(v[0]), date: d, start: String(v[2]), end: String(v[3] || ''),
+                minutes: Number(v[4]) || 0, source: String(v[5] || ''), note: String(v[6] || '')});
     }
   }
   return {ok: true, rows: out, days: days};

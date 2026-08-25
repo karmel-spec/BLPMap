@@ -1,0 +1,5967 @@
+1
+00:00:00,000 --> 00:00:03,599
+¿Ya estamos todos?
+
+2
+00:00:03,599 --> 00:00:06,400
+Bien. Para ser totalmente honesto,
+
+3
+00:00:06,400 --> 00:00:12,960
+toda esta app y todo este folleto se hicieron con IA.
+
+4
+00:00:12,960 --> 00:00:16,520
+Así que si hay algo que suena raro o no cuadra,
+
+5
+00:00:16,520 --> 00:00:18,959
+sepan que todo lo que estamos haciendo ahora está en
+
+6
+00:00:18,959 --> 00:00:22,579
+forma de borrador y todos estamos en modo de aprendizaje.
+
+7
+00:00:22,579 --> 00:00:25,280
+Pero lo primero que quiero que hagan es ir a
+
+8
+00:00:25,280 --> 00:00:27,799
+la parte de atrás, y hasta abajo dice:
+
+9
+00:00:27,799 --> 00:00:31,479
+celular de Karmel. ¿Traen sus celulares con ustedes?
+
+10
+00:00:31,479 --> 00:00:37,799
+Si pueden sacarlo y mandarme un texto con su nombre y apellido,
+
+11
+00:00:37,799 --> 00:00:39,959
+para saber de quién viene el mensaje.
+
+12
+00:00:39,959 --> 00:00:44,720
+Luego díganme cómo se ve su horario de la semana.
+
+13
+00:00:44,720 --> 00:00:46,840
+Porque esta semana fue la primera en
+
+14
+00:00:46,840 --> 00:00:50,360
+la historia de BLP en que hicimos la programación 100 por ciento con IA.
+
+15
+00:00:50,360 --> 00:00:54,639
+Pero el problema es que en realidad está bastante bien.
+
+16
+00:00:54,639 --> 00:00:55,759
+Debería estar bastante bien.
+
+17
+00:00:55,759 --> 00:01:00,279
+Pero la información con la que trabaja la IA todavía no es precisa.
+
+18
+00:01:00,279 --> 00:01:01,639
+De eso vamos a aprender hoy.
+
+19
+00:01:01,639 --> 00:01:04,639
+Luego todos ustedes nos van a ayudar a que los tracks,
+
+20
+00:01:04,639 --> 00:01:07,720
+las fases, y toda la información queden correctos.
+
+21
+00:01:07,720 --> 00:01:13,199
+Así la programación con IA será cada semana más precisa conforme la entrenemos.
+
+22
+00:01:13,199 --> 00:01:16,319
+Pero tengo curiosidad, con la poca información que tiene,
+
+23
+00:01:16,319 --> 00:01:20,919
+porque ha estado estudiando sus reportes del viernes e intentando adivinar lo mejor posible.
+
+24
+00:01:20,919 --> 00:01:26,080
+Mándenme un texto diciendo en porcentaje, como 80 por ciento,
+
+25
+00:01:26,080 --> 00:01:29,879
+20 por ciento, ¿qué tan preciso se ve su horario?
+
+26
+00:01:29,879 --> 00:01:31,519
+Si parece que lo hizo Brigham,
+
+27
+00:01:31,519 --> 00:01:33,279
+pongan 100 por ciento.
+
+28
+00:01:33,279 --> 00:01:37,680
+Si parece que lo hizo una IA borracha de otra tienda,
+
+29
+00:01:37,680 --> 00:01:42,080
+pongan cinco por ciento o cualquier punto intermedio.
+
+30
+00:01:42,080 --> 00:01:44,319
+Y pueden agregar notas si quieren.
+
+31
+00:01:44,319 --> 00:01:48,040
+Casi le atinó, pero me asignó un piano que ya estaba terminado,
+
+32
+00:01:48,040 --> 00:01:49,519
+así que pasé a lo siguiente.
+
+33
+00:01:49,519 --> 00:01:53,639
+Cualquier comentario sobre cómo se ve sería útil.
+
+34
+00:01:53,800 --> 00:01:56,559
+Además tendré el texto de todos,
+
+35
+00:01:56,559 --> 00:02:00,559
+así puedo verificarlo, porque estamos
+
+36
+00:02:00,559 --> 00:02:06,720
+entrenando a la IA para que también pueda enviarles textos y avisos.
+
+37
+00:02:09,039 --> 00:02:14,479
+El 1 de septiembre vamos a migrar el marcado de entrada de ISOLVE,
+
+38
+00:02:14,479 --> 00:02:17,440
+podrán marcar entrada en el mapa.
+
+39
+00:02:18,440 --> 00:02:22,559
+Y a partir de, creo que ya funciona,
+
+40
+00:02:22,559 --> 00:02:24,919
+¿el marcar entrada en los pianos? Creo que eso ya funciona.
+
+41
+00:02:24,919 --> 00:02:26,320
+A partir de hoy, después de esta reunión,
+
+42
+00:02:26,320 --> 00:02:29,720
+podrán marcar entrada y salida en sus pianos en el Store Map.
+
+43
+00:02:29,720 --> 00:02:34,639
+Desde el 1 de septiembre, podrán marcar entrada para sus horas de nómina aquí.
+
+44
+00:02:34,639 --> 00:02:38,759
+Pero además, ya saben que tenemos una política:
+
+45
+00:02:38,759 --> 00:02:42,000
+tratamos de no hacer horas extra a menos que se aprueben antes.
+
+46
+00:02:42,000 --> 00:02:44,320
+En lugar de que Melissa esté pendiente de eso,
+
+47
+00:02:44,320 --> 00:02:46,000
+¿ustedes están pendientes de eso?
+
+48
+00:02:46,119 --> 00:02:49,919
+Les mandará un texto como:
+
+49
+00:02:49,919 --> 00:02:54,000
+te quedan dos horas y terminas por la semana, o algo así.
+
+50
+00:02:54,000 --> 00:02:58,639
+Ahora mismo todo está en modo de innovación e invención.
+
+51
+00:02:58,639 --> 00:03:01,479
+Todas las ideas son bienvenidas y útiles.
+
+52
+00:03:01,479 --> 00:03:04,880
+Lo más útil que pueden hacer ahora, mientras lanzamos esto y todos empiezan
+
+53
+00:03:04,880 --> 00:03:09,440
+a probarlo hoy, es ayudarnos a encontrar las fallas y problemas,
+
+54
+00:03:09,440 --> 00:03:10,960
+no solo con la función en sí,
+
+55
+00:03:10,960 --> 00:03:12,720
+sino con la tecnología misma.
+
+56
+00:03:12,720 --> 00:03:14,240
+Porque puede ser una gran función,
+
+57
+00:03:14,240 --> 00:03:15,800
+pero que no funcione del todo bien.
+
+58
+00:03:15,800 --> 00:03:17,839
+O que no funcione bien en sus teléfonos.
+
+59
+00:03:17,839 --> 00:03:26,080
+Estamos pidiendo Chromebooks para que en el taller
+
+60
+00:03:26,080 --> 00:03:31,080
+puedan usar esta app en una de ellas en vez de sus teléfonos,
+
+61
+00:03:31,080 --> 00:03:33,440
+lo cual debería facilitar mucho las cosas.
+
+62
+00:03:33,440 --> 00:03:35,399
+Pero, bueno.
+
+63
+00:03:35,399 --> 00:03:38,800
+Mucho más fácil. No se desanimen hoy al usarlo en el teléfono.
+
+64
+00:03:38,800 --> 00:03:41,720
+Es mucho, mucho más fácil en una Chromebook.
+
+65
+00:03:41,720 --> 00:03:46,720
+Se siente torpe, pero sí, ya llegaremos ahí.
+
+66
+00:03:46,720 --> 00:03:51,279
+Sí. Vamos a tener un brazo para Chromebook en cada mesa,
+
+67
+00:03:51,279 --> 00:03:54,039
+en cada estación de reconstrucción, que se puede mover a cualquier lado,
+
+68
+00:03:54,039 --> 00:03:57,440
+y también unas cuantas que andarán sueltas, libres.
+
+69
+00:03:57,440 --> 00:03:59,440
+Si están trabajando en un panel como el piano de cola cuadrado ahora,
+
+70
+00:03:59,440 --> 00:04:01,759
+que no está en una estación.
+
+71
+00:04:01,759 --> 00:04:03,880
+Pero siempre pueden usar sus teléfonos también.
+
+72
+00:04:03,880 --> 00:04:09,360
+Además, en algún lugar de aquí, ¿hay un número de teléfono?
+
+73
+00:04:09,360 --> 00:04:10,600
+Mensajes de texto, el número seis.
+
+74
+00:04:10,600 --> 00:04:16,839
+También los textos, ¿está el número al que se manda el texto, o no lo puse?
+
+75
+00:04:16,839 --> 00:04:18,160
+Mark, ¿sabes ese número?
+
+76
+00:04:18,160 --> 00:04:19,959
+Creo que te lo envié.
+
+77
+00:04:19,959 --> 00:04:21,880
+Creo que es el número seis,
+
+78
+00:04:21,880 --> 00:04:23,239
+pero no puse el número, ¿verdad?
+
+79
+00:04:23,239 --> 00:04:28,600
+Está atrás, así que pueden textear abajo y enviarlo al del frente.
+
+80
+00:04:28,600 --> 00:04:30,359
+Ah, sí. Hacia abajo.
+
+81
+00:04:30,359 --> 00:04:32,079
+Arriba del texto verde.
+
+82
+00:04:32,079 --> 00:04:34,480
+A ese número de celular
+
+83
+00:04:34,480 --> 00:04:39,160
+también deberían poder mandar un texto,
+
+84
+00:04:39,160 --> 00:04:41,920
+y el texto en verde les da ejemplos.
+
+85
+00:04:41,920 --> 00:04:43,920
+Así que si quieren, pueden,
+
+86
+00:04:43,920 --> 00:04:47,160
+eventualmente podrán usar su teléfono, una Chromebook,
+
+87
+00:04:47,160 --> 00:04:49,320
+o bueno, también su teléfono, pero solo manden un texto.
+
+88
+00:04:49,320 --> 00:04:51,040
+Pero si mandan un texto,
+
+89
+00:04:51,040 --> 00:04:53,720
+no les voy a explicar estos ejemplos, solo léanlos.
+
+90
+00:04:53,720 --> 00:04:58,760
+Se explican solos, pero asegúrense de incluir el número de serie.
+
+91
+00:04:58,760 --> 00:05:01,959
+En su teléfono, si ponen un número de serie equivocado,
+
+92
+00:05:01,959 --> 00:05:03,559
+puede ser más riesgoso,
+
+93
+00:05:03,559 --> 00:05:05,079
+mientras que en el Store Map,
+
+94
+00:05:05,079 --> 00:05:07,320
+si ponen un número de serie equivocado,
+
+95
+00:05:07,320 --> 00:05:09,799
+es menos probable que lo acepte.
+
+96
+00:05:09,799 --> 00:05:12,760
+Los nuevos gerentes hemos estado
+
+97
+00:05:12,760 --> 00:05:15,079
+haciendo algunas sugerencias previas.
+
+98
+00:05:15,079 --> 00:05:18,920
+Una fue hacer que no puedas poner un número de lugar equivocado,
+
+99
+00:05:18,920 --> 00:05:21,119
+simplemente no lo acepta.
+
+100
+00:05:25,119 --> 00:05:28,760
+¿Empezamos ya? Si quieren,
+
+101
+00:05:28,760 --> 00:05:32,839
+pueden iniciar sesión ahora con Google si no lo han hecho.
+
+102
+00:05:35,399 --> 00:05:39,399
+Conforme empiecen a probar estas cosas por su cuenta,
+
+103
+00:05:39,399 --> 00:05:42,880
+y en la parte de atrás hay tres hábitos que más importan.
+
+104
+00:05:42,880 --> 00:05:44,920
+Sería el número 10 si tuviera número.
+
+105
+00:05:44,920 --> 00:05:48,279
+Esas son las primeras cosas que pueden probar hoy después de esta capacitación,
+
+106
+00:05:48,279 --> 00:05:52,720
+y si al probarlas algo no funciona,
+
+107
+00:05:52,720 --> 00:05:56,279
+eso sería un éxito y una victoria, porque habremos encontrado rápido
+
+108
+00:05:56,279 --> 00:06:00,799
+algo que mejorar en nuestro nuevo software a medida que todos estamos aprendiendo juntos.
+
+109
+00:06:00,799 --> 00:06:06,160
+Lo más útil que pueden hacer es sentirse de fiesta,
+
+110
+00:06:06,160 --> 00:06:08,040
+que ustedes fueron quienes encontraron una falla,
+
+111
+00:06:08,040 --> 00:06:09,600
+y luego tomar una captura de pantalla,
+
+112
+00:06:09,600 --> 00:06:12,119
+¿y ven el foquito?
+
+113
+00:06:12,119 --> 00:06:15,359
+Es como, el foquito.
+
+114
+00:06:15,359 --> 00:06:17,000
+Pueden sugerir una mejora.
+
+115
+00:06:17,000 --> 00:06:18,720
+Una edición sería como:
+
+116
+00:06:18,720 --> 00:06:21,239
+encontré una falla en la función de búsqueda.
+
+117
+00:06:21,239 --> 00:06:22,640
+Entonces tómenle una captura de pantalla.
+
+118
+00:06:22,640 --> 00:06:26,559
+Pueden adjuntar su captura y luego enviarla.
+
+119
+00:06:26,559 --> 00:06:29,799
+Si la captura se explica sola, solo envíenla.
+
+120
+00:06:29,799 --> 00:06:31,720
+Si no, tal vez agreguen una frase.
+
+121
+00:06:31,720 --> 00:06:34,880
+Ahora mismo, estos me llegan a mí.
+
+122
+00:06:34,880 --> 00:06:37,920
+Con el tiempo, Mark también va a ayudar,
+
+123
+00:06:37,920 --> 00:06:39,160
+para que no tengan que esperarme a mí.
+
+124
+00:06:39,160 --> 00:06:42,640
+Las cosas tienden a atorarse cuando dependen de mí.
+
+125
+00:06:43,519 --> 00:06:46,760
+Luego está el botón de ideas.
+
+126
+00:06:46,760 --> 00:06:50,920
+Creo que van a tener muchas ideas cuando empiecen a trabajar con esto.
+
+127
+00:06:50,959 --> 00:06:53,079
+Van a desear que pudiera hacer algo más.
+
+128
+00:06:53,079 --> 00:06:58,160
+Yo he deseado un millón de deseos en los últimos 25 años como emprendedor,
+
+129
+00:06:58,160 --> 00:07:00,200
+de lo que quería que hiciera el software,
+
+130
+00:07:00,200 --> 00:07:02,399
+porque pagábamos muchísimo por ese software,
+
+131
+00:07:02,399 --> 00:07:04,640
+y luego no hacía lo que queríamos que hiciera.
+
+132
+00:07:04,640 --> 00:07:11,119
+Tuvimos que adaptarlo para una tienda de pianos cuando en realidad era para una financiera.
+
+133
+00:07:11,119 --> 00:07:13,519
+Pero ¿adivinen qué? Con la IA,
+
+134
+00:07:13,519 --> 00:07:18,000
+literalmente podemos hacer realidad todos nuestros deseos de inmediato.
+
+135
+00:07:18,000 --> 00:07:21,320
+Cualquier idea que tengan o lo que quieran que haga,
+
+136
+00:07:21,320 --> 00:07:24,200
+no puedo prometer que implementaremos cada idea,
+
+137
+00:07:24,200 --> 00:07:26,959
+pero lo intentaremos.
+
+138
+00:07:26,959 --> 00:07:30,200
+La mayoría sí; cuantas más ideas tengamos, mejor.
+
+139
+00:07:30,200 --> 00:07:32,559
+Si mandan algunas ideas que no se hacen,
+
+140
+00:07:32,559 --> 00:07:36,079
+eso también es bueno, porque significa que estamos recibiendo muchas ideas.
+
+141
+00:07:37,600 --> 00:07:39,839
+Si les llega ese pensamiento de:
+
+142
+00:07:39,839 --> 00:07:41,239
+ojalá pudiera hacer esto,
+
+143
+00:07:41,239 --> 00:07:44,640
+denle al foquito y manden lo que desearían que hiciera,
+
+144
+00:07:44,640 --> 00:07:47,679
+y probablemente para el día siguiente o la próxima semana, ya lo hará.
+
+145
+00:07:47,679 --> 00:07:51,920
+Recibirán un texto avisándoles que esa función ya está activa.
+
+146
+00:07:53,959 --> 00:07:56,559
+Entonces, iniciar y cerrar sesión,
+
+147
+00:07:56,559 --> 00:07:59,359
+creo que eso se explica solo.
+
+148
+00:07:59,359 --> 00:08:01,160
+Ahora, para encontrar un piano,
+
+149
+00:08:01,160 --> 00:08:03,720
+hay distintas formas de encontrar un piano.
+
+150
+00:08:03,720 --> 00:08:08,399
+Pueden escribir el número de serie aquí arriba,
+
+151
+00:08:08,399 --> 00:08:11,200
+y empieza a cargar automáticamente.
+
+152
+00:08:11,200 --> 00:08:14,880
+Pueden buscar por año, marca o modelo.
+
+153
+00:08:14,880 --> 00:08:20,200
+Si no saben el número de serie y no quieren ir a buscarlo,
+
+154
+00:08:20,200 --> 00:08:22,839
+pero saben que están trabajando en un Emerson,
+
+155
+00:08:22,839 --> 00:08:24,959
+empiezan a escribir Emerson,
+
+156
+00:08:24,959 --> 00:08:26,839
+y les mostrará todos los Emerson,
+
+157
+00:08:26,839 --> 00:08:28,000
+y entonces pueden decir: ah sí,
+
+158
+00:08:28,000 --> 00:08:30,799
+reconozco que es ese, es este.
+
+159
+00:08:30,799 --> 00:08:32,719
+Tal vez sí o tal vez no.
+
+160
+00:08:32,719 --> 00:08:37,880
+Pero también pueden escanear la etiqueta de taller.
+
+161
+00:08:37,880 --> 00:08:40,239
+¿Han visto las nuevas etiquetas de taller por ahí?
+
+162
+00:08:40,239 --> 00:08:43,000
+Deberían estar pegadas con cinta.
+
+163
+00:08:43,000 --> 00:08:44,359
+Antes las pegábamos solo del lado derecho,
+
+164
+00:08:44,359 --> 00:08:46,400
+ahora deben estar pegadas a la derecha y a la izquierda.
+
+165
+00:08:46,400 --> 00:08:54,880
+También hicimos con IA, súper rápido, un juego completo de etiquetas para imprimir la nueva versión.
+
+166
+00:08:55,760 --> 00:09:01,599
+Yo diría que son como 60 por ciento útiles,
+
+167
+00:09:01,599 --> 00:09:05,719
+porque solo le dijimos que buscara en el registro de pianos y todos los archivos y todo lo que sabía,
+
+168
+00:09:05,719 --> 00:09:08,479
+e imprimiera un juego completo.
+
+169
+00:09:08,559 --> 00:09:12,880
+Lo hice porque solo quería poner esos códigos QR ahí,
+
+170
+00:09:12,919 --> 00:09:14,840
+para que pudieran empezar a usarlos.
+
+171
+00:09:14,840 --> 00:09:17,039
+Porque creo que el código QR es la parte más importante,
+
+172
+00:09:17,039 --> 00:09:19,479
+porque los lleva de inmediato a esto,
+
+173
+00:09:19,479 --> 00:09:21,719
+yo le llamo la tarjeta de datos.
+
+174
+00:09:23,679 --> 00:09:28,000
+Así que esa es otra forma de encontrar rápido un piano y abrirlo:
+
+175
+00:09:28,000 --> 00:09:29,599
+el código QR que está en la etiqueta.
+
+176
+00:09:29,599 --> 00:09:37,559
+Todavía no los ponemos en los pianos de la sala de exhibición, será pronto.
+
+177
+00:09:37,719 --> 00:09:40,559
+Veamos una etiqueta de taller rapidito.
+
+178
+00:09:40,559 --> 00:09:42,159
+Puede que no siga esto muy bien,
+
+179
+00:09:42,159 --> 00:09:43,559
+porque no veo sin mis lentes.
+
+180
+00:09:43,559 --> 00:09:45,039
+Así que me salté cosas,
+
+181
+00:09:45,039 --> 00:09:47,039
+ustedes díganme de qué más debería hablar.
+
+182
+00:09:47,039 --> 00:09:49,840
+Pero lo más, a ver,
+
+183
+00:09:49,840 --> 00:09:51,320
+¿dónde está la etiqueta de taller?
+
+184
+00:09:51,320 --> 00:09:59,799
+Hacia abajo en la tarjeta de datos del piano hay un botón a la etiqueta de taller.
+
+185
+00:09:59,799 --> 00:10:02,479
+Así que si están trabajando en un piano y ven que la etiqueta de taller es
+
+186
+00:10:02,479 --> 00:10:06,599
+completamente basura y saben cómo se podría actualizar o mejorar,
+
+187
+00:10:06,599 --> 00:10:09,919
+sería útil que escriban en ella
+
+188
+00:10:09,960 --> 00:10:11,479
+lo que en realidad debería decir,
+
+189
+00:10:11,479 --> 00:10:15,119
+como en esta área que dice alcance del trabajo.
+
+190
+00:10:15,119 --> 00:10:20,000
+A ver si puedo, aquí dice alcance del trabajo.
+
+191
+00:10:20,000 --> 00:10:22,039
+Entonces, el número de serie aquí,
+
+192
+00:10:22,039 --> 00:10:24,840
+estos son los datos del piano que no van a cambiar,
+
+193
+00:10:24,840 --> 00:10:26,919
+es como información genérica.
+
+194
+00:10:26,919 --> 00:10:30,520
+Luego esta sección de alcance del trabajo es donde,
+
+195
+00:10:30,520 --> 00:10:32,479
+miren, este no tiene track,
+
+196
+00:10:32,479 --> 00:10:35,159
+y en un minuto les digo qué es un track.
+
+197
+00:10:35,159 --> 00:10:39,799
+Luego tiene fase, y luego pasa por lo que llamamos trabajo concurrente.
+
+198
+00:10:39,799 --> 00:10:42,200
+Ese es un término nuevo. Track,
+
+199
+00:10:42,200 --> 00:10:45,599
+trabajo concurrente y fase son términos nuevos que vamos a implementar.
+
+200
+00:10:45,599 --> 00:10:47,479
+Pero este alcance del trabajo básicamente dice,
+
+201
+00:10:47,479 --> 00:10:50,880
+¿qué vendió Brigham y qué le prometió al cliente?
+
+202
+00:10:50,880 --> 00:10:53,039
+Eso no va a cambiar en el proceso.
+
+203
+00:10:53,039 --> 00:10:55,760
+Es como: ¿qué venimos a hacer en este piano?
+
+204
+00:10:55,760 --> 00:10:59,919
+Luego pueden usar el código QR para escanear y ver actualizaciones.
+
+205
+00:10:59,919 --> 00:11:05,359
+Toda esta lista de elementos son las cosas que cambian constantemente,
+
+206
+00:11:05,359 --> 00:11:07,880
+y por eso no están en la etiqueta,
+
+207
+00:11:07,880 --> 00:11:11,760
+están en la lista para ir al código QR y ver cómo está actualmente.
+
+208
+00:11:11,760 --> 00:11:14,679
+Eso incluye todos los trabajos concurrentes,
+
+209
+00:11:14,679 --> 00:11:18,559
+la cola, el mapa, todas esas cosas.
+
+210
+00:11:18,559 --> 00:11:21,239
+Medios; de esos hablaremos más.
+
+211
+00:11:21,239 --> 00:11:23,799
+Pero por ejemplo, déjenme decirles qué son estos.
+
+212
+00:11:23,799 --> 00:11:31,080
+Track. Track significa: ¿cuál es el gran paraguas que se le vendió a esta persona?
+
+213
+00:11:31,080 --> 00:11:35,000
+Puede ser reconstrucción, restauración, híbrido.
+
+214
+00:11:35,000 --> 00:11:37,239
+Tiene que ser uno de esos.
+
+215
+00:11:37,239 --> 00:11:41,719
+También el reacabado es otra categoría de track,
+
+216
+00:11:41,719 --> 00:11:45,640
+y también puede ser restauración de piano player,
+
+217
+00:11:45,640 --> 00:11:49,280
+o QRS, o tecnología de silent play.
+
+218
+00:11:49,280 --> 00:11:53,359
+Así que cada piano debe tener al menos un track.
+
+219
+00:11:53,359 --> 00:11:55,679
+La mayoría tendrá al menos dos, porque a la mayoría les hacemos reacabado,
+
+220
+00:11:55,679 --> 00:11:57,760
+y algunos podrían tener hasta tres.
+
+221
+00:11:57,760 --> 00:12:03,760
+Cada uno de esos tracks tiene una lista de fases por las que pasa.
+
+222
+00:12:04,080 --> 00:12:08,440
+Entonces, al identificar el track,
+
+223
+00:12:08,440 --> 00:12:10,640
+y eso lo harán Melissa y Brigham,
+
+224
+00:12:10,640 --> 00:12:12,440
+identificamos el track,
+
+225
+00:12:12,440 --> 00:12:15,679
+y automáticamente carga el conjunto de fases.
+
+226
+00:12:15,679 --> 00:12:20,559
+Las fases son el trabajo que ya están acostumbrados a hacer.
+
+227
+00:12:20,559 --> 00:12:24,919
+A ver. Lo abro en un minuto cuando veamos la tarjeta de datos.
+
+228
+00:12:24,919 --> 00:12:27,520
+Pero es como desarme, CAP,
+
+229
+00:12:27,520 --> 00:12:31,000
+DHRT, encordado, QC.
+
+230
+00:12:31,039 --> 00:12:34,359
+Esas son las fases por las que pasará.
+
+231
+00:12:36,239 --> 00:12:43,400
+El trabajo concurrente es todo lo demás que ocurre en paralelo mientras avanzan las fases.
+
+232
+00:12:43,400 --> 00:12:47,119
+Las cosas que pasan al mismo tiempo son,
+
+233
+00:12:47,119 --> 00:12:49,679
+por ejemplo, ustedes trabajando en el mecanismo,
+
+234
+00:12:49,679 --> 00:12:51,200
+o las costillas, o la tabla armónica,
+
+235
+00:12:51,200 --> 00:12:53,799
+mientras Marcelo trabaja en las cubiertas de teclas.
+
+236
+00:12:53,799 --> 00:12:56,320
+Esas cosas ocurren en paralelo.
+
+237
+00:12:56,719 --> 00:13:00,919
+Los elementos concurrentes son las cubiertas de teclas,
+
+238
+00:13:00,919 --> 00:13:06,200
+las cuerdas graves, el cromado, la placa que va con Curtis,
+
+239
+00:13:06,200 --> 00:13:08,799
+quizá algunas otras cosas,
+
+240
+00:13:08,799 --> 00:13:13,760
+pero: fases, tareas concurrentes. ¿Tiene sentido?
+
+241
+00:13:13,760 --> 00:13:22,039
+Bien. Luego estos son los niveles de reacabado.
+
+242
+00:13:22,039 --> 00:13:25,559
+Quieren, ¿está Marcelo aquí?
+
+243
+00:13:25,559 --> 00:13:29,640
+No está. Bueno. Qué bueno que estamos grabando.
+
+244
+00:13:29,640 --> 00:13:32,880
+Pero sí quieren revisar estas notas.
+
+245
+00:13:32,880 --> 00:13:34,320
+Todavía no lo tenemos programado,
+
+246
+00:13:34,320 --> 00:13:37,239
+pero vamos a hacer que estas notas acompañen a la tarea.
+
+247
+00:13:37,239 --> 00:13:43,119
+Así, cuando a Marcelo le llegue la asignación de las cubiertas de teclas de este piano,
+
+248
+00:13:43,119 --> 00:13:47,599
+las notas escritas aquí sobre las teclas deberían estar en sus notas.
+
+249
+00:13:48,119 --> 00:13:50,880
+Si es algo como: conservar las cejas,
+
+250
+00:13:50,880 --> 00:13:53,520
+o si hay una nota especial sobre el cromado,
+
+251
+00:13:53,520 --> 00:13:56,200
+la nota del cromado estaría aquí,
+
+252
+00:13:56,200 --> 00:13:58,799
+y ojalá, al hacer clic en la tarea concurrente,
+
+253
+00:13:58,799 --> 00:14:00,559
+esa nota también aparezca ahí.
+
+254
+00:14:00,559 --> 00:14:02,320
+Ojalá lo dejemos funcionando así.
+
+255
+00:14:02,320 --> 00:14:03,880
+Bien. Esa es la etiqueta.
+
+256
+00:14:03,880 --> 00:14:06,479
+La otra forma de encontrar su piano.
+
+257
+00:14:06,479 --> 00:14:15,880
+Bien. Solo un detallito en su teléfono y en una Chromebook.
+
+258
+00:14:15,880 --> 00:14:17,840
+Veamos si esto me funciona.
+
+259
+00:14:17,840 --> 00:14:23,919
+Esta tarjeta de datos, en teoría.
+
+260
+00:14:23,919 --> 00:14:26,679
+A ver. Aquí arriba ven primer piso y segundo piso.
+
+261
+00:14:26,679 --> 00:14:29,719
+La mayoría de los pianos en los que trabajan están en el primer piso.
+
+262
+00:14:29,719 --> 00:14:32,960
+Vamos a, ¿y ven este botón de aquí abajo?
+
+263
+00:14:32,960 --> 00:14:35,840
+Estos son sus botones de tamaño.
+
+264
+00:14:35,840 --> 00:14:39,280
+Este lo regresa a pantalla completa en la pantalla que estén usando.
+
+265
+00:14:39,280 --> 00:14:43,159
+Este lo hace más grande y más pequeño.
+
+266
+00:14:43,280 --> 00:14:46,440
+Una vez que lo agrandan, entonces pueden.
+
+267
+00:14:46,640 --> 00:14:49,159
+No puedo hacerlo bien en esta computadora,
+
+268
+00:14:49,159 --> 00:14:50,679
+pero en su teléfono,
+
+269
+00:14:50,679 --> 00:14:53,719
+pueden moverlo, arrastrarlo y soltarlo.
+
+270
+00:14:53,719 --> 00:14:55,440
+No sé por qué no lo hace en esta.
+
+271
+00:14:55,440 --> 00:14:58,640
+Normalmente sí, pero lo dejaré en el tamaño normal.
+
+272
+00:14:58,640 --> 00:15:00,960
+Regresemos al primer piso del taller,
+
+273
+00:15:00,960 --> 00:15:02,640
+y elijamos un piano.
+
+274
+00:15:02,640 --> 00:15:06,840
+Vamos a este Steinway B. Bien.
+
+275
+00:15:06,840 --> 00:15:09,320
+Ahí está. ¿Ven una flechita?
+
+276
+00:15:09,320 --> 00:15:10,880
+Yo quería esta función.
+
+277
+00:15:10,880 --> 00:15:12,559
+Me hace muy feliz que pueda hacerlo.
+
+278
+00:15:12,559 --> 00:15:14,760
+Es una cosita pequeña, pero me hace muy feliz.
+
+279
+00:15:14,760 --> 00:15:17,320
+Miren, pueden cambiar el tamaño de su pantalla.
+
+280
+00:15:17,320 --> 00:15:21,359
+¿No es genial? Literalmente, cualquier cosa que quisieran hacer.
+
+281
+00:15:21,359 --> 00:15:23,440
+Solo dígannos cuáles son sus mejores ideas.
+
+282
+00:15:23,440 --> 00:15:27,359
+Luego, en raras ocasiones,
+
+283
+00:15:27,359 --> 00:15:29,760
+puede decir que es de cola cuando en realidad es vertical.
+
+284
+00:15:29,760 --> 00:15:31,880
+Eso es lo que guía estos iconitos.
+
+285
+00:15:31,880 --> 00:15:33,919
+Sí, este es de cola.
+
+286
+00:15:33,919 --> 00:15:35,640
+Si en realidad es vertical,
+
+287
+00:15:35,640 --> 00:15:38,640
+solo hacen clic en este botón y lo cambia a vertical.
+
+288
+00:15:39,359 --> 00:15:41,960
+¿Ven estas barras rojas?
+
+289
+00:15:41,960 --> 00:15:45,119
+Esos son los encabezados de sección en las tarjetas de datos.
+
+290
+00:15:45,119 --> 00:15:51,119
+Se pueden expandir y contraer.
+
+291
+00:15:51,119 --> 00:15:53,840
+Gracias. Como ustedes lo configuren,
+
+292
+00:15:53,840 --> 00:16:00,559
+así se pondrán todos los pianos y lo recordará en su configuración.
+
+293
+00:16:00,559 --> 00:16:02,640
+Si siempre quieren abierto,
+
+294
+00:16:02,640 --> 00:16:03,599
+pero lo administrativo cerrado,
+
+295
+00:16:03,599 --> 00:16:06,359
+entonces lo guardará así para ustedes.
+
+296
+00:16:06,559 --> 00:16:10,640
+Bien. Ya sabemos cómo encontrar un piano.
+
+297
+00:16:10,640 --> 00:16:15,960
+¿Cubrimos todas las formas? Ahora, leer los íconos del mapa.
+
+298
+00:16:15,960 --> 00:16:18,919
+Este es un botón importante aquí abajo.
+
+299
+00:16:18,919 --> 00:16:20,840
+Cierro este por ahora.
+
+300
+00:16:20,840 --> 00:16:23,840
+La leyenda; está oculta a menos que esté ahí.
+
+301
+00:16:23,840 --> 00:16:26,039
+¿Ven la leyenda? ¿Alcanzan a ver alrededor de mí?
+
+302
+00:16:26,039 --> 00:16:28,159
+Está en la parte de abajo. ¿La ven ahí?
+
+303
+00:16:28,159 --> 00:16:30,679
+Leyenda. ¿La ven?
+
+304
+00:16:30,679 --> 00:16:33,799
+Si la abren,
+
+305
+00:16:33,799 --> 00:16:36,919
+si se les olvida qué significan los colores,
+
+306
+00:16:36,919 --> 00:16:40,640
+porque nos volvimos locos con símbolos y colores,
+
+307
+00:16:40,640 --> 00:16:43,520
+y con el tiempo no necesitarán la leyenda, ya se los sabrán.
+
+308
+00:16:43,520 --> 00:16:45,280
+Pero al principio dirán:
+
+309
+00:16:45,280 --> 00:16:47,200
+¿qué es el símbolo de Ghostbusters?
+
+310
+00:16:47,200 --> 00:16:48,719
+Ah, no agregué el símbolo de Ghostbusters.
+
+311
+00:16:48,719 --> 00:16:51,159
+Es el más nuevo. Fue idea de Melissa.
+
+312
+00:16:51,159 --> 00:16:54,479
+No sé por qué no lo agregué a la leyenda.
+
+313
+00:16:54,479 --> 00:16:57,159
+Pero si no estuviera dando la clase ahora,
+
+314
+00:16:57,159 --> 00:16:59,119
+iría a mi teléfono, le daría al botón de idea,
+
+315
+00:16:59,119 --> 00:17:00,479
+tomaría una captura de esto,
+
+316
+00:17:00,479 --> 00:17:02,080
+y me la enviaría a mí mismo,
+
+317
+00:17:02,119 --> 00:17:07,400
+diciendo: el símbolo de Ghostbusters no aparece en la leyenda. Agrégalo.
+
+318
+00:17:07,400 --> 00:17:09,880
+Así que les digo qué es el símbolo de Ghostbusters.
+
+319
+00:17:09,880 --> 00:17:11,839
+Es un círculo con una línea atravesada.
+
+320
+00:17:11,839 --> 00:17:14,239
+Si ven un piano así,
+
+321
+00:17:14,239 --> 00:17:16,839
+a ver, creo que sé dónde hay uno.
+
+322
+00:17:16,839 --> 00:17:20,479
+Les muestro. O tal vez no.
+
+323
+00:17:20,479 --> 00:17:22,400
+Bueno, cuando vean uno así,
+
+324
+00:17:22,400 --> 00:17:25,400
+si intentan abrirlo, significa: no trabajen en este piano.
+
+325
+00:17:25,400 --> 00:17:27,839
+¿Verdad que es un buen símbolo para eso?
+
+326
+00:17:32,880 --> 00:17:36,079
+Ah, tiene el símbolo de Ghostbusters. Miren eso.
+
+327
+00:17:36,079 --> 00:17:38,800
+Cuando vean el símbolo de Ghostbusters,
+
+328
+00:17:38,800 --> 00:17:41,800
+les va a mostrar esta gran barra amarilla.
+
+329
+00:17:41,800 --> 00:17:43,439
+Significa que está en pre-cola.
+
+330
+00:17:43,439 --> 00:17:44,839
+Todavía no está en la cola,
+
+331
+00:17:44,839 --> 00:17:48,579
+pero está aquí en el edificio porque dijeron que quieren que lo hagamos.
+
+332
+00:17:48,579 --> 00:17:51,920
+Pero no han pagado sus $1,000 para entrar a la cola.
+
+333
+00:17:51,920 --> 00:17:54,359
+Tuvimos problemas en el pasado con gente que dice que lo quiere,
+
+334
+00:17:54,359 --> 00:17:55,280
+pero luego no paga,
+
+335
+00:17:55,280 --> 00:17:57,319
+y nunca pagan, y nosotros ya lo desarmamos.
+
+336
+00:17:57,319 --> 00:17:59,959
+Así que queremos tener cuidado: si no han pagado
+
+337
+00:17:59,959 --> 00:18:04,079
+al menos $1,000 para respaldar sus deseos con dinero,
+
+338
+00:18:04,079 --> 00:18:07,119
+no queremos que alguien lo desarme pensando que hace
+
+339
+00:18:07,119 --> 00:18:10,880
+un gran trabajo adelantando el siguiente piano, y luego estamos en problemas.
+
+340
+00:18:10,880 --> 00:18:16,479
+Eso es lo que, y el mío no tiene aprobar para cola porque soy dueño.
+
+341
+00:18:16,479 --> 00:18:20,140
+El dueño, los gerentes y los administradores tendrán este botón de aprobar para cola.
+
+342
+00:18:20,140 --> 00:18:23,079
+Hay funciones distintas con permisos distintos.
+
+343
+00:18:23,079 --> 00:18:26,199
+Así que si alguna vez se preguntan por qué los gerentes
+
+344
+00:18:26,199 --> 00:18:28,719
+lo ven en el suyo y tratan de enseñarle a alguien a darle a ese botón,
+
+345
+00:18:28,719 --> 00:18:31,719
+puede que esté en el suyo y no en el de todos.
+
+346
+00:18:31,719 --> 00:18:33,839
+Hay algunas funciones que están
+
+347
+00:18:33,839 --> 00:18:38,079
+limitadas por puesto, y aprobar para la cola es una de esas.
+
+348
+00:18:38,079 --> 00:18:39,800
+Ese es el símbolo de Ghostbusters.
+
+349
+00:18:39,800 --> 00:18:45,239
+Bien. No voy a repasar todos los colores porque se explican solos.
+
+350
+00:18:45,239 --> 00:18:47,760
+Los pueden ir aprendiendo sobre la marcha.
+
+351
+00:18:47,760 --> 00:18:54,040
+Los íconos de medios: necesita fotos, y el video es para Brigham y los administradores.
+
+352
+00:18:54,119 --> 00:18:58,760
+Una cosa que probablemente no necesitan saber,
+
+353
+00:18:58,760 --> 00:19:00,239
+pero se las cuento porque es divertida.
+
+354
+00:19:00,239 --> 00:19:03,640
+El color de la banqueta es,
+
+355
+00:19:03,640 --> 00:19:07,439
+obviamente están los íconos de cola y vertical,
+
+356
+00:19:07,439 --> 00:19:13,359
+y luego el gris es propiedad de BLP y el negro es de cliente o consignado.
+
+357
+00:19:13,359 --> 00:19:15,479
+Ese es el color de la banqueta.
+
+358
+00:19:15,479 --> 00:19:18,400
+Si está totalmente negro,
+
+359
+00:19:18,400 --> 00:19:20,699
+de hecho hay una banqueta negra ahí, solo que no se ve.
+
+360
+00:19:20,739 --> 00:19:24,339
+Significa que es de un cliente.
+
+361
+00:19:24,339 --> 00:19:27,979
+Si es un vertical negro con banqueta gris,
+
+362
+00:19:27,979 --> 00:19:30,300
+significa que es propiedad de BLP,
+
+363
+00:19:30,300 --> 00:19:32,459
+lo estamos arreglando para venderlo.
+
+364
+00:19:33,140 --> 00:19:38,780
+A veces ayuda saber si es del cliente o de la tienda.
+
+365
+00:19:38,780 --> 00:19:42,819
+Los códigos que más les van a interesar son estos.
+
+366
+00:19:42,819 --> 00:19:44,739
+Les explico cómo funcionan.
+
+367
+00:19:45,219 --> 00:19:48,619
+Esta fue idea de Brigham, su criatura.
+
+368
+00:19:48,619 --> 00:19:50,660
+Si no les gusta, pueden decirle:
+
+369
+00:19:50,660 --> 00:19:52,140
+inventa una idea mejor.
+
+370
+00:19:52,140 --> 00:19:56,099
+¿Ven que este dice 13.E?
+
+371
+00:19:56,339 --> 00:19:59,339
+Lo abrimos al mismo tiempo.
+
+372
+00:19:59,339 --> 00:20:03,180
+Entonces 13.E, la E es de exit, salida.
+
+373
+00:20:03,180 --> 00:20:05,260
+Originalmente solo íbamos a poner un número encima de
+
+374
+00:20:05,260 --> 00:20:08,060
+los pianos que identificara su fase.
+
+375
+00:20:08,060 --> 00:20:11,339
+Pero Brigham dijo: no me puedo acordar de los números.
+
+376
+00:20:11,339 --> 00:20:12,819
+Denme una pista.
+
+377
+00:20:12,819 --> 00:20:15,260
+Con una letra extra, ya se los aprende.
+
+378
+00:20:16,260 --> 00:20:24,099
+Entonces 6R, la R es de restringing, encordado.
+
+379
+00:20:24,099 --> 00:20:26,619
+Ese es nuestro pequeño código.
+
+380
+00:20:29,540 --> 00:20:33,140
+Y 3C es de CAP.
+
+381
+00:20:33,140 --> 00:20:36,300
+Significa que esa es la fase en la que está actualmente.
+
+382
+00:20:36,300 --> 00:20:39,939
+Luego hay unos extras al final.
+
+383
+00:20:39,939 --> 00:20:44,579
+En la cola: si está en cola,
+
+384
+00:20:44,579 --> 00:20:47,859
+lo más probable es que esté en el estacionamiento del mapa,
+
+385
+00:20:47,859 --> 00:20:52,939
+y probablemente dirá algo como Q17.
+
+386
+00:20:52,939 --> 00:20:56,219
+Q17 significa que es el 17 en la cola.
+
+387
+00:20:56,219 --> 00:20:57,780
+Una vez que está en progreso,
+
+388
+00:20:57,780 --> 00:20:59,459
+ya no mostrará su número de cola,
+
+389
+00:20:59,459 --> 00:21:01,699
+mostrará su número de fase.
+
+390
+00:21:01,699 --> 00:21:08,660
+Pero si quieren saber el número de cola de un piano
+
+391
+00:21:08,660 --> 00:21:10,660
+que está mostrando su número de fase,
+
+392
+00:21:10,660 --> 00:21:13,219
+solo hacen clic en la tarjeta y van a ver
+
+393
+00:21:14,140 --> 00:21:18,540
+su sección de ubicación y ahí encuentran su número de cola.
+
+394
+00:21:18,540 --> 00:21:22,540
+Este Steinway, que no puede mostrar todo en el ícono.
+
+395
+00:21:22,540 --> 00:21:25,020
+Priorizamos el número de fase si está en progreso.
+
+396
+00:21:25,020 --> 00:21:28,660
+Este muestra el número de mapa y el número de cola.
+
+397
+00:21:28,660 --> 00:21:29,900
+Este es el 15 de,
+
+398
+00:21:29,900 --> 00:21:33,099
+actualmente tenemos 66 pianos en la cola.
+
+399
+00:21:35,500 --> 00:21:38,739
+Si quieren cambiar el número,
+
+400
+00:21:38,739 --> 00:21:39,900
+si lo están moviendo,
+
+401
+00:21:39,900 --> 00:21:42,859
+hay varias formas de cambiar el número de mapa.
+
+402
+00:21:43,020 --> 00:21:44,859
+No pueden cambiar los números de cola,
+
+403
+00:21:44,859 --> 00:21:48,739
+pero sí los números de mapa y el mueble (cabinetry).
+
+404
+00:21:48,739 --> 00:21:50,939
+Bueno, a eso llegamos en un segundo.
+
+405
+00:21:50,939 --> 00:21:58,939
+También hay un historial de mueble y un historial de ubicación.
+
+406
+00:21:58,939 --> 00:22:01,780
+En algunas ocasiones,
+
+407
+00:22:01,780 --> 00:22:04,219
+puede ser útil saber: este piano está aquí ahora,
+
+408
+00:22:04,219 --> 00:22:05,660
+pero ¿dónde estuvo antes?
+
+409
+00:22:05,660 --> 00:22:07,020
+¿En qué tres lugares estuvo?
+
+410
+00:22:07,020 --> 00:22:09,300
+Porque necesito buscar una pieza que falta,
+
+411
+00:22:09,300 --> 00:22:11,819
+y quizá está en uno de esos lugares donde estuvo.
+
+412
+00:22:11,819 --> 00:22:15,219
+O el mueble: si lo movieron a otros estantes,
+
+413
+00:22:15,219 --> 00:22:19,420
+quizá una pieza perdida se pueda rastrear en los historiales de ubicación.
+
+414
+00:22:19,420 --> 00:22:22,739
+Bien. Entonces, estaba,
+
+415
+00:22:22,739 --> 00:22:27,060
+un detalle más sobre la leyenda.
+
+416
+00:22:28,180 --> 00:22:35,900
+Bien. El número de cola es Q y el número; pausado significa,
+
+417
+00:22:36,339 --> 00:22:39,660
+pausado significa que está en la cola y el trabajo empezó,
+
+418
+00:22:39,699 --> 00:22:44,140
+pero quizá hay un problema, o se espera una pieza, o dejaron de pagar,
+
+419
+00:22:44,140 --> 00:22:47,140
+o por alguna razón ese trabajo debe pausarse,
+
+420
+00:22:47,140 --> 00:22:48,420
+aunque esté a media cola.
+
+421
+00:22:48,420 --> 00:22:51,500
+Así que pausado es distinto de aún no empezado.
+
+422
+00:22:51,500 --> 00:22:55,819
+Bien. Pausado también es distinto de estamos esperando algo.
+
+423
+00:22:55,819 --> 00:22:58,859
+Pausado es: por alguna razón no estamos avanzando.
+
+424
+00:22:58,859 --> 00:23:03,420
+En cambio, hay tres tipos de en espera de.
+
+425
+00:23:03,420 --> 00:23:07,859
+En espera de significa que quisiéramos que no estuviera detenido o pausado,
+
+426
+00:23:07,859 --> 00:23:09,119
+pero estamos esperando algo.
+
+427
+00:23:09,119 --> 00:23:13,040
+O esperamos a Curtis Harper por la placa,
+
+428
+00:23:13,040 --> 00:23:15,800
+o esperamos a Brigham porque quizá necesita
+
+429
+00:23:15,800 --> 00:23:19,719
+alguna innovación especial, o impresión, o CNC, no sé,
+
+430
+00:23:19,719 --> 00:23:22,400
+algo de Brigham, o esperamos otra cosa,
+
+431
+00:23:22,400 --> 00:23:26,239
+que es la categoría general para todo lo demás.
+
+432
+00:23:26,239 --> 00:23:28,839
+Bien. Entonces, sí.
+
+433
+00:23:28,839 --> 00:23:31,800
+¿Cuál es la diferencia entre pausado y en espera de otra cosa?
+
+434
+00:23:31,800 --> 00:23:36,920
+En espera de otra cosa significa que hay
+
+435
+00:23:36,920 --> 00:23:43,000
+alguna razón, quizá una cuerda grave quedó mal hecha,
+
+436
+00:23:43,000 --> 00:23:46,000
+y estamos esperando que llegue la cuerda grave
+
+437
+00:23:46,000 --> 00:23:49,359
+nueva porque hubo un error.
+
+438
+00:23:49,359 --> 00:23:53,800
+Solo esperamos algo para poder avanzar,
+
+439
+00:23:53,800 --> 00:23:56,160
+y esperamos que ocurra lo antes posible.
+
+440
+00:23:56,160 --> 00:24:01,000
+En cambio, pausado significa que quizá no están pagando ahora,
+
+441
+00:24:01,000 --> 00:24:03,760
+o la abuela falleció,
+
+442
+00:24:03,760 --> 00:24:05,920
+y la familia está viendo qué hacer con ese piano,
+
+443
+00:24:05,920 --> 00:24:08,959
+porque en realidad nadie lo quiere, y ella pensaba que sí.
+
+444
+00:24:09,079 --> 00:24:11,479
+Sí. Pausado es como,
+
+445
+00:24:11,479 --> 00:24:13,119
+probablemente nunca sabrán por qué está pausado,
+
+446
+00:24:13,119 --> 00:24:16,640
+pero Brigham le dio pausa por alguna razón cualquiera.
+
+447
+00:24:16,640 --> 00:24:20,119
+Mientras que en espera de suele ser algo técnico del taller.
+
+448
+00:24:20,119 --> 00:24:22,040
+Estamos esperando algo,
+
+449
+00:24:22,040 --> 00:24:26,719
+y no podemos avanzar hasta que eso esté listo.
+
+450
+00:24:27,719 --> 00:24:30,439
+Hay otro término, que es parecido,
+
+451
+00:24:30,439 --> 00:24:32,920
+pero diferente, con el que estarán más involucrados,
+
+452
+00:24:32,920 --> 00:24:35,280
+y que quizá oigan a Mark mencionar:
+
+453
+00:24:35,280 --> 00:24:36,959
+los cuellos de botella.
+
+454
+00:24:36,959 --> 00:24:40,839
+Los cuellos de botella también causan pausas y esperas,
+
+455
+00:24:40,839 --> 00:24:42,880
+pero un cuello de botella es cuando
+
+456
+00:24:42,880 --> 00:24:47,640
+las tareas concurrentes están deteniendo la siguiente fase.
+
+457
+00:24:49,040 --> 00:24:54,119
+O quizá es un cuello de botella porque solo hay dos técnicos que
+
+458
+00:24:54,119 --> 00:24:58,040
+saben hacer esta reparación especializada de costillas,
+
+459
+00:24:58,040 --> 00:25:01,439
+pero ya están en pianos más arriba en la cola,
+
+460
+00:25:01,439 --> 00:25:03,520
+y eso es un cuello de botella.
+
+461
+00:25:03,520 --> 00:25:05,560
+Es un cuello de botella de programación.
+
+462
+00:25:05,560 --> 00:25:10,079
+Muchas variaciones de la misma idea, ¿verdad?
+
+463
+00:25:10,079 --> 00:25:14,959
+Bien. ¿Preguntas sobre la leyenda o seguimos adelante?
+
+464
+00:25:14,959 --> 00:25:17,520
+Bien. Esa fue la leyenda.
+
+465
+00:25:17,520 --> 00:25:24,280
+Bien. ¿Qué sigue? ¿Ya vimos todos los íconos del mapa?
+
+466
+00:25:24,680 --> 00:25:28,079
+Bien. Entonces repasemos la tarjeta del piano.
+
+467
+00:25:28,079 --> 00:25:31,640
+Díganme si me salté algo en esas notas que no alcanzo a ver.
+
+468
+00:25:31,640 --> 00:25:34,160
+Elijamos un piano,
+
+469
+00:25:34,160 --> 00:25:39,599
+¿qué tal el 59?
+
+470
+00:25:39,599 --> 00:25:42,599
+¿Buen piano? ¿El Lester de cola?
+
+471
+00:25:42,599 --> 00:25:46,319
+Bien. Empezando por arriba,
+
+472
+00:25:46,319 --> 00:25:53,280
+voy a minimizar todas las secciones,
+
+473
+00:25:53,920 --> 00:25:57,079
+y las vamos a repasar una por una, ¿de acuerdo?
+
+474
+00:25:57,079 --> 00:26:02,319
+Muy bien. Ya hablamos de la parte de arriba.
+
+475
+00:26:02,319 --> 00:26:04,280
+Este color de aquí arriba, nuevo,
+
+476
+00:26:04,280 --> 00:26:06,280
+viene de la leyenda.
+
+477
+00:26:08,760 --> 00:26:12,239
+Bien. El reloj de trabajo, ¿ya lo mencioné?
+
+478
+00:26:12,239 --> 00:26:14,680
+Aquí es donde, a partir de esta reunión,
+
+479
+00:26:14,680 --> 00:26:16,040
+en cualquier piano en el que trabajen,
+
+480
+00:26:16,040 --> 00:26:17,520
+pueden buscar por número de serie,
+
+481
+00:26:17,520 --> 00:26:19,839
+usar un código QR, o ir a la tarjeta de datos,
+
+482
+00:26:19,839 --> 00:26:25,119
+y lo primero que pueden hacer es marcar entrada en ese piano.
+
+483
+00:26:25,160 --> 00:26:26,640
+Así que, después de esta reunión, en vez de usar
+
+484
+00:26:26,640 --> 00:26:27,959
+ISOLVE para marcar entrada y salida de los pianos,
+
+485
+00:26:27,959 --> 00:26:29,880
+empiecen a usar el mapa,
+
+486
+00:26:29,880 --> 00:26:32,040
+y aquí es donde marcan entrada y salida en ellos.
+
+487
+00:26:32,040 --> 00:26:33,479
+Aunque no pueden hacer clic en marcar entrada
+
+488
+00:26:33,479 --> 00:26:35,439
+hasta que seleccionen el trabajo que van a hacer.
+
+489
+00:26:35,439 --> 00:26:38,880
+Así que seleccionen la tarea que estén haciendo,
+
+490
+00:26:38,880 --> 00:26:40,359
+y si no aparece,
+
+491
+00:26:40,359 --> 00:26:42,920
+hasta abajo del todo dice otro,
+
+492
+00:26:42,920 --> 00:26:45,000
+y en ese espacio,
+
+493
+00:26:45,000 --> 00:26:48,640
+solo tienen que escribir lo que están haciendo en este piano si eligen otro.
+
+494
+00:26:48,640 --> 00:26:51,280
+Si no, solo seleccionen la categoría de trabajo,
+
+495
+00:26:51,280 --> 00:26:53,280
+y entonces su botón verde se activará,
+
+496
+00:26:53,280 --> 00:26:54,520
+y podrán marcar entrada.
+
+497
+00:26:54,680 --> 00:26:56,680
+Y creo que una vez que marcaron entrada, ¿lo muestra?
+
+498
+00:26:56,680 --> 00:27:00,319
+¿También pueden buscarlo en la barra de búsqueda?
+
+499
+00:27:00,319 --> 00:27:01,520
+¿Para marcar entrada?
+
+500
+00:27:01,520 --> 00:27:02,280
+Sí.
+
+501
+00:27:02,280 --> 00:27:05,439
+Sí, la barra de búsqueda abrirá esta tarjeta de datos,
+
+502
+00:27:05,439 --> 00:27:09,239
+y dentro de la tarjeta de datos, en la primera categoría,
+
+503
+00:27:09,239 --> 00:27:13,920
+el reloj de trabajo, es donde marcarán entrada.
+
+504
+00:27:13,920 --> 00:27:15,319
+Y una vez que marcan entrada,
+
+505
+00:27:15,319 --> 00:27:17,760
+creo que les muestra un botón de marcar salida,
+
+506
+00:27:17,760 --> 00:27:19,839
+¿y un cronómetro?
+
+507
+00:27:19,839 --> 00:27:21,520
+Sí, iniciará un cronómetro,
+
+508
+00:27:21,520 --> 00:27:23,199
+y les dará un botón de marcar salida.
+
+509
+00:27:23,239 --> 00:27:24,640
+Así que si cambian a otro piano,
+
+510
+00:27:24,640 --> 00:27:26,560
+es igual que en iSolved.
+
+511
+00:27:26,560 --> 00:27:31,439
+Y a partir del 1 de septiembre,
+
+512
+00:27:31,439 --> 00:27:34,359
+habrá un reemplazo de iSolved,
+
+513
+00:27:34,359 --> 00:27:37,640
+su marcado de nómina de tiempo completo,
+
+514
+00:27:37,640 --> 00:27:39,560
+o sea cuando llegan y cuando se van.
+
+515
+00:27:39,560 --> 00:27:44,839
+Eso estará disponible aquí en lugar de iSolved desde el 1 de septiembre,
+
+516
+00:27:44,839 --> 00:27:50,079
+y les muestro dónde está después de ver la tarjeta de datos.
+
+517
+00:27:50,079 --> 00:27:52,560
+Hay otra función que acabamos de agregar.
+
+518
+00:27:52,560 --> 00:27:54,719
+Se llama Mi Panel (My Dashboard).
+
+519
+00:27:54,719 --> 00:27:59,040
+Está en este menú desplegable de hamburguesa.
+
+520
+00:27:59,040 --> 00:28:00,719
+Eso lo vemos después.
+
+521
+00:28:00,719 --> 00:28:03,479
+Bien, ahí es donde marcan entrada y salida en los pianos.
+
+522
+00:28:03,479 --> 00:28:05,599
+Ubicaciones, ya lo repasamos más o menos.
+
+523
+00:28:05,599 --> 00:28:07,199
+Es el lugar de mapa y cola.
+
+524
+00:28:07,199 --> 00:28:11,040
+Bien, quizá deberíamos hablar del mueble.
+
+525
+00:28:11,040 --> 00:28:14,839
+El mueble se puede agregar de dos formas.
+
+526
+00:28:14,839 --> 00:28:18,520
+Pueden agregarlo directamente aquí,
+
+527
+00:28:18,520 --> 00:28:21,800
+o pueden, si están parados en el cuarto,
+
+528
+00:28:21,800 --> 00:28:23,719
+tenemos que ir al segundo piso ahora.
+
+529
+00:28:23,719 --> 00:28:27,959
+Pestaña del segundo piso: este es el cuarto de muebles.
+
+530
+00:28:27,959 --> 00:28:32,920
+Y nuestro brillante sistema es solo una versión web de sus pizarrones.
+
+531
+00:28:32,920 --> 00:28:35,079
+Así que creo que por ahora
+
+532
+00:28:35,079 --> 00:28:38,760
+deberíamos seguir con los pizarrones y también usar la app.
+
+533
+00:28:38,760 --> 00:28:40,160
+Y quizá en algún momento
+
+534
+00:28:40,160 --> 00:28:42,839
+alguien decidirá: bien, esto funciona,
+
+535
+00:28:42,839 --> 00:28:44,439
+todos lo usan, es preciso,
+
+536
+00:28:44,439 --> 00:28:48,319
+y todos estamos capacitados usando los teléfonos o las Chromebooks.
+
+537
+00:28:48,319 --> 00:28:50,959
+Ya no necesitamos un sistema doble.
+
+538
+00:28:51,160 --> 00:28:54,079
+Pero hasta que digamos: esto es impecable,
+
+539
+00:28:54,079 --> 00:28:56,000
+probablemente deberíamos seguir con ambos.
+
+540
+00:28:56,000 --> 00:28:57,359
+Pueden hacerlo en la tarjeta de datos,
+
+541
+00:28:57,359 --> 00:29:01,040
+o pueden abrir el estante en el que estén, digamos el estante siete.
+
+542
+00:29:02,199 --> 00:29:05,359
+Y este tiene tres tableros para elegir.
+
+543
+00:29:05,359 --> 00:29:10,359
+Si quieren agregar un piano a la unidad siete del lado izquierdo
+
+544
+00:29:11,599 --> 00:29:14,599
+a nivel de piso, piso C,
+
+545
+00:29:14,599 --> 00:29:16,359
+hacen clic en ese botón,
+
+546
+00:29:16,359 --> 00:29:18,239
+escriben su número de serie,
+
+547
+00:29:18,280 --> 00:29:21,839
+y traerá toda la información del piano.
+
+548
+00:29:21,839 --> 00:29:22,920
+¿De acuerdo?
+
+549
+00:29:22,920 --> 00:29:25,479
+Creo que se explica solo,
+
+550
+00:29:25,479 --> 00:29:30,319
+pero si lo fueran a poner en la tarjeta de datos,
+
+551
+00:29:30,319 --> 00:29:31,959
+en el cuadro de mueble,
+
+552
+00:29:32,800 --> 00:29:37,800
+la forma, o sea el código sería:
+
+553
+00:29:38,079 --> 00:29:41,160
+si lo fueran a poner en este lugar de aquí,
+
+554
+00:29:41,160 --> 00:29:45,000
+sería 3LF,
+
+555
+00:29:46,000 --> 00:29:51,239
+tres por la unidad, luego L o R por izquierda o derecha.
+
+556
+00:29:51,239 --> 00:29:55,040
+Y lo tercero será F de piso (floor),
+
+557
+00:29:55,040 --> 00:29:57,479
+uno para el primer estante, dos para el segundo,
+
+558
+00:29:57,479 --> 00:30:00,920
+tres para el tercero, o T para el estante de arriba (top).
+
+559
+00:30:00,920 --> 00:30:02,000
+¿De acuerdo?
+
+560
+00:30:02,000 --> 00:30:03,160
+¿Tiene sentido ese código?
+
+561
+00:30:03,160 --> 00:30:05,920
+Si en verdad ocupan todo el piso,
+
+562
+00:30:05,920 --> 00:30:07,079
+porque tienen muchísimo mueble,
+
+563
+00:30:07,079 --> 00:30:09,000
+y lo ponen en ambos lugares,
+
+564
+00:30:09,000 --> 00:30:12,000
+entonces su código sería 3LRF.
+
+565
+00:30:16,000 --> 00:30:17,760
+¿Sí?
+
+566
+00:30:17,760 --> 00:30:18,599
+Bien.
+
+567
+00:30:19,880 --> 00:30:22,199
+Bien, eso es el mueble.
+
+568
+00:30:23,079 --> 00:30:25,680
+Y ya perdí mi piano, así que elijamos otro.
+
+569
+00:30:26,599 --> 00:30:28,800
+Elijamos este piano.
+
+570
+00:30:28,800 --> 00:30:30,000
+Veamos cómo se ve.
+
+571
+00:30:30,000 --> 00:30:32,239
+Bien, ¿ven cómo guardó mis ubicaciones?
+
+572
+00:30:32,239 --> 00:30:35,520
+Creo que ya cubrimos todo para el,
+
+573
+00:30:35,520 --> 00:30:37,719
+ah, parece que se puede cambiar el número de cola.
+
+574
+00:30:38,719 --> 00:30:39,920
+Simplemente no lo hagan.
+
+575
+00:30:39,920 --> 00:30:42,479
+Quizá deba, tengo que cambiar las funciones de eso.
+
+576
+00:30:42,479 --> 00:30:43,719
+Tengo que cambiar los permisos de eso.
+
+577
+00:30:43,719 --> 00:30:46,839
+Si estuviera en mi propio teléfono, sin estar proyectando,
+
+578
+00:30:46,839 --> 00:30:51,199
+tomaría una captura, haría clic en el foquito,
+
+579
+00:30:51,199 --> 00:30:53,560
+clic en editar, subiría la captura,
+
+580
+00:30:53,560 --> 00:30:58,560
+y diría: agreguen permisos al cambio de la cola.
+
+581
+00:31:00,319 --> 00:31:04,040
+Bien, y puedo minimizar esta sección.
+
+582
+00:31:04,040 --> 00:31:07,040
+Progreso del taller es la que creo que más van a usar.
+
+583
+00:31:07,959 --> 00:31:12,640
+Esto, ojalá para cuando un piano llegue a su área,
+
+584
+00:31:12,640 --> 00:31:14,439
+el track ya esté definido.
+
+585
+00:31:14,439 --> 00:31:19,359
+Pero por ahora pueden agregar un track si no está definido.
+
+586
+00:31:20,959 --> 00:31:22,239
+Solo hacen clic.
+
+587
+00:31:22,239 --> 00:31:26,040
+Y de forma similar con las teclas, eso debería estar definido,
+
+588
+00:31:26,040 --> 00:31:27,920
+pero hagan clic para eso.
+
+589
+00:31:27,920 --> 00:31:28,880
+Fase de taller.
+
+590
+00:31:32,040 --> 00:31:34,839
+Por ahora, pueden pasar a la siguiente fase con un clic
+
+591
+00:31:34,839 --> 00:31:37,560
+si terminan; si están trabajando en CAP y lo terminan,
+
+592
+00:31:37,560 --> 00:31:39,680
+pueden hacer clic a la siguiente fase.
+
+593
+00:31:40,680 --> 00:31:45,680
+Pero pronto, cuando lo probemos y confirmemos
+
+594
+00:31:46,040 --> 00:31:48,400
+que las fotos de progreso de todos funcionan,
+
+595
+00:31:50,040 --> 00:31:53,199
+les va a mostrar una ventanita.
+
+596
+00:31:53,199 --> 00:31:54,239
+Si intentan cambiar de fase,
+
+597
+00:31:54,239 --> 00:31:56,079
+se les va a exigir tomar una foto,
+
+598
+00:31:56,079 --> 00:31:58,479
+una foto de progreso, y subir la foto de progreso
+
+599
+00:31:58,479 --> 00:32:00,680
+antes de poder hacer clic en la siguiente fase.
+
+600
+00:32:00,680 --> 00:32:02,079
+Y esas van a la carpeta del técnico.
+
+601
+00:32:02,079 --> 00:32:05,280
+Tenemos carpetas de antes, después y del técnico.
+
+602
+00:32:05,280 --> 00:32:07,239
+Y también estamos usando esas fotos.
+
+603
+00:32:07,599 --> 00:32:10,560
+Se está automatizando un reporte al cliente
+
+604
+00:32:10,560 --> 00:32:13,119
+según lo que se ha terminado, con su foto.
+
+605
+00:32:16,160 --> 00:32:19,160
+Por hoy, como eso aún no está automatizado,
+
+606
+00:32:19,160 --> 00:32:20,599
+creo que una de las cosas al reverso de su hoja
+
+607
+00:32:20,599 --> 00:32:22,439
+que dice prueba esto hoy,
+
+608
+00:32:22,439 --> 00:32:27,079
+si después de esta reunión todos pudieran tomar una foto
+
+609
+00:32:27,079 --> 00:32:28,839
+del piano en el que estén trabajando.
+
+610
+00:32:28,839 --> 00:32:30,520
+Creo que está en la sección de medios.
+
+611
+00:32:31,599 --> 00:32:34,439
+Creo que en la sección de medios, sí,
+
+612
+00:32:34,439 --> 00:32:36,160
+está agregar foto de progreso.
+
+613
+00:32:36,160 --> 00:32:37,880
+Pueden hacer clic en agregar foto de progreso.
+
+614
+00:32:37,880 --> 00:32:39,359
+Abre su cámara.
+
+615
+00:32:39,359 --> 00:32:42,680
+Toman la foto, le dan enviar, y así de fácil.
+
+616
+00:32:43,680 --> 00:32:45,880
+Si no la tienen abierta aquí, pueden usar el código QR.
+
+617
+00:32:45,880 --> 00:32:50,680
+Código QR, bajan a medios, abren esa foto de progreso,
+
+618
+00:32:50,680 --> 00:32:54,160
+toman la foto, le dan enviar, y la manda
+
+619
+00:32:54,160 --> 00:32:56,199
+a la carpeta del técnico, ¿de acuerdo?
+
+620
+00:32:57,119 --> 00:33:02,119
+A ver, estábamos en la fase de taller.
+
+621
+00:33:02,319 --> 00:33:03,640
+Ya las repasamos.
+
+622
+00:33:04,599 --> 00:33:05,839
+Cuando le dan a entregado,
+
+623
+00:33:05,839 --> 00:33:10,040
+debería quitar el piano del mapa.
+
+624
+00:33:10,040 --> 00:33:11,439
+Así que si un piano ya fue entregado,
+
+625
+00:33:11,439 --> 00:33:13,280
+pero todavía lo ven en la tienda,
+
+626
+00:33:13,280 --> 00:33:17,599
+eso sería un foquito para enviar una corrección
+
+627
+00:33:17,599 --> 00:33:18,920
+de que eso no está funcionando.
+
+628
+00:33:26,880 --> 00:33:29,920
+No sé si vamos a conservar estos números de terminado o no.
+
+629
+00:33:29,920 --> 00:33:31,959
+Idealmente, lo que esto va a hacer es:
+
+630
+00:33:32,079 --> 00:33:34,800
+si dijeron ya terminé la fase cuatro,
+
+631
+00:33:34,800 --> 00:33:38,319
+entonces las fases anteriores también deberían estar terminadas.
+
+632
+00:33:39,359 --> 00:33:41,560
+Pero pueden hacer clic en ellas.
+
+633
+00:33:41,560 --> 00:33:42,680
+No sé si son útiles.
+
+634
+00:33:42,680 --> 00:33:44,040
+Quizá las quitemos.
+
+635
+00:33:44,040 --> 00:33:44,880
+Esa es otra cosa.
+
+636
+00:33:44,880 --> 00:33:47,199
+¿Saben cómo es el software genérico?
+
+637
+00:33:47,199 --> 00:33:48,719
+Tiene que traer todas las funciones
+
+638
+00:33:48,719 --> 00:33:50,439
+aunque solo usen el 20 por ciento de ellas,
+
+639
+00:33:51,599 --> 00:33:53,319
+porque no se ajusta bien a tu negocio.
+
+640
+00:33:53,319 --> 00:33:54,239
+Ese no es el caso aquí.
+
+641
+00:33:54,239 --> 00:33:57,160
+Así que si con el tiempo vemos, por ejemplo,
+
+642
+00:33:57,160 --> 00:33:59,479
+que no usamos esta función,
+
+643
+00:33:59,479 --> 00:34:01,640
+eso puede ser un botón de idea, una captura,
+
+644
+00:34:02,319 --> 00:34:03,239
+la envían, y deberíamos eliminarla
+
+645
+00:34:03,239 --> 00:34:04,479
+si no la estamos usando.
+
+646
+00:34:04,479 --> 00:34:05,719
+Queremos mantener,
+
+647
+00:34:05,719 --> 00:34:07,280
+queremos asegurarnos de que este software
+
+648
+00:34:07,280 --> 00:34:10,959
+sea 100 por ciento genial y sin relleno,
+
+649
+00:34:10,959 --> 00:34:13,600
+sin desperdiciar nuestro tiempo ni nuestra vista.
+
+650
+00:34:13,600 --> 00:34:16,439
+Y luego están las tareas concurrentes.
+
+651
+00:34:16,439 --> 00:34:18,760
+Esta sección está en construcción.
+
+652
+00:34:18,760 --> 00:34:20,399
+Todavía no está lista.
+
+653
+00:34:20,399 --> 00:34:22,439
+Pero decidimos lanzarlo de todos modos
+
+654
+00:34:22,439 --> 00:34:24,679
+para que empiecen a usar las funciones que sí lo están.
+
+655
+00:34:25,679 --> 00:34:26,520
+Esto necesita trabajo.
+
+656
+00:34:26,520 --> 00:34:28,479
+Pero la idea de lo que esto va a ser
+
+657
+00:34:28,520 --> 00:34:33,439
+es que habrá, por ejemplo, para pedir calcomanías,
+
+658
+00:34:33,439 --> 00:34:36,679
+tendrá un espacio de la calcomanía fue pedida
+
+659
+00:34:36,679 --> 00:34:39,120
+o recibida, y lo mismo con el cromado.
+
+660
+00:34:39,120 --> 00:34:42,959
+Podrán ver
+
+661
+00:34:42,959 --> 00:34:47,879
+dónde va este piano, como esta placa con Curtis.
+
+662
+00:34:47,879 --> 00:34:51,159
+No sabemos si esta placa está en el piano,
+
+663
+00:34:51,159 --> 00:34:55,159
+en el taller de Curtis, en el estante, o en el piano.
+
+664
+00:34:55,159 --> 00:35:00,159
+Pero pronto podremos ir a la tarjeta de datos
+
+665
+00:35:00,360 --> 00:35:02,120
+y simplemente sabremos qué está pasando,
+
+666
+00:35:02,120 --> 00:35:04,239
+como las teclas, las cubiertas de teclas.
+
+667
+00:35:04,239 --> 00:35:05,399
+¿Están listas?
+
+668
+00:35:05,399 --> 00:35:06,320
+¿Están en el cuarto de muebles?
+
+669
+00:35:06,320 --> 00:35:07,159
+¿Están con Marcelo?
+
+670
+00:35:07,159 --> 00:35:07,979
+¿Están terminadas?
+
+671
+00:35:07,979 --> 00:35:08,820
+¿Están en el piano?
+
+672
+00:35:08,820 --> 00:35:10,120
+Simplemente lo sabremos
+
+673
+00:35:10,120 --> 00:35:12,159
+porque el trabajo concurrente lo mostrará.
+
+674
+00:35:12,159 --> 00:35:13,399
+Todavía no está del todo listo.
+
+675
+00:35:14,800 --> 00:35:17,239
+Bien, el técnico.
+
+676
+00:35:17,239 --> 00:35:19,320
+Esa es la lista de trabajo concurrente.
+
+677
+00:35:19,320 --> 00:35:21,520
+El historial de reportes del técnico.
+
+678
+00:35:21,520 --> 00:35:22,340
+Esto tenía una falla.
+
+679
+00:35:22,340 --> 00:35:23,179
+Veamos si funciona.
+
+680
+00:35:23,179 --> 00:35:25,340
+Esto es para el Steinway B de 1917.
+
+681
+00:35:25,340 --> 00:35:27,780
+En teoría, debería abrir
+
+682
+00:35:27,780 --> 00:35:29,659
+todos los reportes de todo lo que,
+
+683
+00:35:29,659 --> 00:35:32,179
+cada reporte que alguna vez incluyó este piano.
+
+684
+00:35:32,179 --> 00:35:34,100
+Así que si están trabajando en él o haciendo un QC
+
+685
+00:35:34,100 --> 00:35:35,699
+y ven que, madre mía,
+
+686
+00:35:35,699 --> 00:35:38,060
+quien hizo esta tabla armónica reparó mal las grietas
+
+687
+00:35:38,060 --> 00:35:42,000
+y necesita capacitación, o no sé, algún ejemplo.
+
+688
+00:35:42,000 --> 00:35:44,260
+Si por alguna razón surge algo
+
+689
+00:35:44,260 --> 00:35:46,439
+y se preguntan quién trabajó en qué o qué pasó,
+
+690
+00:35:46,439 --> 00:35:48,939
+pueden hacer clic en los reportes de técnicos
+
+691
+00:35:49,939 --> 00:35:54,939
+y usar Control F para buscar lo que necesiten.
+
+692
+00:35:55,179 --> 00:35:57,580
+Cada reporte de viernes que se haya enviado
+
+693
+00:35:57,580 --> 00:36:01,879
+para ese piano, ahora tienen acceso desde 2011.
+
+694
+00:36:03,540 --> 00:36:05,020
+Sí, bastante genial, ¿no?
+
+695
+00:36:06,979 --> 00:36:11,979
+Y luego, bien, sigue la sección de medios.
+
+696
+00:36:12,120 --> 00:36:13,860
+Esto es sobre todo para los administradores y Brigham,
+
+697
+00:36:13,860 --> 00:36:15,939
+pero la foto de progreso está ahí,
+
+698
+00:36:16,820 --> 00:36:20,860
+y también la moveremos a un lugar más cómodo.
+
+699
+00:36:20,860 --> 00:36:25,620
+Papeleo, hay un poco de traslape.
+
+700
+00:36:25,620 --> 00:36:28,320
+Quizá rediseñemos esta sección de papeleo.
+
+701
+00:36:29,340 --> 00:36:31,699
+Todos pónganse de pie y estírense mientras tomo agua,
+
+702
+00:36:31,699 --> 00:36:32,739
+porque los estoy durmiendo a todos.
+
+703
+00:36:32,739 --> 00:36:33,860
+No soy presentador.
+
+704
+00:36:33,860 --> 00:36:36,419
+Levántense y estírense, yo voy a tomar agua
+
+705
+00:36:36,419 --> 00:36:38,459
+y luego, tengo TDAH.
+
+706
+00:36:38,459 --> 00:36:39,280
+No tienen que admitirlo,
+
+707
+00:36:39,280 --> 00:36:40,860
+pero cualquiera más en la sala que tenga TDAH,
+
+708
+00:36:40,860 --> 00:36:43,580
+quizá den una vuelta, en serio, estírense.
+
+709
+00:36:43,580 --> 00:36:45,620
+Mover el cuerpo hace bien, reinicia el cerebro.
+
+710
+00:36:50,860 --> 00:36:54,379
+Y pueden quedarse de pie si quieren, si les ayuda,
+
+711
+00:36:54,379 --> 00:36:56,540
+o siéntense, aquí vamos de nuevo.
+
+712
+00:36:56,540 --> 00:36:59,780
+El papeleo es esto del trabajo concurrente.
+
+713
+00:36:59,780 --> 00:37:01,300
+Ahora mismo lo hacemos en papel,
+
+714
+00:37:01,300 --> 00:37:02,899
+como mostraste con los formularios de papel.
+
+715
+00:37:03,979 --> 00:37:04,820
+Qué bueno que lo descubriste.
+
+716
+00:37:04,820 --> 00:37:06,879
+No sabía que había dos opciones,
+
+717
+00:37:06,879 --> 00:37:08,540
+pero voy a trabajar con Jacob
+
+718
+00:37:08,540 --> 00:37:12,040
+y vamos a digitalizar eso, ponerlo en el,
+
+719
+00:37:13,000 --> 00:37:15,239
+vamos a tener cada vez menos papel por aquí.
+
+720
+00:37:15,239 --> 00:37:16,679
+Por un tiempo, tendremos papel
+
+721
+00:37:16,679 --> 00:37:18,659
+que digitalizamos y quedará adjunto aquí.
+
+722
+00:37:18,659 --> 00:37:20,580
+Así que las hojas de QC estarán,
+
+723
+00:37:21,479 --> 00:37:24,540
+podrán acceder a ellas aquí.
+
+724
+00:37:24,540 --> 00:37:26,100
+Y con el tiempo,
+
+725
+00:37:26,100 --> 00:37:27,840
+los pizarrones desaparecerán.
+
+726
+00:37:27,840 --> 00:37:30,439
+También el papel desaparecerá
+
+727
+00:37:30,439 --> 00:37:32,439
+y todo se hará en la web app.
+
+728
+00:37:32,439 --> 00:37:35,159
+Así que en vez de llenar sus hojas de desarme,
+
+729
+00:37:35,159 --> 00:37:39,520
+las de cuerdas graves y las hojas de cromado en papel,
+
+730
+00:37:39,520 --> 00:37:42,560
+las llenaremos en la web app.
+
+731
+00:37:42,560 --> 00:37:44,800
+Aún no está listo, está en construcción,
+
+732
+00:37:44,800 --> 00:37:45,919
+pero ya viene.
+
+733
+00:37:46,899 --> 00:37:49,479
+Y si tienen dudas sobre alguna de esas cosas,
+
+734
+00:37:49,479 --> 00:37:51,860
+podrán encontrar la información
+
+735
+00:37:51,860 --> 00:37:53,179
+por ahora en la sección de papeleo,
+
+736
+00:37:53,179 --> 00:37:56,260
+pero después quizá esté en la sección de trabajo concurrente.
+
+737
+00:37:56,260 --> 00:37:58,199
+Bien, eso es lo que es por ahora.
+
+738
+00:37:59,260 --> 00:38:04,260
+Luego papeleo, administración.
+
+739
+00:38:06,020 --> 00:38:07,580
+No creo que ustedes necesiten hacer nada
+
+740
+00:38:07,580 --> 00:38:10,419
+con la sección de administración, pueden dejarla cerrada.
+
+741
+00:38:12,179 --> 00:38:15,739
+Y luego el PianoLog.
+
+742
+00:38:17,459 --> 00:38:18,659
+Esto está bastante genial, muchachos.
+
+743
+00:38:18,659 --> 00:38:20,979
+Nunca antes tuvieron acceso al PianoLog.
+
+744
+00:38:20,979 --> 00:38:24,659
+Ahora prácticamente sí, aunque esto está mal.
+
+745
+00:38:24,659 --> 00:38:27,179
+No está, tendré que arreglarlo.
+
+746
+00:38:27,179 --> 00:38:29,780
+Pero básicamente lo que hace el PianoLog es,
+
+747
+00:38:32,060 --> 00:38:33,820
+el PianoLog es esta hoja de cálculo que tenemos
+
+748
+00:38:33,820 --> 00:38:35,419
+que maneja todo nuestro negocio
+
+749
+00:38:35,419 --> 00:38:39,300
+y tiene todos los pianos desde 2011 en adelante
+
+750
+00:38:39,300 --> 00:38:42,580
+y tiene como 100 columnas.
+
+751
+00:38:43,540 --> 00:38:46,899
+Y todo lo que todavía no se ha traído
+
+752
+00:38:46,899 --> 00:38:49,780
+a las secciones de arriba se trae aquí,
+
+753
+00:38:49,780 --> 00:38:51,260
+a la sección del PianoLog.
+
+754
+00:38:51,260 --> 00:38:52,699
+Probablemente no necesitarán consultarlo,
+
+755
+00:38:52,699 --> 00:38:55,459
+pero si alguna vez hay un detalle y se preguntan:
+
+756
+00:38:55,459 --> 00:38:57,179
+¿podremos averiguar eso?
+
+757
+00:38:57,179 --> 00:38:58,739
+Pueden buscar aquí.
+
+758
+00:38:58,739 --> 00:39:01,580
+Pero probablemente no necesitarán usar la sección del PianoLog.
+
+759
+00:39:02,500 --> 00:39:03,800
+Pero eso es lo que es.
+
+760
+00:39:03,800 --> 00:39:06,719
+Y esto abre el PianoLog
+
+761
+00:39:06,719 --> 00:39:08,080
+que ahora es una web app digitalizada,
+
+762
+00:39:08,080 --> 00:39:10,120
+pero probablemente tampoco necesitarán ese botón.
+
+763
+00:39:10,120 --> 00:39:13,239
+Bien, ¿preguntas sobre las tarjetas de datos de los pianos?
+
+764
+00:39:14,959 --> 00:39:16,679
+¿Pasamos a lo siguiente?
+
+765
+00:39:16,679 --> 00:39:19,080
+Bien, ¿qué sigue?
+
+766
+00:39:19,080 --> 00:39:21,639
+La tarjeta del piano, bien.
+
+767
+00:39:21,639 --> 00:39:24,280
+Alguien revise eso y díganme si me salté algo,
+
+768
+00:39:24,280 --> 00:39:25,320
+así solo leo los encabezados.
+
+769
+00:39:25,320 --> 00:39:26,560
+Sugerencias, mejoras.
+
+770
+00:39:26,560 --> 00:39:29,840
+Creo que ya cubrimos bien el foquito hoy.
+
+771
+00:39:29,840 --> 00:39:31,399
+Bien, les cuento sobre eso.
+
+772
+00:39:31,399 --> 00:39:33,560
+Ah, eso es bueno diferenciarlo.
+
+773
+00:39:34,620 --> 00:39:35,959
+Bien, gracias por señalarlo.
+
+774
+00:39:35,959 --> 00:39:39,580
+En la, ¿qué sección es?
+
+775
+00:39:39,580 --> 00:39:40,419
+Creo que es,
+
+776
+00:39:42,879 --> 00:39:43,719
+hay,
+
+777
+00:39:47,379 --> 00:39:48,739
+bien, esto es, ¿qué sección es esta?
+
+778
+00:39:48,739 --> 00:39:51,000
+Administración; en la sección de administración,
+
+779
+00:39:51,000 --> 00:39:53,399
+esto es sobre todo para Brigham o los gerentes,
+
+780
+00:39:53,399 --> 00:39:55,699
+para solicitar algo sobre un piano.
+
+781
+00:39:55,699 --> 00:39:59,959
+Si le dan a este botón de solicitud dentro de la tarjeta de datos,
+
+782
+00:39:59,959 --> 00:40:01,959
+va a enviar una solicitud
+
+783
+00:40:01,959 --> 00:40:03,840
+o poner algo en el calendario de alguien
+
+784
+00:40:03,840 --> 00:40:05,560
+o va a enviar,
+
+785
+00:40:05,560 --> 00:40:07,500
+va a mandar un correo, un texto,
+
+786
+00:40:07,500 --> 00:40:08,439
+ponerlo en el calendario de alguien.
+
+787
+00:40:08,439 --> 00:40:10,120
+Va a hacer algo.
+
+788
+00:40:10,120 --> 00:40:11,800
+Pero va a adjuntar la información
+
+789
+00:40:11,800 --> 00:40:13,239
+de ese piano específico.
+
+790
+00:40:14,080 --> 00:40:16,320
+Así que si quieren que quede vinculado a un piano específico,
+
+791
+00:40:16,320 --> 00:40:17,919
+háganlo dentro de la tarjeta de datos.
+
+792
+00:40:20,840 --> 00:40:22,800
+Si quieren que lo muevan o lo afinen,
+
+793
+00:40:22,800 --> 00:40:24,580
+si necesita servicio, significa,
+
+794
+00:40:24,580 --> 00:40:27,159
+servicio significa todo lo que sea una reparación,
+
+795
+00:40:27,159 --> 00:40:28,399
+un pedal que rechina.
+
+796
+00:40:28,399 --> 00:40:30,679
+Si hay, ya saben, una queja de un recital
+
+797
+00:40:30,679 --> 00:40:33,760
+o si hay un cliente al que están ayudando en la sala de exhibición
+
+798
+00:40:33,760 --> 00:40:37,360
+y les dice: ¿sabían que este si de aquí no funciona?
+
+799
+00:40:37,360 --> 00:40:39,879
+Entonces pueden entrar a ese piano,
+
+800
+00:40:39,879 --> 00:40:41,360
+bajar a la sección de administración,
+
+801
+00:40:41,360 --> 00:40:43,360
+hacen clic en solicitud,
+
+802
+00:40:43,360 --> 00:40:45,479
+clic en servicio,
+
+803
+00:40:46,959 --> 00:40:51,959
+y lo asignan a uno de estos técnicos
+
+804
+00:40:52,100 --> 00:40:55,239
+y ponen: tecla pegada en la octava central
+
+805
+00:40:55,239 --> 00:40:57,520
+y el pedal rechina, o lo que sea.
+
+806
+00:40:57,520 --> 00:41:00,199
+El tiempo asignado: su mejor cálculo.
+
+807
+00:41:00,199 --> 00:41:02,959
+Y pueden programarlo en su siguiente espacio libre
+
+808
+00:41:02,959 --> 00:41:06,179
+o programarlo lo antes posible si es una urgencia.
+
+809
+00:41:09,560 --> 00:41:11,360
+A ver, ¿cuáles eran los otros?
+
+810
+00:41:13,159 --> 00:41:14,000
+Solicitud.
+
+811
+00:41:15,919 --> 00:41:18,679
+Si tienen una solicitud para los administradores,
+
+812
+00:41:19,800 --> 00:41:22,399
+Curtis Harper es para retoques,
+
+813
+00:41:23,280 --> 00:41:25,879
+como a veces cuando hay reencordado.
+
+814
+00:41:25,879 --> 00:41:27,719
+Aunque en general, no creo que la mayoría de los técnicos
+
+815
+00:41:27,719 --> 00:41:28,840
+vayan a hacer estas solicitudes.
+
+816
+00:41:28,840 --> 00:41:32,000
+Estas serán más de Brigham, administración y gerentes.
+
+817
+00:41:33,520 --> 00:41:36,919
+Cambio de precio, programación prioritaria, una tarea para Brigham.
+
+818
+00:41:36,919 --> 00:41:38,120
+Si quieren asignarle una tarea a Brigham
+
+819
+00:41:38,120 --> 00:41:40,239
+y decirle que haga algo,
+
+820
+00:41:40,239 --> 00:41:41,159
+esta es la forma de hacerlo.
+
+821
+00:41:41,159 --> 00:41:43,320
+Y pone algo sobre este piano
+
+822
+00:41:43,320 --> 00:41:45,239
+en la lista de pendientes de Brigham.
+
+823
+00:41:45,239 --> 00:41:46,280
+¿Qué les parece?
+
+824
+00:41:47,399 --> 00:41:49,439
+Eso podría ser muy útil, la verdad.
+
+825
+00:41:49,439 --> 00:41:52,479
+Ahora tienen una forma de asignarle tareas de pianos a Brigham.
+
+826
+00:41:53,540 --> 00:41:55,000
+Ah, esto no lo hemos probado aún,
+
+827
+00:41:55,159 --> 00:41:57,560
+pero ¿quieres explicar el lugar temporal del mapa?
+
+828
+00:41:58,919 --> 00:41:59,760
+Está bastante genial.
+
+829
+00:41:59,760 --> 00:42:02,800
+Fue una de las ideas de los gerentes.
+
+830
+00:42:03,719 --> 00:42:06,840
+Hay un lugar para cada piano en el mapa.
+
+831
+00:42:06,840 --> 00:42:09,840
+Y a veces, según cambian las cosas,
+
+832
+00:42:09,840 --> 00:42:11,639
+es como: bueno, necesitamos poner este piano aquí
+
+833
+00:42:11,639 --> 00:42:13,560
+por una semana o tres días.
+
+834
+00:42:13,560 --> 00:42:15,320
+Lo están metiendo con calzador.
+
+835
+00:42:15,320 --> 00:42:17,679
+Pueden crear un lugar temporal desde aquí,
+
+836
+00:42:17,679 --> 00:42:18,520
+tipo: perfecto,
+
+837
+00:42:18,520 --> 00:42:20,360
+esto estará aquí solo esta semana.
+
+838
+00:42:20,360 --> 00:42:22,399
+La próxima semana desaparecerá cuando terminemos con el normal.
+
+839
+00:42:22,399 --> 00:42:25,560
+No es uno de estos lugares fijos permanentes,
+
+840
+00:42:25,560 --> 00:42:29,800
+pero bueno, para resolverlo,
+
+841
+00:42:29,800 --> 00:42:31,360
+hay que poner las cosas en algún lugar.
+
+842
+00:42:31,360 --> 00:42:34,159
+Así que tenemos ese lugar ahí.
+
+843
+00:42:34,159 --> 00:42:36,199
+Sí, esto no lo hemos probado aún.
+
+844
+00:42:36,199 --> 00:42:37,919
+Ojalá funcione.
+
+845
+00:42:37,919 --> 00:42:39,719
+Y si no, usaremos etiqueta.
+
+846
+00:42:39,719 --> 00:42:41,600
+Marcar como duplicado.
+
+847
+00:42:41,600 --> 00:42:42,719
+No hay realmente una buena forma:
+
+848
+00:42:42,719 --> 00:42:44,919
+si por accidente ponen un piano en dos lugares
+
+849
+00:42:44,919 --> 00:42:46,439
+porque creen que no está en ningún lado
+
+850
+00:42:46,439 --> 00:42:47,439
+y entonces lo registran,
+
+851
+00:42:47,439 --> 00:42:49,360
+pero luego, o intentaron abrirlo
+
+852
+00:42:49,360 --> 00:42:50,320
+con el número de serie equivocado.
+
+853
+00:42:50,320 --> 00:42:52,120
+Esto está aquí porque pasa.
+
+854
+00:42:52,840 --> 00:42:55,280
+Lo registran, y entonces tenemos un duplicado.
+
+855
+00:42:55,280 --> 00:42:58,080
+Esta es la única forma de eliminar duplicados.
+
+856
+00:42:59,919 --> 00:43:01,959
+La única forma de crear un duplicado
+
+857
+00:43:01,959 --> 00:43:03,840
+es equivocarse con el número de serie.
+
+858
+00:43:03,840 --> 00:43:05,479
+Entonces creen que no está ahí,
+
+859
+00:43:05,479 --> 00:43:07,639
+pero, y entonces agregan uno.
+
+860
+00:43:09,040 --> 00:43:13,719
+Y la etiqueta de taller es editable.
+
+861
+00:43:13,719 --> 00:43:16,000
+Pueden editar aquí mismo para imprimir una nueva.
+
+862
+00:43:17,439 --> 00:43:18,919
+Probablemente es mejor,
+
+863
+00:43:19,919 --> 00:43:22,560
+pueden escribirlo aquí o escribir con lápiz
+
+864
+00:43:22,560 --> 00:43:24,600
+y llevarlo a administración para que lo actualicen.
+
+865
+00:43:24,600 --> 00:43:26,760
+Y luego le dan imprimir.
+
+866
+00:43:26,760 --> 00:43:28,679
+E imprime lo que hayan editado.
+
+867
+00:43:28,679 --> 00:43:29,800
+E imprime dos por página.
+
+868
+00:43:29,800 --> 00:43:32,399
+Así hay una a cada lado del piano.
+
+869
+00:43:32,399 --> 00:43:34,439
+Bien, pero también está esto.
+
+870
+00:43:34,439 --> 00:43:38,080
+Eso es para solicitar cualquiera de esas cosas
+
+871
+00:43:38,080 --> 00:43:38,919
+para ese piano específico.
+
+872
+00:43:38,919 --> 00:43:40,520
+Pero esto es solicitud, arriba.
+
+873
+00:43:41,600 --> 00:43:44,479
+Significa que no es específica de un piano.
+
+874
+00:43:44,479 --> 00:43:48,040
+Es como una solicitud en general, ¿de acuerdo?
+
+875
+00:43:49,159 --> 00:43:53,959
+La solicitud de arriba es solo en general.
+
+876
+00:43:58,159 --> 00:44:00,080
+Bien, ¿qué sigue?
+
+877
+00:44:03,800 --> 00:44:05,280
+Ya vimos las sugerencias y mejoras.
+
+878
+00:44:05,280 --> 00:44:08,879
+Ya vimos el texto al número del taller, los reportes y el archivo.
+
+879
+00:44:08,879 --> 00:44:10,120
+Bien, repasemos eso.
+
+880
+00:44:11,120 --> 00:44:13,560
+Repasemos el menú, todo lo que está en el menú.
+
+881
+00:44:13,560 --> 00:44:15,280
+El Store Map es la primera pestaña.
+
+882
+00:44:16,120 --> 00:44:17,919
+Mi Panel lo agregué apenas ayer.
+
+883
+00:44:17,919 --> 00:44:19,840
+Así que no está muy desarrollado.
+
+884
+00:44:19,840 --> 00:44:22,080
+Pero cada uno de ustedes, perdón, soy técnico.
+
+885
+00:44:23,399 --> 00:44:25,760
+Voy a cambiar esto para que los administradores digan:
+
+886
+00:44:25,760 --> 00:44:26,919
+administradores de pianos.
+
+887
+00:44:26,919 --> 00:44:29,479
+Por cierto, hoy empieza una nueva administradora.
+
+888
+00:44:29,479 --> 00:44:32,280
+Muy emocionados de haber encontrado a alguien increíble.
+
+889
+00:44:32,280 --> 00:44:36,159
+Susie se fue a continuar sus estudios a Corea.
+
+890
+00:44:36,159 --> 00:44:40,719
+Y encontramos a una persona nueva súper sobrecalificada
+
+891
+00:44:40,719 --> 00:44:41,879
+para el puesto.
+
+892
+00:44:41,879 --> 00:44:44,840
+Pero quiere un cambio de vida y de carrera,
+
+893
+00:44:44,840 --> 00:44:47,639
+trabajar en un lugar con menos estrés,
+
+894
+00:44:48,320 --> 00:44:49,800
+con gente agradable y en un buen ambiente.
+
+895
+00:44:49,800 --> 00:44:52,800
+Y nos ganamos el premio mayor.
+
+896
+00:44:52,800 --> 00:44:55,360
+Así que Lisa es nuestra nueva administradora.
+
+897
+00:44:55,360 --> 00:44:57,520
+Sean amables con ella, porque quiere trabajar en un lugar agradable.
+
+898
+00:44:57,520 --> 00:45:00,120
+Y la convencimos de que aquí todos somos amables.
+
+899
+00:45:01,000 --> 00:45:02,320
+Empieza hoy.
+
+900
+00:45:02,320 --> 00:45:03,679
+Estará de 10 a 2, de lunes a viernes,
+
+901
+00:45:03,679 --> 00:45:05,080
+y un sábado sí, uno no.
+
+902
+00:45:05,080 --> 00:45:06,479
+Solo una nota curiosa al margen.
+
+903
+00:45:06,479 --> 00:45:11,479
+Nuestras tres administradoras más Ezi ahora son Lisa, Alisa y Melissa.
+
+904
+00:45:12,719 --> 00:45:15,080
+Así que podrían llamarme Karlisa o algo así.
+
+905
+00:45:16,080 --> 00:45:17,320
+Sí, ¿verdad que es divertido?
+
+906
+00:45:18,120 --> 00:45:19,520
+Bien, entonces, su panel.
+
+907
+00:45:19,520 --> 00:45:24,520
+Aquí es donde podrán marcar entrada para su día.
+
+908
+00:45:25,560 --> 00:45:27,479
+Y cuando marquen entrada en el piano,
+
+909
+00:45:27,479 --> 00:45:30,959
+¿ven este fuera de reloj?, ahí mismo mostrará
+
+910
+00:45:30,959 --> 00:45:33,159
+en qué piano tienen la entrada marcada.
+
+911
+00:45:33,159 --> 00:45:38,159
+Y este pay logics es lo que va a cambiar
+
+912
+00:45:38,360 --> 00:45:40,840
+a su marcado de entrada y salida.
+
+913
+00:45:43,320 --> 00:45:45,360
+No he probado todas estas funciones.
+
+914
+00:45:45,360 --> 00:45:47,840
+Así que quizá no se metan en estas todavía.
+
+915
+00:45:47,840 --> 00:45:49,840
+Déjenme, porque podrían frustrarse.
+
+916
+00:45:49,840 --> 00:45:51,760
+Voy a seguir probando estas funciones
+
+917
+00:45:51,760 --> 00:45:54,000
+con los gerentes.
+
+918
+00:45:54,000 --> 00:45:55,399
+Y quizá en las reuniones de la mañana
+
+919
+00:45:55,399 --> 00:45:58,479
+les avisen: bien, empiecen a usar su calendario,
+
+920
+00:45:58,479 --> 00:46:00,239
+su semana y su reporte del viernes.
+
+921
+00:46:00,239 --> 00:46:02,840
+Pero todavía no, porque podrían frustrarse.
+
+922
+00:46:02,840 --> 00:46:05,280
+Y podría tener a 12 personas mandándome
+
+923
+00:46:05,280 --> 00:46:07,919
+los mismos foquitos, ¿de acuerdo?
+
+924
+00:46:07,919 --> 00:46:12,159
+Pero pronto van a enviar su reporte del viernes
+
+925
+00:46:12,159 --> 00:46:14,320
+desde aquí en vez de a la hoja de cálculo.
+
+926
+00:46:14,320 --> 00:46:15,840
+Podrán abrir su calendario de Google
+
+927
+00:46:15,840 --> 00:46:18,879
+y podrán ver su semana.
+
+928
+00:46:20,000 --> 00:46:20,840
+¿De acuerdo?
+
+929
+00:46:20,840 --> 00:46:22,080
+Para esta semana, ¿seguimos con el plan de hacer
+
+930
+00:46:22,080 --> 00:46:24,959
+los reportes del viernes en Google Sheets y Google?
+
+931
+00:46:24,959 --> 00:46:29,320
+Sí, aunque probablemente los ponga a probarlo.
+
+932
+00:46:29,320 --> 00:46:30,159
+Bien.
+
+933
+00:46:31,719 --> 00:46:35,879
+Bien, algunos de los otros: este de pianos
+
+934
+00:46:35,879 --> 00:46:38,120
+solo va al registro de pianos,
+
+935
+00:46:38,120 --> 00:46:42,080
+que probablemente no necesiten, pero ahí está.
+
+936
+00:46:42,080 --> 00:46:45,679
+Va a una versión web app de esa hoja de cálculo enorme.
+
+937
+00:46:45,679 --> 00:46:49,360
+La app del taller, pueden hacer clic ahí si quieren.
+
+938
+00:46:49,360 --> 00:46:53,040
+Pero, y Mark les dio enlaces tanto a esta app
+
+939
+00:46:53,040 --> 00:46:55,000
+como a la app del taller, pero hace poco decidí,
+
+940
+00:46:55,000 --> 00:46:56,679
+ni siquiera le he dicho a Mark,
+
+941
+00:46:56,679 --> 00:47:01,679
+pero creo que la app del taller se va a convertir
+
+942
+00:47:01,959 --> 00:47:05,479
+en una app solo para gerentes, porque creo que todas las funciones
+
+943
+00:47:05,479 --> 00:47:07,120
+que están ahí para los técnicos
+
+944
+00:47:07,120 --> 00:47:08,959
+se podrán poner en su panel.
+
+945
+00:47:08,959 --> 00:47:10,120
+Y será más fácil para ustedes
+
+946
+00:47:10,120 --> 00:47:14,320
+estar todo en una sola app y no andar cambiando entre apps,
+
+947
+00:47:14,320 --> 00:47:17,959
+porque hemos creado toda una monstruosidad,
+
+948
+00:47:17,959 --> 00:47:19,840
+un Frankenstein de tantas apps.
+
+949
+00:47:19,840 --> 00:47:21,479
+Nos emocionamos tanto con la IA,
+
+950
+00:47:21,479 --> 00:47:23,520
+y es tan divertido crear lo que quieras,
+
+951
+00:47:23,520 --> 00:47:24,919
+que yo decía: una web app para esto,
+
+952
+00:47:24,919 --> 00:47:26,239
+y sí, y para esto, y aquello.
+
+953
+00:47:26,239 --> 00:47:28,000
+Y, ya saben, algunas son geniales
+
+954
+00:47:28,000 --> 00:47:29,360
+y otras están en aprendizaje.
+
+955
+00:47:29,360 --> 00:47:30,520
+Y vamos a mantenerlos a ustedes
+
+956
+00:47:30,520 --> 00:47:32,360
+en una sola web app que sea genial.
+
+957
+00:47:32,360 --> 00:47:36,600
+Y la app del taller será una app gerencial de Brigham.
+
+958
+00:47:36,719 --> 00:47:40,000
+Y todo a lo que van,
+
+959
+00:47:40,000 --> 00:47:41,879
+si quieren ir ahí y ver
+
+960
+00:47:41,879 --> 00:47:45,120
+el desorden que he hecho con todos los borradores,
+
+961
+00:47:45,120 --> 00:47:46,820
+pueden ver lo que está en progreso.
+
+962
+00:47:46,820 --> 00:47:49,399
+Pero es como la estación de trabajo de borradores.
+
+963
+00:47:49,399 --> 00:47:51,840
+No hay nada que esté realmente listo.
+
+964
+00:47:52,879 --> 00:47:57,439
+El tablero de mudanzas es para los que mueven pianos.
+
+965
+00:47:57,439 --> 00:48:00,100
+Si tienen curiosidad, trae su calendario
+
+966
+00:48:00,100 --> 00:48:01,760
+y muestra qué mudanzas vienen.
+
+967
+00:48:01,760 --> 00:48:03,760
+Este iconito del camión de mudanzas
+
+968
+00:48:03,760 --> 00:48:06,120
+significa que hoy hay una mudanza de piano.
+
+969
+00:48:08,199 --> 00:48:11,280
+Así que si se preguntan qué están haciendo los de mudanzas,
+
+970
+00:48:11,280 --> 00:48:14,899
+pueden hacer clic ahí o en el tablero de mudanzas.
+
+971
+00:48:16,520 --> 00:48:19,679
+Calendario, ah, ese es el calendario de mudanzas.
+
+972
+00:48:19,679 --> 00:48:21,399
+Probablemente deberíamos quitarlo.
+
+973
+00:48:21,399 --> 00:48:23,300
+Es un ejemplo de algo que no necesita estar ahí.
+
+974
+00:48:23,300 --> 00:48:24,939
+Así que deberíamos eliminarlo.
+
+975
+00:48:24,939 --> 00:48:28,719
+Reportes; los reportes también son más gerenciales.
+
+976
+00:48:28,719 --> 00:48:30,679
+Así que no voy a repasarlos todos.
+
+977
+00:48:31,679 --> 00:48:36,679
+Pero quizá un reporte que puede ser útil
+
+978
+00:48:36,959 --> 00:48:38,580
+para todos es la cola del taller.
+
+979
+00:48:39,520 --> 00:48:41,239
+Marcelo vino a preguntarme el otro día,
+
+980
+00:48:41,239 --> 00:48:42,919
+porque su programación no estaba del todo bien.
+
+981
+00:48:42,919 --> 00:48:45,600
+Y me dijo: ¿de qué piano hago las teclas ahora?
+
+982
+00:48:45,600 --> 00:48:48,139
+Y un técnico me ayudó a encontrar unas teclas
+
+983
+00:48:48,139 --> 00:48:50,959
+en el cuarto de muebles, tres que no estaban hechas.
+
+984
+00:48:50,959 --> 00:48:53,199
+Y la forma en que decidí cuál debía hacer primero
+
+985
+00:48:53,199 --> 00:48:55,600
+fue buscarlas todas en la cola,
+
+986
+00:48:55,600 --> 00:48:57,840
+y le dije: haz estas tres ahora,
+
+987
+00:48:57,840 --> 00:49:00,520
+y las puse en orden de cola.
+
+988
+00:49:01,360 --> 00:49:04,120
+Así que si quieren ver los pianos en orden,
+
+989
+00:49:04,120 --> 00:49:06,080
+ese reporte puede ser útil.
+
+990
+00:49:08,479 --> 00:49:13,479
+La forma en que, los reportes se expanden y se contraen.
+
+991
+00:49:15,600 --> 00:49:16,439
+Sí.
+
+992
+00:49:17,439 --> 00:49:18,280
+Sí.
+
+993
+00:49:27,320 --> 00:49:29,520
+Supongo que es lo que esté marcado en ese momento.
+
+994
+00:49:29,520 --> 00:49:33,679
+Si está en DHRT, alguien está trabajando en DHRT.
+
+995
+00:49:33,679 --> 00:49:36,199
+Sí, porque así es en la tarjeta de datos.
+
+996
+00:49:36,199 --> 00:49:38,120
+Si muestra la fase DHRT,
+
+997
+00:49:38,120 --> 00:49:40,600
+significa que en eso está trabajando alguien ahora.
+
+998
+00:49:40,600 --> 00:49:44,800
+Entonces, si está en la cola pero aún no está asignado,
+
+999
+00:49:44,800 --> 00:49:47,439
+¿cómo sabemos, por ejemplo: alguien termina un miércoles,
+
+1000
+00:49:47,439 --> 00:49:49,919
+y necesitamos pasarlo al siguiente piano?
+
+1001
+00:49:49,919 --> 00:49:51,679
+¿Cómo sabríamos dónde terminan
+
+1002
+00:49:51,679 --> 00:49:53,159
+los que ya se están trabajando
+
+1003
+00:49:53,159 --> 00:49:55,320
+y dónde están los que faltan por trabajar?
+
+1004
+00:49:55,320 --> 00:49:57,159
+¿Tiene sentido?
+
+1005
+00:49:57,159 --> 00:49:58,639
+Sí.
+
+1006
+00:49:58,639 --> 00:50:00,800
+Bueno, denme un ejemplo.
+
+1007
+00:50:00,800 --> 00:50:01,679
+¿Quién necesita trabajo?
+
+1008
+00:50:03,320 --> 00:50:06,040
+Quizá alguien necesita trabajo, su siguiente trabajo de CAP.
+
+1009
+00:50:06,040 --> 00:50:07,800
+Entonces, quizá empezarían por arriba,
+
+1010
+00:50:07,800 --> 00:50:09,280
+quizá empezarían en lo alto de la cola y dirían:
+
+1011
+00:50:09,280 --> 00:50:13,800
+bueno, hay que encontrar un piano que esté en CAP o antes, ¿verdad?
+
+1012
+00:50:13,800 --> 00:50:15,520
+Todos estos, DHRT ya está superado.
+
+1013
+00:50:15,520 --> 00:50:16,560
+Ya está en su primera afinación.
+
+1014
+00:50:16,560 --> 00:50:17,639
+Está en la afinación inicial.
+
+1015
+00:50:17,639 --> 00:50:18,600
+Está listo para salir.
+
+1016
+00:50:18,600 --> 00:50:20,080
+Ese está esperando a Brigham.
+
+1017
+00:50:20,080 --> 00:50:22,760
+Este ya está en CAP y ese está en espera.
+
+1018
+00:50:22,760 --> 00:50:23,959
+Así que hay que seguir bajando.
+
+1019
+00:50:23,959 --> 00:50:25,239
+Ese está en reacabado.
+
+1020
+00:50:25,239 --> 00:50:27,800
+Debimos elegir, o sea, debimos elegir QC.
+
+1021
+00:50:27,800 --> 00:50:29,120
+¿Cuál es el siguiente QC, verdad?
+
+1022
+00:50:29,120 --> 00:50:31,600
+Y luego, pero creo que solo bajan
+
+1023
+00:50:31,600 --> 00:50:33,399
+hasta encontrar uno que esté.
+
+1024
+00:50:33,399 --> 00:50:34,600
+Bueno, pero entonces, ¿eso muestra
+
+1025
+00:50:34,600 --> 00:50:37,439
+si ya está asignado a alguien?
+
+1026
+00:50:37,439 --> 00:50:39,280
+¿Como en su calendario de la semana?
+
+1027
+00:50:40,479 --> 00:50:41,320
+No.
+
+1028
+00:50:41,320 --> 00:50:42,800
+Entonces, estoy trabajando en el,
+
+1029
+00:50:42,800 --> 00:50:47,800
+el, em, piano cuadrado del diagrama, ¿verdad?
+
+1030
+00:50:47,840 --> 00:50:49,360
+Y ahora muestra el CAP.
+
+1031
+00:50:49,360 --> 00:50:50,199
+Sí.
+
+1032
+00:50:50,199 --> 00:50:52,120
+Si alguien necesitara un CAP, miraría el,
+
+1033
+00:50:52,120 --> 00:50:53,719
+ah, bueno, no necesito apuntarme
+
+1034
+00:50:53,719 --> 00:50:55,120
+desde tu misma gráfica de barras.
+
+1035
+00:50:55,120 --> 00:50:56,199
+¿Cómo vemos, o sea, quién ya está?
+
+1036
+00:50:56,199 --> 00:50:57,919
+Déjame decir que no sé la respuesta
+
+1037
+00:50:57,919 --> 00:50:59,439
+y quizá ni siquiera esté creado.
+
+1038
+00:50:59,439 --> 00:51:01,600
+Así que, ¿por qué no envías un foquito
+
+1039
+00:51:01,600 --> 00:51:02,879
+y dices: averigüemos
+
+1040
+00:51:02,879 --> 00:51:04,840
+cómo responder esa pregunta rápido,
+
+1041
+00:51:04,840 --> 00:51:08,000
+y podemos ponerlo en el reporte de cola
+
+1042
+00:51:08,000 --> 00:51:10,199
+o encontrar otra forma de hacerlo?
+
+1043
+00:51:10,199 --> 00:51:13,199
+Pero esa es una gran necesidad identificada.
+
+1044
+00:51:13,199 --> 00:51:15,199
+Donde antes íbamos: Brigham,
+
+1045
+00:51:15,199 --> 00:51:18,679
+¿qué debería hacer Jake ahora?
+
+1046
+00:51:18,679 --> 00:51:20,879
+¿No va a ser hermoso, muchachos?
+
+1047
+00:51:20,879 --> 00:51:22,520
+¿Se acuerdan del registro de pianos que les conté,
+
+1048
+00:51:22,520 --> 00:51:24,159
+que llevamos desde 2011,
+
+1049
+00:51:24,159 --> 00:51:26,399
+que tiene literalmente 100 columnas
+
+1050
+00:51:26,399 --> 00:51:28,199
+y miles de pianos?
+
+1051
+00:51:28,199 --> 00:51:31,320
+Hubo una época antes del registro de pianos
+
+1052
+00:51:31,320 --> 00:51:33,600
+en que toda esa información solo estaba en la cabeza de Brigham.
+
+1053
+00:51:33,600 --> 00:51:36,199
+¿Se imaginan intentar ser administradora
+
+1054
+00:51:36,199 --> 00:51:37,679
+y trabajar con Brigham
+
+1055
+00:51:37,679 --> 00:51:40,479
+con toda la información encerrada en su cerebro?
+
+1056
+00:51:40,479 --> 00:51:42,600
+Estamos tratando de darles a todos el regalo
+
+1057
+00:51:42,600 --> 00:51:45,080
+de desbloquear la información del taller,
+
+1058
+00:51:45,080 --> 00:51:46,560
+para que un día, dentro de cinco años,
+
+1059
+00:51:46,560 --> 00:51:48,600
+digamos: ¿te acuerdas de antes del mapa,
+
+1060
+00:51:48,600 --> 00:51:50,719
+cuando teníamos que ir a preguntarle a Brigham
+
+1061
+00:51:50,719 --> 00:51:53,159
+porque toda la información estaba encerrada en su cerebro?
+
+1062
+00:51:53,159 --> 00:51:55,239
+Estamos por desbloquear el cerebro de Brigham,
+
+1063
+00:51:55,239 --> 00:51:56,760
+y todos ustedes, todos van a saber
+
+1064
+00:51:56,760 --> 00:51:58,320
+qué está haciendo cada quien,
+
+1065
+00:51:58,320 --> 00:52:00,000
+y va a ser glorioso.
+
+1066
+00:52:00,000 --> 00:52:01,199
+Es una nueva era, muchachos.
+
+1067
+00:52:01,199 --> 00:52:02,399
+Es muy emocionante.
+
+1068
+00:52:02,399 --> 00:52:04,199
+La información es poderosa.
+
+1069
+00:52:04,199 --> 00:52:05,439
+Pero no sé la respuesta a eso,
+
+1070
+00:52:05,439 --> 00:52:07,560
+así que averigüémoslo.
+
+1071
+00:52:07,560 --> 00:52:09,800
+Bien, ¿algún otro reporte del taller
+
+1072
+00:52:09,800 --> 00:52:12,600
+que sería útil para todos?
+
+1073
+00:52:12,600 --> 00:52:15,639
+Voy a minimizar este.
+
+1074
+00:52:15,639 --> 00:52:17,639
+Ah, y tiene ese botón de compartir y uno de imprimir,
+
+1075
+00:52:17,639 --> 00:52:22,399
+así que pueden enviar los reportes por texto
+
+1076
+00:52:22,399 --> 00:52:24,159
+o imprimirlos si les sirve.
+
+1077
+00:52:24,159 --> 00:52:25,360
+¿Cuál era tu pregunta?
+
+1078
+00:52:27,760 --> 00:52:28,600
+Ah, sí.
+
+1079
+00:52:29,600 --> 00:52:33,959
+Este, diría que está en progreso,
+
+1080
+00:52:33,959 --> 00:52:35,760
+pero le agregamos filtros.
+
+1081
+00:52:35,760 --> 00:52:37,600
+Por ejemplo, si Marcelo quiere saber
+
+1082
+00:52:37,600 --> 00:52:39,879
+qué cubiertas de teclas hacer ahora,
+
+1083
+00:52:39,879 --> 00:52:43,719
+puede filtrar por, entonces estos son,
+
+1084
+00:52:45,520 --> 00:52:47,280
+no sé si estos están bien o no.
+
+1085
+00:52:47,280 --> 00:52:50,280
+Creo que la IA decidió qué poner en este filtro.
+
+1086
+00:52:50,280 --> 00:52:53,399
+¿Qué es un, rayos, qué es eso?
+
+1087
+00:52:55,760 --> 00:52:57,120
+¿Eso es una tarea concurrente?
+
+1088
+00:52:58,840 --> 00:53:01,360
+Bien, esto lo vamos a ordenar,
+
+1089
+00:53:01,360 --> 00:53:02,879
+pero básicamente pueden filtrar
+
+1090
+00:53:02,879 --> 00:53:04,479
+por distintas tareas concurrentes
+
+1091
+00:53:04,479 --> 00:53:06,040
+y encontrar quizá lo que sigue.
+
+1092
+00:53:06,040 --> 00:53:07,879
+O pueden filtrar por calcomanías
+
+1093
+00:53:07,879 --> 00:53:09,959
+y mostrará una lista con
+
+1094
+00:53:09,959 --> 00:53:14,320
+todas las calcomanías pedidas versus recibidas.
+
+1095
+00:53:14,320 --> 00:53:17,080
+Así que ese también será un reporte útil
+
+1096
+00:53:17,080 --> 00:53:19,239
+para quienes hacen esas tareas.
+
+1097
+00:53:19,239 --> 00:53:21,280
+Luego hay muchos otros,
+
+1098
+00:53:23,520 --> 00:53:27,080
+la mayoría de estos los usarán
+
+1099
+00:53:27,080 --> 00:53:28,800
+los gerentes, no los técnicos.
+
+1100
+00:53:29,719 --> 00:53:32,040
+Hay uno que quizá les interese conocer.
+
+1101
+00:53:32,040 --> 00:53:34,600
+El registro de actividad simplemente guarda,
+
+1102
+00:53:34,600 --> 00:53:36,479
+todo lo que hacen se observa y se revisa.
+
+1103
+00:53:36,479 --> 00:53:40,199
+Es básicamente la versión 1984 de las apps de taller.
+
+1104
+00:53:40,199 --> 00:53:42,600
+Todo queda grabado, así que cuando inician sesión,
+
+1105
+00:53:42,600 --> 00:53:45,479
+muestra cada clic en detalle, quién hace qué.
+
+1106
+00:53:45,479 --> 00:53:48,959
+Así que si tenemos alguna duda, ¿ven?
+
+1107
+00:53:49,679 --> 00:53:51,840
+Garrett, bien hecho, miren eso.
+
+1108
+00:53:51,840 --> 00:53:53,919
+Garrett acaba de hacer esto, movió un piano.
+
+1109
+00:53:54,840 --> 00:53:58,239
+Y esto también se puede filtrar.
+
+1110
+00:53:58,239 --> 00:54:03,040
+Si se preguntan quién hizo qué o qué acción,
+
+1111
+00:54:03,040 --> 00:54:05,719
+pueden filtrar el registro de actividad por movimientos.
+
+1112
+00:54:05,719 --> 00:54:07,360
+Pueden filtrarlo y preguntar:
+
+1113
+00:54:07,360 --> 00:54:09,919
+¿quién movió qué pianos a dónde en la última semana?
+
+1114
+00:54:09,919 --> 00:54:11,479
+Porque Corbin justo me preguntó esta mañana,
+
+1115
+00:54:11,479 --> 00:54:12,919
+dijo: se supone que debo afinar un piano aquí,
+
+1116
+00:54:12,919 --> 00:54:15,520
+pero no está aquí, y no está en los últimos tres lugares.
+
+1117
+00:54:15,520 --> 00:54:16,360
+¿Dónde está el piano?
+
+1118
+00:54:16,360 --> 00:54:17,959
+Y le dije: no sé.
+
+1119
+00:54:17,959 --> 00:54:19,560
+Pero después de esta reunión,
+
+1120
+00:54:19,560 --> 00:54:22,040
+ojalá todos actualicemos nuestros lugares del mapa,
+
+1121
+00:54:22,040 --> 00:54:24,280
+y todos sabremos dónde está todo.
+
+1122
+00:54:24,280 --> 00:54:26,320
+Y si no, podemos ir al registro de actividad
+
+1123
+00:54:26,320 --> 00:54:28,120
+y filtrar por movimientos, y no sé,
+
+1124
+00:54:28,120 --> 00:54:29,840
+sería otra pieza del rompecabezas
+
+1125
+00:54:29,840 --> 00:54:31,399
+para tratar de armar las cosas.
+
+1126
+00:54:32,479 --> 00:54:36,199
+Bien, medios es sobre todo para administradores, Brigham, taller, trabajo.
+
+1127
+00:54:36,199 --> 00:54:38,760
+Ah, esto es solo una curiosidad.
+
+1128
+00:54:38,760 --> 00:54:41,399
+Nadie lo va a necesitar, bueno, a Brigham le interesa,
+
+1129
+00:54:41,399 --> 00:54:43,399
+pero pueden conocerlo por diversión.
+
+1130
+00:54:44,320 --> 00:54:47,679
+Este es el mapa actual de todos los pianos
+
+1131
+00:54:48,360 --> 00:54:49,560
+que están ahora en la cola,
+
+1132
+00:54:49,560 --> 00:54:51,479
+de dónde vinieron en todo el país.
+
+1133
+00:54:51,479 --> 00:54:55,399
+Esto nos ayuda a armar viajes por carretera nacionales
+
+1134
+00:54:55,399 --> 00:54:58,000
+o vacaciones familiares, ya que casi solo vacacionamos
+
+1135
+00:54:58,000 --> 00:54:59,639
+según el negocio.
+
+1136
+00:54:59,639 --> 00:55:03,800
+Así que quizá pronto oigan que vamos a un viaje en casa rodante
+
+1137
+00:55:03,800 --> 00:55:05,879
+por la costa este entregando pianos.
+
+1138
+00:55:05,879 --> 00:55:09,320
+Y quizá noten que, sean cuales sean esos pianos,
+
+1139
+00:55:09,320 --> 00:55:11,560
+Brigham esté tratando de apurarlos
+
+1140
+00:55:11,560 --> 00:55:15,000
+en la cola para poder entregarlos todos juntos.
+
+1141
+00:55:15,040 --> 00:55:18,080
+O quizá mande a nuestros hijos a un viaje a California.
+
+1142
+00:55:18,080 --> 00:55:21,159
+Y va a tratar de apurar esos en la cola,
+
+1143
+00:55:21,159 --> 00:55:22,840
+lo cual es interesante, ¿no?
+
+1144
+00:55:22,840 --> 00:55:25,080
+Buen trabajo arreglando pianos por todo el país.
+
+1145
+00:55:25,959 --> 00:55:26,800
+Bastante divertido.
+
+1146
+00:55:28,439 --> 00:55:29,280
+Pero me desvío.
+
+1147
+00:55:29,280 --> 00:55:32,560
+Bien, mapa del taller, no mucha pestaña.
+
+1148
+00:55:32,560 --> 00:55:36,000
+Soy la reina de las pestañas, siempre tengo demasiadas abiertas.
+
+1149
+00:55:36,000 --> 00:55:38,639
+Bien, creo que ya terminamos eso.
+
+1150
+00:55:38,639 --> 00:55:40,199
+¿Y qué más?
+
+1151
+00:55:40,199 --> 00:55:41,639
+¿Ya pasamos por todo?
+
+1152
+00:55:41,639 --> 00:55:44,800
+Íconos del mapa, manos administradas, bien.
+
+1153
+00:55:46,000 --> 00:55:47,800
+Ya repasamos el menú.
+
+1154
+00:55:47,800 --> 00:55:49,679
+Ah, hay una cosa más que es útil.
+
+1155
+00:55:49,679 --> 00:55:51,520
+Hay un, sí, ¿para el mapa?
+
+1156
+00:55:54,399 --> 00:55:55,280
+Ah sí, déjenme mostrarlo.
+
+1157
+00:55:55,280 --> 00:55:59,439
+Y luego creo que tenemos un archivo.
+
+1158
+00:55:59,439 --> 00:56:00,439
+¿Dónde está eso?
+
+1159
+00:56:00,439 --> 00:56:01,560
+En los reportes.
+
+1160
+00:56:01,560 --> 00:56:04,120
+A veces, esto es más cosa de administración y Brigham,
+
+1161
+00:56:04,120 --> 00:56:07,439
+pero a veces, quizá encuentran una pieza
+
+1162
+00:56:07,439 --> 00:56:08,800
+con un número de serie y resulta que
+
+1163
+00:56:08,800 --> 00:56:11,280
+ese número de serie no está en el taller.
+
+1164
+00:56:11,280 --> 00:56:14,520
+Ahora tienen acceso a todo el historial de pianos,
+
+1165
+00:56:14,840 --> 00:56:16,639
+pero no recuerdo dónde está.
+
+1166
+00:56:16,639 --> 00:56:17,679
+Es el archivo.
+
+1167
+00:56:19,399 --> 00:56:21,000
+Hay un archivo.
+
+1168
+00:56:21,000 --> 00:56:21,840
+¿En espera de?
+
+1169
+00:56:23,080 --> 00:56:24,959
+Bueno, va a aparecer aquí pronto,
+
+1170
+00:56:24,959 --> 00:56:27,159
+pero podrán buscar un piano
+
+1171
+00:56:27,159 --> 00:56:28,639
+y si ya fue entregado
+
+1172
+00:56:28,639 --> 00:56:30,679
+o si lo hicimos hace cinco años
+
+1173
+00:56:30,679 --> 00:56:31,959
+y en algún rincón del edificio
+
+1174
+00:56:31,959 --> 00:56:34,399
+encontramos una pieza con ese número de serie,
+
+1175
+00:56:34,399 --> 00:56:36,000
+entonces tendrán acceso a él
+
+1176
+00:56:36,000 --> 00:56:39,120
+porque, necesito mandar un foquito
+
+1177
+00:56:39,120 --> 00:56:40,600
+que diga: ¿dónde está el reporte de archivo?
+
+1178
+00:56:40,719 --> 00:56:42,439
+Archivo de entregados.
+
+1179
+00:56:42,439 --> 00:56:43,679
+¿Dónde está?
+
+1180
+00:56:43,679 --> 00:56:44,919
+Menú superior derecho.
+
+1181
+00:56:44,919 --> 00:56:46,840
+Menú superior derecho.
+
+1182
+00:56:46,840 --> 00:56:47,760
+¿Archivo de entregados?
+
+1183
+00:56:50,080 --> 00:56:50,919
+Arriba a la derecha.
+
+1184
+00:56:51,760 --> 00:56:52,600
+Yo no lo tengo.
+
+1185
+00:56:55,360 --> 00:56:56,879
+Ah, déjenme contarles esto.
+
+1186
+00:56:56,879 --> 00:56:58,360
+No sé si esto pasa o no,
+
+1187
+00:56:58,360 --> 00:57:02,239
+pero a veces, quizá envían un foquito
+
+1188
+00:57:02,239 --> 00:57:03,360
+y luego reciben un texto de vuelta
+
+1189
+00:57:03,360 --> 00:57:04,840
+o les dicen en la reunión de la mañana:
+
+1190
+00:57:04,840 --> 00:57:05,919
+esto ya se agregó.
+
+1191
+00:57:05,919 --> 00:57:07,439
+Nueva función genial.
+
+1192
+00:57:07,439 --> 00:57:08,760
+Y resulta que ustedes no la tienen.
+
+1193
+00:57:08,760 --> 00:57:10,040
+No les funciona.
+
+1194
+00:57:11,399 --> 00:57:15,120
+Este botón de actualizar carga.
+
+1195
+00:57:15,120 --> 00:57:17,080
+Si no le dan al botón de actualizar,
+
+1196
+00:57:17,080 --> 00:57:19,600
+o a veces tienen que cerrar sesión y volver a entrar,
+
+1197
+00:57:19,600 --> 00:57:21,800
+y no sé si me lo va a mostrar ahora
+
+1198
+00:57:21,800 --> 00:57:24,360
+si tuviera permisos, pero veamos si aparece.
+
+1199
+00:57:26,360 --> 00:57:27,199
+¿Dónde?
+
+1200
+00:57:27,199 --> 00:57:28,760
+Ah, ahí está.
+
+1201
+00:57:28,760 --> 00:57:30,320
+Gracias por ese ejemplo.
+
+1202
+00:57:30,320 --> 00:57:31,479
+Ni siquiera lo tenía en mis notas,
+
+1203
+00:57:31,479 --> 00:57:33,000
+pero si les falta algo
+
+1204
+00:57:33,000 --> 00:57:35,639
+que alguien dice que es una función y debería estar,
+
+1205
+00:57:35,639 --> 00:57:39,479
+pueden intentar recargar la URL, ¿de acuerdo?
+
+1206
+00:57:41,280 --> 00:57:44,040
+Tienes que, ¿en serio?
+
+1207
+00:57:45,399 --> 00:57:47,959
+Quizá en su teléfono, pero en mi laptop
+
+1208
+00:57:47,959 --> 00:57:50,159
+solo tengo que darle al círculo de actualizar.
+
+1209
+00:57:50,159 --> 00:57:51,280
+Así que ojalá en las Chromebooks
+
+1210
+00:57:51,280 --> 00:57:52,679
+solo tengan que darle al círculo de actualizar,
+
+1211
+00:57:52,679 --> 00:57:55,000
+pero quizá en sus teléfonos tengan que salir y volver a entrar.
+
+1212
+00:57:55,000 --> 00:57:59,199
+Bien, esos fueron los reportes y el archivo.
+
+1213
+00:57:59,199 --> 00:58:01,120
+Solo gerentes y administradores.
+
+1214
+00:58:01,120 --> 00:58:03,600
+Ustedes solo denles un vistazo.
+
+1215
+00:58:03,600 --> 00:58:05,919
+No hablemos mucho de eso.
+
+1216
+00:58:05,919 --> 00:58:07,479
+Práctica con las manos.
+
+1217
+00:58:07,479 --> 00:58:09,159
+Hagan estas cosas ahora.
+
+1218
+00:58:09,199 --> 00:58:12,840
+Pueden, a ver, ¿ya hablamos de todas?
+
+1219
+00:58:12,840 --> 00:58:14,639
+Escanear una etiqueta, mover un panel de prueba.
+
+1220
+00:58:14,639 --> 00:58:16,760
+Ah, querían que hablara del ático,
+
+1221
+00:58:16,760 --> 00:58:20,439
+y ya hablamos del historial de ubicación y las fotos de progreso.
+
+1222
+00:58:21,919 --> 00:58:23,840
+Voy a hablar del ático y del estacionamiento,
+
+1223
+00:58:23,840 --> 00:58:28,439
+y luego, a menos que haya preguntas,
+
+1224
+00:58:28,439 --> 00:58:31,879
+creo que cubrimos lo básico,
+
+1225
+00:58:31,879 --> 00:58:35,679
+y va a venir muchísimo más con esto,
+
+1226
+00:58:36,639 --> 00:58:39,000
+pero creo que iremos dando actualizaciones continuas
+
+1227
+00:58:39,840 --> 00:58:41,000
+en las reuniones de la mañana, tipo: esta es la nueva función.
+
+1228
+00:58:41,000 --> 00:58:42,159
+Esta función ya está activa.
+
+1229
+00:58:42,159 --> 00:58:43,679
+Fulano tuvo esta idea.
+
+1230
+00:58:43,679 --> 00:58:47,439
+Ya está activa, ¿de acuerdo?
+
+1231
+00:58:47,439 --> 00:58:50,399
+Pero déjenme mostrarles, explicar el ático.
+
+1232
+00:58:54,239 --> 00:58:56,959
+¿Alguien está sonando, o es mi teléfono?
+
+1233
+00:58:56,959 --> 00:58:58,520
+Porque mi teléfono hace ese ruido.
+
+1234
+00:58:58,520 --> 00:58:59,360
+¿Soy yo?
+
+1235
+00:59:01,639 --> 00:59:03,639
+¿Es mi bolsa haciendo música?
+
+1236
+00:59:05,360 --> 00:59:06,199
+Qué agradable.
+
+1237
+00:59:06,719 --> 00:59:08,840
+Perdón, ah, es Melissa.
+
+1238
+00:59:09,719 --> 00:59:10,560
+Hola, Melissa.
+
+1239
+00:59:16,760 --> 00:59:17,719
+Bien, no hay problema.
+
+1240
+00:59:18,840 --> 00:59:19,679
+Yo te cubro.
+
+1241
+00:59:20,800 --> 00:59:22,120
+No te preocupes para nada.
+
+1242
+00:59:22,120 --> 00:59:23,600
+Bien, gracias por avisar.
+
+1243
+00:59:23,600 --> 00:59:24,760
+Bien, adiós.
+
+1244
+00:59:26,560 --> 00:59:27,600
+Va a llegar cinco minutos tarde.
+
+1245
+00:59:27,600 --> 00:59:29,479
+Estamos capacitando a una nueva administradora, y está en pánico,
+
+1246
+00:59:29,479 --> 00:59:30,719
+pero ya vamos a terminar.
+
+1247
+00:59:30,719 --> 00:59:31,679
+Bien, lo último.
+
+1248
+00:59:31,679 --> 00:59:33,159
+Déjenme encontrar mi Store Map,
+
+1249
+00:59:34,159 --> 00:59:36,679
+y vamos al segundo piso.
+
+1250
+00:59:36,679 --> 00:59:38,080
+Aquí está el cuarto de muebles.
+
+1251
+00:59:38,959 --> 00:59:41,000
+Ah, les cuento una cosa más que se me acaba de ocurrir.
+
+1252
+00:59:41,000 --> 00:59:42,919
+Seguro se me olvidan muchísimas cosas,
+
+1253
+00:59:42,919 --> 00:59:47,919
+pero en el, en este cuarto de aquí,
+
+1254
+00:59:48,080 --> 00:59:49,479
+el mapa original no llegaba a,
+
+1255
+00:59:49,479 --> 00:59:50,560
+Brigham hizo este mapa original
+
+1256
+00:59:50,560 --> 00:59:52,000
+hace como cinco años o algo así,
+
+1257
+00:59:52,000 --> 00:59:55,239
+y hemos metido más pianos de los que caben,
+
+1258
+00:59:55,239 --> 00:59:57,040
+así que resolvió ese problema con,
+
+1259
+00:59:58,120 --> 01:00:01,439
+ahora hay 211, 212, 213,
+
+1260
+01:00:01,439 --> 01:00:04,239
+y luego está 213 A, B, C, D, E, F, G,
+
+1261
+01:00:05,399 --> 01:00:07,439
+así que si están viendo estos pianos,
+
+1262
+01:00:07,439 --> 01:00:09,520
+e hicimos lo mismo en el vestíbulo.
+
+1263
+01:00:10,639 --> 01:00:12,360
+En un mundo ideal, el vestíbulo estaría
+
+1264
+01:00:12,360 --> 01:00:16,560
+limpio y simple, con un piano de cola aquí y cinco allá,
+
+1265
+01:00:16,560 --> 01:00:19,280
+pero la realidad es que a veces metemos 20 verticales
+
+1266
+01:00:19,280 --> 01:00:20,919
+en el vestíbulo cuando estamos saturados,
+
+1267
+01:00:20,919 --> 01:00:23,719
+y a veces hay cuatro de cola apretados del otro lado,
+
+1268
+01:00:23,719 --> 01:00:26,520
+así que agregamos, en el lado corto,
+
+1269
+01:00:26,520 --> 01:00:29,560
+agregamos ese número que sea con A, B, C, D,
+
+1270
+01:00:29,560 --> 01:00:32,239
+y en el lado largo hay .5,
+
+1271
+01:00:32,239 --> 01:00:34,280
+así que tuvimos que ser creativos,
+
+1272
+01:00:34,280 --> 01:00:37,800
+y luego esta sección de aquí,
+
+1273
+01:00:37,800 --> 01:00:40,320
+la oficina de Brigham, ahí metimos todos los pianos de renta,
+
+1274
+01:00:40,320 --> 01:00:42,639
+los que están rentados en casas de la gente,
+
+1275
+01:00:42,639 --> 01:00:45,120
+por si se preguntan por qué la oficina de Brigham tiene tantos,
+
+1276
+01:00:45,120 --> 01:00:48,159
+ah, fuera, por qué están todos esos ahí,
+
+1277
+01:00:48,159 --> 01:00:50,479
+y, ah no, esa es la sala de recitales,
+
+1278
+01:00:50,479 --> 01:00:53,520
+y en la oficina de Brigham tenemos los pianos financiados
+
+1279
+01:00:53,520 --> 01:00:57,399
+y los Larson, los que están en nuestra casa
+
+1280
+01:00:57,399 --> 01:00:59,719
+o en el edificio por alguna razón.
+
+1281
+01:00:59,719 --> 01:01:01,679
+Bien, el ático, déjenme explicar qué es el ático,
+
+1282
+01:01:01,679 --> 01:01:04,320
+porque ¿de verdad hay pianos en el ático?
+
+1283
+01:01:04,320 --> 01:01:07,040
+En realidad no hay pianos en el ático.
+
+1284
+01:01:07,040 --> 01:01:10,280
+Es solo un lugar que usamos para,
+
+1285
+01:01:10,280 --> 01:01:14,760
+los pianos son lanzados al ático
+
+1286
+01:01:14,760 --> 01:01:18,360
+si necesitan que se les asigne un lugar,
+
+1287
+01:01:18,360 --> 01:01:21,239
+así que si van físicamente a un lugar
+
+1288
+01:01:21,239 --> 01:01:23,439
+y están parados frente a un piano de cola,
+
+1289
+01:01:23,439 --> 01:01:25,860
+pero en el mapa hay un piano diferente,
+
+1290
+01:01:26,860 --> 01:01:29,899
+si, y pueden confirmarlo con seguridad,
+
+1291
+01:01:29,899 --> 01:01:32,300
+o sea, están parados en el lugar 89,
+
+1292
+01:01:32,300 --> 01:01:35,459
+y este es un Highland de cola, no un vertical con sistema player,
+
+1293
+01:01:35,459 --> 01:01:38,540
+entonces van al mapa y escriben el piano correcto
+
+1294
+01:01:38,540 --> 01:01:40,620
+que de verdad está en ese lugar físico,
+
+1295
+01:01:40,620 --> 01:01:43,820
+y lo que la app, lo que el Store Map va a hacer
+
+1296
+01:01:43,820 --> 01:01:47,659
+es que el piano equivocado será lanzado al ático,
+
+1297
+01:01:47,659 --> 01:01:49,300
+y entonces la administración o los gerentes,
+
+1298
+01:01:49,300 --> 01:01:50,860
+o si ustedes saben dónde está el piano equivocado,
+
+1299
+01:01:50,860 --> 01:01:51,939
+pueden ponerlo en el lugar correcto
+
+1300
+01:01:51,939 --> 01:01:54,139
+y lo tomará del ático,
+
+1301
+01:01:54,139 --> 01:01:55,659
+y lo pondrá en el lugar correcto,
+
+1302
+01:01:56,459 --> 01:01:59,060
+pero muchas veces solo conocen el piano correcto,
+
+1303
+01:01:59,060 --> 01:02:02,219
+no saben dónde está el piano equivocado,
+
+1304
+01:02:02,219 --> 01:02:03,979
+así que en cuanto ponen el piano correcto,
+
+1305
+01:02:03,979 --> 01:02:05,379
+el equivocado sale disparado al ático
+
+1306
+01:02:05,379 --> 01:02:08,300
+hasta que alguien lo encuentre y lo ponga en su lugar.
+
+1307
+01:02:08,300 --> 01:02:09,340
+¿Tiene sentido?
+
+1308
+01:02:11,219 --> 01:02:14,899
+Sí, entonces les pediría,
+
+1309
+01:02:14,899 --> 01:02:18,780
+no tenemos una función que los detecte
+
+1310
+01:02:18,780 --> 01:02:21,419
+si ponen el piano equivocado en el lugar equivocado,
+
+1311
+01:02:21,419 --> 01:02:24,699
+pero sería útil que solo pongan,
+
+1312
+01:02:24,739 --> 01:02:26,780
+asignen un piano a un lugar,
+
+1313
+01:02:26,780 --> 01:02:29,179
+si están ahí,
+
+1314
+01:02:29,179 --> 01:02:31,459
+si saben que de verdad está visiblemente en ese lugar,
+
+1315
+01:02:31,459 --> 01:02:32,300
+o sea, no adivinen tipo:
+
+1316
+01:02:32,300 --> 01:02:36,100
+ah, ese piano está en el lugar 72 de la sala de exhibición,
+
+1317
+01:02:36,100 --> 01:02:37,620
+así que lo pongo ahí,
+
+1318
+01:02:37,620 --> 01:02:38,459
+porque si se equivocan,
+
+1319
+01:02:38,459 --> 01:02:42,620
+va a mandar pianos al lugar equivocado, ¿saben?
+
+1320
+01:02:42,620 --> 01:02:46,780
+Bien, y también hay unos casos raros,
+
+1321
+01:02:46,780 --> 01:02:49,620
+como los digitales y demás, pero en general, eso es todo,
+
+1322
+01:02:49,620 --> 01:02:53,340
+y en el estacionamiento, de regreso al primer piso,
+
+1323
+01:02:53,340 --> 01:02:58,340
+en el estacionamiento, estos pianos amarillos vienen pronto,
+
+1324
+01:03:01,379 --> 01:03:03,020
+todos tienen números de cola,
+
+1325
+01:03:03,020 --> 01:03:04,300
+miren, tenemos el cola siete,
+
+1326
+01:03:04,300 --> 01:03:07,020
+no sé por qué está en gris así,
+
+1327
+01:03:07,020 --> 01:03:08,860
+no me gusta mucho eso,
+
+1328
+01:03:08,860 --> 01:03:10,179
+y antes no era así,
+
+1329
+01:03:10,179 --> 01:03:13,860
+le voy a mandar un foquito para que no salgan en gris,
+
+1330
+01:03:13,860 --> 01:03:16,419
+pero todos esos amarillos vienen pronto,
+
+1331
+01:03:16,419 --> 01:03:19,139
+están en la cola, pero todavía no llegan,
+
+1332
+01:03:19,139 --> 01:03:22,540
+y los de fuera por servicio típicamente son los
+
+1333
+01:03:22,580 --> 01:03:25,139
+que van a Salt Lake para que les instalen el QRS,
+
+1334
+01:03:26,300 --> 01:03:29,459
+están en otro taller,
+
+1335
+01:03:29,459 --> 01:03:33,479
+pero siguen en la cola y en una fase, ¿de acuerdo?
+
+1336
+01:03:33,479 --> 01:03:34,620
+¿Qué más debería cubrir?
+
+1337
+01:03:34,620 --> 01:03:37,020
+¿Me faltó algo o alguien tiene preguntas?
+
+1338
+01:03:38,179 --> 01:03:40,699
+¿O quieren empezar de una vez?
+
+1339
+01:03:40,699 --> 01:03:43,739
+Pueden empezar, hacer práctica con las manos,
+
+1340
+01:03:43,739 --> 01:03:46,459
+tomar una foto, asegurarse de que el piano
+
+1341
+01:03:46,459 --> 01:03:48,780
+en el que trabajan, usen el código QR
+
+1342
+01:03:48,780 --> 01:03:50,159
+o escriban el número de serie,
+
+1343
+01:03:50,159 --> 01:03:51,939
+y asegúrense de que el piano en el que trabajan
+
+1344
+01:03:52,300 --> 01:03:54,020
+esté en la fase correcta,
+
+1345
+01:03:54,020 --> 01:03:56,979
+y en el lugar correcto del mapa, eso sería lo más útil.
+
+1346
+01:03:58,260 --> 01:03:59,459
+Bien, ¿sí?
+
+1347
+01:03:59,459 --> 01:04:01,820
+Bien, para marcar entrada y salida,
+
+1348
+01:04:01,820 --> 01:04:04,060
+por ahora, ¿vamos a empezar a marcar entrada
+
+1349
+01:04:04,060 --> 01:04:06,020
+en el piano en la web app?
+
+1350
+01:04:06,020 --> 01:04:08,060
+Sí, a partir de hoy,
+
+1351
+01:04:08,060 --> 01:04:10,739
+solo marcamos entrada y salida en los pianos.
+
+1352
+01:04:10,739 --> 01:04:11,580
+Como...
+
+1353
+01:04:11,580 --> 01:04:12,659
+¿Siguen usando iSolved?
+
+1354
+01:04:12,659 --> 01:04:16,219
+Para la llegada y salida del edificio,
+
+1355
+01:04:16,219 --> 01:04:18,939
+vamos a, no, alto,
+
+1356
+01:04:18,939 --> 01:04:20,540
+van a seguir usando iSolved
+
+1357
+01:04:20,540 --> 01:04:23,699
+para la llegada al edificio y la salida del edificio,
+
+1358
+01:04:23,699 --> 01:04:26,300
+pero ya no para los pianos, ¿de acuerdo?
+
+1359
+01:04:26,300 --> 01:04:28,139
+Así que desde este mismo minuto,
+
+1360
+01:04:28,139 --> 01:04:31,479
+van a marcar entrada y salida de su piano específico
+
+1361
+01:04:31,479 --> 01:04:34,600
+en el nuevo sistema, este Store Map,
+
+1362
+01:04:34,600 --> 01:04:38,139
+pero sigan marcando el día en iSolved,
+
+1363
+01:04:38,139 --> 01:04:40,699
+y eso lo cambiaremos el 1 de septiembre.
+
+1364
+01:04:43,699 --> 01:04:46,199
+Sí, y eso lo vamos a agregar a su panel.
+
+1365
+01:04:47,040 --> 01:04:50,320
+Ahora mismo estamos como marcados en misceláneos.
+
+1366
+01:04:50,320 --> 01:04:54,120
+Así que salgan de eso, y luego marquen, en iSolved,
+
+1367
+01:04:54,120 --> 01:04:55,639
+marquen salida de misceláneos en iSolved,
+
+1368
+01:04:55,639 --> 01:04:57,800
+y su siguiente entrada a su piano,
+
+1369
+01:04:57,800 --> 01:04:59,280
+háganla en el Store Map.
+
+1370
+01:04:59,280 --> 01:05:01,000
+Y marcan entrada y salida de los pianos
+
+1371
+01:05:01,000 --> 01:05:02,719
+en la tarjeta de datos específica,
+
+1372
+01:05:03,760 --> 01:05:06,439
+pero a partir del 1 de septiembre
+
+1373
+01:05:06,439 --> 01:05:09,560
+van a marcar la entrada y salida de su día
+
+1374
+01:05:09,560 --> 01:05:14,560
+para la nómina en su panel, Mi Panel,
+
+1375
+01:05:14,879 --> 01:05:18,080
+que es el primer elemento del menú de hamburguesa.
+
+1376
+01:05:18,080 --> 01:05:19,719
+¿Qué otras preguntas tienen?
+
+1377
+01:05:26,320 --> 01:05:27,159
+Ya lo tenemos.
+
+1378
+01:05:28,040 --> 01:05:28,879
+Pan comido.
+
+1379
+01:05:29,919 --> 01:05:30,760
+Sí.
+
+1380
+01:05:31,760 --> 01:05:35,800
+Por ejemplo, en el taller principal ahora
+
+1381
+01:05:38,479 --> 01:05:40,679
+está algo abarrotado de pianos de cola,
+
+1382
+01:05:40,679 --> 01:05:43,879
+y no están exactamente en los lugares ordenados
+
+1383
+01:05:44,679 --> 01:05:45,520
+del mapa.
+
+1384
+01:05:45,520 --> 01:05:46,360
+Sí.
+
+1385
+01:05:48,080 --> 01:05:48,919
+En esta área.
+
+1386
+01:05:56,919 --> 01:06:00,879
+Bueno, si hay cuatro de cola en esta área del frente,
+
+1387
+01:06:01,719 --> 01:06:05,120
+deberían ser uno de esos números,
+
+1388
+01:06:05,120 --> 01:06:06,600
+aunque estén, ya saben,
+
+1389
+01:06:06,600 --> 01:06:08,639
+quizá tres en fila y otro más,
+
+1390
+01:06:08,639 --> 01:06:10,159
+hay cuatro de cola en ese lugar.
+
+1391
+01:06:10,159 --> 01:06:13,040
+Pero si hay un quinto de cola embutido en ese lugar,
+
+1392
+01:06:13,040 --> 01:06:15,280
+entonces hay que usar la función de lugar temporal.
+
+1393
+01:06:16,919 --> 01:06:18,840
+Y eso, pero eso aún no está probado,
+
+1394
+01:06:18,840 --> 01:06:19,679
+así que lo vamos a probar.
+
+1395
+01:06:19,679 --> 01:06:21,360
+Y en general,
+
+1396
+01:06:21,360 --> 01:06:23,439
+hay como cuatro pianos
+
+1397
+01:06:23,439 --> 01:06:26,159
+por cada dos líneas de restauración.
+
+1398
+01:06:26,159 --> 01:06:27,760
+Si hay otro embutido ahí,
+
+1399
+01:06:27,760 --> 01:06:31,959
+si agregamos un vertical en los extremos o algo,
+
+1400
+01:06:31,959 --> 01:06:33,479
+y, ya saben, tratamos de evitar eso,
+
+1401
+01:06:33,479 --> 01:06:35,760
+pero entonces tendríamos que usar un lugar temporal.
+
+1402
+01:06:35,760 --> 01:06:37,679
+Así que supongo que la respuesta es: elijan el lugar
+
+1403
+01:06:37,679 --> 01:06:40,639
+más cercano que no esté ocupado.
+
+1404
+01:06:40,639 --> 01:06:41,760
+Y si no hay uno,
+
+1405
+01:06:41,760 --> 01:06:43,120
+si quedó embutido ahí,
+
+1406
+01:06:43,120 --> 01:06:44,879
+entonces hay que crear un lugar temporal.
+
+1407
+01:06:47,959 --> 01:06:49,120
+Buena pregunta.
+
+1408
+01:06:49,120 --> 01:06:49,959
+Sí.
+
+1409
+01:06:53,600 --> 01:06:54,439
+¿Qué?
+
+1410
+01:06:56,879 --> 01:06:57,719
+Ah, sí.
+
+1411
+01:06:57,719 --> 01:07:01,879
+Pero eso era más bien algo de práctica, de desarrollo.
+
+1412
+01:07:01,879 --> 01:07:03,679
+Así que no queremos que usen el PIN de equipo,
+
+1413
+01:07:03,679 --> 01:07:05,239
+queremos que inicien sesión.
+
+1414
+01:07:05,239 --> 01:07:07,080
+Inicien sesión con su Google.
+
+1415
+01:07:07,080 --> 01:07:10,439
+Lo de Google era algo quisquilloso.
+
+1416
+01:07:11,199 --> 01:07:13,959
+Así que teníamos un PIN para saltarnos el inicio con Google,
+
+1417
+01:07:13,959 --> 01:07:15,879
+pero queremos que usen el inicio de sesión con Google,
+
+1418
+01:07:15,879 --> 01:07:19,120
+porque así aparecerán en el registro de actividad.
+
+1419
+01:07:19,120 --> 01:07:21,000
+Sí, y sabremos quién hace qué.
+
+1420
+01:07:33,399 --> 01:07:34,879
+Ah, para guardar la etapa.
+
+1421
+01:07:37,639 --> 01:07:39,360
+Puede ser una función de permisos.
+
+1422
+01:07:39,360 --> 01:07:42,159
+Quizá tenga que actualizar los permisos.
+
+1423
+01:07:42,159 --> 01:07:45,159
+Prueben Piano Man y vean si los deja hacerlo.
+
+1424
+01:07:45,159 --> 01:07:47,159
+Pero eso lo voy a quitar.
+
+1425
+01:07:47,159 --> 01:07:49,320
+Eso sería útil capturarlo en pantalla y enviarlo,
+
+1426
+01:07:49,320 --> 01:07:50,840
+porque no quiero que tengan que poner un PIN
+
+1427
+01:07:50,840 --> 01:07:52,719
+cada vez que hagan una actualización.
+
+1428
+01:07:52,719 --> 01:07:55,120
+Así que prueben Piano Man, y si no funciona,
+
+1429
+01:07:55,120 --> 01:07:57,520
+sería útil que envíen una captura de eso
+
+1430
+01:07:57,520 --> 01:07:58,800
+al foquito.
+
+1431
+01:08:00,520 --> 01:08:02,239
+Lo principal, me alegra que lo encontraras,
+
+1432
+01:08:02,239 --> 01:08:05,000
+porque quiero recalcar: esto es completamente nuevo.
+
+1433
+01:08:05,000 --> 01:08:06,919
+No soy experta en IA ni en software,
+
+1434
+01:08:06,919 --> 01:08:08,639
+pero me estoy volviendo bastante buena.
+
+1435
+01:08:08,639 --> 01:08:11,560
+Pero la meta principal es que lo prueben,
+
+1436
+01:08:11,560 --> 01:08:13,760
+que encuentren todas las fallas y problemas.
+
+1437
+01:08:13,760 --> 01:08:16,720
+Si encontramos muchas fallas y problemas,
+
+1438
+01:08:16,720 --> 01:08:18,680
+eso es un gran éxito.
+
+1439
+01:08:18,680 --> 01:08:20,040
+Y también envíen ideas,
+
+1440
+01:08:20,040 --> 01:08:22,799
+si tienen sus propias ideas de foquito.
+
+1441
+01:08:22,799 --> 01:08:27,200
+Y esto va a tomar años de trabajo,
+
+1442
+01:08:27,200 --> 01:08:31,560
+así que no todo va a ser perfecto desde el inicio.
+
+1443
+01:08:31,560 --> 01:08:34,399
+Bien, agradecida por todas sus ideas, ayuda y paciencia,
+
+1444
+01:08:34,399 --> 01:08:38,120
+y ojalá les haga el trabajo más fácil y mejor.
+
+1445
+01:08:38,759 --> 01:08:39,959
+Esa es la esperanza.
+
+1446
+01:08:39,959 --> 01:08:40,799
+¿Sí?
+
+1447
+01:08:40,799 --> 01:08:41,640
+¿Qué implicaría,
+
+1448
+01:08:41,640 --> 01:08:43,200
+porque usamos Homebase y Wi-Fi,
+
+1449
+01:08:43,200 --> 01:08:46,680
+entonces ¿todavía necesitamos marcar entrada en los pianos?
+
+1450
+01:08:48,200 --> 01:08:49,799
+¿Ustedes marcan entrada en los pianos ahora?
+
+1451
+01:08:49,799 --> 01:08:50,640
+No.
+
+1452
+01:08:50,640 --> 01:08:51,640
+¿Necesitamos hacerlo?
+
+1453
+01:08:51,640 --> 01:08:53,319
+Ah, sí.
+
+1454
+01:08:53,319 --> 01:08:55,640
+Adelante, pueden seguir usando Homebase
+
+1455
+01:08:55,640 --> 01:08:59,279
+hasta el 1 de septiembre, y luego usarán el sistema nuevo,
+
+1456
+01:08:59,279 --> 01:09:01,759
+y pueden empezar a marcar entrada en los pianos hoy.
+
+1457
+01:09:03,359 --> 01:09:04,479
+Bien.
+
+1458
+01:09:04,479 --> 01:09:05,479
+Muy bien, cualquier otra pregunta,
+
+1459
+01:09:05,479 --> 01:09:07,080
+pueden hacérmela en persona,
+
+1460
+01:09:07,080 --> 01:09:10,160
+o mándenme un texto, tienen mi número.
+
+1461
+01:09:10,160 --> 01:09:12,439
+Y, gracias.
+
+1462
+01:09:12,439 --> 01:09:13,279
+¿Sí?
+
+1463
+01:09:13,279 --> 01:09:14,959
+¿Esto eventualmente se convertirá en una especie de
+
+1464
+01:09:14,959 --> 01:09:17,600
+reemplazo de los reportes del viernes?
+
+1465
+01:09:21,879 --> 01:09:23,319
+Posiblemente, ¿dices que ni siquiera necesitarán
+
+1466
+01:09:23,319 --> 01:09:25,040
+enviar un reporte del viernes?
+
+1467
+01:09:25,040 --> 01:09:26,799
+Hay buenas probabilidades de que, no sé.
+
+1468
+01:09:26,799 --> 01:09:28,839
+No sé qué tan bueno llegará a ser ni qué tan preciso,
+
+1469
+01:09:28,839 --> 01:09:30,399
+pero sí, creo que puede ser,
+
+1470
+01:09:30,399 --> 01:09:33,279
+porque vamos a tener datos en tiempo real.
+
+1471
+01:09:33,279 --> 01:09:36,240
+Pero quizá todavía haya, sí, no lo había pensado,
+
+1472
+01:09:36,799 --> 01:09:37,759
+pero apuesto a que sí.
+
+1473
+01:09:37,759 --> 01:09:40,040
+Pero por ahora, es un poco como,
+
+1474
+01:09:40,040 --> 01:09:41,959
+por ahora es como el pizarrón
+
+1475
+01:09:41,959 --> 01:09:43,040
+del cuarto de muebles,
+
+1476
+01:09:43,959 --> 01:09:46,240
+donde tendremos ambos sistemas por un tiempo.
+
+1477
+01:09:46,240 --> 01:09:50,319
+Pronto harán su reporte del viernes en la app nueva,
+
+1478
+01:09:50,319 --> 01:09:52,839
+y quizá con el tiempo ya no haya reportes del viernes.
+
+1479
+01:09:52,839 --> 01:09:55,640
+Todo se actualizará en tiempo real.
+
+1480
+01:09:56,640 --> 01:09:57,759
+Y si tienen un mensaje para Brigham,
+
+1481
+01:09:57,759 --> 01:09:59,200
+solo lo enviarán a las tareas de Brigham,
+
+1482
+01:09:59,200 --> 01:10:01,240
+o le mandan un mensaje, no sé.
+
+1483
+01:10:01,240 --> 01:10:02,080
+Ya veremos.
+
+1484
+01:10:04,240 --> 01:10:05,799
+Bien, gracias a todos.
+
+1485
+01:10:06,240 --> 01:10:07,080
+Bien.
+
+1486
+01:10:27,080 --> 01:10:28,919
+Ah, ah, perdón.
+
+1487
+01:10:28,919 --> 01:10:29,759
+¿Saben qué?
+
+1488
+01:10:29,759 --> 01:10:30,600
+Voy a,
+
+1489
+01:10:32,799 --> 01:10:35,479
+creo que puedo conseguir una transcripción de esto,
+
+1490
+01:10:36,479 --> 01:10:38,759
+se puede traducir al español,
+
+1491
+01:10:38,759 --> 01:10:40,720
+y así puedo tener una versión en español de esto.
+
+1492
+01:10:40,720 --> 01:10:41,759
+Sí, gracias.

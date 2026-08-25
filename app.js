@@ -2376,6 +2376,51 @@ setInterval(() => {
 setInterval(fetchClock, 60000);
 setTimeout(fetchClock, 2500);
 
+/* ---------- 💵 payroll day clock (separate from the per-piano Work Clock) ----
+ * One punch for the whole paid day: in on arrival, out when leaving. The
+ * bridge keeps a "Payroll Clock" tab; the dashboard card is the only punch
+ * surface. State refreshes when the dashboard opens and after every punch. */
+const PAY = {open: null, today: [], at: 0};
+async function fetchPayroll(force) {
+  if (!force && Date.now() - PAY.at < 60000) return;
+  try {
+    const r = await fetch(BRIDGE_URL + '?fn=payroll', {redirect: 'follow'});
+    const j = await r.json();
+    if (!j.ok) return;
+    PAY.at = Date.now();
+    const me = clockName().toLowerCase();
+    PAY.open = (j.open || []).find(o => (o.tech || '').toLowerCase() === me) || null;
+    PAY.today = (j.today || []).filter(t => (t.tech || '').toLowerCase() === me);
+    if (S.view === 'dash') renderDash();
+  } catch (e) { /* offline — keep last */ }
+}
+async function dayPunch(action) {
+  const {pin, ok} = writeAuth();
+  if (!ok) return {error: 'Sign in first — payroll hours are logged under your name.'};
+  try {
+    const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+      headers: {'content-type': 'text/plain;charset=utf-8'},
+      body: JSON.stringify({pin, action, source: 'dash', ...authFields()})});
+    const j = await r.json();
+    if (j.ok) {
+      PAY.open = action === 'dayin'
+        ? (j.open || {tech: clockName(), start: new Date().toISOString()}) : null;
+      PAY.at = 0;
+      fetchPayroll(true);
+    }
+    return j;
+  } catch (e) { return {error: 'offline — punch not recorded, try again'}; }
+}
+function payMins() {   // today's closed minutes + the open session so far
+  let m = PAY.today.reduce((a, t) => a + (t.minutes || 0), 0);
+  if (PAY.open) m += Math.max(0, Math.floor((Date.now() - new Date(PAY.open.start)) / 60000));
+  return m;
+}
+function fmtHM(mins) {
+  const h = Math.floor(mins / 60), m = Math.round(mins % 60);
+  return h ? `${h}h ${String(m).padStart(2, '0')}m` : `${m}m`;
+}
+
 /* Collapsible Bold Banner sections — header click toggles the body; the
  * open/closed choice is remembered per section for this device, so a tech
  * who never wants Media open keeps it collapsed on every card. */
@@ -5665,7 +5710,7 @@ function queueTable() {
         <td>${esc(String(p.location || '—').slice(0, 14))}</td></tr>`).join('')}</table>` : ''}`;
 }
 
-function briefsTable() {
+function briefsTable(kindOnly) {
   if (!S.briefRows) return '<div class="empty">Loading the brief archive\u2026</div>';
   const list = (kind, label, note) => {
     const rows = S.briefRows.filter(b => (b.kind || 'shop') === kind);
@@ -5681,10 +5726,11 @@ function briefsTable() {
        || '<tr><td colspan="3" class="empty">Nothing archived yet \u2014 the next one lands with this evening\u2019s 7PM send.</td></tr>'}
       </table>`;
   };
-  return list('shop', '\ud83c\udf05 Shop Manager Briefings',
-      'Emailed by 7PM the night before to shop@, brigham@ and karmel@ \u2014 opens with the next morning\u2019s standup.')
-    + list('admin', '\ud83d\udcbc Admin Morning Briefings',
+  const shop = list('shop', '\ud83c\udf05 Shop Manager Briefings',
+      'Emailed by 7PM the night before to shop@, brigham@ and karmel@ \u2014 opens with the next morning\u2019s standup.');
+  const admin = list('admin', '\ud83d\udcbc Admin Morning Briefings',
       'Emailed by 7PM the night before to info@, karmel@ and brigham@ \u2014 payments, media and delivery logistics.');
+  return kindOnly === 'shop' ? shop : kindOnly === 'admin' ? admin : shop + admin;
 }
 async function loadBriefs() {
   try {
@@ -5694,49 +5740,246 @@ async function loadBriefs() {
   renderReport();
 }
 
+/* ---------- payroll + job-costing reports (Time Log + Payroll Clock) ------ */
+async function loadPayroll() {
+  try {
+    const r = await fetch(BRIDGE_URL + '?fn=payrollrows&days=190', {redirect: 'follow'});
+    S.payRows = (await r.json()).rows || [];
+  } catch (e) { S.payRows = []; }
+  if (!S.tlRows) loadTimeLog(); else renderReport();
+}
+async function loadTimeLog() {
+  try {
+    const r = await fetch(BRIDGE_URL + '?fn=timelog&days=365', {redirect: 'follow'});
+    S.tlRows = (await r.json()).rows || [];
+  } catch (e) { S.tlRows = []; }
+  renderReport();
+}
+function denverDay(iso) {   // yyyy-mm-dd in Denver for a session start
+  return new Date(iso).toLocaleDateString('en-CA', {timeZone: 'America/Denver'});
+}
+function weekKey(day) {   // Monday of that week
+  const d = new Date(day + 'T12:00');
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  return d.toISOString().slice(0, 10);
+}
+function monthKey(day) { return day.slice(0, 7); }
+function hDec(mins) { return (mins / 60).toFixed(2); }
+function inRange(day, f) { return (!f.from || day >= f.from) && (!f.to || day <= f.to); }
+function fmtT(iso) {
+  return iso ? new Date(iso).toLocaleTimeString('en-US',
+    {hour: 'numeric', minute: '2-digit', timeZone: 'America/Denver'}) : '—';
+}
+let CSV_EXPORTS = {};   // id -> () => [filename, rows[][]] — rebuilt with each table
+function downloadCsv(name, rows) {
+  const csv = rows.map(r => r.map(c => {
+    c = String(c == null ? '' : c);
+    return /[",\n]/.test(c) ? '"' + c.replace(/"/g, '""') + '"' : c;
+  }).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['﻿' + csv], {type: 'text/csv'}));
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+function filterBar(scope, fields) {
+  return `<div class="rfbar">${fields.join('')}</div>`;
+}
+function fSel(scope, f, cur, opts, label) {
+  return `<select class="rptf" data-scope="${scope}" data-f="${f}">
+    <option value="">${label}</option>
+    ${opts.map(o => `<option ${cur === o ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>`;
+}
+function fDate(scope, f, cur, title) {
+  return `<label class="rfd">${title} <input type="date" class="rptf" data-scope="${scope}" data-f="${f}" value="${esc(cur || '')}"></label>`;
+}
+
+function payTimeTable() {
+  if (!S.payRows || !S.tlRows) return '<div class="empty">Loading payroll punches…</div>';
+  const f = S.payF || (S.payF = {who: '', from: '', to: '', group: 'day'});
+  const techs = [...new Set([...S.payRows.map(r => r.tech), ...S.tlRows.map(r => r.tech)])].sort();
+  const rows = S.payRows.filter(r =>
+    (!f.who || r.tech === f.who) && inRange(r.date, f));
+  const bar = filterBar('pay', [
+    fSel('pay', 'who', f.who, techs, 'All team members'),
+    fDate('pay', 'from', f.from, 'from'), fDate('pay', 'to', f.to, 'to'),
+    `<select class="rptf" data-scope="pay" data-f="group">
+       <option value="day" ${f.group === 'day' ? 'selected' : ''}>Daily punches</option>
+       <option value="week" ${f.group === 'week' ? 'selected' : ''}>Weekly totals</option>
+       <option value="month" ${f.group === 'month' ? 'selected' : ''}>Monthly totals</option></select>`,
+    `<button class="csvbtn" data-csv="paydays">⬇ CSV — punches</button>`,
+    `<button class="csvbtn" data-csv="paytotals">⬇ CSV — totals</button>`,
+  ]);
+  // day rows + grouped totals
+  let main;
+  if (f.group === 'day') {
+    main = `<table><tr><th>DATE</th><th>TEAM MEMBER</th><th>CLOCK IN</th><th>CLOCK OUT</th><th>HOURS</th><th>NOTE</th></tr>
+      ${rows.map(r => `<tr${/auto/.test(r.note) ? ' style="color:#a33"' : ''}>
+        <td>${esc(r.date)}</td><td>${esc(r.tech)}</td><td>${fmtT(r.start)}</td>
+        <td>${r.end ? fmtT(r.end) : '<b style="color:#2e7d4f">on the clock</b>'}</td>
+        <td>${r.minutes ? fmtHM(r.minutes) : '—'}</td><td>${esc(r.note || '')}</td></tr>`).join('')
+       || '<tr><td colspan="6" class="empty">No payroll punches in this range yet.</td></tr>'}</table>`;
+  } else {
+    const key = f.group === 'week' ? r => weekKey(r.date) : r => monthKey(r.date);
+    const agg = {};
+    rows.forEach(r => {
+      const k = key(r.date) + '|' + r.tech;
+      (agg[k] = agg[k] || {period: key(r.date), tech: r.tech, mins: 0, days: new Set()});
+      agg[k].mins += r.minutes || 0;
+      agg[k].days.add(r.date);
+    });
+    const list = Object.values(agg).sort((a, b) =>
+      b.period.localeCompare(a.period) || a.tech.localeCompare(b.tech));
+    const plabel = f.group === 'week' ? 'WEEK OF' : 'MONTH';
+    main = `<table><tr><th>${plabel}</th><th>TEAM MEMBER</th><th>DAYS</th><th>HOURS</th><th>HOURS (DECIMAL)</th></tr>
+      ${list.map(g => `<tr><td>${esc(g.period)}</td><td>${esc(g.tech)}</td>
+        <td>${g.days.size}</td><td>${fmtHM(g.mins)}</td><td>${hDec(g.mins)}</td></tr>`).join('')
+       || '<tr><td colspan="5" class="empty">No payroll punches in this range yet.</td></tr>'}</table>`;
+  }
+  // per-member range totals
+  const tot = {};
+  rows.forEach(r => { tot[r.tech] = (tot[r.tech] || 0) + (r.minutes || 0); });
+  const totals = Object.entries(tot).sort((a, b) => b[1] - a[1]);
+  // per-piano / per-category hours from the Work Clock, same member + range
+  const tl = S.tlRows.filter(r =>
+    (!f.who || r.tech === f.who) && inRange(denverDay(r.start), f));
+  const byPhase = {}, byPiano = {};
+  tl.forEach(r => {
+    byPhase[r.phase || '(no phase)'] = (byPhase[r.phase || '(no phase)'] || 0) + r.minutes;
+    const pk = (r.piano || '?') + ' #' + r.serial;
+    byPiano[pk] = (byPiano[pk] || 0) + r.minutes;
+  });
+  const phaseRows = Object.entries(byPhase).sort((a, b) => b[1] - a[1]);
+  const pianoRows = Object.entries(byPiano).sort((a, b) => b[1] - a[1]).slice(0, 40);
+  CSV_EXPORTS.paydays = () => ['payroll-punches.csv',
+    [['Date', 'Team member', 'Clock in', 'Clock out', 'Minutes', 'Hours (decimal)', 'Note'],
+     ...rows.map(r => [r.date, r.tech, fmtT(r.start), r.end ? fmtT(r.end) : 'OPEN', r.minutes, hDec(r.minutes), r.note])]];
+  CSV_EXPORTS.paytotals = () => ['payroll-totals.csv',
+    [['Team member', 'Minutes', 'Hours (decimal)'],
+     ...totals.map(([t, m]) => [t, m, hDec(m)])]];
+  return bar + main + `
+    <h4 class="bfhd">Range totals per team member</h4>
+    <table><tr><th>TEAM MEMBER</th><th>HOURS</th><th>HOURS (DECIMAL)</th></tr>
+    ${totals.map(([t, m]) => `<tr><td>${esc(t)}</td><td>${fmtHM(m)}</td><td>${hDec(m)}</td></tr>`).join('')
+     || '<tr><td colspan="3" class="empty">—</td></tr>'}</table>
+    <h4 class="bfhd">Hours by category of work — same filters, from the piano Work Clock</h4>
+    <table><tr><th>PHASE / CATEGORY</th><th>HOURS</th></tr>
+    ${phaseRows.map(([p, m]) => `<tr><td>${esc(p)}</td><td>${fmtHM(m)}</td></tr>`).join('')
+     || '<tr><td colspan="2" class="empty">No piano work-clock sessions in this range.</td></tr>'}</table>
+    <h4 class="bfhd">Hours by piano — same filters (top 40)</h4>
+    <table><tr><th>PIANO</th><th>HOURS</th></tr>
+    ${pianoRows.map(([p, m]) => `<tr><td>${esc(p)}</td><td>${fmtHM(m)}</td></tr>`).join('')
+     || '<tr><td colspan="2" class="empty">No piano work-clock sessions in this range.</td></tr>'}</table>`;
+}
+
+function jobCostTable() {
+  if (!S.tlRows) return '<div class="empty">Loading the Work Clock ledger…</div>';
+  const f = S.jcF || (S.jcF = {q: '', tech: '', phase: '', from: '', to: ''});
+  const techs = [...new Set(S.tlRows.map(r => r.tech))].sort();
+  const phases = [...new Set(S.tlRows.map(r => r.phase).filter(Boolean))].sort();
+  const q = f.q.trim().toLowerCase();
+  const rows = S.tlRows.filter(r =>
+    (!q || (r.serial + ' ' + r.piano).toLowerCase().includes(q))
+    && (!f.tech || r.tech === f.tech)
+    && (!f.phase || r.phase === f.phase)
+    && inRange(denverDay(r.start), f));
+  const bar = filterBar('jc', [
+    `<input type="text" class="rptf" data-scope="jc" data-f="q" placeholder="🔍 serial, make, model…" value="${esc(f.q)}">`,
+    fSel('jc', 'tech', f.tech, techs, 'All technicians'),
+    fSel('jc', 'phase', f.phase, phases, 'All phases'),
+    fDate('jc', 'from', f.from, 'from'), fDate('jc', 'to', f.to, 'to'),
+    `<button class="csvbtn" data-csv="jcsummary">⬇ CSV — summary</button>`,
+    `<button class="csvbtn" data-csv="jcsessions">⬇ CSV — raw sessions</button>`,
+  ]);
+  // group by piano, then tech × phase inside
+  const pianos = {};
+  rows.forEach(r => {
+    const k = r.serial;
+    const g = pianos[k] = pianos[k] || {serial: r.serial, piano: r.piano, mins: 0, n: 0, parts: {}};
+    g.mins += r.minutes; g.n++;
+    const pk = r.tech + '|' + (r.phase || '(no phase)');
+    g.parts[pk] = (g.parts[pk] || 0) + r.minutes;
+  });
+  const list = Object.values(pianos).sort((a, b) => b.mins - a.mins);
+  const totalM = rows.reduce((a, r) => a + r.minutes, 0);
+  CSV_EXPORTS.jcsummary = () => ['job-costing-summary.csv',
+    [['Serial', 'Piano', 'Technician', 'Phase', 'Minutes', 'Hours (decimal)'],
+     ...list.flatMap(g => Object.entries(g.parts).map(([pk, m]) => {
+       const [tech, phase] = pk.split('|');
+       return [g.serial, g.piano, tech, phase, m, hDec(m)];
+     }))]];
+  CSV_EXPORTS.jcsessions = () => ['job-costing-sessions.csv',
+    [['Serial', 'Piano', 'Technician', 'Phase', 'Start', 'End', 'Minutes', 'Hours (decimal)', 'Source'],
+     ...rows.map(r => [r.serial, r.piano, r.tech, r.phase, r.start, r.end, r.minutes, hDec(r.minutes), r.source])]];
+  return bar + `
+    <p class="pd">${list.length} piano${list.length === 1 ? '' : 's'} · ${fmtHM(totalM)} total ·
+      ${rows.length} session${rows.length === 1 ? '' : 's'} ·
+      <a target="_blank" rel="noopener" href="https://docs.google.com/spreadsheets/d/11RoeVRETag5rZYX6_tEH-rf6x8JL0JeZU0P5AT0WI-I/edit">open the Time Log sheet ↗</a></p>
+    <table><tr><th>PIANO</th><th>TECHNICIAN × PHASE</th><th>HOURS</th></tr>
+    ${list.map(g => `
+      <tr class="jcp"><td><b>${esc(g.piano || '—')}</b><br><small>#${esc(g.serial)} · ${g.n} session${g.n === 1 ? '' : 's'}</small></td>
+        <td></td><td><b>${fmtHM(g.mins)}</b> <small>(${hDec(g.mins)})</small></td></tr>
+      ${Object.entries(g.parts).sort((a, b) => b[1] - a[1]).map(([pk, m]) => {
+        const [tech, phase] = pk.split('|');
+        return `<tr><td></td><td>${esc(tech)} — ${esc(phase)}</td><td>${fmtHM(m)}</td></tr>`;
+      }).join('')}`).join('')
+     || '<tr><td colspan="3" class="empty">No work-clock sessions match these filters.</td></tr>'}</table>`;
+}
+
 const REPORT_DEFS = () => [
-  {id: 'briefs', icon: '📰', title: 'DAILY SHOP BRIEFS', count: null,
-   desc: 'Both nightly briefings, archived as Google Docs and listed separately — Shop Manager and Admin. Each row has its own ↗ share button, so you can send one day\u2019s briefing without sharing the whole archive.',
-   html: briefsTable},
-  {id: 'queue', icon: '🎹', title: 'SHOP QUEUE', count: (() => {
+  // ---- ADMIN REPORTS ----
+  {id: 'adminbriefs', sec: 'admin', icon: '💼', title: 'ADMIN DAILY BRIEF', count: null,
+   desc: 'The nightly Admin briefing, archived as Google Docs — payments, media and delivery logistics. Each row has its own ↗ share button.',
+   html: () => briefsTable('admin')},
+  {id: 'paytime', sec: 'admin', icon: '⏰', title: 'TIME CLOCK — PAYROLL', count: null,
+   desc: 'Team clock-in / clock-out for payroll: every arrival-and-exit punch from the dashboard Payroll Clock, filterable by team member and date, with daily punches or weekly/monthly totals, plus that member\u2019s hours by piano and by category of work from the piano Work Clock. Red rows were auto-closed (forgot to clock out) — review before running payroll. The CSV buttons export spreadsheets.',
+   html: payTimeTable},
+  {id: 'jobcost', sec: 'admin', icon: '💰', title: 'JOB COSTING — PER PIANO', count: null,
+   desc: 'Shop hours per piano from the Work Clock ledger, broken down by technician and phase — filter by piano, technician, phase, or date range, then export CSV spreadsheets (summary or raw sessions) for job costing.',
+   html: jobCostTable},
+  // ---- SHOP REPORTS ----
+  {id: 'briefs', sec: 'shop', icon: '📰', title: 'SHOP MANAGER DAILY BRIEF', count: null,
+   desc: 'The nightly Shop Manager briefing, archived as Google Docs — opens with the next morning\u2019s standup. Each row has its own ↗ share button, so you can send one day\u2019s briefing without sharing the whole archive.',
+   html: () => briefsTable('shop')},
+  {id: 'queue', sec: 'shop', icon: '🎹', title: 'SHOP QUEUE', count: (() => {
      try { return queueMembers().length; } catch (e) { return null; } })(),
    desc: 'Every piano in the Custom Shop Work queue, in order — #1 is next up. Click a row to jump to that piano on the map. Pre-Queue pianos (deposit not received) are listed below the queue; they don’t hold a place until approved.',
    html: queueTable},
-  {id: 'tasks', icon: '🧩', title: 'CONCURRENT WORK', count: (() => {
+  {id: 'tasks', sec: 'shop', icon: '🧩', title: 'CONCURRENT WORK', count: (() => {
      try { const f = S.tkF || {cat: 'keys'}; return S.data.pianos.filter(p =>
        p.active && p.serial && (p.queuePos || p.phase) && !taskAutoDone(p, f.cat)
        && taskStatus(taskVal(p, f.cat)) === 'needed').length; }
      catch (e) { return null; } })(),
    desc: 'Hardware and order tasks per piano, in queue order. Pick a category (keytops, plating, bass strings…) and a status — "needs attention" is the to-do list, top of the queue first. The count badge tracks the selected category.',
    html: tasksTable},
-  {id: 'stalled', icon: '🐢', title: 'SITTING TOO LONG', count: (() => {
+  {id: 'stalled', sec: 'shop', icon: '🐢', title: 'SITTING TOO LONG', count: (() => {
      try { return stalledPianos().length; } catch (e) { return null; } })(),
    desc: 'Custom Shopwork pianos in the building more than twice the typical span for their current phase — the 🐢 list that used to live inside the daily brief. Click a row to jump to the piano.',
    html: stalledTable},
-  {id: 'unplaced', icon: '⚠️', title: 'UNPLACED PIANOS', count: unplaced().length,
+  {id: 'unplaced', sec: 'shop', icon: '⚠️', title: 'UNPLACED PIANOS', count: unplaced().length,
    desc: 'Active pianos whose Piano Log location (column U) is empty or doesn’t match any spot or known area.',
    html: unplacedTable},
-  {id: 'dups', icon: '🔁', title: 'DUPLICATE SPOT NUMBERS', count: duplicates().length,
+  {id: 'dups', sec: 'shop', icon: '🔁', title: 'DUPLICATE SPOT NUMBERS', count: duplicates().length,
    desc: 'Two or more active pianos claim the same map spot — one of them is wrong.',
    html: dupTable},
-  {id: 'stage', icon: '🔧', title: 'MISSING SHOP STAGE', count: missingStage().length,
+  {id: 'stage', sec: 'shop', icon: '🔧', title: 'MISSING SHOP STAGE', count: missingStage().length,
    desc: 'Pianos in the Custom Shopwork section missing a CURRENT PHASE or TRACK — storage, rentals, financing, and other non-shopwork sections are exempt. Click a row to jump to the piano.',
    html: missingStageTable},
-  {id: 'media', icon: '📸', title: 'MEDIA NEEDED', count: S.data.pianos.filter(p =>
+  {id: 'media', sec: 'admin', icon: '📸', title: 'MEDIA NEEDED', count: S.data.pianos.filter(p =>
      p.active && !notYetArrived(p) && (mediaNeeds(p).photo || mediaNeeds(p).video)).length,
    desc: 'Before photos/video for every arrived piano; after photos/video once it reaches Tuning or later. Pianos that haven\'t arrived yet join once they\'re here.',
    html: mediaTable},
-  {id: 'cabinetry', icon: '🗄', title: 'CABINETRY', count: S.data.pianos.filter(p =>
+  {id: 'cabinetry', sec: 'shop', icon: '🗄', title: 'CABINETRY', count: S.data.pianos.filter(p =>
      p.active && cabTokens(p).length).length,
    desc: 'Which Cabinetry Storage shelves hold each piano\'s stripped cabinetry and hardware. Assign from the piano card (Cabinetry → ＋ shelf); click a unit box on the map for one unit\'s contents.',
    html: cabinetryTable},
-  {id: 'duplicates', icon: '🗑', title: 'MARKED DUPLICATES', count: duplicateMarkedPianos().length,
+  {id: 'duplicates', sec: 'shop', icon: '🗑', title: 'MARKED DUPLICATES', count: duplicateMarkedPianos().length,
    desc: 'Rows marked "Mark as Duplicate" from a piano card — hidden from the map/reports but never deleted. Restore one here if it was flagged by mistake.',
    html: duplicatesTable},
-  {id: 'waiting', icon: '⏳', title: 'WAITING ON', count: waitingPianos().length,
+  {id: 'waiting', sec: 'shop', icon: '⏳', title: 'WAITING ON', count: waitingPianos().length,
    desc: 'Every piano parked in a Waiting phase — what it’s waiting on, and when to check whether the wait is over (set with the card’s +3d/+1w/+2w/+1m snooze buttons). Overdue or dateless waits show in red.',
    html: waitingTable},
-  {id: 'activity', icon: '📝', title: 'ACTIVITY LOG', count: null,
+  {id: 'activity', sec: 'shop', icon: '📝', title: 'ACTIVITY LOG', count: null,
    desc: 'Who changed what — every move, phase change, media checkoff, and tuning request made through the map.',
    html: () => activityTable(S.activityRows)},
 ];
@@ -5745,7 +5988,7 @@ function renderReport() {
   const body = $('#reportsBody');
   if (!body) return;
   const open = S.openReport;
-  body.innerHTML = REPORT_DEFS().map(r => `
+  const rptCard = r => `
     <div class="rpt ${open === r.id ? 'open' : ''}" data-r="${r.id}">
       <button class="rptbtn">
         <span class="ric">${r.icon}</span><span class="rtitle">${r.title}</span>
@@ -5758,13 +6001,39 @@ function renderReport() {
           <button class="printbtn" data-r="${r.id}">🖨 Print</button></div>
         <div class="tscroll">${open === r.id ? r.html() : ''}</div>
       </div>
-    </div>`).join('');
+    </div>`;
+  const defs = REPORT_DEFS();
+  body.innerHTML =
+    `<h3 class="rsec">🔑 ADMIN REPORTS</h3>`
+    + defs.filter(r => r.sec === 'admin').map(rptCard).join('')
+    + `<h3 class="rsec">🔧 SHOP REPORTS</h3>`
+    + defs.filter(r => r.sec !== 'admin').map(rptCard).join('');
   body.querySelectorAll('.rptbtn').forEach(b => b.onclick = () => {
     const id = b.closest('.rpt').dataset.r;
     S.openReport = S.openReport === id ? null : id;
     if (S.openReport === 'activity' && !S.activityRows) loadActivity();
-    if (S.openReport === 'briefs' && !S.briefRows) loadBriefs();
+    if ((S.openReport === 'briefs' || S.openReport === 'adminbriefs') && !S.briefRows) loadBriefs();
+    if (S.openReport === 'paytime' && !S.payRows) loadPayroll();
+    if (S.openReport === 'jobcost' && !S.tlRows) loadTimeLog();
     renderReport();
+  });
+  body.querySelectorAll('.rptf').forEach(el => {
+    const apply = () => {
+      const scope = el.dataset.scope === 'pay' ? (S.payF || (S.payF = {})) : (S.jcF || (S.jcF = {}));
+      scope[el.dataset.f] = el.value;
+      renderReport();
+      const again = body.querySelector(`.rptf[data-scope="${el.dataset.scope}"][data-f="${el.dataset.f}"]`);
+      if (again && again.tagName === 'INPUT' && again.type === 'text') {
+        again.focus(); again.setSelectionRange(again.value.length, again.value.length);
+      }
+    };
+    if (el.tagName === 'SELECT' || el.type === 'date') el.onchange = apply;
+    else el.oninput = () => { clearTimeout(el._t); el._t = setTimeout(apply, 350); };
+  });
+  body.querySelectorAll('.csvbtn').forEach(b => b.onclick = ev => {
+    ev.stopPropagation();
+    const mk = CSV_EXPORTS[b.dataset.csv];
+    if (mk) { const [name, rows] = mk(); downloadCsv(name, rows); }
   });
   body.querySelectorAll('.actf').forEach(el => {
     const apply = () => {
@@ -5818,7 +6087,7 @@ function renderReport() {
     ev.stopPropagation();
     const def = REPORT_DEFS().find(r => r.id === b.dataset.r);
     let html = def.html();
-    if (def.id === 'activity' || def.id === 'tasks' || def.id === 'queue') {
+    if (['activity', 'tasks', 'queue', 'paytime', 'jobcost'].includes(def.id)) {
       const i = html.indexOf('<table');
       if (i > 0) html = html.slice(i);   // drop the filter bar from print
     }
@@ -6000,10 +6269,25 @@ function renderDash() {
       live Work Clock, personal records, your pianos, and your week.</p>`;
     return;
   }
+  fetchPayroll();   // refresh the payroll card whenever the dashboard opens
   const o = CLOCK.open;
   const pill = o
     ? `<span class="dlive on">● ON CLOCK <span class="cctime" data-start="${esc(o.start)}">${clockElapsed(o.start)}</span></span>`
     : `<span class="dlive">○ off the clock</span>`;
+  const po = PAY.open;
+  const payCard = `<div class="dbench db-pay">
+      <h4>💵 Payroll Clock — your paid day</h4>
+      ${po ? `<div class="dline now"><b>On the clock for payroll</b> since ${fmtT(po.start)} —
+                <span class="cctime" data-start="${esc(po.start)}">${clockElapsed(po.start)}</span></div>`
+           : PAY.today.length
+             ? `<div class="dline">Clocked out — <b>${fmtHM(payMins())}</b> on the day clock today.</div>`
+             : `<div class="dline">Not clocked in for the day yet.</div>`}
+      ${po ? `<button class="paybtn payout">■ Clock out for the day</button>`
+           : `<button class="paybtn payin">▶ Clock in for the day</button>`}
+      <div class="paymsg"></div>
+      <div class="dline dim">Arrival-to-exit for payroll — separate from the per-piano ⏱ Work Clock.
+        Admin pulls these punches in ☰ Reports → ⏰ Time Clock.</div>
+    </div>`;
   const d = (S.dashData && S.dashData.forName === name) ? S.dashData : null;
   const prs = d ? d.prs : null;
   const anniv = d ? d.anniv : null;
@@ -6034,6 +6318,7 @@ function renderDash() {
         <div class="dpr tap" id="dashPianos"><b>${prs ? prs.pianosTouched : '…'}</b><span>pianos touched ›</span></div>
       </div>
     </div>
+    ${payCard}
     <div class="dbench db-bench">
       <h4>⏱ On the bench right now</h4>
       ${o ? `<div class="dline now"><b>${esc(o.phase || 'Working')} — ${esc(o.piano || '')} #${esc(o.serial)}</b>
@@ -6057,6 +6342,18 @@ function renderDash() {
     ${prWatch}
     <p class="dsoon">coming soon: report history · phase-time PRs as the Work Clock fills in</p>`;
 
+  const pb = body.querySelector('.paybtn');
+  if (pb) pb.onclick = async () => {
+    pb.disabled = true;
+    pb.textContent = pb.classList.contains('payin') ? 'Clocking in…' : 'Clocking out…';
+    const j = await dayPunch(pb.classList.contains('payin') ? 'dayin' : 'dayout');
+    if (j && j.error) {
+      const pm = body.querySelector('.paymsg');
+      if (pm) { pm.className = 'paymsg err'; pm.textContent = j.error; }
+      pb.disabled = false;
+      pb.textContent = pb.classList.contains('payin') ? '▶ Clock in for the day' : '■ Clock out for the day';
+    } else renderDash();
+  };
   body.querySelectorAll('.dlocker[data-h], .dlink2').forEach(el => el.onclick = () => {
     const h = el.dataset.h;
     const titles = {'#myweek': '📋 My Week', '#report': '📝 My Friday Report', '#calendars': '📅 My Calendar'};
