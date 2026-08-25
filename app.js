@@ -6669,7 +6669,8 @@ function renderDash() {
     <div class="dcard">
       <div class="dcardtop">
         <div><div class="dwho">${esc(name)}</div>
-        <div class="dmeta">PIANO TECHNICIAN · BLP</div></div>
+        <div class="dmeta">${esc((((d && d.title) || 'Piano Technician')
+          .replace(/^larson family\s*\/\s*/i, '') || 'Piano Technician').toUpperCase())} · BLP</div></div>
         ${pill}
       </div>
       <div class="dprrow">

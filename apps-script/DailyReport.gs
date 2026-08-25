@@ -2406,7 +2406,7 @@ function addRequest_(req) {
   // preferred path (8/25): the client pre-uploads via the sales-app service
   // account (request-shot) — this web app's own token has NO Drive scope in
   // the anonymous deployment, so the REST upload below always failed silently
-  var shot = /^https:\/\/drive\.google\.com\//.test(String(req.screenshotUrl || ''))
+  var shot = /^https:\/\/(drive\.google\.com|blpsalesapp\.netlify\.app)\//.test(String(req.screenshotUrl || ''))
     ? String(req.screenshotUrl) : '';
   if (!shot && req.photo) {
     // Drive REST, not DriveApp — DriveApp throws in the anonymous web-app
@@ -3952,14 +3952,16 @@ function techDash_(name) {
     pianosTouched: pianos.length,
   };
 
-  // anniversary + tenure from the team sheet (start date only leaves here)
+  // anniversary + tenure + work title from the team sheet (start date only leaves here)
   var anniv = null;
+  var title = '';
   try {
     var ts = SpreadsheetApp.openById('1j1FP78rRj1jrl2z-_vIg95kN3GuG8TI4dpOheSnIoPc')
       .getSheetByName('Current Team');
     var tv = ts.getRange(2, 1, Math.max(1, ts.getLastRow() - 1), 7).getValues();
     for (var i = 0; i < tv.length; i++) {
       if (String(tv[i][0] || '').trim().toLowerCase() !== first) continue;
+      title = String(tv[i][3] || '').trim();   // Position column
       var st = tv[i][6];
       var sd = (st instanceof Date) ? st : null;
       if (!sd) {
@@ -3978,7 +3980,7 @@ function techDash_(name) {
     }
   } catch (e) {}
 
-  return {ok: true, name: name, pianos: pianos.slice(0, 250), prs: prs, anniv: anniv};
+  return {ok: true, name: name, title: title, pianos: pianos.slice(0, 250), prs: prs, anniv: anniv};
 }
 
 /* The 7:50 AM standup text: today's celebration lines, the safety/standard
