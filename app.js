@@ -18,7 +18,7 @@ const PHASES = ['New Arrival - Admin', 'Assessment', 'CAP',
   'Chip Tuning', 'DHRT', '1st Tuning', 'Refinishing', 'QC & Assembly',
   '2nd Tuning', 'Exit Prep - Admin', 'Delivered'];
 const PHASE_STATES = ['In Queue', 'Paused', 'For Sale',
-  'Waiting on Brigham', 'Waiting on Curtis Harper', 'Waiting on OTHER'];
+  'Waiting on Brigham', 'Waiting on Curtis Harper', 'Waiting on Customer', 'Waiting on OTHER'];
 // work tracks (multi-select, stored comma-separated in the TRACK column)
 const TRACKS = ['Rebuild', 'Hybrid', 'Refurbish', 'Refinish', 'Technology', 'Old Player', 'Storage', 'Misc'];   // unnumbered states; For Sale turns the icon green
 // Admin section: client payment plans, the shop-progress milestones that
@@ -49,6 +49,7 @@ function phaseLabels(phase, p) {
   if (phase === 'Paused') return {full: 'P', short: 'P'};
   if (phase === 'Waiting on Brigham') return {full: 'WB', short: 'W'};
   if (phase === 'Waiting on Curtis Harper') return {full: 'WC', short: 'W'};
+  if (phase === 'Waiting on Customer') return {full: 'WCu', short: 'W'};
   if (phase === 'Waiting on OTHER') return {full: 'WO', short: 'W'};
   if (phase === 'Delivered' || phase === 'For Sale') return null;
   const i = PHASES.indexOf(phase);
@@ -2618,12 +2619,20 @@ function popHTML(p) {
            ${PHASE_STATES.filter(ph => ph !== 'In Queue').map(ph =>
              `<option value="${esc(ph)}" ${effPh === ph ? 'selected' : ''}>${esc(ph)}</option>`).join('')}
          </select></div>${gotoLine(p, effPh)}<div class="phmsg"></div>
+       ${(p.phaseNotes || '').trim() ? `<div class="phnhist" style="font-size:11px;color:#6f6a63;background:#faf8f4;border-radius:6px;padding:6px 9px;margin:4px 0;white-space:pre-wrap">📝 ${esc(String(p.phaseNotes).slice(0, 500))}</div>` : ''}
        <div class="row phrow platerow">Plate
          <select class="platesel">
            <option value="" ${!(p.plateStatus || '').trim() ? 'selected' : ''}>— not tracked —</option>
            ${PLATE_STAGES.map(v =>
              `<option ${p.plateStatus === v ? 'selected' : ''}>${esc(v)}</option>`).join('')}
-         </select></div><div class="platemsg phmsg"></div>`
+         </select></div><div class="platemsg phmsg"></div>
+       <div class="row phrow colorow">Colors
+         <span style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:0">
+           <input class="colorpick" maxlength="80" placeholder="first pick — refinish/plating color + sheen"
+             value="${esc(p.colorPick || '')}">
+           <input class="colorfinal" maxlength="80" placeholder="FINAL color — after the client approves"
+             value="${esc(p.colorFinal || '')}">
+         </span></div><div class="colormsg phmsg"></div>`
     : '';
   // opt-IN: blank asks, Yes shows the history button, No shows nothing at all
   const crVal = (p.clientReports || '').trim().toLowerCase();
@@ -2863,6 +2872,31 @@ function wirePop(p) {
     qin.onclick = ev => ev.stopPropagation();
     qin.onkeydown = e => { if (e.key === 'Enter') queuePiano(p, parseInt(qin.value, 10), pop); };
   }
+
+  // color selections (Brigham 8/26): first pick + client-approved final —
+  // admin-entered, mirrored into the Concurrent Work report categories
+  pop.querySelectorAll('.colorpick, .colorfinal').forEach(ci => {
+    ci.onclick = ev => ev.stopPropagation();
+    ci.onchange = async () => {
+      const msg = pop.querySelector('.colormsg');
+      const {pin, ok} = writeAuth();
+      if (!ok) { msg.textContent = 'Sign in first.'; return; }
+      msg.textContent = 'Saving…';
+      try {
+        const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+          headers: {'content-type': 'text/plain;charset=utf-8'},
+          body: JSON.stringify({pin, action: 'setcolor', serial: p.serial, row: p.row,
+            which: ci.classList.contains('colorfinal') ? 'final' : 'pick',
+            value: ci.value.trim(), ...authFields()})});
+        const j = await r.json();
+        if (!j.ok) throw new Error(j.error || 'save failed');
+        if (ci.classList.contains('colorfinal')) p.colorFinal = ci.value.trim();
+        else p.colorPick = ci.value.trim();
+        msg.className = 'colormsg phmsg ok'; msg.textContent = '✓ saved';
+        setTimeout(() => { if (msg.isConnected) msg.textContent = ''; }, 1600);
+      } catch (e) { msg.className = 'colormsg phmsg err'; msg.textContent = '✗ ' + e.message; }
+    };
+  });
 
   const plsel = pop.querySelector('.platesel');
   if (plsel) plsel.onchange = async () => {
@@ -3204,6 +3238,83 @@ function wirePop(p) {
   if (pt) pt.onclick = ev => ev.stopPropagation();
 }
 
+/* Phase-advance gate: photo required + optional routed notes, then the
+ * advance goes through setPhase with {gated:true}. */
+function openPhaseGateModal(p, phase, was, pop) {
+  const old = document.querySelector('.dsheetov'); if (old) old.remove();
+  const sel = pop && pop.querySelector('.phsel');
+  const ov = document.createElement('div');
+  ov.className = 'dsheetov';
+  ov.innerHTML = `<div class="dsheet"><button class="dsx">✕</button>
+    <h3>📸 Finishing ${esc(was)} → ${esc(phase)}</h3>
+    <div class="dssub">Take a progress photo of the piano first — these photos feed
+      <b>Quality Control</b>, <b>marketing content</b>, and the <b>progress emails the
+      piano's owner receives</b>.</div>
+    <div class="rfbar">
+      <label class="csvbtn" style="cursor:pointer">📷 Take / attach the photo
+        <input type="file" accept="image/*" capture="environment" hidden class="pg-file"></label>
+      <span class="pg-shot phmsg">required before advancing</span></div>
+    <textarea class="pg-note" rows="3" placeholder="Notes about the ${esc(was)} work you just finished (optional) — anything the next tech, the managers or Brigham should know"></textarea>
+    <div class="rfbar"><select class="pg-route">
+        <option value="card">📌 put the note on the piano's data card (all team)</option>
+        <option value="managers">👔 send the note to the managers</option>
+        <option value="brigham">🗒 send the note to Brigham</option>
+      </select></div>
+    <div class="rfbar">
+      <button class="csvbtn pg-go" disabled>Advance to ${esc(phase)} →</button>
+      <button class="csvbtn pg-cancel" style="background:none;border:1px solid #cfc9bf;color:inherit">Cancel</button>
+      <span class="pg-msg phmsg"></span></div>
+  </div>`;
+  document.body.appendChild(ov);
+  const close = () => { ov.remove(); if (sel) sel.value = was; };
+  ov.querySelector('.dsx').onclick = close;
+  ov.querySelector('.pg-cancel').onclick = close;
+  const shotMsg = ov.querySelector('.pg-shot'), go = ov.querySelector('.pg-go');
+  ov.querySelector('.pg-file').onchange = async ev => {
+    const f = ev.target.files && ev.target.files[0];
+    if (!f) return;
+    const wa = writeAuth();
+    if (!wa.ok) { shotMsg.className = 'pg-shot phmsg err'; shotMsg.textContent = 'Sign in first.'; return; }
+    shotMsg.className = 'pg-shot phmsg'; shotMsg.textContent = 'Uploading…';
+    try {
+      const dataUrl = await downscalePhoto(f, 2048, 0.85);
+      const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+        headers: {'content-type': 'text/plain;charset=utf-8'},
+        body: JSON.stringify({pin: wa.pin, action: 'photo', kind: 'progress', serial: p.serial,
+          row: p.row, stage: was || 'progress', mime: 'image/jpeg',
+          data: dataUrl.split(',')[1], ...authFields()})});
+      const j = await r.json();
+      if (!j.saved) throw new Error(j.error || 'upload failed');
+      shotMsg.className = 'pg-shot phmsg ok'; shotMsg.textContent = '✓ photo filed';
+      go.disabled = false;
+    } catch (e) { shotMsg.className = 'pg-shot phmsg err'; shotMsg.textContent = '✗ ' + e.message; }
+  };
+  go.onclick = async () => {
+    go.disabled = true; go.textContent = 'Advancing…';
+    const note = ov.querySelector('.pg-note').value.trim();
+    const route = ov.querySelector('.pg-route').value;
+    const wa = writeAuth();
+    if (note && wa.ok) {
+      try {
+        if (route === 'card') {
+          await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+            headers: {'content-type': 'text/plain;charset=utf-8'},
+            body: JSON.stringify({pin: wa.pin, action: 'phasenote', serial: p.serial, row: p.row,
+              phase: was, note, ...authFields()})});
+        } else {
+          await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+            headers: {'content-type': 'text/plain;charset=utf-8'},
+            body: JSON.stringify({pin: wa.pin, action: 'teamreq',
+              kind: route === 'brigham' ? 'Phase note for Brigham' : 'Phase note for the managers',
+              serial: p.serial, row: p.row,
+              notes: `finished ${was} on #${p.serial}: ${note}`, ...authFields()})});
+        }
+      } catch (e) { /* the advance still goes through */ }
+    }
+    ov.remove();
+    setPhase(p, phase, pop, {gated: true});
+  };
+}
 async function setPhase(p, phase, pop, extra) {
   const msg = pop.querySelector('.phmsg');
   const sel = pop.querySelector('.phsel');
@@ -3211,6 +3322,16 @@ async function setPhase(p, phase, pop, extra) {
   if (phase === was) return;
   if (phase.startsWith('Waiting') && extra == null) {
     openWaitNoteModal(p, phase, pop);   // ask for details + check-back first
+    return;
+  }
+  // 📸 phase-advance gate (Brigham 8/26): moving FORWARD in the sequence
+  // requires a tech progress photo first (QC, marketing, client updates),
+  // plus optional phase notes routed to the card / managers / Brigham
+  const gseq = pianoPhases(p) || PHASES;
+  if (!(extra && extra.gated)
+      && gseq.indexOf(phase) >= 0 && gseq.indexOf(was) >= 0
+      && gseq.indexOf(phase) > gseq.indexOf(was)) {
+    openPhaseGateModal(p, phase, was, pop);
     return;
   }
   const note = extra && extra.note;
@@ -5791,10 +5912,14 @@ const TASK_CATS = [
   ['hinges', 'Hinges'],
   ['screws', 'Screws'],
   ['otherhw', 'Other hardware'],
+  ['colorpick', '🎨 Color — first pick'],
+  ['colorfinal', '✅ Color — FINAL approved'],
 ];
 function taskVal(p, k) {
   if (k === 'keys') return (p.keywork || p.keyService || '').trim();
   if (k === 'plating') return (p.replate || '').trim();
+  if (k === 'colorpick') return (p.colorPick || '').trim();
+  if (k === 'colorfinal') return (p.colorFinal || '').trim();
   return ((p.tasks || {})[k] || '').trim();
 }
 /* Phase-inferred completion: the shop's own sequence proves some tasks.

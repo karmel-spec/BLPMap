@@ -97,6 +97,12 @@ function parsePianos(text) {
     ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'TYPE OVERRIDE') : -1;
   const plateIdx = rows[1]
     ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'PLATE STATUS') : -1;
+  const colorPickIdx = rows[1]
+    ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'COLOR FIRST PICK') : -1;
+  const colorFinalIdx = rows[1]
+    ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'COLOR FINAL APPROVED') : -1;
+  const phaseNotesIdx = rows[1]
+    ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'PHASE NOTES') : -1;
   const payPlanIdx = rows[1]
     ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'PAYMENT PLAN') : -1;
   const payMsIdx = rows[1]
@@ -224,6 +230,9 @@ function parsePianos(text) {
       checkBack: cbIdx >= 0 ? col(cbIdx) : '',
       cabinetry: cabIdx >= 0 ? col(cabIdx) : '',
       plateStatus: plateIdx >= 0 ? col(plateIdx) : '',
+      colorPick: colorPickIdx >= 0 ? col(colorPickIdx) : '',
+      colorFinal: colorFinalIdx >= 0 ? col(colorFinalIdx) : '',
+      phaseNotes: phaseNotesIdx >= 0 ? col(phaseNotesIdx).slice(0, 600) : '',
       bphoto: med(13), aphoto: med(15), bvideo: med(16), avideo: med(17),
       queuePos: 0, queueTotal: 0,
       isNew, active,

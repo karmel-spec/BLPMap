@@ -794,6 +794,18 @@ function doPost(e) {
       if (srs.ok) logAct_(who, 'Roster ' + srs.status, srs.tech, 'Shop Board roster override');
       return json_(srs);
     }
+    if (req.action === 'setcolor') {
+      var scl = setColor_(req);
+      if (scl.ok) logAct_(who, 'Color ' + (req.which === 'final' ? 'FINAL approved' : 'first pick'),
+        scl.summary || req.serial, scl.value || '(cleared)');
+      return json_(scl);
+    }
+    if (req.action === 'phasenote') {
+      var pn = phaseNote_(req, who);
+      if (pn.ok) logAct_(who, 'Phase note', pn.summary || req.serial,
+        String(req.phase || '') + ': ' + String(req.note || '').slice(0, 120));
+      return json_(pn);
+    }
     if (req.action === 'setplatestatus') {
       var pls = setPlateStatus_(req);
       if (pls.ok) logAct_(who, 'Plate status', pls.summary || req.serial, pls.plateStatus || '(cleared)');
@@ -1141,7 +1153,7 @@ var PHASE_VALUES = ['New Arrival - Admin', 'Assessment', 'CAP',
   'Chip Tuning', 'DHRT', '1st Tuning', 'Refinishing', 'QC & Assembly',
   '2nd Tuning', 'Exit Prep - Admin', 'Delivered',
   'In Queue', 'Paused', 'For Sale',
-  'Waiting on Brigham', 'Waiting on Curtis Harper', 'Waiting on OTHER'];
+  'Waiting on Brigham', 'Waiting on Curtis Harper', 'Waiting on Customer', 'Waiting on OTHER'];
 
 // July 2026 phase rework: how the old phase names translate to the new
 // 14-phase pipeline. Used once by the 'migratephases' action to update
@@ -3464,9 +3476,12 @@ function buildShopManagerReport_(dayOffset) {
   });
 
   // admin + payments
+  // every queue piano without a payment plan (Brigham 8/26) — the ones past
+  // 25% complete are the urgent tail (milestone emails stay off without one)
   R.noPlan = pianos.filter(function (p) {
-    return smIsShopwork_(p) && !String(p.payPlan || '').trim() && smProgress_(p) >= 25;
-  });
+    return smIsShopwork_(p) && !String(p.payPlan || '').trim();
+  }).map(function (p) { return {p: p, urgent: smProgress_(p) >= 25}; })
+    .sort(function (a, b) { return (b.urgent ? 1 : 0) - (a.urgent ? 1 : 0); });
   R.adminDrift = [];
   pianos.forEach(function (p) {
     if (!smIsShopwork_(p)) return;
@@ -3635,6 +3650,21 @@ function shopManagerHtml_(R) {
         + (x.context ? ', ' + x.context : '') + ')</span> '
         + pill(x.status, x.status === 'Tested' ? '#eaf5ec' : '#eaf2fd',
                x.status === 'Tested' ? '#2f7d4f' : '#2c5d96');
+    }));
+  }
+  if (R.clientReady && R.clientReady.length) {
+    sec('🤝', 'Client reports ready to send', R.clientReady.length,
+      'Opt-in client-report pianos with shop activity this week — review the draft and email it from the Shop Manager’s Client Reports page.');
+    ul(R.clientReady.map(function (x) {
+      return '<b>' + esc_(x.summary) + '</b> #' + esc_(x.serial) + (x.phase ? ' · ' + esc_(x.phase) : '');
+    }));
+  }
+  if (R.fieldCalls && R.fieldCalls.length) {
+    sec('📞', 'Field tunings — reminder calls & confirmations (next 2 days)', R.fieldCalls.length,
+      'From McKinly’s and Curtis’s own calendars — call to confirm, or clear cancelled slots.');
+    ul(R.fieldCalls.map(function (x) {
+      return '<b>' + esc_(x.when) + '</b> · ' + esc_(x.tech) + ' · ' + esc_(x.title)
+        + ' ' + pill(esc_(x.flag), '#fdf3ec', '#9a5b13');
     }));
   }
   if (R.suggestions && R.suggestions.length) {
@@ -3897,9 +3927,10 @@ function adminBriefHtml_(R) {
     sec('💰', 'Admin & payments', R.noPlan.length + R.adminDrift.length);
     var a = [];
     if (R.noPlan.length) a.push('<b style="color:#9e2020">' + R.noPlan.length
-      + ' past 25% complete with no payment plan set</b> — milestone emails stay off until one is chosen:<br>'
-      + '<span style="font-size:12px">' + R.noPlan.slice(0, 10).map(function (p) {
-          return smName_(p) + ' (#' + smSpot_(p) + ')'; }).join('; ') + '</span>');
+      + ' queue pianos with no payment plan set</b> (bold = past 25% complete — milestone emails stay off until one is chosen):<br>'
+      + '<span style="font-size:12px">' + R.noPlan.slice(0, 15).map(function (x) {
+          var nm = smName_(x.p) + ' (#' + smSpot_(x.p) + ')';
+          return x.urgent ? '<b>' + nm + '</b>' : nm; }).join('; ') + '</span>');
     R.adminDrift.slice(0, 10).forEach(function (d) {
       a.push(ref(d.p) + '<br><span style="font-size:12px;color:#8a6a00">admin steps not checked: '
         + d.want.join(', ') + '</span>');
@@ -4245,6 +4276,46 @@ function shopRosterSet_(tech, status) {
  * plating view shows where each plate is. */
 var PLATE_STATUSES = ['', 'In piano', 'Removed', 'Plate storage — BEFORE',
                       'At Curtis Harper', 'Plate storage — AFTER', 'Back in piano'];
+/* Color selections (Brigham 8/26): admin-entered refinish/plating color+sheen —
+ * a first pick, then the FINAL after the client approves. Header-created cols. */
+function setColor_(req) {
+  var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+  var found = findPiano_(sh, req.serial, req.row);
+  if (found.error) return found;
+  var hdrName = req.which === 'final' ? 'COLOR FINAL APPROVED' : 'COLOR FIRST PICK';
+  var last = sh.getLastColumn();
+  var hdr = sh.getRange(2, 1, 1, last).getValues()[0];
+  var col = -1;
+  for (var c = 0; c < hdr.length; c++) {
+    if (String(hdr[c] || '').trim().toUpperCase() === hdrName) { col = c + 1; break; }
+  }
+  if (col < 0) { sh.getRange(2, last + 1).setValue(hdrName); col = last + 1; }
+  var val = String(req.value == null ? '' : req.value).trim().slice(0, 80);
+  sh.getRange(found.row, col).setValue(val);
+  return {ok: true, row: found.row, summary: found.summary, which: req.which, value: val};
+}
+/* Phase notes (Brigham 8/26): tech notes left when advancing a phase, shown on
+ * the data card — appended newest-first into a header-created PHASE NOTES col. */
+function phaseNote_(req, who) {
+  var note = String(req.note || '').trim().slice(0, 300);
+  if (!note) return {error: 'no note'};
+  var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+  var found = findPiano_(sh, req.serial, req.row);
+  if (found.error) return found;
+  var last = sh.getLastColumn();
+  var hdr = sh.getRange(2, 1, 1, last).getValues()[0];
+  var col = -1;
+  for (var c = 0; c < hdr.length; c++) {
+    if (String(hdr[c] || '').trim().toUpperCase() === 'PHASE NOTES') { col = c + 1; break; }
+  }
+  if (col < 0) { sh.getRange(2, last + 1).setValue('PHASE NOTES'); col = last + 1; }
+  var name = String(who || '').replace(/\s*<[^>]*>\s*/, '').replace(/\s*\(.*\)\s*$/, '');
+  var stamp = Utilities.formatDate(new Date(), 'America/Denver', 'M/d');
+  var line = stamp + ' ' + name + (req.phase ? ' (' + String(req.phase) + ')' : '') + ': ' + note;
+  var prev = String(sh.getRange(found.row, col).getValue() || '').trim();
+  sh.getRange(found.row, col).setValue(prev ? line + '\n' + prev : line);
+  return {ok: true, row: found.row, summary: found.summary};
+}
 function setPlateStatus_(req) {
   var val = String(req.plateStatus == null ? '' : req.plateStatus).trim();
   if (PLATE_STATUSES.indexOf(val) < 0) return {error: 'bad plate status: ' + val};
