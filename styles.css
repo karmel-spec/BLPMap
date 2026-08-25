@@ -900,3 +900,32 @@ body{top:0!important}
 .trainrow .tact{display:inline-block;font-size:11.5px;font-weight:600;color:#9e2020;
   margin:7px 16px 0 0;text-decoration:none}
 .trainrow .tact:hover{text-decoration:underline}
+
+/* Training doc viewer (in-app guide/handbook/policies) */
+.tdwrap{max-width:860px}
+.tdback{display:inline-block;margin-bottom:6px}
+.tdtoc{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 16px}
+.tdchip{font:600 11.5px/1.2 inherit;color:#9e2020;background:#fafbfc;border:1px solid #e3e6e9;
+  border-radius:20px;padding:5px 10px;cursor:pointer;font-family:inherit}
+.tdchip:hover{background:#fff;border-color:#c9a0a0}
+.tdsec{padding:10px 0 4px;border-top:1px solid #eef0f2}
+.tdsec:first-of-type{border-top:0}
+.tdsec h3{font-size:15px;color:#23282d;margin:8px 0 6px;letter-spacing:.2px}
+.tdsec h4{font-size:13px;color:#3a4046;margin:8px 0 4px}
+.tdsec p,.tdsec li{font-size:13.5px;line-height:1.55;color:#3a4046}
+.tdsec p{margin:6px 0}
+.tdsec ul,.tdsec ol{margin:6px 0;padding-left:22px}
+.tdsec b{color:#23282d}
+.tdsec img{max-width:100%;height:auto;border-radius:8px;margin:8px 0}
+.tdsec a{color:#9e2020}
+.tdsec table{border-collapse:collapse;display:block;overflow-x:auto;margin:8px 0;max-width:100%}
+.tdsec td{border:1px solid #e3e6e9;padding:6px 9px;font-size:12.5px;vertical-align:top}
+.hbvid{position:relative;display:block;max-width:480px;margin:10px 0;cursor:pointer;
+  border-radius:10px;overflow:hidden;background:#000;aspect-ratio:16/9}
+.hbvid img{width:100%;height:100%;object-fit:cover;display:block;opacity:.85;margin:0;border-radius:0}
+.hbvid .tdplay{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  width:52px;height:52px;border-radius:50%;background:rgba(158,32,32,.92);color:#fff;
+  font-size:20px;display:flex;align-items:center;justify-content:center;pointer-events:none}
+.hbvid .tdvtitle{position:absolute;left:0;right:0;bottom:0;padding:6px 10px;
+  background:linear-gradient(transparent,rgba(0,0,0,.75));color:#fff;font-size:12px;pointer-events:none}
+.tdiframe{width:100%;max-width:480px;aspect-ratio:16/9;border:0;border-radius:10px;margin:10px 0;display:block}

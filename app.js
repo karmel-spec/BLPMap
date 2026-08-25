@@ -6094,43 +6094,127 @@ function renderDash() {
 }
 
 /* ---------- training ---------- */
-// Guides & handbooks shown on the 🎓 Training view. The first entry is this
-// app's own user guide (doubles as the app's help link). To add a training,
-// append {title, desc, href} here — `video` is optional and adds a
-// "▶ watch video" link next to the doc link. Nothing else to touch.
+// Guides & handbooks shown on the 🎓 Training view. Docs open IN-APP via
+// openTrainingDoc(): content lives in data/training/<doc>.json + <doc>.es.json
+// (the .es file is served when the 🌐 language is Español, marked
+// translate="no" so Google page-translate leaves the curated Spanish alone).
+// Regenerate the JSON with scripts/build-training-docs.py. To add a training:
+// add its two JSON files and one {doc, title, desc} entry here — `video` is
+// optional and adds a "▶ watch video" link.
 const TRAININGS = [
   {
+    doc: 'guide',
     title: 'Store Map User Guide',
     desc: 'How to use the BLP Store Map: signing in, finding pianos, clocking work time, paperwork & photos.',
-    href: 'https://docs.google.com/document/d/1aq3oTa6pxr6AhquS7pbJakAY4q4iPc_nUJW4yLMXDOM/edit?usp=sharing',
     video: 'https://youtu.be/1zDlnks5CC0',
   },
   {
+    doc: 'handbook',
     title: 'BLP Restoration Handbook',
     desc: 'The complete BLP restoration handbook.',
-    href: 'https://blpshop.netlify.app/index.html#handbook',
   },
   {
+    doc: 'policies',
     title: 'Professional Standards & Team Culture',
     desc: 'BLP professional standards: punctuality, dress code, safety, workplace conduct & cleanliness.',
-    href: 'https://docs.google.com/document/d/1PYw5R8o9k8iLtCIfRkWVcno2hqqYQcS5-8izyM4Fbsk/edit',
   },
 ];
+// the training-video transcript opens as its own in-app doc, in either
+// language explicitly (EN and ES links sit next to the video link)
+function transcriptDoc(lang) {
+  return {doc: 'video-transcript', title: 'Training Video — Transcript', forceLang: lang};
+}
+function transcriptLinks() {
+  return `<a class="tact" href="#" data-tdoc="en">📄 transcript</a>
+          <a class="tact" href="#" data-tdoc="es">📄 transcripción (ES)</a>`;
+}
+function wireDocLinks(el) {
+  el.querySelectorAll('[data-doc]').forEach(a => a.onclick = e => {
+    e.preventDefault();
+    openTrainingDoc(TRAININGS[+a.dataset.doc]);
+  });
+  el.querySelectorAll('[data-tdoc]').forEach(a => a.onclick = e => {
+    e.preventDefault();
+    openTrainingDoc(transcriptDoc(a.dataset.tdoc));
+  });
+}
 function renderTraining() {
   const el = $('#trainingBody');
   if (!el) return;
-  el.innerHTML = TRAININGS.map(t =>
+  el.innerHTML = TRAININGS.map((t, i) =>
     `<div class="trainrow">
        <b>${esc(t.title)}</b><span>${esc(t.desc)}</span>
-       <a class="tact" href="${esc(t.href)}" target="_blank" rel="noopener">open ↗</a>${
-       t.video ? `<a class="tact" href="${esc(t.video)}" target="_blank" rel="noopener">▶ watch video</a>` : ''
+       <a class="tact" href="#" data-doc="${i}">📖 read</a>${
+       t.video ? `<a class="tact" href="${esc(t.video)}" target="_blank" rel="noopener">▶ watch video</a>` + transcriptLinks() : ''
      }</div>`).join('');
+  wireDocLinks(el);
 }
 renderTraining();
 
+const trainDocCache = {};
+async function fetchTrainingDoc(id, lang) {
+  const key = id + '.' + lang;
+  if (trainDocCache[key]) return trainDocCache[key];
+  const file = 'data/training/' + id + (lang === 'es' ? '.es' : '') + '.json';
+  const r = await fetch(file);
+  if (!r.ok) throw new Error(file + ' → HTTP ' + r.status);
+  return (trainDocCache[key] = await r.json());
+}
+async function openTrainingDoc(t) {
+  const body = $('#trainingDocBody');
+  switchView('trainingdoc');
+  const close = $('#view-trainingdoc .viewclose');
+  if (close) { close.onclick = () => switchView('training'); close.title = 'Back to Training'; }
+  const es = t.forceLang ? t.forceLang === 'es' : lsGet('blpLang') === 'es';
+  body.innerHTML = '<p class="pd">Loading…</p>';
+  let doc;
+  try { doc = await fetchTrainingDoc(t.doc, es ? 'es' : 'en'); }
+  catch (e) {
+    try { doc = await fetchTrainingDoc(t.doc, 'en'); }
+    catch (e2) { body.innerHTML = `<p class="pd">Couldn’t load this doc — ${esc(e2.message)}</p>`; return; }
+  }
+  const secs = doc.sections.filter(s => s.html);
+  const usingEs = doc.lang === 'es';
+  const toc = secs.filter(s => s.title).length > 4
+    ? `<div class="tdtoc">${secs.map((s, i) => s.title
+        ? `<button class="tdchip" data-sec="td-${i}">${esc(s.title)}</button>` : '').join('')}</div>`
+    : '';
+  body.innerHTML =
+    `<div class="tdwrap${usingEs ? ' notranslate' : ''}"${usingEs ? ' translate="no"' : ''}>
+       <a class="tact tdback" href="#">← ${usingEs ? 'Todas las capacitaciones' : 'All trainings'}</a>
+       <h2 class="ph">${esc(doc.title || t.title)}</h2>
+       ${t.video ? `<p class="pd"><a class="tact" href="${esc(t.video)}" target="_blank" rel="noopener">▶ ${usingEs ? 'ver el video de capacitación' : 'watch the training video'}</a> ${transcriptLinks()}</p>` : ''}
+       ${toc}
+       ${secs.map((s, i) => `<section class="tdsec" id="td-${i}">${s.title ? `<h3>${esc(s.title)}</h3>` : ''}${s.html}</section>`).join('')}
+     </div>`;
+  body.querySelector('.tdback').onclick = e => { e.preventDefault(); switchView('training'); };
+  wireDocLinks(body);
+  body.querySelectorAll('.tdchip').forEach(c => c.onclick = () => {
+    const s = document.getElementById(c.dataset.sec);
+    if (s) s.scrollIntoView({behavior: 'smooth', block: 'start'});
+  });
+  // handbook video embeds: click-to-play thumbnails, iframe only on demand
+  body.querySelectorAll('.hbvid').forEach(v => {
+    const yt = v.dataset.yt, start = v.dataset.start || 0, title = v.dataset.title || '';
+    if (!yt) return;
+    v.innerHTML = `<img src="https://i.ytimg.com/vi/${esc(yt)}/hqdefault.jpg" alt="${esc(title)}" loading="lazy"><span class="tdplay">▶</span>${title ? `<span class="tdvtitle">${esc(title)}</span>` : ''}`;
+    v.onclick = () => {
+      const f = document.createElement('iframe');
+      f.className = 'tdiframe';
+      f.src = `https://www.youtube-nocookie.com/embed/${yt}?start=${start}&autoplay=1`;
+      f.allow = 'autoplay; encrypted-media; picture-in-picture';
+      f.allowFullscreen = true;
+      v.replaceWith(f);
+    };
+  });
+  $('#view-trainingdoc').scrollTop = 0;
+  const panel = $('#view-trainingdoc .panel');
+  if (panel) panel.scrollTop = 0;
+}
+
 /* ---------- views / nav / drawers ---------- */
 function showView(v) {
-  ['map', 'report', 'board', 'cal', 'media', 'shopmap', 'archive', 'dash', 'training'].forEach(x => $('#view-' + x).hidden = x !== v);
+  ['map', 'report', 'board', 'cal', 'media', 'shopmap', 'archive', 'dash', 'training', 'trainingdoc'].forEach(x => $('#view-' + x).hidden = x !== v);
   if (v === 'archive') renderArchive();
   document.querySelectorAll('.navitem[data-view]').forEach(el =>
     el.classList.toggle('on', el.dataset.view === v));
@@ -6157,7 +6241,7 @@ $('.logo').onclick = goHome;
 $('.logo').style.cursor = 'pointer';
 
 // every non-map view gets a ✕ back to the map (Escape works too)
-['report', 'board', 'cal', 'media', 'shopmap', 'archive', 'dash', 'training'].forEach(v => {
+['report', 'board', 'cal', 'media', 'shopmap', 'archive', 'dash', 'training', 'trainingdoc'].forEach(v => {
   const el = $('#view-' + v);
   if (el && !el.querySelector('.viewclose')) {
     const b = document.createElement('button');

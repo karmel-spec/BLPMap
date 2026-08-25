@@ -1,0 +1,63 @@
+{
+ "generated": "2026-08-25",
+ "source": "https://docs.google.com/document/d/1aq3oTa6pxr6AhquS7pbJakAY4q4iPc_nUJW4yLMXDOM/edit",
+ "lang": "en",
+ "title": "🎹 BLP Store Map — blpstoremap.netlify.app",
+ "sections": [
+  {
+   "slug": "intro",
+   "title": "",
+   "html": "<p>The Store Map is our live floor plan and the home base for shop work: where every piano is, what phase it&#39;s in, your work clock, photos, paperwork, and requests. <b>Everything you do in it is logged under your name</b>&nbsp;&mdash;</p>"
+  },
+  {
+   "slug": "1-signing-in-and-out",
+   "title": "1 Signing in and out",
+   "html": "<ul><li><b>Sign in with Google</b>&nbsp;using your <b>.blp@gmail.com</b>&nbsp;account (preferred &mdash; one tap after the first time), <b>Sign out:</b>&nbsp;tap <b>your own name</b>&nbsp;in the top bar (it has a small &#9211; mark). On shared devices, always sign out so the next person&#39;s work is logged as theirs.</li><li>If &quot;sign-in expired,&quot; just retry &mdash; the app renews your session by itself in about 2 seconds.</li></ul>"
+  },
+  {
+   "slug": "2-finding-a-piano",
+   "title": "2 Finding a piano",
+   "html": "<ul><li><b>Search bar:</b>&nbsp;type a serial, make, model, or year &mdash; suggestions appear as you type; keep typing to narrow. Pick one to jump to it on the map.</li><li><b>Scan the shop tag:</b>&nbsp;point your phone camera at the QR on any piano&#39;s printed tag &mdash; the app opens that exact piano&#39;s card. Fastest way on the floor.</li><li><b>Floors:</b>&nbsp;First / Second floor buttons top-left. Pinching zooms the map; the header never scrolls away.</li></ul>"
+  },
+  {
+   "slug": "3-reading-the-map-icons",
+   "title": "3 Reading the map icons",
+   "html": "<ul><li><b>Red slash over a wrench (&#128295;&#8416;):</b>&nbsp;PRE-QUEUE &mdash; the deposit hasn&#39;t been received. <b>No work may start on this piano.</b>&nbsp;Only a manager can release it.</li><li><b>Gold &#10003; / gold ring:</b>&nbsp;sold or completed but still in the building &mdash; awaiting delivery.</li><li><b>Dashed gold &quot;TEMP&quot; box:</b>&nbsp;a temporary parking spot a manager created &mdash; treat it like any spot; it disappears when the piano moves on.</li><li><b>Camera badge:</b>&nbsp;media is needed on that piano.</li></ul>"
+  },
+  {
+   "slug": "4-the-piano-card-tap-any-piano",
+   "title": "4 The piano card (tap any piano)",
+   "html": "<p>Sections are the red banners &mdash; <b>tap a banner to collapse or expand it</b>; the app remembers your preferences.</p><ul><li><b>&#128205; Locations:</b>&nbsp;move a piano by typing the new spot &mdash; <b>only real spots are accepted</b>; pick from the suggestion list (includes areas like Attic, Sanding Shop). <b>&#128344; Location history</b>&nbsp;shows everywhere it&#39;s been, and who moved it.</li><li><b>&#128296; Shop Progress:</b>&nbsp;track, keys, phase dropdown, Done checkmarks, and tasks. Update the phase the moment you finish &mdash; stale phases scramble the whole shop&#39;s scheduling.</li><li><b>&#9201; Work Clock &mdash; the big new habit:</b></li></ul><ul><li><b>Clock in when you start working on a piano; clock out when you stop.</b>&nbsp;This is how job costing and your hours work now.</li><li>You must <b>pick the phase first</b>&nbsp;(or choose &quot;&#9999;&#65039; Other&quot; and write a few words). The green button won&#39;t fire without it.</li><li><b>One piano at a time:</b>&nbsp;clocking into a new piano automatically closes your previous session &mdash; switching is one tap, no math.</li><li>While clocked in you&#39;ll see a <b>green timer chip</b>&nbsp;in the top bar and a <b>dock at the bottom</b>&nbsp;&mdash; Switch and Clock out live there.</li><li>Quiet for 15 minutes? The dock asks if you&#39;re still on it &mdash; answer honestly; &quot;clock out at last activity&quot; backdates correctly.</li><li><b>Scanning a piano&#39;s tag</b>&nbsp;highlights the Work Clock so scan &rarr; clock in is two taps.</li></ul><ul><li><b>&#128247; Media:</b>&nbsp;&quot;Add before photos&quot; / &quot;Add after photos&quot; file pictures straight into the piano&#39;s Drive folders, sized for the web. Use them &mdash; the daily report tracks what&#39;s missing.</li><li><b>&#128193; Paperwork:</b>&nbsp;QC checklist scans (the app can find them by serial) plus slots for bass string orders, tear-down sheets, plating orders.</li><li><b>&#128214; Piano Log:</b>&nbsp;everything else from the sheet, and a link to the exact row.</li><li><b>&#128232; Request&hellip; menu:</b>&nbsp;moves, tunings, service, Curtis Harper, admin requests, Brigham tasks &mdash; routed to the right person automatically.</li></ul>"
+  },
+  {
+   "slug": "5-suggest-improvements-please-do",
+   "title": "5 💡 Suggest improvements (please do!)",
+   "html": "<ul><li>Tap the <b>&#128161; bulb</b>&nbsp;in the top bar &rarr; pick &#9999;&#65039; Edit or &#128161; Idea &rarr; one or two sentences &rarr; attach a screenshot if it helps &rarr; <b>Send it &#128640;</b>.</li><li>Watch &quot;My requests&quot; in that same panel: when yours flips to <b>LIVE</b>, you&#39;ll get a text &mdash; go try it and tap <b>&quot;&#9989; It works.&quot;</b>&nbsp;Contributors get named in the daily briefing.</li></ul>"
+  },
+  {
+   "slug": "6-texting-the-shop-number",
+   "title": "6 Texting the shop number",
+   "html": "<p>You can text changes to the shop&#39;s number, in plain words: &quot;38930 phase DHRT&quot; &middot; &quot;moved 29908 to 83a&quot; &middot; &quot;here&#39;s a photo of 55383&quot;&nbsp;(photos attach to the piano). Same rules apply &mdash; it&#39;s logged as you.</p>"
+  },
+  {
+   "slug": "7-reports-the-archive-menu",
+   "title": "7 Reports & the archive (☰ menu)",
+   "html": "<ul><li><b>Reports:</b>&nbsp;unplaced pianos, duplicates, media needed, and the <b>Activity log with filters</b>&nbsp;&mdash; by person, action, piano, time window. Every view has a &#10005; (or press Escape) to get back to the map.</li><li><b>&#128230; Delivered Archive:</b>&nbsp;delivered pianos leave the map but live here &mdash; searchable, cards intact.</li></ul>"
+  },
+  {
+   "slug": "8-managers-admins-only",
+   "title": "8 Managers & admins only",
+   "html": "<ul><li><b>Pre-Queue approval:</b>&nbsp;the yellow-banner pianos can only be released into the queue by admins or Mark &mdash; confirming the $1,000 deposit is in.</li><li><b>&#128205; Temp map spot</b>&nbsp;(Request menu): tap open floor space to park a piano there temporarily.</li><li><b>Sale prices:</b>&nbsp;only admins/owner can edit.</li><li><b>Shop Manager app:</b>&nbsp;Shop Board (live work clocks + job costing), App Requests triage, Assignment Planner with notes-to-Claude, Team Roster with exit/onboarding checklists.</li></ul>"
+  },
+  {
+   "slug": "9-hands-on-practice-do-these-now-at-the-",
+   "title": "9 Hands-on practice (do these now, at the meeting)",
+   "html": "<ol><li>Sign in on your own phone &rarr; find the piano you&#39;re currently working on via search.</li><li>Scan a shop tag &rarr; clock in (pick the phase!) &rarr; notice the timer chip &rarr; clock out.</li><li>Move a test piano to a new spot &mdash; try typing a fake spot like &quot;999X&quot; and watch it refuse; then pick a real one and put it back.</li><li>Open &#128344; Location history on that piano and find your own move.</li><li>Add a progress photo (or a Before photo) to a piano you&#39;re on.</li><li>File one &#128161; suggestion &mdash; any real annoyance or idea.</li></ol>"
+  },
+  {
+   "slug": "the-three-habits-that-matter-most",
+   "title": "The three habits that matter most",
+   "html": "<p><b>1. Clock in / clock out on the piano you&#39;re touching.</b>&nbsp;&nbsp;</p><p><b>2. Update the phase when you finish one.</b>&nbsp;&nbsp;</p><p><b>3. If it&#39;s wrong or annoying, </b>&#128161;<b>&nbsp;it.</b></p><p>Questions later? Ask Mark, Matthew, or Jacob &mdash; or file a &#128161;&nbsp;and it lands on the fix list automatically.</p><p><b>Sending a text to (801) 769-0054</b>&nbsp;is also an option instead of opening the app. The handler at sms-inbound.mts&nbsp;accepts plain English (no command syntax, ESL-friendly) and writes through the same bridge as the app would:</p><ul><li>38930 update to phase 9&nbsp;&rarr; phase change (names or numbers 1&ndash;13)</li><li>move 22722 to map 52&nbsp;&rarr; map move</li><li>38930 queue 3&nbsp;&rarr; queue position</li><li>photo + 38930 progress&nbsp;&rarr; lands in that piano&#39;s Tech photo folder</li><li>38930 before photos done&nbsp;&rarr; media checkoff</li><li>38930 cabinetry 8-3&nbsp;&rarr; cabinetry shelf</li></ul><p>Writes get attributed as &quot;Name (SMS)&quot; by matching the sender against the Tech Phones tab, and unknown numbers are refused. Casual replies like &quot;ok&quot;/&quot;thanks&quot; are ignored so responses to the cleaning reminders don&#39;t trigger anything.</p><p>One caveat worth flagging: that same number is what the app texts from for suggestion-box notifications, so it&#39;s a single shared shop line &mdash; which is fine, but it means the sms-inbound handler is what decides whether an incoming text is a Store Map change or just conversation.</p><p>Karmel Cell 801-427-9293</p>"
+  }
+ ]
+}

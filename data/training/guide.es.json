@@ -1,0 +1,64 @@
+{
+ "generated": "2026-08-25",
+ "source": "https://docs.google.com/document/d/1aq3oTa6pxr6AhquS7pbJakAY4q4iPc_nUJW4yLMXDOM/edit",
+ "lang": "es",
+ "note": "Traducción mantenida a mano — retraducir cuando cambie el Google Doc (ver scripts/build-training-docs.py).",
+ "title": "🎹 Mapa de la Tienda BLP — blpstoremap.netlify.app",
+ "sections": [
+  {
+   "slug": "intro",
+   "title": "",
+   "html": "<p>El Mapa de la Tienda es nuestro plano en vivo y la base de operaciones del trabajo del taller: dónde está cada piano, en qué fase va, tu reloj de trabajo, fotos, papeleo y solicitudes. <b>Todo lo que haces en la app queda registrado bajo tu nombre</b> —</p>"
+  },
+  {
+   "slug": "1-signing-in-and-out",
+   "title": "1 Iniciar y cerrar sesión",
+   "html": "<ul><li><b>Inicia sesión con Google</b> usando tu cuenta <b>.blp@gmail.com</b> (preferido — un solo toque después de la primera vez). <b>Cerrar sesión:</b> toca <b>tu propio nombre</b> en la barra superior (tiene una pequeña marca ⏻). En dispositivos compartidos, siempre cierra sesión para que el trabajo de la siguiente persona quede registrado como suyo.</li><li>Si aparece &quot;sesión expirada&quot;, solo inténtalo de nuevo — la app renueva tu sesión por sí sola en unos 2 segundos.</li></ul>"
+  },
+  {
+   "slug": "2-finding-a-piano",
+   "title": "2 Encontrar un piano",
+   "html": "<ul><li><b>Barra de búsqueda:</b> escribe un número de serie, marca, modelo o año — las sugerencias aparecen mientras escribes; sigue escribiendo para afinar. Elige una para saltar a ese piano en el mapa.</li><li><b>Escanea la etiqueta del taller:</b> apunta la cámara de tu teléfono al código QR de la etiqueta impresa de cualquier piano — la app abre la tarjeta de ese piano exacto. La forma más rápida estando en el piso.</li><li><b>Pisos:</b> botones de Primer / Segundo piso arriba a la izquierda. Pellizca para hacer zoom en el mapa; el encabezado nunca se desplaza fuera de vista.</li></ul>"
+  },
+  {
+   "slug": "3-reading-the-map-icons",
+   "title": "3 Leer los íconos del mapa",
+   "html": "<ul><li><b>Barra roja sobre una llave (🔧⃠):</b> PRE-COLA — el depósito no se ha recibido. <b>No se puede empezar ningún trabajo en este piano.</b> Solo un gerente puede liberarlo.</li><li><b>✓ dorada / anillo dorado:</b> vendido o terminado pero todavía en el edificio — en espera de entrega.</li><li><b>Recuadro dorado punteado &quot;TEMP&quot;:</b> un lugar de estacionamiento temporal creado por un gerente — trátalo como cualquier lugar; desaparece cuando el piano avanza.</li><li><b>Insignia de cámara:</b> a ese piano le hacen falta fotos o video.</li></ul>"
+  },
+  {
+   "slug": "4-the-piano-card-tap-any-piano",
+   "title": "4 La tarjeta del piano (toca cualquier piano)",
+   "html": "<p>Las secciones son los letreros rojos — <b>toca un letrero para plegarlo o desplegarlo</b>; la app recuerda tus preferencias.</p><ul><li><b>📍 Ubicaciones:</b> mueve un piano escribiendo el nuevo lugar — <b>solo se aceptan lugares reales</b>; elige de la lista de sugerencias (incluye áreas como el Ático y el Taller de Lijado). <b>🕘 El historial de ubicaciones</b> muestra todos los lugares donde ha estado, y quién lo movió.</li><li><b>🔨 Progreso del Taller:</b> clavijero, teclas, menú de fase, palomitas de Listo, y tareas. Actualiza la fase en cuanto termines — las fases desactualizadas descomponen la programación de todo el taller.</li><li><b>⏱ Reloj de Trabajo — el gran hábito nuevo:</b></li></ul><ul><li><b>Marca entrada cuando empieces a trabajar en un piano; marca salida cuando pares.</b> Así funcionan ahora el costeo de trabajos y tus horas.</li><li>Debes <b>elegir la fase primero</b> (o escoger &quot;✏️ Otro&quot; y escribir unas palabras). El botón verde no funciona sin eso.</li><li><b>Un piano a la vez:</b> marcar entrada en un piano nuevo cierra automáticamente tu sesión anterior — cambiar de piano es un toque, sin cuentas.</li><li>Mientras estés registrado verás un <b>chip verde con el cronómetro</b> en la barra superior y una <b>barra fija abajo</b> — ahí están Cambiar y Marcar salida.</li><li>¿Sin actividad por 15 minutos? La barra te pregunta si sigues en ello — contesta con honestidad; &quot;marcar salida en la última actividad&quot; retrocede la hora correctamente.</li><li><b>Escanear la etiqueta de un piano</b> resalta el Reloj de Trabajo, así que escanear → marcar entrada son dos toques.</li></ul><ul><li><b>📷 Fotos y video:</b> &quot;Agregar fotos de antes&quot; / &quot;Agregar fotos de después&quot; guardan las imágenes directo en las carpetas de Drive del piano, con tamaño para la web. Úsalas — el reporte diario rastrea lo que falta.</li><li><b>📁 Papeleo:</b> escaneos de la lista de control de calidad (la app puede encontrarlos por número de serie) más espacios para pedidos de cuerdas graves, hojas de desarmado y pedidos de plateado.</li><li><b>📖 Piano Log:</b> todo lo demás de la hoja de cálculo, y un enlace a la fila exacta.</li><li><b>📨 Menú Solicitar…:</b> mudanzas, afinaciones, servicio, Curtis Harper, solicitudes de administración, tareas para Brigham — dirigidas automáticamente a la persona correcta.</li></ul>"
+  },
+  {
+   "slug": "5-suggest-improvements-please-do",
+   "title": "5 💡 Sugiere mejoras (¡por favor hazlo!)",
+   "html": "<ul><li>Toca el <b>💡 foco</b> en la barra superior → elige ✏️ Edición o 💡 Idea → una o dos oraciones → adjunta una captura de pantalla si ayuda → <b>Envíalo 🚀</b>.</li><li>Revisa &quot;Mis solicitudes&quot; en ese mismo panel: cuando la tuya cambie a <b>LIVE</b>, recibirás un texto — ve a probarla y toca <b>&quot;✅ Funciona.&quot;</b> Los que contribuyen aparecen con su nombre en el informe diario.</li></ul>"
+  },
+  {
+   "slug": "6-texting-the-shop-number",
+   "title": "6 Enviar textos al número del taller",
+   "html": "<p>Puedes textear cambios al número del taller, en palabras normales: &quot;38930 phase DHRT&quot; · &quot;moved 29908 to 83a&quot; · &quot;aquí va una foto del 55383&quot; (las fotos se adjuntan al piano). Aplican las mismas reglas — queda registrado como tú.</p>"
+  },
+  {
+   "slug": "7-reports-the-archive-menu",
+   "title": "7 Reportes y el archivo (menú ☰)",
+   "html": "<ul><li><b>Reportes:</b> pianos sin ubicar, duplicados, fotos pendientes, y el <b>registro de Actividad con filtros</b> — por persona, acción, piano y periodo de tiempo. Cada vista tiene una ✕ (o presiona Escape) para volver al mapa.</li><li><b>📦 Archivo de Entregados:</b> los pianos entregados salen del mapa pero viven aquí — se pueden buscar, con sus tarjetas intactas.</li></ul>"
+  },
+  {
+   "slug": "8-managers-admins-only",
+   "title": "8 Solo gerentes y administración",
+   "html": "<ul><li><b>Aprobación de Pre-Cola:</b> los pianos con letrero amarillo solo pueden ser liberados a la cola por administración o por Mark — confirmando que el depósito de $1,000 ya llegó.</li><li><b>📍 Lugar temporal en el mapa</b> (menú Solicitar): toca un espacio libre del piso para estacionar un piano ahí temporalmente.</li><li><b>Precios de venta:</b> solo administración/dueño pueden editarlos.</li><li><b>App Shop Manager:</b> Tablero del Taller (relojes de trabajo en vivo + costeo de trabajos), triaje de Solicitudes de la App, Planificador de Asignaciones con notas para Claude, y Lista del Equipo con listas de salida e incorporación.</li></ul>"
+  },
+  {
+   "slug": "9-hands-on-practice-do-these-now-at-the-",
+   "title": "9 Práctica en vivo (hazlo ahora, en la reunión)",
+   "html": "<ol><li>Inicia sesión en tu propio teléfono → encuentra el piano en el que estás trabajando usando la búsqueda.</li><li>Escanea una etiqueta del taller → marca entrada (¡elige la fase!) → observa el chip del cronómetro → marca salida.</li><li>Mueve un piano de prueba a un lugar nuevo — intenta escribir un lugar falso como &quot;999X&quot; y mira cómo lo rechaza; luego elige uno real y regrésalo.</li><li>Abre 🕘 el historial de ubicaciones de ese piano y encuentra tu propio movimiento.</li><li>Agrega una foto de progreso (o una foto de Antes) a un piano en el que estés trabajando.</li><li>Envía una 💡 sugerencia — cualquier molestia o idea real.</li></ol>"
+  },
+  {
+   "slug": "the-three-habits-that-matter-most",
+   "title": "Los tres hábitos que más importan",
+   "html": "<p><b>1. Marca entrada / salida en el piano que estás tocando.</b></p><p><b>2. Actualiza la fase cuando termines una.</b></p><p><b>3. Si algo está mal o es molesto, </b>💡<b> repórtalo.</b></p><p>¿Preguntas después? Pregúntale a Mark, Matthew o Jacob — o envía una 💡 y cae automáticamente en la lista de arreglos.</p><p><b>Enviar un texto al (801) 769-0054</b> también es una opción en lugar de abrir la app. El sistema acepta español o inglés normal (sin sintaxis de comandos) y escribe por el mismo puente que usaría la app:</p><ul><li>38930 update to phase 9 → cambio de fase (nombres o números 1–13)</li><li>move 22722 to map 52 → movimiento en el mapa</li><li>38930 queue 3 → posición en la cola</li><li>foto + 38930 progress → cae en la carpeta de fotos técnicas de ese piano</li><li>38930 before photos done → marca las fotos como completadas</li><li>38930 cabinetry 8-3 → estante de gabinetes</li></ul><p>Los cambios se atribuyen como &quot;Nombre (SMS)&quot; comparando el remitente contra la pestaña Tech Phones, y los números desconocidos se rechazan. Respuestas casuales como &quot;ok&quot;/&quot;gracias&quot; se ignoran, así que responder a los recordatorios de limpieza no activa nada.</p><p>Celular de Karmel: 801-427-9293</p>"
+  }
+ ]
+}
