@@ -2419,13 +2419,27 @@ async function fetchPayroll(force) {
     if (S.view === 'dash') renderDash();
   } catch (e) { /* offline — keep last */ }
 }
+// soft geofence: grab the phone's location for the punch (6s budget) — the
+// punch always goes through; the bridge just notes how far from the store it
+// was, and away punches get flagged on the payroll report
+function punchGeo() {
+  return new Promise(res => {
+    if (!navigator.geolocation) return res('unavailable');
+    const t = setTimeout(() => res('timeout'), 6000);
+    navigator.geolocation.getCurrentPosition(
+      p => { clearTimeout(t); res({lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy}); },
+      () => { clearTimeout(t); res('denied'); },
+      {enableHighAccuracy: false, timeout: 5500, maximumAge: 120000});
+  });
+}
 async function dayPunch(action) {
   const {pin, ok} = writeAuth();
   if (!ok) return {error: 'Sign in first — payroll hours are logged under your name.'};
+  const geo = await punchGeo();
   try {
     const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
       headers: {'content-type': 'text/plain;charset=utf-8'},
-      body: JSON.stringify({pin, action, source: 'dash', ...authFields()})});
+      body: JSON.stringify({pin, action, source: 'dash', geo, ...authFields()})});
     const j = await r.json();
     if (j.ok) {
       PAY.open = action === 'dayin'
@@ -5987,7 +6001,7 @@ function payTimeTable() {
   let main;
   if (f.group === 'day') {
     main = `<table><tr><th>DATE</th><th>TEAM MEMBER</th><th>CLOCK IN</th><th>CLOCK OUT</th><th>HOURS</th><th>NOTE</th></tr>
-      ${rows.map(r => `<tr${/auto/.test(r.note) ? ' style="color:#a33"' : ''}>
+      ${rows.map(r => `<tr${/auto|mi from store/.test(r.note) ? ' style="color:#a33"' : ''}>
         <td>${esc(r.date)}</td><td>${esc(r.tech)}</td><td>${fmtT(r.start)}</td>
         <td>${r.end ? fmtT(r.end) : '<b style="color:#2e7d4f">on the clock</b>'}</td>
         <td>${r.minutes ? fmtHM(r.minutes) : '—'}</td><td>${esc(r.note || '')}</td></tr>`).join('')
@@ -6594,7 +6608,8 @@ function renderDash() {
       <div class="paymsg"></div>
       <div class="dline"><a class="tact cfixlink" href="#">🛠 Request a time fix</a>
         <span class="dim" style="font-size:11.5px">— forgot a punch, or a time is wrong (day clock or piano clock)</span></div>
-      <div class="dline dim">Arrival-to-exit for payroll — separate from the per-piano ⏱ Work Clock.</div>
+      <div class="dline dim">Arrival-to-exit for payroll — separate from the per-piano ⏱ Work Clock.
+        Punches note your location, so clock in at the store.</div>
     </div>`;
   const d = (S.dashData && S.dashData.forName === name) ? S.dashData : null;
   const prs = d ? d.prs : null;

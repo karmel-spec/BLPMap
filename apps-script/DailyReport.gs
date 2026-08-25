@@ -2128,6 +2128,25 @@ function sweepForgottenPay_(sh) {
                  'auto: forgot to clock out — review before payroll');
   }
 }
+/* Soft geofence for payroll punches: the app sends the phone's location
+ * with each punch; we record how far from the store it was. Punches are
+ * NEVER blocked — away punches just get a flag for payroll review. */
+var STORE_LAT = 40.269752, STORE_LNG = -111.682881;   // 1497 S State St, Orem
+var FENCE_METERS = 300;
+function geoNote_(req, dir) {
+  var g = req.geo;
+  if (!g) return '';
+  if (typeof g === 'string') return '📍 ' + dir + ': location off';
+  var lat = Number(g.lat), lng = Number(g.lng);
+  if (!isFinite(lat) || !isFinite(lng)) return '📍 ' + dir + ': location off';
+  var R = 6371000, toR = Math.PI / 180;
+  var dLat = (lat - STORE_LAT) * toR, dLng = (lng - STORE_LNG) * toR;
+  var a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
+    + Math.cos(STORE_LAT * toR) * Math.cos(lat * toR) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  var m = 2 * R * Math.asin(Math.sqrt(a));
+  if (m <= FENCE_METERS + (Number(g.acc) || 0)) return '';
+  return '📍 ' + dir + ': ' + (m / 1609.34).toFixed(1) + ' mi from store';
+}
 function dayIn_(req) {
   return withClockLock_(function () {
     var tech = clockTech_(req);
@@ -2140,7 +2159,7 @@ function dayIn_(req) {
     var now = new Date();
     var startIso = now.toISOString();
     sh.appendRow([tech, Utilities.formatDate(now, 'America/Denver', 'yyyy-MM-dd'),
-                  startIso, '', '', String(req.source || 'dash'), '']);
+                  startIso, '', '', String(req.source || 'dash'), geoNote_(req, 'in')]);
     return {ok: true, open: {tech: tech, start: startIso}};
   });
 }
@@ -2151,7 +2170,10 @@ function dayOut_(req) {
     var sh = payrollSheet_();
     var open = openPayRow_(sh, tech);
     if (!open) return {ok: true, closed: null, note: 'no open day'};
-    var out = closePayRow_(sh, open, req.endAt, '');
+    var gn = geoNote_(req, 'out');
+    var oldNote = String(sh.getRange(open.row, 7).getValue() || '');
+    var out = closePayRow_(sh, open, req.endAt,
+      gn ? (oldNote ? oldNote + ' · ' : '') + gn : '');
     var extra;   // double-punch leftovers
     while ((extra = openPayRow_(sh, tech))) closePayRow_(sh, extra, null, 'duplicate punch (auto)');
     return {ok: true, closed: out};
@@ -2383,14 +2405,27 @@ function addRequest_(req) {
     + lastName + ('0' + (n + 1)).slice(-2);
   var shot = '';
   if (req.photo) {
+    // Drive REST, not DriveApp — DriveApp throws in the anonymous web-app
+    // context, which silently ate every screenshot the team attached
     try {
-      var it = DriveApp.getFoldersByName('BLP App Requests');
-      var folder = it.hasNext() ? it.next() : DriveApp.createFolder('BLP App Requests');
-      var blob = Utilities.newBlob(Utilities.base64Decode(req.photo),
-        req.photoType || 'image/jpeg', id + '-' + (req.photoName || 'screenshot.jpg'));
-      var f = folder.createFile(blob);
-      f.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-      shot = f.getUrl();
+      var folderId = driveFolderIdByName_('BLP App Requests');
+      var meta = {name: id + '-' + (req.photoName || 'screenshot.jpg'), parents: [folderId]};
+      var boundary = 'blpshot' + id;
+      var payload = Utilities.newBlob(
+        '--' + boundary + '\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n'
+        + JSON.stringify(meta)
+        + '\r\n--' + boundary + '\r\nContent-Type: ' + (req.photoType || 'image/jpeg')
+        + '\r\nContent-Transfer-Encoding: base64\r\n\r\n'
+        + req.photo + '\r\n--' + boundary + '--').getBytes();
+      var res = UrlFetchApp.fetch(
+        'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink', {
+          method: 'post',
+          contentType: 'multipart/related; boundary=' + boundary,
+          payload: payload,
+          headers: {Authorization: 'Bearer ' + ScriptApp.getOAuthToken()},
+        });
+      var f = JSON.parse(res.getContentText());
+      if (f.id) { shareAnyoneWithLink_(f.id); shot = f.webViewLink || ('https://drive.google.com/file/d/' + f.id + '/view'); }
     } catch (e) { shot = ''; }
   }
   sh.appendRow([id, new Date().toISOString(), who, String(req.type || 'idea'),
@@ -4146,6 +4181,19 @@ function shareAnyoneWithLink_(fileId) {
       muteHttpExceptions: true,
     });
   } catch (e) { /* sharing is best-effort — the doc itself still exists */ }
+}
+/* Find-or-create a Drive folder by name via REST (web-app safe). */
+function driveFolderIdByName_(name) {
+  var token = ScriptApp.getOAuthToken();
+  var q = encodeURIComponent("name='" + name + "' and mimeType='application/vnd.google-apps.folder' and trashed=false");
+  var r = JSON.parse(UrlFetchApp.fetch('https://www.googleapis.com/drive/v3/files?q=' + q + '&fields=files(id)',
+    {headers: {Authorization: 'Bearer ' + token}}).getContentText());
+  if (r.files && r.files.length) return r.files[0].id;
+  var c = JSON.parse(UrlFetchApp.fetch('https://www.googleapis.com/drive/v3/files', {
+    method: 'post', contentType: 'application/json',
+    payload: JSON.stringify({name: name, mimeType: 'application/vnd.google-apps.folder'}),
+    headers: {Authorization: 'Bearer ' + token}}).getContentText());
+  return c.id;
 }
 /* One-shot / rerunnable sweep: link-share every archived brief doc. */
 function shareAllBriefs_() {
