@@ -2566,9 +2566,10 @@ function popHTML(p) {
     ? `<div class="row phrow">Shop phase
          <select class="phsel">
            <option value="">— none —</option>
+           <option value="In Queue" ${effPh === 'In Queue' ? 'selected' : ''}>0 · In Queue</option>
            ${phaseOptions(p, effPh).map((ph, i) =>
              `<option value="${esc(ph)}" ${effPh === ph ? 'selected' : ''}>${i + 1} · ${esc(ph)}</option>`).join('')}
-           ${PHASE_STATES.map(ph =>
+           ${PHASE_STATES.filter(ph => ph !== 'In Queue').map(ph =>
              `<option value="${esc(ph)}" ${effPh === ph ? 'selected' : ''}>${esc(ph)}</option>`).join('')}
          </select></div>${gotoLine(p, effPh)}<div class="phmsg"></div>
        <div class="row phrow platerow">Plate
