@@ -2248,6 +2248,14 @@ async function loadMyRequests(ov) {
 setTimeout(() => {
   const btn = document.getElementById('suggestBtn');
   if (btn) btn.onclick = openSuggestBox;
+  // 🔢 one-tap Shop Queue report (Brigham 8/25) — same path as a shared link
+  const qb = document.getElementById('queueBtn');
+  if (qb) qb.onclick = () => {
+    S.openReport = 'queue';
+    if (!S.tlRows) loadTimeLog();          // ASSIGNED TO column
+    switchView('report');
+    renderReport();
+  };
   // a draft stashed before a sign-in renewal: reopen the box, text intact
   const d = lsGet('sgDraft');
   if (d && authUser()) {
