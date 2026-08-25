@@ -6106,6 +6106,7 @@ const TRAININGS = [
     doc: 'guide',
     title: 'Store Map User Guide',
     desc: 'How to use the BLP Store Map: signing in, finding pianos, clocking work time, paperwork & photos.',
+    readLabel: 'training handout',
     video: 'https://youtu.be/1zDlnks5CC0',
   },
   {
@@ -6125,8 +6126,8 @@ function transcriptDoc(lang) {
   return {doc: 'video-transcript', title: 'Training Video — Transcript', forceLang: lang};
 }
 function transcriptLinks() {
-  return `<a class="tact" href="#" data-tdoc="en">📄 transcript</a>
-          <a class="tact" href="#" data-tdoc="es">📄 transcripción (ES)</a>`;
+  return `<a class="tact" href="#" data-tdoc="en">📄 English Transcript</a>
+          <a class="tact" href="#" data-tdoc="es">📄 Spanish Transcript</a>`;
 }
 function wireDocLinks(el) {
   el.querySelectorAll('[data-doc]').forEach(a => a.onclick = e => {
@@ -6144,7 +6145,7 @@ function renderTraining() {
   el.innerHTML = TRAININGS.map((t, i) =>
     `<div class="trainrow">
        <b>${esc(t.title)}</b><span>${esc(t.desc)}</span>
-       <a class="tact" href="#" data-doc="${i}">📖 read</a>${
+       <a class="tact" href="#" data-doc="${i}">📖 ${esc(t.readLabel || 'read')}</a>${
        t.video ? `<a class="tact" href="${esc(t.video)}" target="_blank" rel="noopener">▶ watch video</a>` + transcriptLinks() : ''
      }</div>`).join('');
   wireDocLinks(el);
