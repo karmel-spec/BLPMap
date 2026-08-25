@@ -3295,12 +3295,17 @@ function buildShopManagerReport_(dayOffset) {
 
   // suggestion box: filed or moved in the last 7 days — public credit fuels it
   R.suggestions = [];
+  R.appLive = [];   // gone Live/Tested this week — managers announce these at the meeting
   try {
     var reqs = requestsList_().requests || [];
     var wk = Date.now() - 7 * 86400000;
     R.suggestions = reqs.filter(function (x) {
       return new Date(x.date).getTime() >= wk
         || (x.statusAt && new Date(x.statusAt).getTime() >= wk);
+    }).slice(0, 15);
+    R.appLive = reqs.filter(function (x) {
+      return (x.status === 'Live' || x.status === 'Tested')
+        && x.statusAt && new Date(x.statusAt).getTime() >= wk;
     }).slice(0, 15);
   } catch (e) {}
 
@@ -3545,6 +3550,19 @@ function shopManagerHtml_(R) {
   } else {
     H.push('<p style="margin:0 0 8px;font:12.5px Helvetica,Arial;color:#8a847b">No punches yesterday — '
       + 'remind the team: the ⏱ Work Clock on every piano card (or scanning the shop tag) is how hours land in job costing.</p>');
+  }
+  if (R.appLive && R.appLive.length) {
+    var LICON = {bug: '🐛', edit: '✏️', idea: '💡'};
+    sec('🚀', 'New in the apps — announce these', R.appLive.length,
+      'Fixes and features that went LIVE this week. Managers: mention these at the morning '
+      + 'meeting and thank the requester by name; Tested means the requester confirmed it works.');
+    ul(R.appLive.map(function (x) {
+      return (LICON[x.type] || '💡') + ' ' + String(x.text).slice(0, 130)
+        + ' <span style="color:#8a847b">(asked by <b>' + x.who + '</b>'
+        + (x.context ? ', ' + x.context : '') + ')</span> '
+        + pill(x.status, x.status === 'Tested' ? '#eaf5ec' : '#eaf2fd',
+               x.status === 'Tested' ? '#2f7d4f' : '#2c5d96');
+    }));
   }
   if (R.suggestions && R.suggestions.length) {
     var SICON = {bug: '🐛', edit: '✏️', idea: '💡'};
