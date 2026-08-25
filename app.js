@@ -2645,6 +2645,7 @@ function popHTML(p) {
             <option value="">— select the work —</option>
             ${opts.map(ph => `<option>${esc(ph)}</option>`).join('')}
             <option>Admin / Misc</option>
+            <option>Moving</option>
             <option value="__other__">✏️ Other — write it in…</option>
           </select></div>
         <input class="clkother" placeholder="what are you doing on this piano?" maxlength="60" hidden>
