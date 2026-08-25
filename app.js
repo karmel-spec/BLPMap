@@ -2698,10 +2698,10 @@ function popHTML(p) {
         <div class="row rowflex"><span>What work?</span>
           <select class="clkphase">
             <option value="">— select the work —</option>
+            <option value="__other__">✏️ Other — write it in…</option>
             ${opts.map(ph => `<option>${esc(ph)}</option>`).join('')}
             <option>Admin / Misc</option>
             <option>Moving</option>
-            <option value="__other__">✏️ Other — write it in…</option>
           </select></div>
         <input class="clkother" placeholder="what are you doing on this piano?" maxlength="60" hidden>
         <button class="clkbtn clkin off">▶ ${mine ? 'Switch here' : 'Clock in'}</button>
@@ -5802,16 +5802,22 @@ function taskVal(p, k) {
  *   decals      — done once Refinishing is completed or passed
  *   keytops     — done once the piano reaches QC & Assembly or farther */
 function taskAutoDone(p, cat) {
-  if (cat !== 'bass' && cat !== 'decals' && cat !== 'keys') return false;
   const seq = pianoPhases(p) || PHASES;
-  const cur = seq.indexOf(effectivePhase(p));
+  const eff = effectivePhase(p);
+  const cur = seq.indexOf(eff);
   const doneList = (p.phasesDone || '').toLowerCase();
   const completed = name => doneList.includes(name.toLowerCase());
   const past = name => { const i = seq.indexOf(name); return (i >= 0 && cur > i) || completed(name); };
-  if (cat === 'bass') return past('Restringing');
-  if (cat === 'decals') return past('Refinishing');
+  // at/past QC & Assembly — or already For Sale / Delivered — proves EVERY
+  // concurrent task is behind it (Brigham 8/26)
   const qi = seq.indexOf('QC & Assembly');
-  return (qi >= 0 && cur >= qi) || completed('QC & Assembly');
+  if ((qi >= 0 && cur >= qi) || completed('QC & Assembly')
+      || eff === 'For Sale' || eff === 'Delivered') return true;
+  if (cat === 'bass') return past('Restringing');       // strings are on
+  if (cat === 'decals') return past('Refinishing');     // decal under the lacquer
+  // keys, plating, parts, pedals and the rest of the hardware must be on the
+  // piano before DHRT can finish — past DHRT proves them
+  return past('DHRT');
 }
 function taskStatus(v) {
   if (!v) return 'needed';
@@ -5826,7 +5832,8 @@ const TASK_ST = [['', 'all statuses'], ['needed', '🔴 needs attention'], ['not
 function taskRows() {
   const f = S.tkF || (S.tkF = {cat: 'keys', st: '', q: ''});
   return S.data.pianos
-    .filter(p => p.active && p.serial && (p.queuePos || p.phase))
+    .filter(p => p.active && p.serial && (p.queuePos || p.phase)
+      && (p.phase || '') !== 'For Sale')   // showroom pianos are past all of this
     .map(p => {
       const v = taskVal(p, f.cat);
       const auto = taskAutoDone(p, f.cat);
@@ -5910,7 +5917,8 @@ const TQ_DEFS = [
 ];
 function taskQueueLists() {
   const pool = S.data.pianos
-    .filter(p => p.active && p.serial && (p.queuePos || p.phase))
+    .filter(p => p.active && p.serial && (p.queuePos || p.phase)
+      && (p.phase || '') !== 'For Sale' && (p.phase || '') !== 'Delivered')
     .sort((a, b) => (a.queuePos || 999) - (b.queuePos || 999) || a.row - b.row);
   return TQ_DEFS.map(d => ({d, list: pool.filter(d.need)}));
 }
@@ -6373,7 +6381,7 @@ const REPORT_DEFS = () => [
      p.active && !notYetArrived(p) && (mediaNeeds(p).photo || mediaNeeds(p).video)).length,
    desc: 'Before photos/video for every arrived piano; after photos/video once it reaches Tuning or later. Pianos that haven\'t arrived yet join once they\'re here.',
    html: mediaTable},
-  {id: 'cabinetry', sec: 'shop', icon: '🗄', title: 'CABINETRY', count: S.data.pianos.filter(p =>
+  {id: 'cabinetry', sec: 'shop', icon: '🗄', title: 'CABINETRY AUDIT REPORT', count: S.data.pianos.filter(p =>
      p.active && cabTokens(p).length).length,
    desc: 'Which Cabinetry Storage shelves hold each piano\'s stripped cabinetry and hardware. Assign from the piano card (Cabinetry → ＋ shelf); click a unit box on the map for one unit\'s contents.',
    html: cabinetryTable},
@@ -7222,6 +7230,7 @@ const LEGEND_LISTS = {
   financed: {t: '💚 Private financing', f: p => isPrivateFinancing(p)},
   larson:   {t: '🩵 Larson Family',  f: p => /conference room|larson home/i.test(p.location || '') && !isPrivateFinancing(p)},
   soldpend: {t: '🏅 Sold / completed — awaiting delivery', f: p => soldPending(p)},
+  preq:     {t: '🚫 Pre-Queue — deposit pending, do NOT start', f: p => preQueue(p)},
 };
 function openLegendList(key) {
   const def = LEGEND_LISTS[key]; if (!def) return;

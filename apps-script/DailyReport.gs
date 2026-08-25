@@ -3332,6 +3332,56 @@ function buildShopManagerReport_(dayOffset) {
     }).slice(0, 15);
   } catch (e) {}
 
+  // client reports ready to review/send: opt-IN pianos with shop activity
+  // in the last 7 days — the news is what makes a report worth emailing
+  R.clientReady = [];
+  try {
+    var crp = pianos.filter(function (p) {
+      return String(p.clientReports || '').trim().toLowerCase() === 'yes' && p.serial;
+    });
+    if (crp.length) {
+      var act7 = (activity_().rows || []);
+      var wk7 = Date.now() - 7 * 86400000;
+      R.clientReady = crp.filter(function (p) {
+        return act7.some(function (r) {
+          var d = new Date(r[0]);
+          return (isNaN(d) || d.getTime() >= wk7)
+            && String(r[3] || '').indexOf(String(p.serial)) >= 0;
+        });
+      }).map(function (p) {
+        return {serial: p.serial, summary: String(p.summary || '').slice(0, 44), phase: p.phase || ''};
+      }).slice(0, 12);
+    }
+  } catch (e) {}
+
+  // field tunings on McKinly's / Curtis's own calendars, next 2 days —
+  // which appointments still need a reminder call / confirmation
+  R.fieldCalls = [];
+  try {
+    var FIELD_CALS = [['McKinly', 'mckinlylopp.blp@gmail.com'], ['Curtis', 'curtisbiggs.blp@gmail.com']];
+    var fc0 = new Date();
+    var fc2 = new Date(Date.now() + 2 * 86400000); fc2.setHours(23, 59, 59, 0);
+    FIELD_CALS.forEach(function (fc) {
+      var cal; try { cal = CalendarApp.getCalendarById(fc[1]); } catch (e) { cal = null; }
+      if (!cal) return;
+      cal.getEvents(fc0, fc2).forEach(function (ev) {
+        var t = String(ev.getTitle() || '');
+        if (!/:/.test(t)) return;                       // client appts read "City: Name"
+        if (/off|available for tuning|no tuning|back-to-back/i.test(t)) return;
+        var flags = [];
+        if (/cancel/i.test(t)) flags.push('CANCELLED — confirm & clear the slot');
+        else if (/tentative/i.test(t)) flags.push('tentative — confirm the time');
+        else if (!/confirmed/i.test(t)) flags.push('needs a reminder call');
+        if (/reminder txt sch/i.test(t)) flags.push('reminder text scheduled');
+        if (!flags.length) return;
+        R.fieldCalls.push({tech: fc[0],
+          when: Utilities.formatDate(ev.getStartTime(), 'America/Denver', 'EEE h:mm a'),
+          title: t.slice(0, 70), flag: flags.join(' · ')});
+      });
+    });
+    R.fieldCalls = R.fieldCalls.slice(0, 14);
+  } catch (e) {}
+
   // waiting on… + check-back hygiene
   R.waiting = [];
   pianos.forEach(function (p) {
