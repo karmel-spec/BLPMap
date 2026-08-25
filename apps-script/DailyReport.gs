@@ -2434,7 +2434,7 @@ function addRequest_(req) {
   return {ok: true, id: id, screenshot: shot};
 }
 function setRequestStatus_(req) {
-  var STATUSES = ['Requested', 'In progress', 'Live', 'Tested'];
+  var STATUSES = ['Requested', 'In progress', 'Live', 'Tested', 'Archived'];
   if (STATUSES.indexOf(String(req.status)) < 0) return {error: 'bad status'};
   var sh = requestsSheet_();
   var vals = sh.getDataRange().getValues();
@@ -3300,8 +3300,9 @@ function buildShopManagerReport_(dayOffset) {
     var reqs = requestsList_().requests || [];
     var wk = Date.now() - 7 * 86400000;
     R.suggestions = reqs.filter(function (x) {
-      return new Date(x.date).getTime() >= wk
-        || (x.statusAt && new Date(x.statusAt).getTime() >= wk);
+      return x.status !== 'Archived'
+        && (new Date(x.date).getTime() >= wk
+            || (x.statusAt && new Date(x.statusAt).getTime() >= wk));
     }).slice(0, 15);
     R.appLive = reqs.filter(function (x) {
       return (x.status === 'Live' || x.status === 'Tested')
