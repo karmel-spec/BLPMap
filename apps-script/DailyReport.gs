@@ -150,6 +150,11 @@ function doGet(e) {
     try { return json_(timeClockState_()); }
     catch (err) { return json_({error: String(err), open: []}); }
   }
+  // where is everyone today — off / field / partial, for the Shop Board tiles
+  if (e && e.parameter && e.parameter.fn === 'whereis') {
+    try { return json_({ok: true, who: whereIs_()}); }
+    catch (err) { return json_({error: String(err), who: {}}); }
+  }
   // Work clock history rows for the Job Costing report (?days=90)
   if (e && e.parameter && e.parameter.fn === 'timelog') {
     try { return json_(timeLogRows_(Number(e.parameter.days) || 90)); }
@@ -2187,6 +2192,64 @@ function geoNote_(req, dir) {
   var m = 2 * R * Math.asin(Math.sqrt(a));
   if (m <= FENCE_METERS + (Number(g.acc) || 0)) return '';
   return '📍 ' + dir + ': ' + (m / 1609.34).toFixed(1) + ' mi from store';
+}
+/* Where is everyone TODAY (Brigham 8/26): a not-clocked-in tile used to look
+ * like a missed punch even when the person was never due in. Sources:
+ *   1. Team Schedule tab — a BLANK cell for today's weekday = scheduled off
+ *      (Doris Fridays, Jacob Wednesdays, Lupita Mon/Thu…)
+ *   2. the tech's own calendar — day-off / vacation / "No <name>" markers,
+ *      morning/afternoon notes, appointments
+ *   3. a field appointment happening right now ("City: Name" titles)
+ * Cached 10 min so the Shop Board stays snappy. */
+function whereIs_() {
+  var cache = CacheService.getScriptCache();
+  var hit = cache.get('whereis2');
+  if (hit) return JSON.parse(hit);
+  var out = {};
+  var tz = 'America/Denver';
+  var dow = Utilities.formatDate(new Date(), tz, 'EEE');   // Mon … Sat
+  try {
+    var sh = SpreadsheetApp.openById('11RoeVRETag5rZYX6_tEH-rf6x8JL0JeZU0P5AT0WI-I')
+      .getSheetByName('Team Schedule');
+    var vals = sh.getDataRange().getValues();
+    var col = {Mon: 2, Tue: 3, Wed: 4, Thu: 5, Fri: 6, Sat: 7}[dow];
+    for (var i = 1; i < vals.length; i++) {
+      var n = String(vals[i][0] || '').trim();
+      if (!n || /subcontractor/i.test(String(vals[i][1] || ''))) continue;
+      if (col != null && !String(vals[i][col] || '').trim()) {
+        out[n.toLowerCase()] = {st: 'off', why: 'scheduled off today'};
+      }
+    }
+  } catch (e) {}
+  try {
+    var cals = techCalMap_();
+    var now = new Date();
+    var d0 = new Date(now); d0.setHours(0, 0, 0, 0);
+    var d1 = new Date(now); d1.setHours(23, 59, 59, 0);
+    for (var name in cals) {
+      var key = name.toLowerCase();
+      var cal; try { cal = CalendarApp.getCalendarById(cals[name]); } catch (e2) { cal = null; }
+      if (!cal) continue;
+      var evs; try { evs = cal.getEvents(d0, d1); } catch (e3) { continue; }
+      for (var j = 0; j < evs.length; j++) {
+        var t = String(evs[j].getTitle() || '');
+        if (new RegExp('no\\s+' + name + '|day off|vacation|\\bpto\\b|time off|out of town|recovery day|holiday|sick', 'i').test(t)) {
+          out[key] = {st: 'off', why: t.slice(0, 60)}; break;
+        }
+        if (/morning off|afternoon off|leaving early|half day|dr\.?\s|dentist|appointment|appt/i.test(t) && !out[key]) {
+          out[key] = {st: 'part', why: t.slice(0, 60)};
+        }
+        if (!out[key] && evs[j].getStartTime() <= now && evs[j].getEndTime() >= now
+            && !evs[j].isAllDayEvent() && /:/.test(t)
+            && !/no tuning|available|vacuum|shop organization/i.test(t)) {
+          out[key] = {st: 'field', why: t.slice(0, 50),
+                      until: Utilities.formatDate(evs[j].getEndTime(), tz, 'h:mm a')};
+        }
+      }
+    }
+  } catch (e4) {}
+  cache.put('whereis2', JSON.stringify(out), 600);
+  return out;
 }
 function dayIn_(req) {
   return withClockLock_(function () {
