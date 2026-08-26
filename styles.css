@@ -1071,3 +1071,7 @@ tr.adjediting td{background:#fdf8ee}
 .sidefoot{display:flex;align-items:stretch;gap:8px;margin:14px 12px 8px}
 .sidefoot .langlist{padding:0;flex:none;align-items:center;align-content:center}
 .sidefoot .authbox{margin:0;flex:1;min-width:0}
+
+/* app updates list */
+.aulist{margin:4px 0 10px;padding-left:20px;font-size:13.5px;line-height:1.6}
+.aumsg{font-size:12.5px;color:#2e7d4f;margin:4px 0}

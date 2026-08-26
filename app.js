@@ -6749,6 +6749,42 @@ function myTimeOffLines() {
       ${r.times ? '· ' + esc(r.times) : ''} <span style="color:#2e7d4f;font-size:11px">upcoming</span></div>`).join('')
     || '') + `<div class="dline dim">${taken} day${taken === 1 ? '' : 's'} taken so far in ${yr}</div>`;
 }
+/* 📣 App Updates — Brigham logs what changed; one button texts everything
+ * since the last share to the chosen audience (team / managers / admins). */
+async function loadAppUpdates() {
+  try {
+    const r = await fetch(BRIDGE_URL + '?fn=appupdates', {redirect: 'follow'});
+    S.auRows = (await r.json()).rows || [];
+  } catch (e) { S.auRows = S.auRows || []; }
+  renderReport();
+}
+function appUpdatesTable() {
+  if (!S.auRows) { loadAppUpdates(); return '<div class="empty">Loading updates…</div>'; }
+  const unshared = S.auRows.filter(r => !r.sharedAt);
+  const shared = S.auRows.filter(r => r.sharedAt);
+  const lastShare = shared.length ? shared[0].sharedAt.slice(0, 10) : null;
+  const AUD = [['team', '👥 Everyone (Tech Phones list)'], ['managers', '🔧 Managers (Mark · Matthew · Jacob)'], ['admins', '🗂 Admins (Melissa · Lisa)']];
+  return `<div class="rfbar">
+      <input type="text" class="auin" maxlength="400" placeholder="write an update the team should hear about…" style="flex:1">
+      <button class="csvbtn auadd">＋ Add</button></div>
+    <div class="aumsg phmsg"></div>
+    <h4 class="bfhd">Not yet shared ${lastShare ? `<span class="lite" style="color:#8a929a">— since the last text on ${esc(lastShare)}</span>` : ''}</h4>
+    ${unshared.length ? `<ul class="aulist">${unshared.map(r =>
+        `<li><b>${esc(r.text)}</b> <span class="lite" style="color:#8a929a">· ${esc(r.at.slice(0, 10))} · ${esc(r.by.replace(/<[^>]*>/g, ''))}</span></li>`).join('')}</ul>
+      <div class="rfbar">
+        <select class="auaud">${AUD.map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join('')}</select>
+        <button class="csvbtn aushare">📱 Text ${unshared.length} update${unshared.length === 1 ? '' : 's'}</button>
+      </div>`
+      : '<div class="empty">Nothing new since the last share — add updates above.</div>'}
+    <h4 class="bfhd">Already shared</h4>
+    <table><tr><th>UPDATE</th><th>LOGGED</th><th>TEXTED</th><th>TO</th></tr>
+    ${shared.slice(0, 60).map(r => `<tr><td>${esc(r.text)}</td>
+      <td style="white-space:nowrap;color:#8a929a">${esc(r.at.slice(0, 10))}</td>
+      <td style="white-space:nowrap">${esc(r.sharedAt.slice(0, 10))}</td>
+      <td>${esc(r.audience || '—')}</td></tr>`).join('')
+     || '<tr><td colspan="4" class="empty">No shares yet.</td></tr>'}</table>`;
+}
+
 const REPORT_DEFS = () => [
   // ---- ADMIN REPORTS ----
   {id: 'adminbriefs', sec: 'admin', icon: '💼', title: 'ADMIN DAILY BRIEF', count: null,
@@ -6764,6 +6800,10 @@ const REPORT_DEFS = () => [
      try { return S.fixRows ? S.fixRows.filter(r => r.status === 'open').length : null; } catch (e) { return null; } })(),
    desc: 'Fix mistakes and forgotten punches. Team fix requests land here; payroll day punches are editable by owners & Melissa, piano Work Clock sessions by owners & the shop managers (Mark, Matthew, Jacob). Every adjustment is stamped with who changed it.',
    html: clockAdjustTable},
+  {id: 'appupdates', sec: 'admin', show: () => isPayrollAdmin() || isTimelogAdmin(), icon: '📣', title: 'APP UPDATES — TEAM TEXTS', count: (() => {
+     try { return S.auRows ? S.auRows.filter(r => !r.sharedAt).length : null; } catch (e) { return null; } })(),
+   desc: 'Log what changed in the apps, then text everything since the last share to the whole team, the managers, or the admins — one tap. Shared updates keep their history below.',
+   html: appUpdatesTable},
   // ---- SHOP REPORTS ----
   {id: 'briefs', sec: 'shop', icon: '📰', title: 'SHOP MANAGER DAILY BRIEF', count: null,
    desc: 'The nightly Shop Manager briefing, archived as Google Docs — opens with the next morning\u2019s standup. Each row has its own ↗ share button, so you can send one day\u2019s briefing without sharing the whole archive.',
@@ -6896,6 +6936,7 @@ function renderReport() {
     if (S.openReport === 'paytime' && !S.payRows) loadPayroll();
     if (S.openReport === 'jobcost' && !S.tlRows) loadTimeLog();
     if (S.openReport === 'queue' && !S.tlRows) loadTimeLog();   // ASSIGNED TO column
+    if (S.openReport === 'appupdates' && !S.auRows) loadAppUpdates();
     if (S.openReport === 'clockadjust') {
       if (!S.fixRows) loadClockFixes();
       if (!S.payRows) loadPayroll();
@@ -6905,6 +6946,29 @@ function renderReport() {
     const v = $('#view-report'); if (v) v.scrollTop = 0;
   });
   // 🛠 adjustments wiring: resolve requests, inline start/end edits, add-missed forms
+  const auAdd = body.querySelector('.auadd');
+  if (auAdd) auAdd.onclick = async () => {
+    const inp = body.querySelector('.auin'), msg = body.querySelector('.aumsg');
+    const text = inp.value.trim();
+    if (!text) { msg.textContent = 'write the update first'; return; }
+    auAdd.disabled = true; msg.textContent = 'saving…';
+    const j = await adjustPost({action: 'addupdate', text});
+    if (j.error) { msg.textContent = j.error; auAdd.disabled = false; return; }
+    S.auRows = null; loadAppUpdates();
+  };
+  const auShare = body.querySelector('.aushare');
+  if (auShare) auShare.onclick = async () => {
+    const aud = body.querySelector('.auaud').value;
+    const msg = body.querySelector('.aumsg');
+    const n = (S.auRows || []).filter(r => !r.sharedAt).length;
+    const who = aud === 'team' ? 'EVERYONE on the Tech Phones list' : 'the ' + aud;
+    if (!confirm('Text ' + n + ' update' + (n === 1 ? '' : 's') + ' to ' + who + ' right now?')) return;
+    auShare.disabled = true; msg.textContent = 'sending texts…';
+    const j = await adjustPost({action: 'shareupdates', audience: aud});
+    if (j.error) { msg.textContent = j.error; auShare.disabled = false; return; }
+    msg.textContent = '✓ texted ' + j.updates + ' updates to ' + j.sent + ' people';
+    S.auRows = null; loadAppUpdates();
+  };
   body.querySelectorAll('.cfxres').forEach(b => b.onclick = async () => {
     b.disabled = true;
     const j = await adjustPost({action: 'resolveclockfix', row: +b.dataset.row});
