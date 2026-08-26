@@ -5361,7 +5361,7 @@ function renderAuth() {
       <button class="authout" id="authOut">sign out</button>`;
     $('#authOut').onclick = signOut;
     $('#gsiBtn').innerHTML = '<button class="goauth sm" type="button">Sign in with Google</button>';
-    $('#gsiBtn').querySelector('.goauth').onclick = oidcLogin;
+    $('#gsiBtn').querySelector('.goauth').onclick = () => oidcLogin();
   } else if (u) {
     const role = userRole();
     const roleTag = role === 'admin' ? 'ADMIN' : role === 'full' ? 'MANAGER · FULL' : role === 'edit' ? 'MANAGER · EDIT' : '';
@@ -5374,7 +5374,7 @@ function renderAuth() {
       <div class="authhint">Sign in so changes are logged under your name — no team PIN needed</div>
       <div id="gsiBtn"></div>`;
     $('#gsiBtn').innerHTML = '<button class="goauth sm" type="button">Sign in with Google</button>';
-    $('#gsiBtn').querySelector('.goauth').onclick = oidcLogin;
+    $('#gsiBtn').querySelector('.goauth').onclick = () => oidcLogin();
   }
 }
 function initAuth() {
