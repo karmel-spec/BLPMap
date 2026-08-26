@@ -6766,28 +6766,44 @@ function renderReport() {
     if (home) home.appendChild(smw);
   }
   const open = S.openReport;
-  const rptCard = r => `
-    <div class="rpt ${open === r.id ? 'open' : ''}" data-r="${r.id}">
-      <button class="rptbtn">
-        <span class="ric">${r.icon}</span><span class="rtitle">${r.title}</span>
-        ${r.count != null ? `<span class="pc ${r.count ? '' : 'zero'}">${r.count}</span>` : ''}
-        <span class="chev">${open === r.id ? '▾' : '▸'}</span>
-      </button>
-      <div class="rptbody" ${open === r.id ? '' : 'hidden'}>
-        <div class="rpthead"><p class="pd">${r.desc}</p>
-          <button class="sharebtn" data-r="${r.id}">↗ Share</button>
-          <button class="printbtn" data-r="${r.id}">🖨 Print</button></div>
-        <div class="tscroll">${open === r.id ? r.html() : ''}</div>
-      </div>
-    </div>`;
   const defs = REPORT_DEFS().filter(r => !r.show || r.show());
-  const admin = defs.filter(r => r.sec === 'admin'), shop = defs.filter(r => r.sec !== 'admin');
-  body.innerHTML =
-    (admin.length ? `<h3 class="rsec">🔑 ADMIN REPORTS</h3>` + admin.map(rptCard).join('') : '')
-    + `<h3 class="rsec">🔧 SHOP REPORTS</h3>` + shop.map(rptCard).join('');
+  const opened = open && defs.find(r => r.id === open);
+  if (opened) {
+    // FULL-PAGE report (Brigham 8/26): one report at a time, ✕ top-right
+    // returns to the reports list — no more accordion scrolling
+    body.innerHTML = `
+      <div class="rpt open rptfull" data-r="${opened.id}">
+        <div class="rptfullhead">
+          <span class="ric">${opened.icon}</span><span class="rtitle">${opened.title}</span>
+          <button class="sharebtn" data-r="${opened.id}">↗ Share</button>
+          <button class="printbtn" data-r="${opened.id}">🖨 Print</button>
+          <button class="rptx" title="close — back to all reports">✕</button>
+        </div>
+        <p class="pd">${opened.desc}</p>
+        <div class="tscroll">${opened.html()}</div>
+      </div>`;
+    body.querySelector('.rptx').onclick = () => {
+      S.openReport = null;
+      renderReport();
+      const v = $('#view-report'); if (v) v.scrollTop = 0;
+    };
+  } else {
+    const rptCard = r => `
+      <div class="rpt" data-r="${r.id}">
+        <button class="rptbtn">
+          <span class="ric">${r.icon}</span><span class="rtitle">${r.title}</span>
+          ${r.count != null ? `<span class="pc ${r.count ? '' : 'zero'}">${r.count}</span>` : ''}
+          <span class="chev">▸</span>
+        </button>
+      </div>`;
+    const admin = defs.filter(r => r.sec === 'admin'), shop = defs.filter(r => r.sec !== 'admin');
+    body.innerHTML =
+      (admin.length ? `<h3 class="rsec">🔑 ADMIN REPORTS</h3>` + admin.map(rptCard).join('') : '')
+      + `<h3 class="rsec">🔧 SHOP REPORTS</h3>` + shop.map(rptCard).join('');
+  }
   body.querySelectorAll('.rptbtn').forEach(b => b.onclick = () => {
     const id = b.closest('.rpt').dataset.r;
-    S.openReport = S.openReport === id ? null : id;
+    S.openReport = id;
     if (S.openReport === 'activity' && !S.activityRows) loadActivity();
     if ((S.openReport === 'briefs' || S.openReport === 'adminbriefs') && !S.briefRows) loadBriefs();
     if (S.openReport === 'paytime' && !S.payRows) loadPayroll();
@@ -6799,6 +6815,7 @@ function renderReport() {
       if (!S.tlRows) loadTimeLog();
     }
     renderReport();
+    const v = $('#view-report'); if (v) v.scrollTop = 0;
   });
   // 🛠 adjustments wiring: resolve requests, inline start/end edits, add-missed forms
   body.querySelectorAll('.cfxres').forEach(b => b.onclick = async () => {

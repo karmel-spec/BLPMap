@@ -1039,3 +1039,13 @@ tr.adjediting td{background:#fdf8ee}
 .mvconfirm .mvyes:hover{background:#831a1a}
 .mvconfirm .mvno{background:#fff;border:1px solid #cfd6dc;color:#3a4046}
 .mvconfirm .mvno:hover{border-color:#8a929a}
+
+/* full-page report view (reports open one at a time, ✕ returns to the list) */
+.rptfull{border:0;background:transparent}
+.rptfullhead{display:flex;align-items:center;gap:9px;position:sticky;top:0;z-index:5;
+  background:#fff;padding:10px 4px;border-bottom:2px solid #e3e6e9;margin-bottom:10px}
+.rptfullhead .rtitle{font-weight:800;letter-spacing:1.2px;flex:1;min-width:0}
+.rptfullhead .rptx{margin-left:auto;flex:none;font-size:17px;line-height:1;color:#5c646c;
+  background:#fafbfc;border:1px solid #d7dbdf;border-radius:10px;padding:9px 13px;cursor:pointer}
+.rptfullhead .rptx:hover{color:#9e2020;border-color:#c9a0a0}
+.rpt .rptbtn{width:100%}
