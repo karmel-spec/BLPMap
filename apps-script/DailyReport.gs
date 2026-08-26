@@ -155,6 +155,10 @@ function doGet(e) {
     try { return json_(timeLogRows_(Number(e.parameter.days) || 90)); }
     catch (err) { return json_({error: String(err), rows: []}); }
   }
+  if (e && e.parameter && e.parameter.fn === 'timeoffrows') {
+    try { return json_(timeOffRows_()); }
+    catch (err) { return json_({error: String(err), rows: []}); }
+  }
   // Shop Board roster overrides (Roster tab of the report sheet) — served
   // here because the Shop Reports Bridge deployment is owner-locked
   if (e && e.parameter && e.parameter.fn === 'shoproster') {
@@ -788,6 +792,17 @@ function doPost(e) {
       if (pms.ok && !pms.skipped) logAct_(who, 'Payment milestone email', req.summary || req.serial,
         pms.milestone + '% — emailed ' + (pms.emailed || ''));
       return json_(pms);
+    }
+    if (req.action === 'timeoff') {
+      var toa = timeOffAdd_(req, who);
+      if (toa.ok) logAct_(who, 'Time off requested', toa.tech,
+        toa.start + (toa.end !== toa.start ? ' → ' + toa.end : ''));
+      return json_(toa);
+    }
+    if (req.action === 'trainreq') {
+      var trq = trainReqAdd_(req, who);
+      if (trq.ok) logAct_(who, 'Training requested', trq.tech, trq.topic);
+      return json_(trq);
     }
     if (req.action === 'shoprosterset') {
       var srs = shopRosterSet_(String(req.tech || ''), String(req.status || 'active'));
@@ -4235,6 +4250,97 @@ function setCabinetry_(req) {
   var val = String(req.cabinetry == null ? '' : req.cabinetry).trim();
   sh.getRange(found.row, col).setValue(val);
   return {ok: true, row: found.row, summary: found.summary, cabinetry: val};
+}
+
+/* ===================== TIME OFF + TRAINING requests =====================
+ * Request menu popups. Time Off -> "Time Off" tab + email shop@ + text Mark;
+ * dashboards show each person's own time off, the admin Time Off report
+ * shows everyone. Training -> "Training Requests" tab + email shop@ + text
+ * Mark AND Jacob. Texts go through the sales app's request-notify. */
+var TIMEOFF_TAB = 'Time Off';
+function notifyTeam_(names, message) {
+  for (var i = 0; i < names.length; i++) {
+    try {
+      UrlFetchApp.fetch('https://blpsalesapp.netlify.app/.netlify/functions/request-notify', {
+        method: 'post', contentType: 'application/json',
+        payload: JSON.stringify({key: 'pianoman', name: names[i], message: message}),
+        muteHttpExceptions: true});
+    } catch (e) { /* text best-effort */ }
+  }
+}
+function timeOffSheet_() {
+  var ss = SpreadsheetApp.openById('11RoeVRETag5rZYX6_tEH-rf6x8JL0JeZU0P5AT0WI-I');
+  var sh = ss.getSheetByName(TIMEOFF_TAB);
+  if (!sh) {
+    sh = ss.insertSheet(TIMEOFF_TAB, ss.getSheets().length);
+    sh.getRange(1, 1, 1, 7).setValues([['Requested at', 'Who', 'Start', 'End', 'Times', 'Notes', 'Status']]);
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+function timeOffAdd_(req, who) {
+  var tech = clockTech_(req);
+  if (!tech) return {error: 'sign in first — time off is filed under your name'};
+  var start = String(req.start || '').slice(0, 10);
+  var end = String(req.end || start).slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(start)) return {error: 'pick a start date'};
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(end)) end = start;
+  var times = String(req.times || '').slice(0, 120);
+  var note = String(req.note || '').slice(0, 500);
+  timeOffSheet_().appendRow([new Date().toISOString(), tech, start, end, times, note, 'requested']);
+  var span = start === end ? start : start + ' → ' + end;
+  var msg = 'Time off request — ' + tech + ': ' + span
+    + (times ? ' (' + times + ')' : '') + (note ? ' — ' + note : '');
+  if (!req.silent) {
+    try {
+      MailApp.sendEmail('shop@brighamlarsonpianos.com', '🏖 ' + msg,
+        msg + '\n\nFiled from the Store Map by ' + who
+        + '.\nAll requests: Store Map → Reports → 🏖 Time Off (or the report sheet\u2019s Time Off tab).');
+    } catch (e) { /* email best-effort */ }
+    notifyTeam_(['Mark Hales'], '🏖 ' + msg);
+  }
+  return {ok: true, tech: tech, start: start, end: end};
+}
+function timeOffRows_() {
+  var sh = timeOffSheet_();
+  var out = [];
+  var last = sh.getLastRow();
+  if (last >= 2) {
+    var vals = sh.getRange(2, 1, last - 1, 7).getValues();
+    var d = function (x) { return (x instanceof Date)
+      ? Utilities.formatDate(x, 'America/Denver', 'yyyy-MM-dd') : String(x || ''); };
+    for (var i = 0; i < vals.length; i++) {
+      var v = vals[i];
+      if (!v[1]) continue;
+      out.push({row: i + 2, at: String(v[0] || ''), who: String(v[1]), start: d(v[2]), end: d(v[3]),
+                times: String(v[4] || ''), note: String(v[5] || ''), status: String(v[6] || 'requested')});
+    }
+  }
+  out.reverse();
+  return {ok: true, rows: out.slice(0, 500)};
+}
+function trainReqAdd_(req, who) {
+  var tech = clockTech_(req);
+  if (!tech) return {error: 'sign in first'};
+  var topic = String(req.topic || 'Other').slice(0, 80);
+  var note = String(req.note || '').slice(0, 500);
+  var ss = SpreadsheetApp.openById('11RoeVRETag5rZYX6_tEH-rf6x8JL0JeZU0P5AT0WI-I');
+  var sh = ss.getSheetByName('Training Requests');
+  if (!sh) {
+    sh = ss.insertSheet('Training Requests', ss.getSheets().length);
+    sh.getRange(1, 1, 1, 4).setValues([['Requested at', 'Who', 'Topic', 'Notes']]);
+    sh.setFrozenRows(1);
+  }
+  sh.appendRow([new Date().toISOString(), tech, topic, note]);
+  var msg = 'Training request — ' + tech + ' wants training on: ' + topic + (note ? ' — ' + note : '');
+  if (!req.silent) {
+    try {
+      MailApp.sendEmail('shop@brighamlarsonpianos.com', '🎓 ' + msg,
+        msg + '\n\nFiled from the Store Map by ' + who + '.');
+    } catch (e) { /* email best-effort */ }
+    notifyTeam_(['Mark Hales', 'Jacob Mower'], '🎓 ' + msg);
+  }
+  return {ok: true, tech: tech, topic: topic};
 }
 
 /* Shop Board roster overrides: the "Roster" tab on the report sheet

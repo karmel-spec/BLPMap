@@ -2514,6 +2514,76 @@ function fmtHM(mins) {
   const h = Math.floor(mins / 60), m = Math.round(mins % 60);
   return h ? `${h}h ${String(m).padStart(2, '0')}m` : `${m}m`;
 }
+/* 🏖 Time Off + 🎓 Training requests — Request menu popups. Both file to
+ * the report sheet via the bridge, which emails shop@ and texts the
+ * managers (Mark; training also texts Jacob). */
+const TRAIN_TOPICS = ['Other', 'Store Map app', 'Tuning', 'Chip Tuning', 'DHRT / Regulation',
+  'Restringing', 'PRSB & Plate Refinishing', 'Lacquer / Soundboard', 'Refinishing',
+  'Key work / Keytops', 'Cabinetry', 'QC & Assembly', 'Piano Moving', 'Safety'];
+function timeOffModal() {
+  const old = document.querySelector('.dsheetov'); if (old) old.remove();
+  const ov = document.createElement('div');
+  ov.className = 'dsheetov';
+  const today = new Date().toLocaleDateString('en-CA');
+  ov.innerHTML = `<div class="dsheet"><button class="dsx">✕</button>
+    <h3>🏖 Request time off</h3>
+    <div class="dssub">Goes to shop@ and texts Mark. Time off is unpaid — get it approved by your supervisor.</div>
+    <div class="rfbar"><span class="rfd">first day <input type="date" class="to-start" value="${today}"></span>
+      <span class="rfd">last day <input type="date" class="to-end" value="${today}"></span></div>
+    <div class="rfbar"><input type="text" class="to-times" placeholder="times, if not the whole day (e.g. 8–noon)" style="flex:1"></div>
+    <textarea class="cf-note to-note" rows="3" placeholder="optional notes"></textarea>
+    <div class="rfbar"><button class="csvbtn to-send">Send request</button><span class="to-msg phmsg"></span></div>
+  </div>`;
+  document.body.appendChild(ov);
+  ov.querySelector('.dsx').onclick = () => ov.remove();
+  ov.querySelector('.to-send').onclick = async () => {
+    const v = c => ov.querySelector(c).value.trim();
+    const msg = ov.querySelector('.to-msg');
+    if (!v('.to-start')) { msg.textContent = 'pick the first day'; return; }
+    msg.textContent = 'sending…';
+    const j = await adjustPost({action: 'timeoff', start: v('.to-start'),
+      end: v('.to-end') || v('.to-start'), times: v('.to-times'), note: v('.to-note')});
+    if (j.error) { msg.textContent = j.error; return; }
+    TO.rows = null;
+    ov.querySelector('.dsheet').innerHTML =
+      '<h3>✅ Request sent</h3><div class="dssub">shop@ has it and Mark got a text — it also shows on your dashboard.</div>';
+    setTimeout(() => ov.remove(), 2600);
+  };
+}
+function trainReqModal() {
+  const old = document.querySelector('.dsheetov'); if (old) old.remove();
+  const ov = document.createElement('div');
+  ov.className = 'dsheetov';
+  ov.innerHTML = `<div class="dsheet"><button class="dsx">✕</button>
+    <h3>🎓 Request training</h3>
+    <div class="dssub">Goes to shop@ and texts Mark and Jacob so they can plan it with you.</div>
+    <div class="rfbar"><select class="tr-topic">${TRAIN_TOPICS.map(t => `<option>${esc(t)}</option>`).join('')}</select></div>
+    <textarea class="cf-note tr-note" rows="3" placeholder="optional — what do you want to learn or get better at?"></textarea>
+    <div class="rfbar"><button class="csvbtn tr-send">Send request</button><span class="tr-msg phmsg"></span></div>
+  </div>`;
+  document.body.appendChild(ov);
+  ov.querySelector('.dsx').onclick = () => ov.remove();
+  ov.querySelector('.tr-send').onclick = async () => {
+    const msg = ov.querySelector('.tr-msg');
+    msg.textContent = 'sending…';
+    const j = await adjustPost({action: 'trainreq',
+      topic: ov.querySelector('.tr-topic').value, note: ov.querySelector('.tr-note').value.trim()});
+    if (j.error) { msg.textContent = j.error; return; }
+    ov.querySelector('.dsheet').innerHTML =
+      '<h3>✅ Request sent</h3><div class="dssub">Mark and Jacob got a text — they\u2019ll line it up in the morning meeting or your queue.</div>';
+    setTimeout(() => ov.remove(), 2600);
+  };
+}
+const TO = {rows: null, at: 0};
+async function loadTimeOff() {
+  try {
+    const r = await fetch(BRIDGE_URL + '?fn=timeoffrows', {redirect: 'follow'});
+    TO.rows = (await r.json()).rows || [];
+    TO.at = Date.now();
+  } catch (e) { TO.rows = TO.rows || []; }
+  if (S.view === 'dash') renderDash();
+  if (S.view === 'report') renderReport();
+}
 // "my clock is wrong" request — any team member; lands on the 🛠 Time Clock
 // Adjustments list for Melissa / the shop managers to correct
 function clockFixModal(prefill) {
@@ -6493,6 +6563,43 @@ function openArchived(p) {
   if (body) { popPinned = true; openPop(p.row, body, true); }
 }
 
+function timeOffTable() {
+  if (!TO.rows) { loadTimeOff(); return '<div class="empty">Loading time off…</div>'; }
+  const f = S.toF || (S.toF = {who: '', from: '', to: ''});
+  const whos = [...new Set(TO.rows.map(r => r.who))].sort();
+  const rows = TO.rows.filter(r =>
+    (!f.who || r.who === f.who)
+    && (!f.from || r.end >= f.from)
+    && (!f.to || r.start <= f.to));
+  const today = new Date().toLocaleDateString('en-CA');
+  return `<div class="rfbar">
+      <select class="rptf" data-scope="to" data-f="who"><option value="">All team members</option>
+        ${whos.map(w => `<option ${f.who === w ? 'selected' : ''}>${esc(w)}</option>`).join('')}</select>
+      <label class="rfd">from <input type="date" class="rptf" data-scope="to" data-f="from" value="${esc(f.from || '')}"></label>
+      <label class="rfd">to <input type="date" class="rptf" data-scope="to" data-f="to" value="${esc(f.to || '')}"></label>
+    </div>
+    <table><tr><th>TEAM MEMBER</th><th>DATES</th><th>TIMES</th><th>NOTES</th><th>REQUESTED</th></tr>
+    ${rows.map(r => `<tr${r.end >= today ? ' style="font-weight:600"' : ''}>
+      <td>${esc(r.who)}</td>
+      <td style="white-space:nowrap">${esc(r.start)}${r.end !== r.start ? ' → ' + esc(r.end) : ''}${r.end >= today ? ' <span style="color:#2e7d4f;font-size:10px">UPCOMING</span>' : ''}</td>
+      <td>${esc(r.times || 'all day')}</td><td>${esc(r.note || '')}</td>
+      <td style="white-space:nowrap;color:#8a929a">${esc((r.at || '').slice(0, 10))}</td></tr>`).join('')
+     || '<tr><td colspan="5" class="empty">No time-off requests yet.</td></tr>'}</table>`;
+}
+function myTimeOffLines() {
+  if (!TO.rows) { if (Date.now() - TO.at > 60000) loadTimeOff(); return '<div class="dline dim">loading…</div>'; }
+  const me = clockName().toLowerCase();
+  const mine = TO.rows.filter(r => r.who.toLowerCase() === me);
+  if (!mine.length) return '<div class="dline dim">None on file — request some from the 📨 Request menu.</div>';
+  const today = new Date().toLocaleDateString('en-CA');
+  const up = mine.filter(r => r.end >= today);
+  const yr = today.slice(0, 4);
+  const dayspan = r => Math.round((new Date(r.end) - new Date(r.start)) / 86400000) + 1;
+  const taken = mine.filter(r => r.end < today && r.start.startsWith(yr)).reduce((a, r) => a + dayspan(r), 0);
+  return (up.map(r => `<div class="dline"><b>${esc(r.start)}${r.end !== r.start ? ' → ' + esc(r.end) : ''}</b>
+      ${r.times ? '· ' + esc(r.times) : ''} <span style="color:#2e7d4f;font-size:11px">upcoming</span></div>`).join('')
+    || '') + `<div class="dline dim">${taken} day${taken === 1 ? '' : 's'} taken so far in ${yr}</div>`;
+}
 const REPORT_DEFS = () => [
   // ---- ADMIN REPORTS ----
   {id: 'adminbriefs', sec: 'admin', icon: '💼', title: 'ADMIN DAILY BRIEF', count: null,
@@ -6544,6 +6651,11 @@ const REPORT_DEFS = () => [
      p.active && !notYetArrived(p) && (mediaNeeds(p).photo || mediaNeeds(p).video)).length,
    desc: 'Before photos/video for every arrived piano; after photos/video once it reaches Tuning or later. Pianos that haven\'t arrived yet join once they\'re here.',
    html: mediaTable},
+  {id: 'timeoffrep', sec: 'admin', icon: '🏖', title: 'TIME OFF', count: (() => {
+     try { const t = new Date().toLocaleDateString('en-CA');
+       return TO.rows ? TO.rows.filter(r => r.end >= t).length : null; } catch (e) { return null; } })(),
+   desc: 'Every time-off request from the Request menu — filter by team member and date range. Upcoming time off counts on the badge; each person also sees their own on their dashboard.',
+   html: timeOffTable},
   {id: 'shopwork', sec: 'admin', icon: '📍', title: 'SHOP WORK MAP — DELIVERY / ORIGIN', count: null,
    desc: 'Every piano in the Custom Shopwork queue, pinned by where it’s headed for delivery or where it came from. Click a pin (or a row) to open that piano.',
    html: () => '<div id="shopmapMount"></div>'},
@@ -6656,7 +6768,9 @@ function renderReport() {
   });
   body.querySelectorAll('.rptf').forEach(el => {
     const apply = () => {
-      const scope = el.dataset.scope === 'pay' ? (S.payF || (S.payF = {})) : (S.jcF || (S.jcF = {}));
+      const scope = el.dataset.scope === 'pay' ? (S.payF || (S.payF = {}))
+        : el.dataset.scope === 'to' ? (S.toF || (S.toF = {}))
+        : (S.jcF || (S.jcF = {}));
       scope[el.dataset.f] = el.value;
       renderReport();
       const again = body.querySelector(`.rptf[data-scope="${el.dataset.scope}"][data-f="${el.dataset.f}"]`);
@@ -6983,6 +7097,10 @@ function renderDash() {
       </div>
     </div>
     ${payCard}
+    <div class="dbench db-timeoff">
+      <h4>🏖 Time off</h4>
+      ${myTimeOffLines()}
+    </div>
     <div class="dbench db-bench">
       <h4>⏱ On the bench right now</h4>
       ${o ? `<div class="dline now"><b>${esc(o.phase || 'Working')} — ${esc(o.piano || '')} #${esc(o.serial)}</b>
@@ -7533,6 +7651,8 @@ if (topReqBtn) {
     else if (kind === 'touchup') openGenericModal(null, 'Touch Up');
     else if (kind === 'priority') openGenericModal(null, 'Priority Scheduling');
     else if (kind === 'brigham') openBrighamModal(null);
+    else if (kind === 'timeoff') timeOffModal();
+    else if (kind === 'trainreq') trainReqModal();
   });
 }
 
