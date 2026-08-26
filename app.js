@@ -750,7 +750,7 @@ function shareSheet(title, url) {
   </div>`;
   document.body.appendChild(ov);
   ov.onclick = ev => {
-    if (ev.target === ov || ev.target.classList.contains('shx')) ov.remove();
+    if (ev.target === ov || ev.target.closest('.shx')) ov.remove();
   };
   const nb = ov.querySelector('.shnative');
   if (nb) nb.onclick = async () => {
@@ -1308,7 +1308,7 @@ function openTagSnapshot(p) {
     <div class="tagrender tvtag">${shopTagInner(snap.d)}</div>
   </div>`;
   ov.onclick = ev => {
-    if (ev.target === ov || ev.target.classList.contains('tvx')) ov.remove();
+    if (ev.target === ov || ev.target.closest('.tvx')) ov.remove();
   };
   document.body.appendChild(ov);
 }
@@ -2180,7 +2180,7 @@ function openSuggestBox() {
     <div class="sgmine"><b>My requests</b><div class="sgminelist">loading…</div></div>
   </div>`;
   document.body.appendChild(ov);
-  ov.onclick = ev => { if (ev.target === ov || ev.target.classList.contains('tvx')) ov.remove(); };
+  ov.onclick = ev => { if (ev.target === ov || ev.target.closest('.tvx')) ov.remove(); };
   let type = 'edit', shotFile = null;
   ov.querySelectorAll('.sgt').forEach(b => b.onclick = () => {
     ov.querySelectorAll('.sgt').forEach(x => x.classList.remove('on'));
@@ -2928,8 +2928,8 @@ const fmtDayYear = iso => new Date(iso + 'T12:00')
 function wirePop(p) {
   const pop = $('#pop');
   pop.onclick = ev => {
-    if (ev.target.classList.contains('x')) { pop.hidden = true; popPinned = false; return; }
-    if (ev.target.classList.contains('shr')) { sharePiano(p); return; }
+    if (ev.target.closest('.x')) { pop.hidden = true; popPinned = false; return; }
+    if (ev.target.closest('.shr')) { sharePiano(p); return; }
     // only the explicit "Open Piano Log" button navigates — every other
     // control on the card (tuning, phases, media, tags, move) stays put
     if (!ev.target.closest('.btn')) return;
@@ -4301,7 +4301,7 @@ function openAddModal(slotId, prefillSerial) {
   </div>`;
   ov.hidden = false;
   ov.onclick = ev => {
-    if (ev.target === ov || ev.target.classList.contains('x')) ov.hidden = true;
+    if (ev.target === ov || ev.target.closest('.x')) ov.hidden = true;
   };
   serialDatalist();
   ov.querySelector('.adgo').onclick = () => submitAdd(slotId, ov);
@@ -4401,7 +4401,7 @@ function modalShell(id, inner) {
   ov.innerHTML = `<div class="tmcard">${inner}</div>`;
   ov.hidden = false;
   ov.onclick = ev => {
-    if (ev.target === ov || ev.target.classList.contains('x')) ov.hidden = true;
+    if (ev.target === ov || ev.target.closest('.x')) ov.hidden = true;
   };
   return ov;
 }
@@ -4709,7 +4709,7 @@ function openWaitNoteModal(p, phase, pop) {
     <div class="tmmsg"></div>`);
   const sel = pop.querySelector('.phsel');
   ov.onclick = ev => {
-    if (ev.target === ov || ev.target.classList.contains('x')) {
+    if (ev.target === ov || ev.target.closest('.x')) {
       ov.hidden = true;
       if (sel) sel.value = p.phase || '';   // cancelled — revert the dropdown
     }
@@ -4835,7 +4835,7 @@ function openTuneModal(p) {
   </div>`;
   ov.hidden = false;
   ov.onclick = ev => {
-    if (ev.target === ov || ev.target.classList.contains('x')) ov.hidden = true;
+    if (ev.target === ov || ev.target.closest('.x')) ov.hidden = true;
   };
   fillTechs(ov);
   ov.querySelector('.tmgo').onclick = () => submitTune(p, ov);
@@ -5549,15 +5549,15 @@ function openSlotPop(id) {
       ps.map(p => `<div class="row">• ${esc(p.summary)}</div>`).join('') +
       `<div class="row" style="color:#9e2020;font-weight:700">Multiple pianos on one spot — see Reports.</div>`;
     pop.onclick = ev => {
-      if (ev.target.classList.contains('x')) { pop.hidden = true; popPinned = false; } };
+      if (ev.target.closest('.x')) { pop.hidden = true; popPinned = false; } };
   } else {
     pop.innerHTML = `<span class="x">✕</span>
       <span class="tag">SPOT ${esc(id)}</span><h3>Empty</h3>
       <div class="row">No piano assigned in the Piano Log.</div>
       <button class="tagbtn addhere">＋ Put a piano here</button>`;
     pop.onclick = ev => {
-      if (ev.target.classList.contains('x')) { pop.hidden = true; popPinned = false; return; }
-      if (ev.target.classList.contains('addhere')) { pop.hidden = true; openAssignModal(id); } };
+      if (ev.target.closest('.x')) { pop.hidden = true; popPinned = false; return; }
+      if (ev.target.closest('.addhere')) { pop.hidden = true; openAssignModal(id); } };
   }
   const el = document.querySelector(`.slot[data-slot="${CSS.escape(id)}"]`);
   place(pop, el);
