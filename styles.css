@@ -1053,3 +1053,12 @@ tr.adjediting td{background:#fdf8ee}
 /* reports view: section banners borrow the piano card's red sechead look */
 .rptsechead{margin:16px 0 10px;border-radius:9px;font-size:12px;padding:10px 14px}
 .rptsechead:first-child{margin-top:2px}
+
+/* temp-spot modal autocomplete */
+.ts-ac{max-height:180px;overflow:auto;margin:2px 0 6px}
+.ts-ac .acrow{position:static;display:flex;justify-content:space-between;gap:10px;
+  padding:8px 10px;border:1px solid #e3e6e9;border-radius:8px;margin-bottom:4px;
+  background:#fafbfc;cursor:pointer;font-size:13px}
+.ts-ac .acrow:hover{border-color:#c9a0a0;background:#fff}
+.tempghost{cursor:grab;touch-action:none}
+.tempghost:active{cursor:grabbing}

@@ -2079,43 +2079,48 @@ function renderMap() {
 
   const svg = $('#plan');
   svg.innerHTML = s;
-  // temp-spot placement mode: one tap on open floor places the piano
+  // temp-spot placement mode (Brigham 8/26): a draggable gold TEMP square —
+  // tap anywhere to jump it there, drag to fine-tune, ✓ Place on the bar
+  // commits. Floor tabs stay usable; the ghost re-appears after re-renders.
   if (S.tempPlace) {
     svg.style.cursor = 'crosshair';
-    svg.addEventListener('click', async function place(ev) {
-      if (!S.tempPlace) return;
-      if (ev.target.closest('.piano') || ev.target.closest('.slot.hit')) return;   // must be open space
-      ev.stopPropagation();
-      svg.removeEventListener('click', place, true);
+    const GW = 74, GH = 116;   // about a piano footprint in plan units
+    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    g.setAttribute('class', 'tempghost');
+    const c0 = S.tempPlace.ghost
+      || {x: S.drawW / 2, y: Math.min(S.drawH / 2, 600)};
+    S.tempPlace.ghost = c0;
+    g.innerHTML = `<rect x="${c0.x - GW / 2}" y="${c0.y - GH / 2}" width="${GW}" height="${GH}" rx="8"
+        fill="#c99a2e" fill-opacity=".55" stroke="#c99a2e" stroke-width="3" stroke-dasharray="7 5"></rect>
+      <text x="${c0.x}" y="${c0.y}" text-anchor="middle" dominant-baseline="middle"
+        font-size="22" font-weight="800" fill="#241c00">TEMP</text>`;
+    svg.appendChild(g);
+    const svgPt = ev => {
       const pt = svg.createSVGPoint();
       pt.x = ev.clientX; pt.y = ev.clientY;
-      const c = pt.matrixTransform(svg.getScreenCTM().inverse());
-      const job = S.tempPlace;
-      S.tempPlace = null;
-      svg.style.cursor = '';
-      const bar = document.getElementById('tempbar');
-      if (bar) bar.remove();
-      let serial = job.serial || prompt('Serial # of the piano for this temp spot:') || '';
-      serial = serial.trim();
-      if (!serial) { renderMap(); return; }
-      const p = S.data.pianos.find(x => (x.serial || '').toLowerCase() === serial.toLowerCase() && x.active);
-      if (!p) { alert('No active piano with serial ' + serial + '.'); renderMap(); return; }
-      const locStr = 'Temp spot @' + (S.floor + 1) + 'F ' + Math.round(c.x) + ',' + Math.round(c.y);
-      if (!confirm('Park #' + p.serial + ' (' + p.summary.slice(0, 30) + ') at this temp spot?\n\nIt disappears automatically when the piano moves to a real spot or is delivered.')) { renderMap(); return; }
-      const wa = writeAuth();
-      if (!wa.ok) { renderMap(); return; }
-      try {
-        const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
-          headers: {'content-type': 'text/plain;charset=utf-8'},
-          body: JSON.stringify({pin: wa.pin, action: 'move', serial: p.serial, row: p.row,
-            newLocation: locStr, ...authFields()})});
-        const j = await r.json();
-        if (!j.moved) throw new Error(j.error || 'move failed');
-        p.location = locStr;
-        renderMap();
-        setTimeout(() => focusPiano(p), 200);
-      } catch (e) { alert('✗ ' + e.message); renderMap(); }
+      return pt.matrixTransform(svg.getScreenCTM().inverse());
+    };
+    const moveGhost = c => {
+      S.tempPlace.ghost = {x: c.x, y: c.y};
+      const r = g.querySelector('rect'), t = g.querySelector('text');
+      r.setAttribute('x', c.x - GW / 2); r.setAttribute('y', c.y - GH / 2);
+      t.setAttribute('x', c.x); t.setAttribute('y', c.y);
+    };
+    // tap anywhere on open map = jump the square there
+    svg.addEventListener('click', ev => {
+      if (!S.tempPlace) return;
+      if (ev.target.closest('.piano')) return;
+      ev.stopPropagation();
+      moveGhost(svgPt(ev));
     }, true);
+    // drag the square itself for fine placement
+    let dragging = false;
+    g.addEventListener('pointerdown', ev => {
+      dragging = true; ev.preventDefault(); ev.stopPropagation();
+      try { g.setPointerCapture(ev.pointerId); } catch (e) {}
+    });
+    g.addEventListener('pointermove', ev => { if (dragging) moveGhost(svgPt(ev)); });
+    ['pointerup', 'pointercancel'].forEach(t => g.addEventListener(t, () => { dragging = false; }));
   }
   svg.querySelectorAll('.cabunitbox, .cabunitnum, .cabcntc, .cabcnt2').forEach(el =>
     el.addEventListener('click', ev => { ev.stopPropagation(); openCabUnitModal(el.dataset.unit); }));
@@ -2525,19 +2530,44 @@ function fmtHM(mins) {
 const TRAIN_TOPICS = ['Other', 'Store Map app', 'Tuning', 'Chip Tuning', 'DHRT / Regulation',
   'Restringing', 'PRSB & Plate Refinishing', 'Lacquer / Soundboard', 'Refinishing',
   'Key work / Keytops', 'Cabinetry', 'QC & Assembly', 'Piano Moving', 'Safety'];
-function startTempPlace(p) {
-  S.tempPlace = {row: p.row, serial: p.serial};
+function startTempPlace(p, floor) {
+  S.tempPlace = {row: p.row, serial: p.serial, ghost: null};
   if (S.view !== 'map') switchView('map');
+  if (floor != null && floor !== S.floor) { S.floor = floor; renderTabs(); }
   let bar = document.getElementById('tempbar');
   if (!bar) {
     bar = document.createElement('div');
     bar.id = 'tempbar';
     document.body.appendChild(bar);
   }
-  bar.innerHTML = `📍 Tap an OPEN floor space to park <b>#${esc(p.serial)}</b> there as a temp spot
-    <button id="tempcancel">cancel</button>`;
+  bar.innerHTML = `📍 Drag the gold square where <b>#${esc(p.serial)}</b> goes
+    <button id="tempgo">✓ Place</button><button id="tempcancel">cancel</button>`;
   bar.querySelector('#tempcancel').onclick = () => {
     S.tempPlace = null; bar.remove(); renderMap();
+  };
+  bar.querySelector('#tempgo').onclick = async () => {
+    const job = S.tempPlace;
+    if (!job || !job.ghost) return;
+    const wa = writeAuth();
+    if (!wa.ok) return;
+    const btn = bar.querySelector('#tempgo');
+    btn.disabled = true; btn.textContent = 'Placing…';
+    const locStr = 'Temp spot @' + (S.floor + 1) + 'F ' + Math.round(job.ghost.x) + ',' + Math.round(job.ghost.y);
+    try {
+      const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+        headers: {'content-type': 'text/plain;charset=utf-8'},
+        body: JSON.stringify({pin: wa.pin, action: 'move', serial: p.serial, row: p.row,
+          newLocation: locStr, ...authFields()})});
+      const j = await r.json();
+      if (!j.moved) throw new Error(j.error || 'move failed');
+      p.location = locStr;
+      S.tempPlace = null; bar.remove();
+      renderMap();
+      setTimeout(() => focusPiano(p), 200);
+    } catch (e) {
+      alert('✗ ' + e.message);
+      btn.disabled = false; btn.textContent = '✓ Place';
+    }
   };
   renderMap();
 }
@@ -2549,25 +2579,55 @@ function tempSpotModal() {
   ov.className = 'dsheetov';
   ov.innerHTML = `<div class="dsheet"><button class="dsx">✕</button>
     <h3>📍 Temp map spot</h3>
-    <div class="dssub">Which piano are you parking? Then tap an open floor space on the map.</div>
-    <div class="rfbar"><input type="text" class="ts-serial" list="serialList" placeholder="type the piano's serial #" style="flex:1">
-      <button class="csvbtn ts-go">Pick a spot</button></div>
+    <div class="dssub">Pick the piano and the floor — then drag the gold square where it goes.</div>
+    <div class="rfbar"><input type="text" class="ts-serial" placeholder="type the piano's serial #" autocomplete="off" style="flex:1"></div>
+    <div class="ts-ac"></div>
+    <div class="ts-pick"></div>
+    <div class="rfbar">
+      <select class="ts-floor">
+        <option value="0" ${S.floor === 0 ? 'selected' : ''}>1st floor</option>
+        <option value="1" ${S.floor === 1 ? 'selected' : ''}>2nd floor</option>
+      </select>
+      <button class="csvbtn ts-go" disabled>Place on the map</button></div>
     <div class="ts-msg phmsg"></div>
   </div>`;
   document.body.appendChild(ov);
   ov.querySelector('.dsx').onclick = () => ov.remove();
-  const go = () => {
-    const q = ov.querySelector('.ts-serial').value.trim().toLowerCase();
-    const msg = ov.querySelector('.ts-msg');
-    if (!q) { msg.textContent = 'type a serial'; return; }
-    const p = S.data.pianos.find(x => x.serial && x.serial.toLowerCase() === q)
-      || S.data.pianos.find(x => x.active && x.serial && x.serial.toLowerCase().includes(q));
-    if (!p) { msg.textContent = 'no piano with that serial'; return; }
-    ov.remove();
-    startTempPlace(p);
+  const inp = ov.querySelector('.ts-serial'), ac = ov.querySelector('.ts-ac'),
+    pick = ov.querySelector('.ts-pick'), goBtn = ov.querySelector('.ts-go');
+  let chosen = null;   // only a real, active piano enables the button
+  const choose = p => {
+    chosen = p;
+    inp.value = p.serial;
+    ac.innerHTML = '';
+    pick.innerHTML = `<div class="dline">✓ <b>${esc(p.summary || p.serial)}</b>
+      <span class="lite" style="color:#8a929a">#${esc(p.serial)} · now at ${esc(p.location || '—')}</span></div>`;
+    goBtn.disabled = false;
   };
-  ov.querySelector('.ts-go').onclick = go;
-  ov.querySelector('.ts-serial').onkeydown = e => { if (e.key === 'Enter') go(); };
+  inp.oninput = () => {
+    const q = inp.value.trim().toLowerCase();
+    chosen = null; goBtn.disabled = true; pick.innerHTML = '';
+    if (!q) { ac.innerHTML = ''; return; }
+    const hits = S.data.pianos
+      .filter(p => p.active && p.serial && ((p.serial + ' ' + p.summary).toLowerCase().includes(q)))
+      .sort((a, b) => a.serial.toLowerCase().startsWith(q) === b.serial.toLowerCase().startsWith(q)
+        ? 0 : a.serial.toLowerCase().startsWith(q) ? -1 : 1)
+      .slice(0, 8);
+    const exact = hits.find(p => p.serial.toLowerCase() === q);
+    if (exact && hits.length === 1) { choose(exact); return; }
+    ac.innerHTML = hits.map((p, i) => `<div class="acrow" data-i="${i}">
+        <span class="acname">${esc((p.summary || '').slice(0, 34))}</span>
+        <span class="acmeta">#${esc(p.serial)}</span></div>`).join('')
+      || '<div class="acrow" style="color:#8a929a;cursor:default">no matching piano — serials only</div>';
+    ac.querySelectorAll('.acrow[data-i]').forEach(el =>
+      el.onmousedown = ev => { ev.preventDefault(); choose(hits[+el.dataset.i]); });
+  };
+  goBtn.onclick = () => {
+    if (!chosen) return;   // typing something not on the list never submits
+    const floor = +ov.querySelector('.ts-floor').value;
+    ov.remove();
+    startTempPlace(chosen, floor);
+  };
 }
 function timeOffModal() {
   const old = document.querySelector('.dsheetov'); if (old) old.remove();
