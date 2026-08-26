@@ -1062,3 +1062,7 @@ tr.adjediting td{background:#fdf8ee}
 .ts-ac .acrow:hover{border-color:#c9a0a0;background:#fff}
 .tempghost{cursor:grab;touch-action:none}
 .tempghost:active{cursor:grabbing}
+
+/* the drag-to-place TEMP square pulses so it can't be missed */
+@keyframes tempghostpulse{0%,100%{fill-opacity:.55;stroke-width:3}50%{fill-opacity:.8;stroke-width:6}}
+.tempghost rect{animation:tempghostpulse 1.1s ease-in-out infinite}

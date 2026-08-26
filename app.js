@@ -2087,8 +2087,20 @@ function renderMap() {
     const GW = 74, GH = 116;   // about a piano footprint in plan units
     const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     g.setAttribute('class', 'tempghost');
-    const c0 = S.tempPlace.ghost
-      || {x: S.drawW / 2, y: Math.min(S.drawH / 2, 600)};
+    // spawn the square in the middle of whatever the user is LOOKING AT —
+    // a fixed spawn point can be far outside their scrolled view
+    let c0 = S.tempPlace.ghost;
+    if (!c0) {
+      const sc = document.querySelector('.mapscroll');
+      const pxW = svg.clientWidth || (sc ? sc.clientWidth : 0);
+      if (sc && pxW) {
+        const scale = S.drawW / pxW;
+        c0 = {x: Math.max(60, Math.min(S.drawW - 60, (sc.scrollLeft + sc.clientWidth / 2) * scale)),
+              y: Math.max(80, Math.min(S.drawH - 80, (sc.scrollTop + sc.clientHeight / 2) * scale))};
+      } else {
+        c0 = {x: S.drawW / 2, y: Math.min(S.drawH / 2, 600)};
+      }
+    }
     S.tempPlace.ghost = c0;
     g.innerHTML = `<rect x="${c0.x - GW / 2}" y="${c0.y - GH / 2}" width="${GW}" height="${GH}" rx="8"
         fill="#c99a2e" fill-opacity=".55" stroke="#c99a2e" stroke-width="3" stroke-dasharray="7 5"></rect>
