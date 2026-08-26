@@ -2070,7 +2070,7 @@ function renderMap() {
     if (fl !== S.floor) return;
     const hl = S.focusRow === p.row || (q && matches(p, q));
     const dim = q && !matches(p, q);
-    s += `<g class="piano tempspot ${extra(p)} ${dim ? 'dim' : ''} ${hl ? 'hl' : ''}" data-row="${p.row}">
+    s += `<g class="piano tempspot ${pianoStatus(p)} own-${ownerClass(p)} ${dim ? 'dim' : ''} ${hl ? 'hl' : ''}" data-row="${p.row}">
       <rect x="${x - 30}" y="${y - 26}" width="60" height="52" rx="7" class="temprect"/>
       <text x="${x}" y="${y - 30}" text-anchor="middle" class="templbl" font-size="9">TEMP</text>
       ${glyph(p.type, x, y + 3, 1.05)}${phaseText(p, x, y + 3, 1.05)}${ghostBadge(p, x, y + 3, 1.05)}</g>`;
