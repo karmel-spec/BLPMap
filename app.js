@@ -6455,6 +6455,44 @@ function clockAdjustTable() {
   return fixes + pay + tl;
 }
 
+/* 📦 Delivered-archive report — same rows as the old sidebar view (click a
+ * row to open the piano's card), now living in Reports; searching an
+ * archived serial from the top bar lands here with the row filtered. */
+function archiveRows(q) {
+  return (S.data.pianos || []).filter(p => p.archived)
+    .filter(p => !q || (p.summary + ' ' + p.serial + ' ' + p.make + ' ' + p.model + ' '
+      + p.year + ' ' + (p.owner || '')).toLowerCase().includes(q));
+}
+function archiveTable() {
+  const f = S.arF || (S.arF = {q: ''});
+  const q = f.q.trim().toLowerCase();
+  const rows = archiveRows(q);
+  return `<div class="actbar">
+      <input class="arf" data-f="q" placeholder="search serial, make, owner…" value="${esc(f.q)}">
+      <span class="actcount">${rows.length} archived piano${rows.length === 1 ? '' : 's'}${q ? ' matching' : ''}</span>
+      ${f.q ? '<button class="arclear">✕ clear</button>' : ''}
+    </div>
+    <table><tr><th>PIANO</th><th>SERIAL</th><th>OWNER</th><th>LAST LOCATION</th><th></th></tr>
+    ${rows.slice(0, 400).map(p => `<tr class="archrow" data-row="${p.row}">
+      <td>${esc((p.year ? p.year + ' ' : '') + ([p.make, p.model].filter(Boolean).join(' ') || p.summary).slice(0, 40))}</td>
+      <td>${esc(p.serial)}</td>
+      <td>${esc(ownerNameOf(p) || '—')}</td>
+      <td>${esc((p.location || '—').slice(0, 26))}</td>
+      <td><a target="_blank" rel="noopener" href="${logLink(p)}">log ↗</a></td></tr>`).join('')
+      || '<tr><td colspan="5" class="empty">Nothing here yet.</td></tr>'}
+    </table>`;
+}
+// top-bar search landed on an archived piano: open the archive report
+// (admin card) filtered to it, with the piano's card popped open
+function openArchived(p) {
+  switchView('report');
+  S.openReport = 'archive';
+  S.arF = {q: p.serial || p.summary || ''};
+  renderReport();
+  const body = document.querySelector('.rpt[data-r="archive"] .rptbody');
+  if (body) { popPinned = true; openPop(p.row, body, true); }
+}
+
 const REPORT_DEFS = () => [
   // ---- ADMIN REPORTS ----
   {id: 'adminbriefs', sec: 'admin', icon: '💼', title: 'ADMIN DAILY BRIEF', count: null,
@@ -6506,6 +6544,10 @@ const REPORT_DEFS = () => [
      p.active && !notYetArrived(p) && (mediaNeeds(p).photo || mediaNeeds(p).video)).length,
    desc: 'Before photos/video for every arrived piano; after photos/video once it reaches Tuning or later. Pianos that haven\'t arrived yet join once they\'re here.',
    html: mediaTable},
+  {id: 'archive', sec: 'admin', icon: '📦', title: 'DELIVERED ARCHIVE', count: (() => {
+     try { return archiveRows('').length; } catch (e) { return null; } })(),
+   desc: 'Delivered pianos leave the map but live here — searchable, cards still open. Click a row for the piano’s full card.',
+   html: archiveTable},
   {id: 'cabinetry', sec: 'shop', icon: '🗄', title: 'CABINETRY AUDIT REPORT', count: S.data.pianos.filter(p =>
      p.active && cabTokens(p).length).length,
    desc: 'Which Cabinetry Storage shelves hold each piano\'s stripped cabinetry and hardware. Assign from the piano card (Cabinetry → ＋ shelf); click a unit box on the map for one unit\'s contents.',
@@ -6519,6 +6561,10 @@ const REPORT_DEFS = () => [
   {id: 'activity', sec: 'shop', icon: '📝', title: 'ACTIVITY LOG', count: null,
    desc: 'Who changed what — every move, phase change, media checkoff, and tuning request made through the map.',
    html: () => activityTable(S.activityRows)},
+  {id: 'archiveshop', sec: 'shop', icon: '📦', title: 'DELIVERED ARCHIVE', count: (() => {
+     try { return archiveRows('').length; } catch (e) { return null; } })(),
+   desc: 'Delivered pianos leave the map but live here — searchable, cards still open. Click a row for the piano’s full card.',
+   html: archiveTable},
 ];
 
 function renderReport() {
@@ -6610,6 +6656,25 @@ function renderReport() {
     };
     if (el.tagName === 'SELECT' || el.type === 'date') el.onchange = apply;
     else el.oninput = () => { clearTimeout(el._t); el._t = setTimeout(apply, 350); };
+  });
+  body.querySelectorAll('.arf').forEach(el => {
+    el.oninput = () => {
+      clearTimeout(el._t);
+      el._t = setTimeout(() => {
+        (S.arF = S.arF || {q: ''}).q = el.value;
+        renderReport();
+        const again = body.querySelector('.arf');
+        if (again) { again.focus(); again.setSelectionRange(again.value.length, again.value.length); }
+      }, 300);
+    };
+  });
+  const arc = body.querySelector('.arclear');
+  if (arc) arc.onclick = () => { S.arF = {q: ''}; renderReport(); };
+  body.querySelectorAll('.archrow').forEach(tr => tr.onclick = ev => {
+    if (ev.target.closest('a')) return;
+    const p = S.data.pianos.find(x => x.row === +tr.dataset.row);
+    const rb = tr.closest('.rptbody');
+    if (p && rb) { popPinned = true; openPop(p.row, rb, true); }
   });
   body.querySelectorAll('.csvbtn').forEach(b => b.onclick = ev => {
     ev.stopPropagation();
@@ -7484,8 +7549,8 @@ function renderSuggest(q) {
   if (!box) return;
   if (q.length < 1) { box.hidden = true; acList = []; acIdx = -1; return; }
   acList = (S.data.pianos || [])
-    .filter(p => p.active)
-    .map(p => ({p, r: searchRank(p, q)}))
+    .filter(p => p.active || p.archived)
+    .map(p => ({p, r: searchRank(p, q) + (p.archived ? 0.5 : 0)}))
     .filter(x => x.r < 99)
     .sort((a, b) => a.r - b.r || String(a.p.summary).localeCompare(String(b.p.summary)))
     .slice(0, 8)
@@ -7501,7 +7566,7 @@ function renderSuggest(q) {
   box.innerHTML = acList.map((p, i) => `<div class="acrow" data-i="${i}">
       <span class="acname">${hl(p.summary || [p.year, p.make, p.model].filter(Boolean).join(' '))}</span>
       <span class="acmeta">${p.serial ? '#' + hl(p.serial) : ''}
-        <i>map ${esc(p.location || '—')}</i></span>
+        <i>${p.archived ? '📦 delivered' : 'map ' + esc(p.location || '—')}</i></span>
     </div>`).join('');
   box.hidden = false;
   box.querySelectorAll('.acrow').forEach(el => {
@@ -7514,6 +7579,7 @@ function pickSuggest(i) {
   $('#searchac').hidden = true;
   $('#search').value = p.summary || p.serial || '';
   S.search = $('#search').value;
+  if (p.archived) { openArchived(p); return; }
   renderMap();
   focusPiano(p);
 }
@@ -7537,7 +7603,11 @@ $('#search').addEventListener('input', e => {
   searchTimer = setTimeout(() => {
     if (S.slotFloor.has(q)) { focusSpot(q); return; }      // exact spot #
     const hits = S.data.pianos.filter(p => p.active && matches(p, q));
-    if (hits.length === 1) focusPiano(hits[0]);            // unique piano
+    if (hits.length === 1) { focusPiano(hits[0]); return; }   // unique piano
+    if (!hits.length) {   // maybe it's a delivered piano — jump to the archive
+      const arch = S.data.pianos.filter(p => p.archived && matches(p, q));
+      if (arch.length === 1) openArchived(arch[0]);
+    }
   }, 450);
 });
 $('#search').addEventListener('keydown', e => {
