@@ -2827,9 +2827,9 @@ function popHTML(p) {
           <select class="clkphase">
             <option value="">— select the work —</option>
             <option value="__other__">✏️ Other — write it in…</option>
-            ${opts.map(ph => `<option>${esc(ph)}</option>`).join('')}
-            <option>Admin / Misc</option>
-            <option>Moving</option>
+            ${opts.map(ph => `<option value="${esc(ph)}">${esc(ph)}</option>`).join('')}
+            <option value="Admin / Misc">Admin / Misc</option>
+            <option value="Moving">Moving</option>
           </select></div>
         <input class="clkother" placeholder="what are you doing on this piano?" maxlength="60" hidden>
         <button class="clkbtn clkin off">▶ ${mine ? 'Switch here' : 'Clock in'}</button>
