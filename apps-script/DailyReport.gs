@@ -160,6 +160,10 @@ function doGet(e) {
     try { return json_(timeLogRows_(Number(e.parameter.days) || 90)); }
     catch (err) { return json_({error: String(err), rows: []}); }
   }
+  if (e && e.parameter && e.parameter.fn === 'appupdates') {
+    try { return json_(appUpdatesRows_()); }
+    catch (err) { return json_({error: String(err), rows: []}); }
+  }
   if (e && e.parameter && e.parameter.fn === 'timeoffrows') {
     try { return json_(timeOffRows_()); }
     catch (err) { return json_({error: String(err), rows: []}); }
@@ -797,6 +801,14 @@ function doPost(e) {
       if (pms.ok && !pms.skipped) logAct_(who, 'Payment milestone email', req.summary || req.serial,
         pms.milestone + '% — emailed ' + (pms.emailed || ''));
       return json_(pms);
+    }
+    if (req.action === 'addupdate') {
+      return json_(appUpdateAdd_(req, who));
+    }
+    if (req.action === 'shareupdates') {
+      var shu = shareUpdates_(req, who);
+      if (shu.ok) logAct_(who, 'App updates texted', shu.audience, shu.updates + ' updates to ' + shu.sent + ' people');
+      return json_(shu);
     }
     if (req.action === 'timeoff') {
       var toa = timeOffAdd_(req, who);
@@ -4329,6 +4341,86 @@ function setCabinetry_(req) {
   var val = String(req.cabinetry == null ? '' : req.cabinetry).trim();
   sh.getRange(found.row, col).setValue(val);
   return {ok: true, row: found.row, summary: found.summary, cabinetry: val};
+}
+
+/* ===================== APP UPDATES + TEAM TEXTS =====================
+ * Brigham logs app updates on an "App Updates" tab; the 📣 App Updates
+ * report shows what's been shared and what hasn't, and one button texts
+ * everything since the last share to the chosen audience. */
+var UPDATE_AUDIENCES = {
+  managers: ['Mark Hales', 'Matthew Wessman', 'Jacob Mower'],
+  admins: ['Melissa Terry', 'Lisa Litton'],
+};
+function appUpdatesSheet_() {
+  var ss = SpreadsheetApp.openById('11RoeVRETag5rZYX6_tEH-rf6x8JL0JeZU0P5AT0WI-I');
+  var sh = ss.getSheetByName('App Updates');
+  if (!sh) {
+    sh = ss.insertSheet('App Updates', ss.getSheets().length);
+    sh.getRange(1, 1, 1, 5).setValues([['At', 'Update', 'By', 'Shared at', 'Audience']]);
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+function updateAdmin_(g) { return payrollAdmin_(g) || timelogAdmin_(g); }
+function appUpdateAdd_(req, who) {
+  if (!updateAdmin_(req._g)) return {error: 'Only owners, Melissa, or the managers can log app updates (Google sign-in required).'};
+  var text = String(req.text || '').trim().slice(0, 400);
+  if (!text) return {error: 'write the update first'};
+  appUpdatesSheet_().appendRow([new Date().toISOString(), text,
+    String((req._g && (req._g.name || req._g.email)) || who || ''), '', '']);
+  return {ok: true};
+}
+function appUpdatesRows_() {
+  var sh = appUpdatesSheet_();
+  var out = [];
+  var last = sh.getLastRow();
+  if (last >= 2) {
+    var vals = sh.getRange(2, 1, last - 1, 5).getValues();
+    for (var i = 0; i < vals.length; i++) {
+      var v = vals[i];
+      if (!v[1]) continue;
+      out.push({row: i + 2, at: String(v[0] || ''), text: String(v[1]),
+                by: String(v[2] || ''), sharedAt: String(v[3] || ''), audience: String(v[4] || '')});
+    }
+  }
+  out.reverse();
+  return {ok: true, rows: out.slice(0, 300)};
+}
+function shareUpdates_(req, who) {
+  if (!updateAdmin_(req._g)) return {error: 'Only owners, Melissa, or the managers can text updates.'};
+  var audience = String(req.audience || 'team');
+  var sh = appUpdatesSheet_();
+  var last = sh.getLastRow();
+  if (last < 2) return {error: 'no updates logged yet'};
+  var vals = sh.getRange(2, 1, last - 1, 5).getValues();
+  var unshared = [];
+  for (var i = 0; i < vals.length; i++) {
+    if (vals[i][1] && !String(vals[i][3] || '').trim()) unshared.push({row: i + 2, text: String(vals[i][1])});
+  }
+  if (!unshared.length) return {error: 'nothing new since the last share'};
+  var names;
+  if (audience === 'team') {
+    names = teamPhones_().phones.map(function (p) { return p.name; });
+  } else {
+    names = UPDATE_AUDIENCES[audience] || [];
+  }
+  if (!names.length) return {error: 'no one to text for audience ' + audience};
+  var day = Utilities.formatDate(new Date(), 'America/Denver', 'M/d');
+  var msg = '📣 BLP app updates (' + day + '):';
+  for (var j = 0; j < unshared.length; j++) {
+    var line = '\n' + (j + 1) + ') ' + unshared[j].text;
+    if ((msg + line).length > 1100) {
+      msg += '\n…and ' + (unshared.length - j) + ' more — full list: Store Map → Reports → 📣 App Updates';
+      break;
+    }
+    msg += line;
+  }
+  notifyTeam_(names, msg);
+  var nowIso = new Date().toISOString();
+  for (var k = 0; k < unshared.length; k++) {
+    sh.getRange(unshared[k].row, 4, 1, 2).setValues([[nowIso, audience]]);
+  }
+  return {ok: true, updates: unshared.length, sent: names.length, audience: audience};
 }
 
 /* ===================== TIME OFF + TRAINING requests =====================
