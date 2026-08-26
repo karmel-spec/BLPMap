@@ -6544,6 +6544,9 @@ const REPORT_DEFS = () => [
      p.active && !notYetArrived(p) && (mediaNeeds(p).photo || mediaNeeds(p).video)).length,
    desc: 'Before photos/video for every arrived piano; after photos/video once it reaches Tuning or later. Pianos that haven\'t arrived yet join once they\'re here.',
    html: mediaTable},
+  {id: 'shopwork', sec: 'admin', icon: '📍', title: 'SHOP WORK MAP — DELIVERY / ORIGIN', count: null,
+   desc: 'Every piano in the Custom Shopwork queue, pinned by where it’s headed for delivery or where it came from. Click a pin (or a row) to open that piano.',
+   html: () => '<div id="shopmapMount"></div>'},
   {id: 'archive', sec: 'admin', icon: '📦', title: 'DELIVERED ARCHIVE', count: (() => {
      try { return archiveRows('').length; } catch (e) { return null; } })(),
    desc: 'Delivered pianos leave the map but live here — searchable, cards still open. Click a row for the piano’s full card.',
@@ -6570,6 +6573,13 @@ const REPORT_DEFS = () => [
 function renderReport() {
   const body = $('#reportsBody');
   if (!body) return;
+  // the Shop Work Map is ONE live DOM node — park it back in its hidden home
+  // view before this innerHTML rebuild destroys it
+  const smw = document.querySelector('.shopmapwrap');
+  if (smw && body.contains(smw)) {
+    const home = document.querySelector('#view-shopmap .panel');
+    if (home) home.appendChild(smw);
+  }
   const open = S.openReport;
   const rptCard = r => `
     <div class="rpt ${open === r.id ? 'open' : ''}" data-r="${r.id}">
@@ -6723,6 +6733,11 @@ function renderReport() {
   });
   const ac = body.querySelector('.actclear');
   if (ac) ac.onclick = () => { S.actF = {who: '', act: '', piano: '', q: '', days: 0}; renderReport(); };
+  if (S.openReport === 'shopwork') {
+    const mt = document.getElementById('shopmapMount');
+    const wrap = document.querySelector('.shopmapwrap');
+    if (mt && wrap) { mt.appendChild(wrap); renderShopMap(); }
+  }
   body.querySelectorAll('.sharebtn').forEach(b => b.onclick = ev => {
     ev.stopPropagation();
     const def = REPORT_DEFS().find(r => r.id === b.dataset.r);
