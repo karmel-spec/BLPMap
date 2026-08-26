@@ -7788,6 +7788,10 @@ function syncFeed() {
 }
 $('#movesBtn').onclick = () => { S.feedOpen = !S.feedOpen; if (S.view !== 'map') switchView('map'); syncFeed(); };
 $('#movesClose').onclick = () => { S.feedOpen = false; syncFeed(); };
+document.querySelectorAll('.feedgo').forEach(b => b.onclick = () => {
+  S.feedOpen = false; syncFeed();
+  switchView(b.dataset.view);
+});
 
 $('#legendBtn').onclick = () => { const p = $('#legendPanel'); p.hidden = !p.hidden; };
 /* Legend items are clickable (Brigham 8/25): each opens the list of pianos in

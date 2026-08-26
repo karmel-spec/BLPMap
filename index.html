@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Store Map — Brigham Larson Pianos</title>
 <link rel="icon" href="assets/blp-logo.png">
-<link rel="stylesheet" href="styles.css?v=143">
+<link rel="stylesheet" href="styles.css?v=144">
 </head>
 <body>
 
@@ -71,14 +71,10 @@
   <nav class="side" id="side">
     <div class="navitem on" data-view="map"><span class="ic">🗺</span>Store Map</div>
     <div class="navitem" data-view="dash"><span class="ic">👤</span>My Dashboard</div>
-    <div class="navitem" data-view="board"><span class="ic">🚚</span>Move Board</div>
-    <div class="navitem" data-view="cal"><span class="ic">📅</span>Calendar</div>
     <div class="navitem" data-view="report"><span class="ic">⚠️</span>Reports</div>
     <div class="navitem" data-view="training"><span class="ic">🎓</span>Training</div>
     <div class="crew">
-      <b>Move Crew Today</b><span id="crew">—</span>
-      <span id="crewMoves" class="crewmoves">— Moves Today</span>
-      <b style="margin-top:10px">Synced</b><span id="synced">loading…</span>
+      <b>Synced</b><span id="synced">loading…</span>
     </div>
     <div class="sidefoot">
       <div class="langlist" id="langList"></div>
@@ -132,6 +128,14 @@
     <aside class="feed" id="feed">
       <h2>TODAY'S MOVES <span class="x" id="movesClose">✕</span></h2>
       <div class="src">as entered in the Moving Calendar</div>
+      <div class="feednav">
+        <button class="feedgo" data-view="board">🚚 Move Board</button>
+        <button class="feedgo" data-view="cal">📅 Moving Calendar</button>
+      </div>
+      <div class="crew feedcrew">
+        <b>Move Crew Today</b><span id="crew">—</span>
+        <span id="crewMoves" class="crewmoves">— Moves Today</span>
+      </div>
       <div id="moves"></div>
     </aside>
   </div>
@@ -221,6 +225,6 @@
   </div>
 </div>
 
-<script src="app.js?v=182"></script>
+<script src="app.js?v=183"></script>
 </body>
 </html>
