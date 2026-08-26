@@ -233,7 +233,7 @@ function parsePianos(text) {
       colorPick: colorPickIdx >= 0 ? col(colorPickIdx) : '',
       colorFinal: colorFinalIdx >= 0 ? col(colorFinalIdx) : '',
       phaseNotes: phaseNotesIdx >= 0 ? col(phaseNotesIdx).slice(0, 600) : '',
-      bphoto: med(13), aphoto: med(15), bvideo: med(16), avideo: med(17),
+      bphoto: med(14), bvideo: med(15), aphoto: med(16), avideo: med(17),
       queuePos: 0, queueTotal: 0,
       isNew, active,
     });
