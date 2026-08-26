@@ -6797,9 +6797,20 @@ function renderReport() {
         </button>
       </div>`;
     const admin = defs.filter(r => r.sec === 'admin'), shop = defs.filter(r => r.sec !== 'admin');
+    // section groups collapse like the piano card's red banners; state
+    // remembered per device
+    const secOpen = k => lsGet('rptsec_' + k) !== 'shut';
+    const secHTML = (key, label, cards) => `
+      <div class="sechead rptsechead ${secOpen(key) ? '' : 'shut'}" data-rsec="${key}">${label}
+        <i class="secarrow">${secOpen(key) ? '▾' : '▸'}</i></div>
+      <div class="rsecbody" ${secOpen(key) ? '' : 'hidden'}>${cards}</div>`;
     body.innerHTML =
-      (admin.length ? `<h3 class="rsec">🔑 ADMIN REPORTS</h3>` + admin.map(rptCard).join('') : '')
-      + `<h3 class="rsec">🔧 SHOP REPORTS</h3>` + shop.map(rptCard).join('');
+      (admin.length ? secHTML('admin', '🔑 Admin Reports', admin.map(rptCard).join('')) : '')
+      + secHTML('shop', '🔧 Shop Reports', shop.map(rptCard).join(''));
+    body.querySelectorAll('.rptsechead').forEach(h => h.onclick = () => {
+      lsSet('rptsec_' + h.dataset.rsec, secOpen(h.dataset.rsec) ? 'shut' : 'open');
+      renderReport();
+    });
   }
   body.querySelectorAll('.rptbtn').forEach(b => b.onclick = () => {
     const id = b.closest('.rpt').dataset.r;

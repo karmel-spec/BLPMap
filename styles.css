@@ -1049,3 +1049,7 @@ tr.adjediting td{background:#fdf8ee}
   background:#fafbfc;border:1px solid #d7dbdf;border-radius:10px;padding:9px 13px;cursor:pointer}
 .rptfullhead .rptx:hover{color:#9e2020;border-color:#c9a0a0}
 .rpt .rptbtn{width:100%}
+
+/* reports view: section banners borrow the piano card's red sechead look */
+.rptsechead{margin:16px 0 10px;border-radius:9px;font-size:12px;padding:10px 14px}
+.rptsechead:first-child{margin-top:2px}
