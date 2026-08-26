@@ -5130,10 +5130,25 @@ function isOwner() { return OWNER_EMAILS.includes(userEmail()); }
 function isAdminUser() { return ADMIN_EMAILS.includes(userEmail()); }
 function isPayrollAdmin() { return PAYROLL_ADMIN_EMAILS.includes(userEmail()); }
 function isTimelogAdmin() { return TIMELOG_ADMIN_EMAILS.includes(userEmail()); }
+// only BLP accounts may sign in — a personal Gmail gets bounced back to
+// Google's account chooser instead of silently half-working
+function blpAccount(email) {
+  const e = String(email || '').toLowerCase();
+  if (!e) return true;   // PIN-gate identities carry no email
+  return /@brighamlarsonpianos\.com$/.test(e) || /\.blp@gmail\.com$/.test(e)
+    || e === 'brighamlarson@gmail.com';
+}
 function onGoogleCred(resp) {
   try {
     const claims = JSON.parse(atob(resp.credential.split('.')[1]
       .replace(/-/g, '+').replace(/_/g, '/')));
+    if (claims.email && !blpAccount(claims.email)) {
+      lsSet('blpBadAcct', claims.email);   // gate explains + offers the chooser
+      lsDel('blpUser');
+      renderAuth();
+      return;
+    }
+    lsDel('blpBadAcct');
     lsSet('blpUser', JSON.stringify({
       tok: resp.credential, exp: claims.exp,
       name: claims.name || claims.email, email: claims.email, pic: claims.picture || '',
@@ -5142,10 +5157,22 @@ function onGoogleCred(resp) {
   renderAuth();
 }
 function signOut() {
-  lsDel('blpUser');
+  ['blpUser', 'blpNonce', 'blpGsiCred'].forEach(lsDel);
+  try { sessionStorage.removeItem('blp.oauth.silent'); } catch (e) { /* storage unavailable */ }
   if (window.google?.accounts?.id) google.accounts.id.disableAutoSelect();
   renderAuth();
 }
+// someone already stored a personal account (before the rule above existed):
+// clear it on load so their next tap gets the account chooser fresh
+(() => {
+  try {
+    const u = JSON.parse(lsGet('blpUser') || 'null');
+    if (u && u.email && !blpAccount(u.email)) {
+      lsSet('blpBadAcct', u.email);
+      ['blpUser', 'blpNonce', 'blpGsiCred'].forEach(lsDel);
+    }
+  } catch (e) { /* unreadable — leave it */ }
+})();
 // Sign-in is REQUIRED: the map stays behind a full-screen Google gate until
 // we know who's clicking. A signed-in user whose hourly token lapsed mid-
 // session is NOT locked back out — the silent refresh handles that, and
@@ -5160,7 +5187,17 @@ function authGate() {
     const gb = document.getElementById('gateBtn');
     if (gb) {
       gb.innerHTML = '<button class="goauth" type="button">Sign in with Google</button>';
-      gb.querySelector('.goauth').onclick = oidcLogin;
+      // no arg: always offer Google's account chooser (passing the click
+      // event here used to become login_hint and skip the chooser)
+      gb.querySelector('.goauth').onclick = () => { lsDel('blpBadAcct'); oidcLogin(); };
+    }
+    const bad = lsGet('blpBadAcct');
+    const msg = document.getElementById('agMsg');
+    if (msg) {
+      msg.className = bad ? 'agmsg err' : 'agmsg';
+      msg.textContent = bad
+        ? bad + ' is a personal account and won\u2019t work here — tap Sign in and pick your BLP account (or "Use another account").'
+        : '';
     }
   }
 }
