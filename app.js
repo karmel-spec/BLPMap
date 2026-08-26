@@ -7617,7 +7617,18 @@ function showView(v) {
   if (v === 'dash') renderDash();
   if (v === 'whiteboard') renderWhiteboard();   // first open fetches the board
 }
-function switchView(v) { S.view = v; showView(v); closeNav(); }
+function switchView(v) {
+  S.view = v; showView(v); closeNav();
+  // a leftover page scroll (from panning the map) can slide a view's top —
+  // and its ✕ — up underneath the sticky header, where iOS bounce keeps it
+  if (v !== 'map') {
+    window.scrollTo(0, 0);
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+    const st = document.querySelector('.stage');
+    if (st) st.scrollTop = 0;
+  }
+}
 document.querySelectorAll('.navitem[data-view]').forEach(el =>
   el.onclick = () => switchView(el.dataset.view));
 
