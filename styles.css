@@ -1066,3 +1066,8 @@ tr.adjediting td{background:#fdf8ee}
 /* the drag-to-place TEMP square pulses so it can't be missed */
 @keyframes tempghostpulse{0%,100%{fill-opacity:.55;stroke-width:3}50%{fill-opacity:.8;stroke-width:6}}
 .tempghost rect{animation:tempghostpulse 1.1s ease-in-out infinite}
+
+/* menu footer: language chips (left) share the row with the account card */
+.sidefoot{display:flex;align-items:stretch;gap:8px;margin:14px 12px 8px}
+.sidefoot .langlist{padding:0;flex:none;align-items:center;align-content:center}
+.sidefoot .authbox{margin:0;flex:1;min-width:0}
