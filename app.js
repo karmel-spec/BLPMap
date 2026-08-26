@@ -2520,6 +2520,50 @@ function fmtHM(mins) {
 const TRAIN_TOPICS = ['Other', 'Store Map app', 'Tuning', 'Chip Tuning', 'DHRT / Regulation',
   'Restringing', 'PRSB & Plate Refinishing', 'Lacquer / Soundboard', 'Refinishing',
   'Key work / Keytops', 'Cabinetry', 'QC & Assembly', 'Piano Moving', 'Safety'];
+function startTempPlace(p) {
+  S.tempPlace = {row: p.row, serial: p.serial};
+  if (S.view !== 'map') switchView('map');
+  let bar = document.getElementById('tempbar');
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'tempbar';
+    document.body.appendChild(bar);
+  }
+  bar.innerHTML = `📍 Tap an OPEN floor space to park <b>#${esc(p.serial)}</b> there as a temp spot
+    <button id="tempcancel">cancel</button>`;
+  bar.querySelector('#tempcancel').onclick = () => {
+    S.tempPlace = null; bar.remove(); renderMap();
+  };
+  renderMap();
+}
+// top-menu version: no piano context, so ask for the serial first
+function tempSpotModal() {
+  if (!(isAdminUser() || userRole())) { alert('Temp map spots are for managers and admins.'); return; }
+  const old = document.querySelector('.dsheetov'); if (old) old.remove();
+  const ov = document.createElement('div');
+  ov.className = 'dsheetov';
+  ov.innerHTML = `<div class="dsheet"><button class="dsx">✕</button>
+    <h3>📍 Temp map spot</h3>
+    <div class="dssub">Which piano are you parking? Then tap an open floor space on the map.</div>
+    <div class="rfbar"><input type="text" class="ts-serial" list="serialList" placeholder="type the piano's serial #" style="flex:1">
+      <button class="csvbtn ts-go">Pick a spot</button></div>
+    <div class="ts-msg phmsg"></div>
+  </div>`;
+  document.body.appendChild(ov);
+  ov.querySelector('.dsx').onclick = () => ov.remove();
+  const go = () => {
+    const q = ov.querySelector('.ts-serial').value.trim().toLowerCase();
+    const msg = ov.querySelector('.ts-msg');
+    if (!q) { msg.textContent = 'type a serial'; return; }
+    const p = S.data.pianos.find(x => x.serial && x.serial.toLowerCase() === q)
+      || S.data.pianos.find(x => x.active && x.serial && x.serial.toLowerCase().includes(q));
+    if (!p) { msg.textContent = 'no piano with that serial'; return; }
+    ov.remove();
+    startTempPlace(p);
+  };
+  ov.querySelector('.ts-go').onclick = go;
+  ov.querySelector('.ts-serial').onkeydown = e => { if (e.key === 'Enter') go(); };
+}
 function timeOffModal() {
   const old = document.querySelector('.dsheetov'); if (old) old.remove();
   const ov = document.createElement('div');
@@ -3170,20 +3214,7 @@ function wirePop(p) {
     ev.stopPropagation();
     if (!(isAdminUser() || userRole())) return;
     $('#pop').hidden = true; popPinned = false;
-    S.tempPlace = {row: p.row, serial: p.serial};
-    if (S.view !== 'map') switchView('map');
-    let bar = document.getElementById('tempbar');
-    if (!bar) {
-      bar = document.createElement('div');
-      bar.id = 'tempbar';
-      document.body.appendChild(bar);
-    }
-    bar.innerHTML = `📍 Tap an OPEN floor space to park <b>#${esc(p.serial)}</b> there as a temp spot
-      <button id="tempcancel">cancel</button>`;
-    bar.querySelector('#tempcancel').onclick = () => {
-      S.tempPlace = null; bar.remove(); renderMap();
-    };
-    renderMap();
+    startTempPlace(p);
   };
   pop.querySelectorAll('.sechead[data-sec]').forEach(h => {
     h.onclick = ev => {
@@ -7651,6 +7682,7 @@ if (topReqBtn) {
     else if (kind === 'touchup') openGenericModal(null, 'Touch Up');
     else if (kind === 'priority') openGenericModal(null, 'Priority Scheduling');
     else if (kind === 'brigham') openBrighamModal(null);
+    else if (kind === 'tempspot') tempSpotModal();
     else if (kind === 'timeoff') timeOffModal();
     else if (kind === 'trainreq') trainReqModal();
   });
