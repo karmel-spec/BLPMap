@@ -1084,3 +1084,7 @@ tr.adjediting td{background:#fdf8ee}
 .feedcrew{margin:0 0 10px;padding:9px 12px;border:1px solid #e3e6e9;border-top:1px solid #e3e6e9;
   border-radius:9px;background:#fafbfc;color:#5a636b}
 .feedcrew b{color:#2b2f33}
+
+/* the KPI floor chips are the floor selector — highlight the active one */
+.kpi.on{border-color:#9e2020;box-shadow:inset 0 0 0 1.5px #9e2020}
+.kpi.on .l{color:#9e2020;font-weight:800}

@@ -852,17 +852,11 @@ function renderAll() {
 }
 
 function renderTabs() {
-  // narrow screens: "1st floor" / "2nd floor" to save space; wide: full name
-  const short = window.innerWidth <= 760;
-  $('#floorTabs').innerHTML = S.map.floors.map((f, i) => {
-    const full = esc(f.name.replace(' floor', '')) + ' floor';
-    const abbr = ['1st floor', '2nd floor', '3rd floor'][i] || full;
-    return `<div class="${i === S.floor ? 'on' : ''}" data-f="${i}">${short ? abbr : full}</div>`;
-  }).join('');
-  $('#floorTabs').querySelectorAll('div').forEach(el =>
-    el.onclick = () => { S.floor = +el.dataset.f;
-      if (S.view !== 'map') switchView('map');
-      renderMap(); renderTabs(); $('#mapscroll').scrollTop = 0; });
+  // the header floor tabs are gone (Brigham 8/26) — the KPI strip's
+  // 1st/2nd-floor chips are the one floor selector now; refresh them
+  const el = $('#floorTabs');
+  if (el) el.remove();
+  try { renderKpis(); } catch (e) { /* first paint: data not loaded yet */ }
 }
 
 function renderKpis() {
@@ -879,9 +873,9 @@ function renderKpis() {
   const mediaCount = act.filter(p => { const m = mediaNeeds(p); return m.photo || m.video; }).length;
   $('#movesBadge').textContent = tm;
   $('#kpis').innerHTML = `
+    <div class="kpi click ${S.floor === 0 ? 'on' : ''}" id="kpiF1"><span class="n">${placed(0)}</span><span class="l">1ST FLOOR</span></div>
+    <div class="kpi click ${S.floor === 1 ? 'on' : ''}" id="kpiF2"><span class="n">${placed(1)}</span><span class="l">2ND FLOOR</span></div>
     <div class="kpi"><span class="n">${total}</span><span class="l">TOTAL PIANOS</span></div>
-    <div class="kpi click" id="kpiF1"><span class="n">${placed(0)}</span><span class="l">1ST FLOOR →</span></div>
-    <div class="kpi click" id="kpiF2"><span class="n">${placed(1)}</span><span class="l">2ND FLOOR →</span></div>
     <div class="kpi"><span class="n">${own.blp}<small> / ${own.csgn} / ${own.client}</small></span><span class="l">BLP / CONSIGN / CLIENT</span></div>
     <div class="kpi"><span class="n">${tm}</span><span class="l">MOVES TODAY</span></div>
     <div class="kpi click" id="kpiNew"><span class="n">${newWeek}</span><span class="l">NEW THIS WEEK →</span></div>
