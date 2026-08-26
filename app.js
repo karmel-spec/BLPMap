@@ -2084,7 +2084,11 @@ function renderMap() {
   // commits. Floor tabs stay usable; the ghost re-appears after re-renders.
   if (S.tempPlace) {
     svg.style.cursor = 'crosshair';
-    const GW = 74, GH = 116;   // about a piano footprint in plan units
+    // at least ~52 screen-px wide no matter the zoom — at phone fit-width a
+    // piano-footprint square renders around 13px, effectively invisible
+    const pxScale = (svg.clientWidth || drawW) / drawW;
+    const boost = Math.max(1, 52 / (74 * pxScale));
+    const GW = 74 * boost, GH = 116 * boost;
     const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     g.setAttribute('class', 'tempghost');
     // spawn the square in the middle of whatever the user is LOOKING AT —
@@ -2105,7 +2109,7 @@ function renderMap() {
     g.innerHTML = `<rect x="${c0.x - GW / 2}" y="${c0.y - GH / 2}" width="${GW}" height="${GH}" rx="8"
         fill="#c99a2e" fill-opacity=".55" stroke="#c99a2e" stroke-width="3" stroke-dasharray="7 5"></rect>
       <text x="${c0.x}" y="${c0.y}" text-anchor="middle" dominant-baseline="middle"
-        font-size="22" font-weight="800" fill="#241c00">TEMP</text>`;
+        font-size="${Math.round(22 * boost)}" font-weight="800" fill="#241c00">TEMP</text>`;
     svg.appendChild(g);
     const svgPt = ev => {
       const pt = svg.createSVGPoint();
