@@ -4011,6 +4011,22 @@ function adminBriefHtml_(R) {
   H.push('<div style="border:1.5px solid #121212;border-top:none;border-radius:0 0 8px 8px;padding:16px 18px">');
   var tocInsertAt = H.length;
 
+  // 🛠 open time-clock fix requests (Brigham 8/26) — filed from the
+  // dashboard's "Request a time fix"; a request leaves this brief the moment
+  // someone marks it ✓ Resolved on the Time Clock Adjustments report
+  try {
+    var cfx = clockFixRows_().rows.filter(function (r) { return r.status === 'open'; });
+    if (cfx.length) {
+      sec('🛠', 'Time-clock fixes waiting', cfx.length,
+        'Fix the punch on Store Map → Reports → 🛠 Time Clock Adjustments, then mark it Resolved to clear it from this brief.');
+      ul(cfx.slice(0, 12).map(function (r) {
+        return '<b>' + String(r.who || '').replace(/<[^>]*>/g, '') + '</b> · ' + r.clock
+          + (r.serial ? ' #' + r.serial : '') + ' — ' + String(r.note || '').slice(0, 140)
+          + ' <span style="color:#8a847b">(' + r.when + ')</span>';
+      }));
+    }
+  } catch (e) { /* fix list is best-effort in the brief */ }
+
   if (R.noPlan.length || R.adminDrift.length) {
     sec('💰', 'Admin & payments', R.noPlan.length + R.adminDrift.length);
     var a = [];
