@@ -2346,7 +2346,12 @@ async function punch(action, p, phase, source, endAt) {
       renderClockChip(); renderDock();
     }
     return j;
-  } catch (e) { return {error: 'offline — punch not recorded, try again'}; }
+  } catch (e) {
+    // the bridge can answer with a non-JSON error page for a few seconds
+    // mid-deploy — the punch often DID land, so re-sync before complaining
+    setTimeout(fetchClock, 2500);
+    return {error: 'the punch may not have recorded — give it a few seconds, the clock will re-sync'};
+  }
 }
 function renderClockChip() {
   let chip = document.getElementById('clockchip');
