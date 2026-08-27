@@ -4674,7 +4674,7 @@ function setBench_(req, who) {
 /* Keytop status (Brigham 8/27): Evaluate / In Key Queue #n / In Process /
  * Done — header-created KEYTOP STATUS col, shown in the card's Concurrent
  * section and the Concurrent Work report's keys category. */
-var KEYTOP_STATES = ['Evaluate', 'In Key Queue', 'In Process', 'Done'];
+var KEYTOP_STATES = ['Evaluate', 'In Key Queue', 'In Progress', 'Done'];
 function setKeyStatus_(req, who) {
   var val = String(req.value == null ? '' : req.value).trim().slice(0, 40);
   if (val && !KEYTOP_STATES.some(function (s) {

@@ -360,10 +360,10 @@ function pianoTaskDefs(p) {
 }
 // keytop status (Brigham 8/27): dropdown in the Concurrent section; the
 // "In Key Queue" choice carries a queue-position number ("In Key Queue #3")
-const KEYTOP_STATES = ['Evaluate', 'In Key Queue', 'In Process', 'Done'];
+const KEYTOP_STATES = ['Evaluate', 'In Key Queue', 'In Progress', 'Done'];
 function keytopParts(p) {
-  const raw = String(p.keytopStatus || '').trim();
-  const m = /^(Evaluate|In Key Queue|In Process|Done)(?:\s*#?\s*(\d+))?$/i.exec(raw);
+  const raw = String(p.keytopStatus || '').trim().replace(/^In Process$/i, 'In Progress');
+  const m = /^(Evaluate|In Key Queue|In Progress|Done)(?:\s*#?\s*(\d+))?$/i.exec(raw);
   if (!m) return {state: '', num: ''};
   return {state: KEYTOP_STATES.find(s => s.toLowerCase() === m[1].toLowerCase()),
           num: m[2] || ''};
