@@ -3771,6 +3771,24 @@ function shopManagerHtml_(R) {
   // has been rendered, so the links always match a real anchor
   var tocInsertAt = H.length;
 
+  // ⏰ last evening's late-clock texts + time fixes waiting (Brigham 8/27)
+  try {
+    var nudges = lateNudgesRecent_();
+    var openFix = clockFixRows_().rows.filter(function (r) { return r.status === 'open'; });
+    if (nudges.length || openFix.length) {
+      sec('⏰', 'Clock follow-ups', nudges.length + openFix.length,
+        'Last evening\'s 6pm sweep texted anyone still clocked in (movers excepted); their correction requests land under Time Clock Adjustments.');
+      var cf = [];
+      nudges.forEach(function (n) {
+        cf.push('📱 texted <b>' + n.who + '</b> — still on ' + n.detail);
+      });
+      if (openFix.length) cf.push('<b style="color:#9e2020">' + openFix.length
+        + ' time-clock fix' + (openFix.length === 1 ? '' : 'es')
+        + ' waiting for approval</b> — Store Map → Reports → 🛠 Time Clock Adjustments');
+      ul(cf);
+    }
+  } catch (eN) { /* best-effort */ }
+
   // ---------- Morning Standup — first thing the 8AM huddle reads ----------
   var SU = R.standup || {};
   TOC.push({id: 'sec-morning-standup', label: '🌅 Morning Standup'});
@@ -4567,18 +4585,28 @@ var TIMEOFF_TAB = 'Time Off';
  * evening deliveries — gets a text asking what time their clock-out
  * should be corrected to. One-time trigger install: run
  * setupLateClockNudge() from the editor. */
-/* Run me once from the editor to restore EVERY trigger this project needs.
- * (setup() nukes all triggers and reinstalls only the 6AM report — running
- * it by accident on 8/27 wiped the evening briefs + Monday digest.) */
+/* Run once from the editor (as karmel@). Production triggers for the 6AM
+ * report + evening briefs are OWNED BY brigham@ ("Other user" on the
+ * Triggers page) — ScriptApp only sees the CURRENT user's triggers, so
+ * they were never at risk. This cleans up karmel-owned duplicates (a
+ * karmel sendDailyReport would DOUBLE the 6AM email) and installs only
+ * what has no owner yet: the Monday digest + the 6pm late-clock nudge. */
 function reinstallAllTriggers() {
-  setupShopManagerBriefing();     // evening ~6:30 PM briefs (shop + admin)
-  setupAdminDigest_();            // Monday 8 AM digest
-  setupLateClockNudge();          // 6-7 PM late-clock texts
+  var removed = [];
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    var h = t.getHandlerFunction();
+    if (h === 'sendDailyReport' || h === 'sendShopManagerReport') {
+      ScriptApp.deleteTrigger(t); removed.push(h);
+    }
+  });
+  setupAdminDigest_();            // Monday 8 AM digest (no owner anywhere)
+  setupLateClockNudge();          // 6-7 PM late-clock texts (new)
   var list = ScriptApp.getProjectTriggers().map(function (t) {
     return t.getHandlerFunction();
   });
-  Logger.log('Triggers now: ' + list.join(', '));
-  return list.join(', ');
+  Logger.log('removed dupes: ' + (removed.join(', ') || 'none')
+    + ' | my triggers now: ' + list.join(', '));
+  return 'removed: ' + removed.join(',') + ' | now: ' + list.join(',');
 }
 function setupLateClockNudge() {
   ScriptApp.getProjectTriggers().forEach(function (t) {
@@ -4636,7 +4664,32 @@ function lateClockNudge(e) {
     notifyTeam_([n], msg);
     logAct_('Store Map (auto)', 'Late clock nudge', n, late[n].join(' + ').slice(0, 140));
   });
+  // summary text to Karmel (Brigham 8/27) — only when someone was nudged
+  if (names.length) {
+    var sum = '⏰ Late-clock sweep: texted ' + names.length + ' — '
+      + names.map(function (n) { return n.split(/\s+/)[0] + ' (' + late[n].join(' + ') + ')'; })
+        .join('; ');
+    notifyTeam_(['Karmel'], sum.slice(0, 1100));
+  }
   return {ok: true, texted: names};
+}
+// last evening's nudges, for the manager morning brief (ACTIVITY LOG rows)
+function lateNudgesRecent_() {
+  var out = [];
+  try {
+    var sh = SpreadsheetApp.openById(PIANO_LOG_ID).getSheetByName('ACTIVITY LOG');
+    if (!sh || sh.getLastRow() < 2) return out;
+    var from = Math.max(2, sh.getLastRow() - 400);
+    var vals = sh.getRange(from, 1, sh.getLastRow() - from + 1, 5).getValues();
+    var cutoff = Date.now() - 20 * 3600 * 1000;
+    for (var i = vals.length - 1; i >= 0; i--) {
+      if (String(vals[i][2]) !== 'Late clock nudge') continue;
+      var when = vals[i][0] instanceof Date ? vals[i][0].getTime() : Date.parse(vals[i][0]);
+      if (!(when > cutoff)) continue;
+      out.push({who: String(vals[i][3] || ''), detail: String(vals[i][4] || '').slice(0, 100)});
+    }
+  } catch (e) {}
+  return out;
 }
 function notifyTeam_(names, message) {
   for (var i = 0; i < names.length; i++) {
