@@ -1068,9 +1068,13 @@ tr.adjediting td{background:#fdf8ee}
 .tempghost rect{animation:tempghostpulse 1.1s ease-in-out infinite}
 
 /* menu footer: language chips (left) share the row with the account card */
-.sidefoot{display:flex;align-items:stretch;gap:8px;margin:14px 12px 8px}
-.sidefoot .langlist{padding:0;flex:none;align-items:center;align-content:center}
-.sidefoot .authbox{margin:0;flex:1;min-width:0}
+.sidefoot{display:flex;flex-direction:column;gap:8px;margin:auto 2px 4px;overflow-y:auto}
+.sidefoot .langlist{padding:0}
+.sidefoot .authbox{margin:0;width:auto;background:#17181a;border-color:#2b2d31;color:#c9cdd2}
+.sidefoot .authbox b{color:#8a929a}
+.sidefoot .authbox .authhint{color:#9aa3ac;font-size:11px;line-height:1.4;margin-bottom:8px}
+.sidefoot .authbox .authname{color:#e8ebee}
+.sidefoot .goauth.sm{width:100%;justify-content:center;box-sizing:border-box}
 
 /* app updates list */
 .aulist{margin:4px 0 10px;padding-left:20px;font-size:13.5px;line-height:1.6}
