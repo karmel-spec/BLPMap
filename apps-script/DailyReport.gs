@@ -122,6 +122,16 @@ function doGet(e) {
     try { return json_({events: fetchEvents_()}); }
     catch (err) { return json_({error: String(err), events: []}); }
   }
+  // TEMP trigger-repair routes (8/27) — key-gated; remove once triggers are
+  // healthy. whoami says which account web-app executions run as.
+  if (e && e.parameter && e.parameter.fn === 'whoami' && e.parameter.key === TEAM_PIN) {
+    try { return json_({ok: true, effective: Session.getEffectiveUser().getEmail()}); }
+    catch (err) { return json_({error: String(err)}); }
+  }
+  if (e && e.parameter && e.parameter.fn === 'fixtriggers' && e.parameter.key === TEAM_PIN) {
+    try { return json_(fixTriggers_(String(e.parameter.mode || ''))); }
+    catch (err) { return json_({error: String(err)}); }
+  }
   // dry-run preview of the 6pm late-clock nudge — who'd be texted right now
   if (e && e.parameter && e.parameter.fn === 'latesweep') {
     try { return json_(lateClockNudge({dry: true})); }
@@ -4607,6 +4617,35 @@ function reinstallAllTriggers() {
   Logger.log('removed dupes: ' + (removed.join(', ') || 'none')
     + ' | my triggers now: ' + list.join(', '));
   return 'removed: ' + removed.join(',') + ' | now: ' + list.join(',');
+}
+/* TEMP (8/27): repair triggers for the EXECUTING user.
+ *  mode=ensureall — full production set, delete-then-recreate each:
+ *    6AM report, ~6:30PM briefs, Monday 8AM digest, 6PM late-clock nudge.
+ *  mode=nudgeonly — just the digest + nudge, leave report/briefs alone. */
+function fixTriggers_(mode) {
+  if (mode !== 'ensureall' && mode !== 'nudgeonly') return {error: 'mode?'};
+  var mine = ScriptApp.getProjectTriggers();
+  var removed = [];
+  mine.forEach(function (t) {
+    var h = t.getHandlerFunction();
+    var kill = mode === 'ensureall'
+      ? ['sendDailyReport', 'sendShopManagerReport', 'mondayAdminDigest', 'lateClockNudge'].indexOf(h) >= 0
+      : ['mondayAdminDigest', 'lateClockNudge'].indexOf(h) >= 0;
+    if (kill) { ScriptApp.deleteTrigger(t); removed.push(h); }
+  });
+  if (mode === 'ensureall') {
+    ScriptApp.newTrigger('sendDailyReport').timeBased()
+      .everyDays(1).atHour(6).inTimezone('America/Denver').create();
+    ScriptApp.newTrigger('sendShopManagerReport').timeBased()
+      .everyDays(1).atHour(18).nearMinute(30).inTimezone('America/Denver').create();
+  }
+  ScriptApp.newTrigger('mondayAdminDigest').timeBased()
+    .onWeekDay(ScriptApp.WeekDay.MONDAY).atHour(8).inTimezone('America/Denver').create();
+  ScriptApp.newTrigger('lateClockNudge').timeBased()
+    .everyDays(1).atHour(18).inTimezone('America/Denver').create();
+  var now = ScriptApp.getProjectTriggers().map(function (t) { return t.getHandlerFunction(); });
+  return {ok: true, as: Session.getEffectiveUser().getEmail(), mode: mode,
+          removed: removed, triggers: now};
 }
 function setupLateClockNudge() {
   ScriptApp.getProjectTriggers().forEach(function (t) {
