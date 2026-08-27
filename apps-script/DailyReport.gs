@@ -4567,6 +4567,19 @@ var TIMEOFF_TAB = 'Time Off';
  * evening deliveries — gets a text asking what time their clock-out
  * should be corrected to. One-time trigger install: run
  * setupLateClockNudge() from the editor. */
+/* Run me once from the editor to restore EVERY trigger this project needs.
+ * (setup() nukes all triggers and reinstalls only the 6AM report — running
+ * it by accident on 8/27 wiped the evening briefs + Monday digest.) */
+function reinstallAllTriggers() {
+  setupShopManagerBriefing();     // evening ~6:30 PM briefs (shop + admin)
+  setupAdminDigest_();            // Monday 8 AM digest
+  setupLateClockNudge();          // 6-7 PM late-clock texts
+  var list = ScriptApp.getProjectTriggers().map(function (t) {
+    return t.getHandlerFunction();
+  });
+  Logger.log('Triggers now: ' + list.join(', '));
+  return list.join(', ');
+}
 function setupLateClockNudge() {
   ScriptApp.getProjectTriggers().forEach(function (t) {
     if (t.getHandlerFunction() === 'lateClockNudge') ScriptApp.deleteTrigger(t);
