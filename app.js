@@ -5529,6 +5529,12 @@ function authGate() {
 }
 function renderAuth() {
   authGate();
+  // 📅 Scheduling (management dashboard) — managers & owners only
+  const ns = $('#navSched');
+  if (ns) ns.hidden = !isTimelogAdmin();
+  // 👥 Team dashboard — admin + managers + owners
+  const nt = $('#navTeam');
+  if (nt) nt.hidden = !isTeamAdmin();
   // top-bar identity chip — who's signed in, always visible
   const tw = $('#topWho');
   if (tw && !tw.dataset.wired) {
@@ -7921,17 +7927,159 @@ setTimeout(() => {
   if (b) b.onclick = () => switchView('whiteboard');
 }, 0);
 
+/* ---------- 👥 TEAM dashboard (admin + managers + owners) ----------
+ * Three tabs fed by the same sources the Shop App uses: the Store Map
+ * bridge (piano clock / day clock / where-is) and the salesapp2 team
+ * bridges (roster safe-columns, Team Schedule tab). Read-only v1 — edits
+ * still happen in the Shop Manager app / the sheets themselves. */
+const TEAM_ROSTER_API = 'https://blpsalesapp.netlify.app/.netlify/functions/team-roster';
+const TEAM_SCHEDULE_API = 'https://blpsalesapp.netlify.app/.netlify/functions/team-schedule';
+function isTeamAdmin() { return isAdminUser() || isTimelogAdmin(); }
+const TEAM = {tab: 'board', roster: null, sched: null, clock: null, pay: null, where: null, loading: false};
+async function teamFetchAll() {
+  if (TEAM.loading) return;
+  TEAM.loading = true;
+  const j = async pr => { try { const r = await pr; return await r.json(); } catch (e) { return null; } };
+  const key = '?key=' + encodeURIComponent('pianoman');
+  const [ros, sch, clk, pay, whr] = await Promise.all([
+    j(fetch(TEAM_ROSTER_API + key)),
+    j(fetch(TEAM_SCHEDULE_API + key)),
+    j(fetch(BRIDGE_URL + '?fn=timeclock', {redirect: 'follow'})),
+    j(fetch(BRIDGE_URL + '?fn=payroll', {redirect: 'follow'})),
+    j(fetch(BRIDGE_URL + '?fn=whereis', {redirect: 'follow'})),
+  ]);
+  TEAM.roster = ros && ros.tabs ? ros.tabs : null;
+  TEAM.sched = sch && sch.tabs ? sch.tabs['Team Schedule'] : null;
+  TEAM.clock = clk && clk.open ? clk : {open: [], todayMinutes: {}};
+  TEAM.pay = pay && pay.open ? pay : {open: [], today: (pay && pay.today) || []};
+  TEAM.where = (whr && whr.who) || {};
+  TEAM.loading = false;
+  renderTeam();
+}
+function teamClockFmt(iso) {
+  const d = new Date(iso);
+  return isNaN(d) ? '' : d.toLocaleTimeString('en-US', {hour: 'numeric', minute: '2-digit'});
+}
+function teamBoardHTML() {
+  const rows = (TEAM.roster && TEAM.roster['Current Team']) || [];
+  const cat = pos => /intern/i.test(pos) ? 'Interns' : /refinish/i.test(pos) ? 'Refinishers'
+    : /admin/i.test(pos) ? 'Admin' : /mover/i.test(pos) ? 'Movers' : 'Technicians';
+  const groups = {Technicians: [], Interns: [], Refinishers: [], Admin: [], Movers: []};
+  rows.slice(1).forEach(r => {
+    const full = (String(r[0] || '').trim() + ' ' + String(r[1] || '').trim()).trim();
+    if (!full) return;
+    groups[cat(String(r[2] || ''))].push({full, pos: String(r[2] || '')});
+  });
+  const norm = s => String(s || '').trim().toLowerCase();
+  const firstOf = s => norm(s).split(/\s+/)[0];
+  const openFor = full => (TEAM.clock.open || []).find(o =>
+    norm(o.tech) === norm(full) || firstOf(o.tech) === firstOf(full));
+  const payFor = full => {
+    const openP = (TEAM.pay.open || []).find(o => norm(o.tech) === norm(full) || firstOf(o.tech) === firstOf(full));
+    if (openP) return {on: true, start: openP.start};
+    const done = (TEAM.pay.today || []).filter(t => (norm(t.tech) === norm(full) || firstOf(t.tech) === firstOf(full)) && t.end);
+    const mins = done.reduce((s, t) => s + (t.minutes || 0), 0);
+    return {on: false, mins};
+  };
+  const whereFor = full => TEAM.where[full] || TEAM.where[firstOf(full)] ||
+    TEAM.where[Object.keys(TEAM.where).find(k => firstOf(k) === firstOf(full)) || ''] || '';
+  const tile = m => {
+    const o = openFor(m.full), pw = payFor(m.full), wh = whereFor(m.full);
+    const mins = o ? Math.max(0, Math.round((Date.now() - new Date(o.start)) / 60000)) : 0;
+    const flag = o && !pw.on ? '<div class="tmflag">⚠ on a piano, no day punch</div>' : '';
+    return `<div class="tmtile ${o ? 'onpiano' : pw.on ? 'onday' : ''}">
+      <b>${esc(m.full)}</b><small>${esc(m.pos)}</small>
+      <div>🎹 ${o ? esc((o.piano || o.serial || '').slice(0, 26)) + ' · ' + esc(o.phase || '') +
+        ' · ' + Math.floor(mins / 60) + ':' + String(mins % 60).padStart(2, '0') : '—'}</div>
+      <div>🕔 ${pw.on ? 'in since ' + teamClockFmt(pw.start)
+        : pw.mins ? 'done · ' + (pw.mins / 60).toFixed(1) + 'h today' : 'not clocked in'}</div>
+      ${wh ? `<div class="tmwhere">${esc(String(wh).slice(0, 44))}</div>` : ''}${flag}
+    </div>`;
+  };
+  return Object.entries(groups).filter(([, l]) => l.length).map(([g, l]) =>
+    `<h4 class="tmsec">${g} <span class="pc">${l.length}</span></h4>
+     <div class="tmgrid">${l.map(tile).join('')}</div>`).join('')
+    || '<div class="empty">Roster unavailable.</div>';
+}
+function teamScheduleHTML() {
+  const v = TEAM.sched;
+  if (!v || !v.length) return '<div class="empty">Schedule unavailable.</div>';
+  const dowIdx = {Mon: 2, Tue: 3, Wed: 4, Thu: 5, Fri: 6, Sat: 7}[
+    new Date().toLocaleDateString('en-US', {weekday: 'short', timeZone: 'America/Denver'})];
+  const cell = (c, ri, ci) => `<td class="${ci === dowIdx - 1 ? 'tmtoday' : ''}">${esc(String(c || ''))}</td>`;
+  return `<div class="tmscroll"><table class="tmtable">
+    ${v.map((row, ri) => `<tr>${row.map((c, ci) =>
+      ri === 0 ? `<th class="${ci === dowIdx - 1 ? 'tmtoday' : ''}">${esc(String(c || ''))}</th>` : cell(c, ri, ci)).join('')}</tr>`).join('')}
+  </table></div>
+  <p class="pd">Today's column is highlighted. Edit in the
+    <a href="https://docs.google.com/spreadsheets/d/11RoeVRETag5rZYX6_tEH-rf6x8JL0JeZU0P5AT0WI-I/edit#gid=1355785595" target="_blank" rel="noopener">Team Schedule sheet ↗</a>
+    or the <a href="https://blpshop.netlify.app/manager.html#schedule" target="_blank" rel="noopener">Shop Manager ↗</a>.</p>`;
+}
+function teamRosterHTML() {
+  if (!TEAM.roster) return '<div class="empty">Roster unavailable.</div>';
+  const table = (name, rows) => {
+    if (!rows || rows.length < 2) return '';
+    return `<h4 class="tmsec">${esc(name)} <span class="pc">${rows.length - 1}</span></h4>
+      <div class="tmscroll"><table class="tmtable">
+      <tr>${rows[0].map(h => `<th>${esc(String(h || ''))}</th>`).join('')}</tr>
+      ${rows.slice(1).map(r => `<tr>${rows[0].map((_, i) => `<td>${esc(String(r[i] || ''))}</td>`).join('')}</tr>`).join('')}
+      </table></div>`;
+  };
+  return table('Current Team', TEAM.roster['Current Team'])
+    + table('Subcontractors / INS', TEAM.roster['Subcontractors/INS'])
+    + table('Former BLP', TEAM.roster['Former BLP'])
+    + `<p class="pd">Edit in the <a href="https://blpshop.netlify.app/manager.html#roster" target="_blank" rel="noopener">Shop Manager roster ↗</a>.</p>`;
+}
+function renderTeam() {
+  const el = $('#teamBody');
+  if (!el) return;
+  if (!isTeamAdmin()) { el.innerHTML = '<div class="empty">Admin, managers &amp; owners only.</div>'; return; }
+  document.querySelectorAll('#teamTabs button').forEach(b => {
+    b.classList.toggle('on', b.dataset.tt === TEAM.tab);
+    if (!b.dataset.wired) { b.dataset.wired = '1'; b.onclick = () => { TEAM.tab = b.dataset.tt; renderTeam(); }; }
+  });
+  if (!TEAM.roster && !TEAM.loading) { teamFetchAll(); el.innerHTML = '<div class="empty">Loading the team…</div>'; return; }
+  if (TEAM.loading) { el.innerHTML = '<div class="empty">Loading the team…</div>'; return; }
+  el.innerHTML = TEAM.tab === 'board' ? teamBoardHTML()
+    : TEAM.tab === 'schedule' ? teamScheduleHTML() : teamRosterHTML();
+}
+
+/* ---------- 📅 Scheduling — management dashboard (managers & owners) ----------
+ * The landing shell. Shop App pages get recreated here section by section
+ * as Brigham picks them; each section renders into #schedBody. */
+function renderSched() {
+  const el = $('#schedBody');
+  if (!el) return;
+  if (!isTimelogAdmin()) { el.innerHTML = '<div class="empty">Managers &amp; owners only.</div>'; return; }
+  el.innerHTML = `
+    <div class="schedgrid">
+      <div class="schedcard">
+        <h4>🗓 This week</h4>
+        <p>Team scheduling lives here next — tell Brigham which Shop App
+           pages to bring over and they land in this dashboard.</p>
+      </div>
+      <div class="schedcard">
+        <h4>🔗 Until then</h4>
+        <p><a href="https://blpshop.netlify.app/manager.html" target="_blank" rel="noopener">Open the Shop Manager app ↗</a></p>
+      </div>
+    </div>`;
+}
+
 /* ---------- views / nav / drawers ---------- */
 function showView(v) {
-  ['map', 'report', 'board', 'cal', 'media', 'shopmap', 'archive', 'dash', 'whiteboard', 'training', 'trainingdoc'].forEach(x => $('#view-' + x).hidden = x !== v);
+  ['map', 'report', 'board', 'cal', 'media', 'shopmap', 'archive', 'dash', 'whiteboard', 'training', 'trainingdoc', 'sched', 'team'].forEach(x => $('#view-' + x).hidden = x !== v);
   if (v === 'archive') renderArchive();
   document.querySelectorAll('.navitem[data-view]').forEach(el =>
     el.classList.toggle('on', el.dataset.view === v));
   if (v === 'shopmap') renderShopMap();
   if (v === 'dash') renderDash();
   if (v === 'whiteboard') renderWhiteboard();   // first open fetches the board
+  if (v === 'sched') renderSched();
+  if (v === 'team') renderTeam();
 }
 function switchView(v) {
+  if (v === 'sched' && !isTimelogAdmin()) v = 'map';   // managers & owners only
+  if (v === 'team' && !isTeamAdmin()) v = 'map';       // admin + managers + owners
   S.view = v; showView(v); closeNav();
   // a leftover page scroll (from panning the map) can slide a view's top —
   // and its ✕ — up underneath the sticky header, where iOS bounce keeps it
