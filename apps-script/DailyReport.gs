@@ -455,8 +455,54 @@ function addPiano_(req) {
   sh.getRange(row, 22).setValue(
     Utilities.formatDate(new Date(), 'America/Denver', 'M/d/yyyy'));        // V arrival
   var bumped = req.location ? bumpOthers_(sh, req.location, row) : [];
+  // TEMP ENTRY (Brigham 8/27): a non-admin team member added this piano —
+  // it maps and works immediately but carries a Pending marker until an
+  // admin approves it (surfaced in the admin morning brief).
+  if (req.temp) {
+    try {
+      var lastC = sh.getLastColumn();
+      var hdr2 = sh.getRange(2, 1, 1, lastC).getValues()[0];
+      var tcol = -1;
+      for (var c2 = 0; c2 < hdr2.length; c2++) {
+        if (String(hdr2[c2] || '').trim().toUpperCase() === 'TEMP ENTRY') { tcol = c2 + 1; break; }
+      }
+      if (tcol < 0) { sh.getRange(2, lastC + 1).setValue('TEMP ENTRY'); tcol = lastC + 1; }
+      var stamp = Utilities.formatDate(new Date(), 'America/Denver', 'M/d');
+      sh.getRange(row, tcol).setValue('Pending · ' + String(req.tempBy || 'team') + ' · ' + stamp);
+    } catch (eT) {}
+    // a Drive folder now so photos have somewhere to land from day one
+    try {
+      var folder = DriveApp.getFolderById(PHOTOS_ROOT_ID)
+        .createFolder((summary + ' ' + serial).slice(0, 90));
+      sh.getRange(row, 69).setValue(folder.getUrl());   // Main Folder col
+    } catch (eF) {}
+  }
   return {ok: true, added: true, row: row, summary: summary,
           location: String(req.location || '').trim(), bumped: bumped};
+}
+/* Approve or reject a TEMP ENTRY (owners/Melissa/managers, Google-verified).
+ * Approve clears the marker; reject marks the row duplicate + clears it. */
+function tempResolve_(req, who) {
+  if (!(payrollAdmin_(req._g) || timelogAdmin_(req._g)))
+    return {error: 'Only owners, Melissa, or the managers can approve temp entries (Google sign-in required).'};
+  var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+  var found = findPiano_(sh, req.serial, req.row);
+  if (found.error) return found;
+  var lastC = sh.getLastColumn();
+  var hdr = sh.getRange(2, 1, 1, lastC).getValues()[0];
+  var tcol = -1;
+  for (var c = 0; c < hdr.length; c++) {
+    if (String(hdr[c] || '').trim().toUpperCase() === 'TEMP ENTRY') { tcol = c + 1; break; }
+  }
+  if (tcol > 0) sh.getRange(found.row, tcol).setValue('');
+  if (req.approve) {
+    logAct_(who, 'Temp entry approved', found.summary || req.serial, 'now a normal Piano Log row');
+    return {ok: true, approved: true, row: found.row, summary: found.summary};
+  }
+  var md = markDuplicate_(req);
+  logAct_(who, 'Temp entry rejected', found.summary || req.serial, 'marked duplicate');
+  return {ok: true, approved: false, rejected: true, row: found.row,
+          summary: found.summary, duplicate: md};
 }
 
 /**
@@ -615,10 +661,16 @@ function doPost(e) {
       return json_(md);
     }
     if (req.action === 'addpiano') {
+      if (req.temp) req.tempBy = who;
       var ap = addPiano_(req);
-      if (ap.added) logAct_(who, 'Added piano', ap.summary || req.serial,
-        'new row ' + ap.row + ' at spot ' + (req.location || '(none)'));
+      if (ap.added) logAct_(who, req.temp ? 'Temp piano added' : 'Added piano',
+        ap.summary || req.serial,
+        'new row ' + ap.row + ' at spot ' + (req.location || '(none)')
+        + (req.temp ? ' — awaiting admin approval' : ''));
       return json_(ap);
+    }
+    if (req.action === 'tempresolve') {
+      return json_(tempResolve_(req, who));
     }
     if (req.action === 'service') {
       var sv = req.asap ? scheduleServiceAsap_(req) : scheduleService_(req);
@@ -3639,6 +3691,10 @@ function buildShopManagerReport_(dayOffset) {
   });
 
   R.stalePhases = smStalePhases_(pianos);
+  // temp pianos a team member added on the floor — awaiting admin approval
+  R.tempEntries = pianos.filter(function (p) {
+    return p.active && String(p.tempEntry || '').trim();
+  });
   R.missingArrivals = smMissingArrivals_(pianos, data.events || []);
 
   R.soldPending = pianos.filter(function (p) {
@@ -4083,6 +4139,17 @@ function adminBriefHtml_(R) {
     + '</div>');
   H.push('<div style="border:1.5px solid #121212;border-top:none;border-radius:0 0 8px 8px;padding:16px 18px">');
   var tocInsertAt = H.length;
+
+  // 🆕 temp pianos awaiting approval (Brigham 8/27) — a mover/tech added a
+  // piano on the floor; approve or reject from its data card in the app
+  if ((R.tempEntries || []).length) {
+    sec('🆕', 'Temp pianos awaiting approval', R.tempEntries.length,
+      'Open the piano’s card on the map — the amber banner has ✅ Approve / 🗑 Not real. Approving makes it a normal Piano Log row to enrich.');
+    ul(R.tempEntries.slice(0, 12).map(function (p) {
+      return ref(p) + '<br><span style="font-size:12px;color:#8a6a00">'
+        + String(p.tempEntry || '') + ' · spot ' + smSpot_(p) + '</span>';
+    }));
+  }
 
   // 🛠 open time-clock fix requests (Brigham 8/26) — filed from the
   // dashboard's "Request a time fix"; a request leaves this brief the moment

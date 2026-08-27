@@ -1222,3 +1222,15 @@ tr.adjediting td{background:#fdf8ee}
 .updday:first-child{margin-top:2px}
 .updrow{background:#fff;border:1px solid #e3e6ea;border-radius:9px;padding:10px 13px;
   margin:7px 0;font-size:13px;line-height:1.5;max-width:720px}
+
+/* 🆕 temp-entry banner + form bits */
+.tempbanner{background:#fdf6e3;border:1.5px solid #c9a227;color:#6b5200;border-radius:8px;
+  padding:8px 11px;margin:7px 0 2px;font-size:12.5px;line-height:1.5}
+.tempbtns{display:inline-flex;gap:6px;margin-left:8px}
+.tempok{border:0;background:#2e7d4f;color:#fff;border-radius:7px;padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer}
+.tempno{border:1.5px solid #c9ced4;background:#fff;color:#9e2020;border-radius:7px;padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer}
+.tempmsg{font-size:11px;color:#9a6a00}
+.adnosn{display:flex;align-items:center;gap:7px;font-size:12px;color:#5b636b;margin:4px 0 8px;cursor:pointer}
+.adnosn input{width:auto;margin:0}
+.adtempnote{background:#fdf6e3;border:1px solid #e8d9a8;border-radius:8px;padding:8px 11px;
+  margin-top:9px;font-size:11.5px;color:#6b5200;line-height:1.45}

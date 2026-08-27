@@ -726,6 +726,13 @@ function soldPending(p) {
   return /sold or completed but not delivered/i.test(p.section || '');
 }
 function soldClass(p) { return soldPending(p) ? 'soldpend' : ''; }
+// 🆕 temp entries: amber TEMP tag until an admin approves
+function tempBadge(p, cx, cy, sc) {
+  if (!(p.tempEntry || '').trim()) return '';
+  return `<text x="${cx}" y="${cy + 13 * sc}" text-anchor="middle"
+          class="tempbadge" font-size="${7.5 * sc}" font-weight="800"
+          fill="#9a6a00" stroke="#fdf6e3" stroke-width="${2.5 * sc}" paint-order="stroke">TEMP</text>`;
+}
 function soldBadge(p, cx, cy, sc) {
   if (!soldPending(p)) return '';
   return `<text x="${cx - 8.5 * sc}" y="${cy - 6 * sc}" text-anchor="middle"
@@ -2017,7 +2024,7 @@ function renderMap() {
           const hl = S.focusRow === p.row || (q && matches(p, q));
           const dim = q && !matches(p, q);
           s += `<g class="piano ${extra(p)} ${dim ? 'dim' : ''} ${hl ? 'hl' : ''}"
-                data-row="${p.row}">${glyph(p.type, cx, cy, sc)}${phaseText(p, cx, cy, sc)}${mediaBadge(p, cx, cy, sc)}${finBadge(p, cx, cy, sc)}${soldBadge(p, cx, cy, sc)}${ghostBadge(p, cx, cy, sc)}</g>`;
+                data-row="${p.row}">${glyph(p.type, cx, cy, sc)}${phaseText(p, cx, cy, sc)}${mediaBadge(p, cx, cy, sc)}${finBadge(p, cx, cy, sc)}${soldBadge(p, cx, cy, sc)}${tempBadge(p, cx, cy, sc)}${ghostBadge(p, cx, cy, sc)}</g>`;
         });
         return grow === 'up' ? anchorY - rows * rowH : anchorY + rows * rowH;
       };
@@ -2047,7 +2054,7 @@ function renderMap() {
         const hl = S.focusRow === p.row || (q && matches(p, q));
         const dim = q && !matches(p, q);
         s += `<g class="piano ${finClass(p)} ${soldClass(p)} ${st} own-${ownerClass(p)} ${dim ? 'dim' : ''} ${hl ? 'hl' : ''}"
-              data-row="${p.row}">${glyph(p.type, cx, cy, bSc)}${phaseText(p, cx, cy, bSc)}${mediaBadge(p, cx, cy, bSc)}${finBadge(p, cx, cy, bSc)}</g>`;
+              data-row="${p.row}">${glyph(p.type, cx, cy, bSc)}${phaseText(p, cx, cy, bSc)}${mediaBadge(p, cx, cy, bSc)}${finBadge(p, cx, cy, bSc)}${tempBadge(p, cx, cy, bSc)}</g>`;
       });
     } else if (list && list.length) {
       // label rides the top; pianos fill the rest of the zone in a row
@@ -2064,7 +2071,7 @@ function renderMap() {
         const hl = S.focusRow === p.row || (q && matches(p, q));
         const dim = q && !matches(p, q);
         s += `<g class="piano ${finClass(p)} ${soldClass(p)} ${st} own-${ownerClass(p)} ${dim ? 'dim' : ''} ${hl ? 'hl' : ''}"
-              data-row="${p.row}">${glyph(p.type, cx, cy, sc)}${phaseText(p, cx, cy, sc)}${mediaBadge(p, cx, cy, sc)}${finBadge(p, cx, cy, sc)}${soldBadge(p, cx, cy, sc)}${ghostBadge(p, cx, cy, sc)}</g>`;
+              data-row="${p.row}">${glyph(p.type, cx, cy, sc)}${phaseText(p, cx, cy, sc)}${mediaBadge(p, cx, cy, sc)}${finBadge(p, cx, cy, sc)}${soldBadge(p, cx, cy, sc)}${tempBadge(p, cx, cy, sc)}${ghostBadge(p, cx, cy, sc)}</g>`;
       });
     } else {
       s += zoneLabelSVG(disp === z.text ? z : {...z, text: disp}, cls);
@@ -2156,7 +2163,7 @@ function renderMap() {
           const hl = S.focusRow === p.row || (q && matches(p, q));
           s += `<g class="piano ${finClass(p)} ${soldClass(p)} ${st} own-${ownerClass(p)} ${q && !matches(p, q) ? 'dim' : ''} ${hl ? 'hl' : ''}"
                 data-slot="${esc(sl.id)}" data-row="${p.row}">
-                <g transform="rotate(90 ${cx} ${cy})">${glyph(p.type, cx, cy, sc)}</g>${phaseText(p, cx, cy, sc)}${mediaBadge(p, cx, cy, sc)}${priceText(p, cx, cy, sc)}${finBadge(p, cx, cy, sc)}${soldBadge(p, cx, cy, sc)}${ghostBadge(p, cx, cy, sc)}</g>`;
+                <g transform="rotate(90 ${cx} ${cy})">${glyph(p.type, cx, cy, sc)}</g>${phaseText(p, cx, cy, sc)}${mediaBadge(p, cx, cy, sc)}${priceText(p, cx, cy, sc)}${finBadge(p, cx, cy, sc)}${soldBadge(p, cx, cy, sc)}${tempBadge(p, cx, cy, sc)}${ghostBadge(p, cx, cy, sc)}</g>`;
         });
       } else {
         const pfs = Math.max(10, Math.min(20, sl.w * 0.4));
@@ -2187,7 +2194,7 @@ function renderMap() {
           const cy = sl.y + sl.h / 2;
           const hl = S.focusRow === p.row || (q && matches(p, q));
           s += `<g class="piano ${finClass(p)} ${soldClass(p)} ${st} own-${ownerClass(p)} ${q && !matches(p, q) ? 'dim' : ''} ${hl ? 'hl' : ''}"
-                data-slot="${esc(sl.id)}" data-row="${p.row}">${glyph(p.type, cx, cy, sc)}${phaseText(p, cx, cy, sc)}${mediaBadge(p, cx, cy, sc)}${priceText(p, cx, cy, sc)}${finBadge(p, cx, cy, sc)}${soldBadge(p, cx, cy, sc)}${ghostBadge(p, cx, cy, sc)}</g>`;
+                data-slot="${esc(sl.id)}" data-row="${p.row}">${glyph(p.type, cx, cy, sc)}${phaseText(p, cx, cy, sc)}${mediaBadge(p, cx, cy, sc)}${priceText(p, cx, cy, sc)}${finBadge(p, cx, cy, sc)}${soldBadge(p, cx, cy, sc)}${tempBadge(p, cx, cy, sc)}${ghostBadge(p, cx, cy, sc)}</g>`;
         });
       } else if (!thin) {
         const pfs = Math.max(9, Math.min(20, sl.h * 0.45));
@@ -2317,7 +2324,7 @@ function renderMap() {
         const iconCy = cy0 + (sch - nameH) / 2;
         if (!plate) S.serviceXY[p.row] = {x: cx, y: cy0 + sch / 2};
         s += `<g class="piano own-${ownerClass(p)} ${dim ? 'dim' : ''} ${hl ? 'hl' : ''}"
-              data-row="${p.row}">${plate ? plateGlyph(cx, iconCy, ssc) : glyph(p.type, cx, iconCy, ssc)}</g>`;
+              data-row="${p.row}">${plate ? plateGlyph(cx, iconCy, ssc) : glyph(p.type, cx, iconCy, ssc)}${tempBadge(p, cx, iconCy, ssc)}</g>`;
         s += `<text x="${cx}" y="${cy0 + sch - 6}" text-anchor="middle" class="ofsname" font-size="9">`
           + nameLines.map(L => esc(L)).join('') + `</text>`;
       });
@@ -2362,7 +2369,7 @@ function renderMap() {
         s += `<rect x="${cx0}" y="${cy0}" width="${iw}" height="${ih}" rx="8"
               class="holdcell ${hl ? 'hl' : ''} ${dim ? 'dim' : ''}" data-row="${p.row}"/>`;
         s += `<g class="piano ${finClass(p)} ${soldClass(p)} ${st} own-${ownerClass(p)} ${dim ? 'dim' : ''} ${hl ? 'hl' : ''}"
-              data-row="${p.row}">${glyph(p.type, cx, iconCy, sc)}${phaseText(p, cx, iconCy, sc)}${mediaBadge(p, cx, iconCy, sc)}${finBadge(p, cx, iconCy, sc)}${soldBadge(p, cx, iconCy, sc)}${ghostBadge(p, cx, iconCy, sc)}</g>`;
+              data-row="${p.row}">${glyph(p.type, cx, iconCy, sc)}${phaseText(p, cx, iconCy, sc)}${mediaBadge(p, cx, iconCy, sc)}${finBadge(p, cx, iconCy, sc)}${soldBadge(p, cx, iconCy, sc)}${tempBadge(p, cx, iconCy, sc)}${ghostBadge(p, cx, iconCy, sc)}</g>`;
         let ty = textTop + 9;
         s += `<text x="${cx}" y="${ty}" text-anchor="middle" class="holdname" font-size="10.5">`
           + nameLines.map((L, li) => `<tspan x="${cx}" ${li ? `dy="${NLH}"` : ''}>${esc(L)}</tspan>`).join('')
@@ -3218,6 +3225,11 @@ function popHTML(p) {
     ${preQueue(p) ? `<div class="pqwarn">⚠️ <b>PRE-QUEUE</b> — deposit not received. No work is approved on this piano yet.
       ${isAdminUser() ? `<button class="pqapprove">✅ Approve for queue</button>` : `<i>admin / manager approval required to start work</i>`}
       <span class="pqmsg"></span></div>` : ''}
+    ${(p.tempEntry || '').trim() ? `<div class="tempbanner">🆕 <b>TEMP ENTRY</b> — ${esc(p.tempEntry)} · awaiting admin approval
+      ${(isPayrollAdmin() || isTimelogAdmin()) ? `<span class="tempbtns">
+        <button class="tempok">✅ Approve</button>
+        <button class="tempno">🗑 Not real</button></span>` : ''}
+      <span class="tempmsg"></span></div>` : ''}
     ${p.serial ? ((p.importantNote || '').trim()
       ? `<div class="impnote">❗ <b>IMPORTANT</b> <span class="imptxt">${esc(p.importantNote)}</span>
            <button class="impedit" title="edit / clear">✎</button><span class="impmsg"></span></div>`
@@ -3571,6 +3583,31 @@ function wirePop(p) {
       openPop(p.row, S.popAnchor, true);
     } catch (e) { msg.textContent = '✗ ' + e.message; }
   });
+  // 🆕 temp-entry approve / reject (owners, Melissa, managers)
+  const tempResolve = async approve => {
+    const msg = pop.querySelector('.tempmsg');
+    const wa = writeAuth();
+    if (!wa.ok) { msg.textContent = ' sign in first'; return; }
+    if (!approve && !confirm('Reject this temp entry?\n\nThe row is marked DUPLICATE (recoverable from Reports → Marked Duplicates).')) return;
+    msg.textContent = approve ? ' approving…' : ' rejecting…';
+    try {
+      const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+        headers: {'content-type': 'text/plain;charset=utf-8'},
+        body: JSON.stringify({pin: wa.pin, action: 'tempresolve', serial: p.serial, row: p.row,
+          approve: approve ? 1 : 0, ...authFields()})});
+      const j = await r.json();
+      if (!j.ok) throw new Error(j.error || 'failed');
+      p.tempEntry = '';
+      if (!approve) p.active = false;
+      renderMap();
+      if (approve) openPop(p.row, S.popAnchor, true);
+      else { $('#pop').hidden = true; popPinned = false; }
+    } catch (e) { msg.textContent = ' ✗ ' + e.message; }
+  };
+  const tok = pop.querySelector('.tempok');
+  if (tok) tok.onclick = ev => { ev.stopPropagation(); popPinned = true; tempResolve(true); };
+  const tno = pop.querySelector('.tempno');
+  if (tno) tno.onclick = ev => { ev.stopPropagation(); popPinned = true; tempResolve(false); };
   // ❗ IMPORTANT note in the sticky card header
   const impBtn = pop.querySelector('.impedit');
   if (impBtn) impBtn.onclick = async ev => {
@@ -3781,6 +3818,10 @@ function wirePop(p) {
       ev.stopPropagation(); popPinned = true;
       if (preQueue(p) && !isAdminUser()) {
         alert('🚫 This piano is PRE-QUEUE \u2014 the deposit hasn\u2019t been received, so no work can start yet. Ask a manager.');
+        return;
+      }
+      if ((p.tempEntry || '').trim() && !(isAdminUser() || isTimelogAdmin())) {
+        alert('🆕 This is a TEMP entry — an admin needs to approve it before work is clocked on it. It shows in the admin morning brief.');
         return;
       }
       const ph = chosen();
@@ -4946,12 +4987,14 @@ function openAddModal(slotId, prefillSerial) {
     ov.id = 'addmodal';
     document.body.appendChild(ov);
   }
+  const isAdm = isAdminUser() || isTimelogAdmin();
   ov.innerHTML = `<div class="tmcard">
     <span class="x">✕</span>
-    <h3>＋ Add a Piano — Spot ${esc(slotId)}</h3>
-    <label>Serial number <small>(required)</small></label>
+    <h3>＋ Add a Piano${slotId ? ` — Spot ${esc(slotId)}` : ''}</h3>
+    <label>Serial number <small>(enter what's legible)</small></label>
     <input class="adserial" maxlength="20" list="serialList" placeholder="e.g. 546310"${''}
       value="${esc(prefillSerial || '')}">
+    <label class="adnosn"><input type="checkbox" class="adnoserial"> serial not found / not legible</label>
     <div class="adgrid">
       <div><label>Year</label><input class="adyear" maxlength="4" placeholder="1996"></div>
       <div><label>Make</label><input class="admake" maxlength="30" placeholder="Yamaha"></div>
@@ -4962,11 +5005,23 @@ function openAddModal(slotId, prefillSerial) {
         <option value="Grand">Grand</option><option value="Upright">Upright</option>
         <option value="Digital">Digital</option></select></div>
     </div>
-    <label>Owner</label>
+    <div class="adgrid">
+      <div><label>Size <small>(if known)</small></label><input class="adsize" maxlength="14" placeholder="5'8&quot; / 48&quot;"></div>
+      ${slotId ? '' : `<div><label>Spot # <small>(optional)</small></label><input class="adspot" maxlength="12" placeholder="e.g. 84"></div>`}
+    </div>
+    <label>Owner <small>(client name if known)</small></label>
     <input class="adowner" maxlength="60" value="BLP">
-    <button class="adgo">Add to the Piano Log at spot ${esc(slotId)}</button>
+    <button class="adgo">${isAdm ? 'Add to the Piano Log' : 'Add as a TEMP entry'}${slotId ? ` at spot ${esc(slotId)}` : ''}</button>
+    ${isAdm ? '' : `<div class="adtempnote">🆕 Saved as a <b>TEMP entry</b> — it shows on the map right away,
+      and an admin approves it from tomorrow's brief. Enter what you know; blanks are fine.</div>`}
     <div class="tmmsg admsg"></div>
   </div>`;
+  const nos = ov.querySelector('.adnoserial'), asn = ov.querySelector('.adserial');
+  nos.onchange = () => {
+    asn.disabled = nos.checked;
+    asn.value = nos.checked ? '' : asn.value;
+    asn.placeholder = nos.checked ? 'a temp ID will be created' : 'e.g. 546310';
+  };
   ov.hidden = false;
   ov.onclick = ev => {
     if (ev.target === ov || ev.target.closest('.x')) ov.hidden = true;
@@ -4978,15 +5033,26 @@ function openAddModal(slotId, prefillSerial) {
 async function submitAdd(slotId, ov) {
   const msg = ov.querySelector('.admsg');
   const btn = ov.querySelector('.adgo');
-  const v = c => ov.querySelector(c).value.trim();
-  const serial = v('.adserial');
-  if (!serial) { msg.className = 'tmmsg err'; msg.textContent = 'A serial number is required.'; return; }
+  const v = c => { const el = ov.querySelector(c); return el ? el.value.trim() : ''; };
+  const noSerial = ov.querySelector('.adnoserial')?.checked;
+  let serial = v('.adserial');
+  if (noSerial && !serial) {
+    // placeholder id so every card feature works; admin swaps in the real
+    // serial once it's found (NOSN = "no serial number")
+    const d = new Date();
+    serial = 'NOSN-' + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0')
+      + '-' + String(d.getHours()).padStart(2, '0') + String(d.getMinutes()).padStart(2, '0');
+  }
+  if (!serial) { msg.className = 'tmmsg err'; msg.textContent = 'Type the serial — or check "serial not found".'; return; }
   const {pin, ok} = writeAuth();
   if (!ok) { msg.className = 'tmmsg err'; msg.textContent = 'Sign in with Google (☰ menu) to make changes — actions are logged under your name.'; return; }
   btn.disabled = true;
   msg.className = 'tmmsg'; msg.textContent = 'Adding to the Piano Log…';
+  const loc = slotId || v('.adspot');
+  const isTemp = !(isAdminUser() || isTimelogAdmin());
   const fields = {serial, year: v('.adyear'), make: v('.admake'), model: v('.admodel'),
-                  category: v('.adtype'), owner: v('.adowner') || 'BLP', location: slotId};
+                  size: v('.adsize'), category: v('.adtype'), owner: v('.adowner') || 'BLP',
+                  location: loc, temp: isTemp ? 1 : 0};
   try {
     const r = await fetch(BRIDGE_URL, {
       method: 'POST', redirect: 'follow',
@@ -5038,18 +5104,21 @@ async function submitAdd(slotId, ov) {
     }
     if (!j.added) throw new Error(j.error || 'add failed');
     msg.className = 'tmmsg ok';
-    msg.textContent = `✓ Added to the Piano Log (row ${j.row}) at spot ${slotId}.`;
+    msg.textContent = isTemp
+      ? `✓ Added as a TEMP entry${loc ? ' at spot ' + loc : ''} — an admin will approve it from the morning brief.`
+      : `✓ Added to the Piano Log (row ${j.row})${loc ? ' at spot ' + loc : ''}.`;
     applyBumps(j.bumped);
     const nu = {row: j.row, section: '', owner: fields.owner, serial,
       summary: j.summary, year: fields.year, make: fields.make, model: fields.model,
-      size: '', type: fields.category.toLowerCase(), status: '', location: slotId,
-      isSlot: SLOT_RE.test(slotId), entered: localDay(),
+      size: fields.size, type: fields.category.toLowerCase(), status: '', location: loc,
+      isSlot: SLOT_RE.test(loc), entered: localDay(),
       phase: 'New Arrival - Admin', price: '', bphoto: false, aphoto: false,
       bvideo: false, avideo: false, queuePos: 0, queueTotal: 0,
+      tempEntry: isTemp ? 'Pending · you · just now' : '',
       isNew: true, active: true};
     pendingAdds.push(nu);
     applyAdds(); index(); renderAll();
-    setTimeout(() => { ov.hidden = true; focusPiano(nu); }, 1600);
+    setTimeout(() => { ov.hidden = true; focusPiano(nu); openPop(nu.row, S.popAnchor, true); }, 1600);
   } catch (e) {
     msg.className = 'tmmsg err';
     msg.textContent = '✗ ' + e.message;
@@ -8731,6 +8800,7 @@ if (topReqBtn) {
     else if (kind === 'tempspot') tempSpotModal();
     else if (kind === 'timeoff') timeOffModal();
     else if (kind === 'trainreq') trainReqModal();
+    else if (kind === 'addpiano') openAddModal(null);
   });
 }
 

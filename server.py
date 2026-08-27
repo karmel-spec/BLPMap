@@ -143,6 +143,8 @@ def parse_pianos(raw):
                        if h.strip().upper() == 'KEYTOP STATUS'), -1)
     imp_note_idx = next((i for i, h in enumerate(hdr)
                          if h.strip().upper() == 'IMPORTANT NOTES'), -1)
+    temp_entry_idx = next((i for i, h in enumerate(hdr)
+                           if h.strip().upper() == 'TEMP ENTRY'), -1)
     tag_snap_idx = next((i for i, h in enumerate(hdr)
                          if h.strip().upper() == 'TAG SNAPSHOT'), -1)
     paperwork_idx = next((i for i, h in enumerate(hdr)
@@ -235,6 +237,7 @@ def parse_pianos(raw):
             'benchLoc': (col(bench_loc_idx) if bench_loc_idx >= 0 else '')[:80],
             'keytopStatus': (col(keytop_idx) if keytop_idx >= 0 else '')[:40],
             'importantNote': (col(imp_note_idx) if imp_note_idx >= 0 else '')[:200],
+            'tempEntry': (col(temp_entry_idx) if temp_entry_idx >= 0 else '')[:80],
             'planNotes': col(26)[:300], 'replate': col(50)[:20],
             # admin section: payment plan, last-emailed pay milestone, admin steps done
             'payPlan': col(pay_plan_idx) if pay_plan_idx >= 0 else '',
