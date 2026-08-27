@@ -850,6 +850,15 @@ function doPost(e) {
     if (req.action === 'setkeystatus') {
       return json_(setKeyStatus_(req, who));
     }
+    if (req.action === 'settaskcell') {
+      return json_(setTaskCell_(req, who));
+    }
+    if (req.action === 'setimportant') {
+      return json_(setImportant_(req, who));
+    }
+    if (req.action === 'pianonote') {
+      return json_(pianoNote_(req, who));
+    }
     if (req.action === 'setplatestatus') {
       var pls = setPlateStatus_(req);
       if (pls.ok) logAct_(who, 'Plate status', pls.summary || req.serial, pls.plateStatus || '(cleared)');
@@ -2085,11 +2094,11 @@ function pianoHistory_(serial, rowOverride) {
   var f = findPiano_(psh, serial, rowOverride);
   var summary = (f && f.summary) || '';
   var sh = SpreadsheetApp.openById(PIANO_LOG_ID).getSheetByName('ACTIVITY LOG');
-  var loc = [], cab = [];
+  var loc = [], cab = [], all = [];
   if (sh && sh.getLastRow() >= 2) {
     var vals = sh.getRange(2, 1, sh.getLastRow() - 1, 5).getValues();
     var LOC = {'Moved': 1, 'Bumped to attic': 1, 'Moved to SOLD section': 1};
-    for (var i = vals.length - 1; i >= 0 && (loc.length < 40 || cab.length < 40); i--) {
+    for (var i = vals.length - 1; i >= 0 && (loc.length < 40 || cab.length < 40 || all.length < 60); i--) {
       var v = vals[i];
       var pianoCell = String(v[3] || '');
       var hit = (summary && pianoCell === summary) || pianoCell === serial
@@ -2099,11 +2108,13 @@ function pianoHistory_(serial, rowOverride) {
       var row = {when: (v[0] instanceof Date)
           ? Utilities.formatDate(v[0], 'America/Denver', 'MMM d, yyyy h:mm a') : String(v[0]),
         who: String(v[1] || ''), detail: String(v[4] || '').slice(0, 160)};
+      if (all.length < 60) all.push({when: row.when, who: row.who,
+        action: String(v[2] || ''), detail: row.detail});
       if (LOC[String(v[2])] && loc.length < 40) loc.push(row);
       else if (String(v[2]) === 'Cabinetry location' && cab.length < 40) cab.push(row);
     }
   }
-  return {ok: true, loc: loc, cab: cab};
+  return {ok: true, loc: loc, cab: cab, all: all};
 }
 function timeClockState_() {
   try { sweepForgottenClocks_(); } catch (e) {}
@@ -4693,6 +4704,50 @@ function setKeyStatus_(req, who) {
   sh.getRange(found.row, col).setValue(val);
   logAct_(who, 'Keytop status', found.summary || req.serial, val || '(cleared)');
   return {ok: true, row: found.row, summary: found.summary, keytopStatus: val};
+}
+/* Ordered/Received date marks for bass strings + decals (Brigham 8/27) —
+ * written into the SAME fixed cells the Concurrent Work report reads. */
+var TASK_CELL_COLS = {bass: 39, decals: 40};   // 1-based: AM bass order, AN decals
+function setTaskCell_(req, who) {
+  var col = TASK_CELL_COLS[String(req.which || '')];
+  if (!col) return {error: 'bad task cell: ' + req.which};
+  var val = String(req.value == null ? '' : req.value).trim().slice(0, 200);
+  var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+  var found = findPiano_(sh, req.serial, req.row);
+  if (found.error) return found;
+  sh.getRange(found.row, col).setValue(val);
+  logAct_(who, req.which === 'decals' ? 'Decals' : 'Bass strings',
+    found.summary || req.serial, val || '(cleared)');
+  return {ok: true, row: found.row, summary: found.summary, value: val};
+}
+/* IMPORTANT note (Brigham 8/27): red banner pinned in the card's sticky
+ * header so unique instructions can't be missed — header-created col. */
+function setImportant_(req, who) {
+  var val = String(req.value == null ? '' : req.value).trim().slice(0, 200);
+  var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+  var found = findPiano_(sh, req.serial, req.row);
+  if (found.error) return found;
+  var last = sh.getLastColumn();
+  var hdr = sh.getRange(2, 1, 1, last).getValues()[0];
+  var col = -1;
+  for (var c = 0; c < hdr.length; c++) {
+    if (String(hdr[c] || '').trim().toUpperCase() === 'IMPORTANT NOTES') { col = c + 1; break; }
+  }
+  if (col < 0) { sh.getRange(2, last + 1).setValue('IMPORTANT NOTES'); col = last + 1; }
+  sh.getRange(found.row, col).setValue(val);
+  logAct_(who, 'Important note', found.summary || req.serial, val || '(cleared)');
+  return {ok: true, row: found.row, summary: found.summary, importantNote: val};
+}
+/* General per-piano note (Brigham 8/27) — lands in the ACTIVITY LOG, shown
+ * in the card's Activity & Notes section. */
+function pianoNote_(req, who) {
+  var note = String(req.note || '').trim().slice(0, 300);
+  if (!note) return {error: 'no note'};
+  var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+  var found = findPiano_(sh, req.serial, req.row);
+  if (found.error) return found;
+  logAct_(who, 'Note', found.summary || req.serial, note);
+  return {ok: true, row: found.row, summary: found.summary};
 }
 function setPlateStatus_(req) {
   var val = String(req.plateStatus == null ? '' : req.plateStatus).trim();

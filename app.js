@@ -388,7 +388,26 @@ function tasksBox(p) {
       <input class="keyqnum" type="number" min="1" max="99" placeholder="#"
         title="place in the key queue" value="${esc(kt.num)}" ${kt.state === 'In Key Queue' ? '' : 'hidden'}>
     </div><div class="keystatmsg phmsg"></div>
+    ${orderChipsRow(p, 'bass', 'Bass strings')}
+    ${orderChipsRow(p, 'decals', 'Decals')}
     ${trackKeysFor(p).length ? '<div class="taskbody">loading…</div>' : ''}</div>`;
+}
+// Ordered/Received date marks live in the same Piano Log cells the
+// Concurrent Work report reads — "Ordered 8/27/26 · Received 9/3/26 · note"
+function orderMarks(p, key) {
+  const v = String((p.tasks || {})[key] || '');
+  const g = k => { const m = new RegExp(k + '\\s*([\\d/.-]+)?', 'i').exec(v); return m ? (m[1] || '✓') : ''; };
+  return {ordered: g('Ordered'), received: g('Received'),
+    rest: v.replace(/(Ordered|Received)\s*[\d/.-]*/gi, '').replace(/\s*·\s*/g, ' ').trim()};
+}
+function orderChipsRow(p, key, label) {
+  const ms = orderMarks(p, key);
+  const chip = (k, ico) => ms[k.toLowerCase()]
+    ? `<button class="bassbtn on" data-task="${key}" data-k="${k}" title="tap to un-mark">${ico} ${k} ${esc(ms[k.toLowerCase()])} ✕</button>`
+    : `<button class="bassbtn" data-task="${key}" data-k="${k}">${ico} Mark ${k.toLowerCase()}</button>`;
+  return `<div class="row phrow bassrow">${label}
+      <span class="bassbtns">${chip('Ordered', '📦')}${chip('Received', '📬')}</span>
+    </div><div class="bassmsg bassmsg-${key} phmsg"></div>`;
 }
 async function loadTasks(p, pop) {
   const body = pop.querySelector('.taskbody');
@@ -3171,6 +3190,10 @@ function popHTML(p) {
     ${preQueue(p) ? `<div class="pqwarn">⚠️ <b>PRE-QUEUE</b> — deposit not received. No work is approved on this piano yet.
       ${isAdminUser() ? `<button class="pqapprove">✅ Approve for queue</button>` : `<i>admin / manager approval required to start work</i>`}
       <span class="pqmsg"></span></div>` : ''}
+    ${p.serial ? ((p.importantNote || '').trim()
+      ? `<div class="impnote">❗ <b>IMPORTANT</b> <span class="imptxt">${esc(p.importantNote)}</span>
+           <button class="impedit" title="edit / clear">✎</button><span class="impmsg"></span></div>`
+      : `<div class="impadd"><button class="impedit">❗ Add IMPORTANT note</button><span class="impmsg"></span></div>`) : ''}
     </div>
     <div class="row">Owner <b>${esc(ownerLine)}</b></div>
     <div class="row">Status <b>${esc(p.status || '—')}</b></div>
@@ -3276,6 +3299,13 @@ function popHTML(p) {
           ${drift ? '<i>\u26a0</i>' : ''}</button>`;
       })()}
     </div>
+    ${p.serial ? secWrap('act', '📝 Activity & Notes', `
+      <div class="movebox notebox">
+        <input class="pnin" placeholder="add a note about this piano…" maxlength="240">
+        <button class="mvgo pngo">Add</button>
+      </div><div class="pnmsg phmsg"></div>
+      <div class="actlist"></div>
+      <button class="tagbtn actload">🕘 Load this piano's activity log</button>`, false) : ''}
     ${isAdminUser() ? secWrap('log', '📖 Piano Log', logExtrasBody(p), false) : ''}`;
 }
 /* Everything the Piano Log row holds that the card doesn't already show,
@@ -3449,6 +3479,100 @@ function wirePop(p) {
       knum.onchange = saveKeytop;
     }
   }
+  // 🎼 bass strings + decals — Ordered / Received chips stamp today's date
+  // into the same Piano Log cells the Concurrent Work report reads
+  pop.querySelectorAll('.bassbtn').forEach(b => b.onclick = async ev => {
+    ev.stopPropagation(); popPinned = true;
+    const key = b.dataset.task;
+    const msg = pop.querySelector('.bassmsg-' + key);
+    const wa = writeAuth();
+    if (!wa.ok) { msg.textContent = 'Sign in with Google (menu) first.'; return; }
+    const marks = orderMarks(p, key);
+    const k = b.dataset.k.toLowerCase();
+    const today = new Date().toLocaleDateString('en-US',
+      {month: 'numeric', day: 'numeric', year: '2-digit', timeZone: 'America/Denver'});
+    marks[k] = marks[k] ? '' : today;              // toggle: set today / clear
+    const val = [marks.ordered ? 'Ordered ' + marks.ordered : '',
+                 marks.received ? 'Received ' + marks.received : '',
+                 marks.rest].filter(Boolean).join(' · ');
+    msg.textContent = 'saving…';
+    try {
+      const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+        headers: {'content-type': 'text/plain;charset=utf-8'},
+        body: JSON.stringify({pin: wa.pin, action: 'settaskcell', which: key,
+          serial: p.serial, row: p.row, value: val, ...authFields()})});
+      const j = await r.json();
+      if (!j.ok) throw new Error(j.error || 'failed');
+      p.tasks = p.tasks || {}; p.tasks[key] = val;
+      openPop(p.row, S.popAnchor, true);
+    } catch (e) { msg.textContent = '✗ ' + e.message; }
+  });
+  // ❗ IMPORTANT note in the sticky card header
+  const impBtn = pop.querySelector('.impedit');
+  if (impBtn) impBtn.onclick = async ev => {
+    ev.stopPropagation(); popPinned = true;
+    const msg = pop.querySelector('.impmsg');
+    const wa = writeAuth();
+    if (!wa.ok) { if (msg) msg.textContent = ' sign in first'; return; }
+    const cur = (p.importantNote || '').trim();
+    const txt = prompt('IMPORTANT note — shows in red at the top of this piano’s card for everyone.\nLeave empty to clear it.', cur);
+    if (txt === null) return;
+    const val = txt.trim().slice(0, 200);
+    if (msg) msg.textContent = ' saving…';
+    try {
+      const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+        headers: {'content-type': 'text/plain;charset=utf-8'},
+        body: JSON.stringify({pin: wa.pin, action: 'setimportant', serial: p.serial, row: p.row,
+          value: val, ...authFields()})});
+      const j = await r.json();
+      if (!j.ok) throw new Error(j.error || 'failed');
+      p.importantNote = val;
+      openPop(p.row, S.popAnchor, true);
+    } catch (e) { if (msg) msg.textContent = ' ✗ ' + e.message; }
+  };
+  // 📝 Activity & Notes — general per-piano notes + the activity log
+  const loadActivity = async () => {
+    const list = pop.querySelector('.actlist');
+    if (!list) return;
+    list.innerHTML = '<div class="empty">loading…</div>';
+    try {
+      const r = await fetch(BRIDGE_URL + '?fn=history&serial=' + encodeURIComponent(p.serial)
+        + '&row=' + p.row, {redirect: 'follow'});
+      const j = await r.json();
+      const rows = j.all || [];
+      list.innerHTML = rows.length ? rows.map(a =>
+        `<div class="actrow"><b>${esc(a.action || '')}</b> ${esc(a.detail || '')}
+           <small>${esc(a.when || '')} · ${esc(a.who || '')}</small></div>`).join('')
+        : '<div class="empty">No activity recorded for this piano yet.</div>';
+    } catch (e) { list.innerHTML = `<div class="empty">✗ ${esc(e.message)}</div>`; }
+  };
+  const alBtn = pop.querySelector('.actload');
+  if (alBtn) alBtn.onclick = ev => { ev.stopPropagation(); popPinned = true; loadActivity(); };
+  const pngo = pop.querySelector('.pngo');
+  if (pngo) pngo.onclick = async ev => {
+    ev.stopPropagation(); popPinned = true;
+    const inp = pop.querySelector('.pnin');
+    const msg = pop.querySelector('.pnmsg');
+    const note = (inp.value || '').trim();
+    if (!note) { msg.textContent = 'type the note first'; return; }
+    const wa = writeAuth();
+    if (!wa.ok) { msg.textContent = wa.renewing ? 'Sign-in expired — retry in a moment.' : 'Sign in first.'; return; }
+    msg.textContent = 'saving…';
+    try {
+      const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+        headers: {'content-type': 'text/plain;charset=utf-8'},
+        body: JSON.stringify({pin: wa.pin, action: 'pianonote', serial: p.serial, row: p.row,
+          note, ...authFields()})});
+      const j = await r.json();
+      if (!j.ok) throw new Error(j.error || 'failed');
+      inp.value = '';
+      msg.textContent = '✓ noted';
+      setTimeout(() => { if (msg.isConnected) msg.textContent = ''; }, 1800);
+      loadActivity();
+    } catch (e) { msg.textContent = '✗ ' + e.message; }
+  };
+  const pnin = pop.querySelector('.pnin');
+  if (pnin) { pnin.onclick = ev => ev.stopPropagation(); }
   const ps = pop.querySelector('.phsel');
   if (ps) {
     ps.onclick = ev => ev.stopPropagation();

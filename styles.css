@@ -1184,3 +1184,23 @@ tr.adjediting td{background:#fdf8ee}
 .ccfmbtns{display:flex;gap:10px;margin-top:13px}
 .ccfmyes{flex:1;background:#2e7d4f;color:#fff;border:0;border-radius:10px;padding:12px 0;font-size:14px;font-weight:800;cursor:pointer}
 .ccfmno{flex:.6;background:#fff;color:#4a5259;border:1.5px solid #c9ced4;border-radius:10px;padding:12px 0;font-size:13px;font-weight:700;cursor:pointer}
+
+/* ❗ IMPORTANT note banner in the sticky card header */
+.impnote{background:#9e2020;color:#fff;border-radius:8px;padding:8px 11px;margin:7px 0 2px;
+  font-size:12.5px;line-height:1.45}
+.impnote b{letter-spacing:1px}
+.impnote .impedit{border:0;background:rgba(255,255,255,.18);color:#fff;border-radius:6px;
+  padding:2px 7px;margin-left:6px;cursor:pointer;font-size:11px}
+.impadd{margin:5px 0 2px}
+.impadd .impedit{border:1.5px dashed #d3a0a0;background:none;color:#9e2020;border-radius:8px;
+  padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer}
+.impmsg{font-size:11px;color:#ffd9d9}
+/* 🎼 bass string chips */
+.bassbtns{display:flex;gap:6px;flex-wrap:wrap}
+.bassbtn{border:1.5px solid #c9ced4;background:#fff;border-radius:999px;padding:4px 11px;
+  font-size:11.5px;font-weight:700;color:#4a5259;cursor:pointer}
+.bassbtn.on{border-color:#2f7d4f;background:#eaf5ec;color:#2f7d4f}
+/* 📝 per-piano activity log */
+.actrow{border-top:1px solid #f0f2f4;padding:6px 2px;font-size:12px;line-height:1.4}
+.actrow small{display:block;color:#8a929a;font-size:10.5px}
+.actlist{max-height:280px;overflow-y:auto}
