@@ -389,16 +389,44 @@ function tasksBox(p) {
         title="place in the key queue" value="${esc(kt.num)}" ${kt.state === 'In Key Queue' ? '' : 'hidden'}>
     </div><div class="keystatmsg phmsg"></div>
     ${orderChipsRow(p, 'bass', 'Bass strings')}
-    ${orderChipsRow(p, 'decals', 'Decals')}
+    ${decalsRow(p)}
     ${trackKeysFor(p).length ? '<div class="taskbody">loading…</div>' : ''}</div>`;
 }
-// Ordered/Received date marks live in the same Piano Log cells the
-// Concurrent Work report reads — "Ordered 8/27/26 · Received 9/3/26 · note"
-function orderMarks(p, key) {
+// Date marks live in the same Piano Log cells the Concurrent Work report
+// reads — "Ordered 8/27/26 · Received 9/3/26 · Installed 9/10/26 · note"
+const DECAL_MARKS = ['Ordered', 'Received', 'In Stock', 'Installed'];
+function taskCellMarks(p, key, names) {
   const v = String((p.tasks || {})[key] || '');
-  const g = k => { const m = new RegExp(k + '\\s*([\\d/.-]+)?', 'i').exec(v); return m ? (m[1] || '✓') : ''; };
-  return {ordered: g('Ordered'), received: g('Received'),
-    rest: v.replace(/(Ordered|Received)\s*[\d/.-]*/gi, '').replace(/\s*·\s*/g, ' ').trim()};
+  const out = {rest: v};
+  for (const n of names) {
+    const m = new RegExp(n.replace(' ', '\\s+') + '\\s*([\\d/.-]+)?', 'i').exec(out.rest);
+    out[n] = m ? (m[1] || '✓') : '';
+    out.rest = out.rest.replace(new RegExp(n.replace(' ', '\\s+') + '\\s*[\\d/.-]*', 'gi'), '');
+  }
+  out.rest = out.rest.replace(/\s*·\s*/g, ' ').replace(/\s+/g, ' ').trim();
+  return out;
+}
+function taskCellValue(marks, names) {
+  return names.map(n => marks[n] ? n + (marks[n] === '✓' ? '' : ' ' + marks[n]) : '')
+    .concat(marks.rest).filter(Boolean).join(' · ');
+}
+function orderMarks(p, key) {
+  const m = taskCellMarks(p, key, ['Ordered', 'Received']);
+  return {ordered: m['Ordered'], received: m['Received'], rest: m.rest};
+}
+function decalsRow(p) {
+  const ms = taskCellMarks(p, 'decals', DECAL_MARKS);
+  const have = DECAL_MARKS.filter(n => ms[n]);
+  return `<div class="row phrow bassrow">Decals
+      <span class="decalcur">${have.length
+        ? have.map(n => `${n === 'Installed' ? '✅' : n === 'In Stock' ? '📥' : n === 'Received' ? '📬' : '📦'} ${n}${ms[n] === '✓' ? '' : ' ' + esc(ms[n])}`).join(' · ')
+        : '<i class="mna">— not tracked —</i>'}</span>
+      <select class="decalsel">
+        <option value="" selected>mark…</option>
+        ${DECAL_MARKS.map(n => `<option value="${n}">${ms[n] ? '✕ un-mark ' : ''}${n}</option>`).join('')}
+        ${have.length ? '<option value="__clear__">clear all marks</option>' : ''}
+      </select>
+    </div><div class="bassmsg bassmsg-decals phmsg"></div>`;
 }
 function orderChipsRow(p, key, label) {
   const ms = orderMarks(p, key);
@@ -3479,8 +3507,44 @@ function wirePop(p) {
       knum.onchange = saveKeytop;
     }
   }
-  // 🎼 bass strings + decals — Ordered / Received chips stamp today's date
-  // into the same Piano Log cells the Concurrent Work report reads
+  // shared saver for the bass/decals Piano Log cells
+  const saveTaskCell = async (key, val) => {
+    const msg = pop.querySelector('.bassmsg-' + key);
+    msg.textContent = 'saving…';
+    try {
+      const wa = writeAuth();
+      if (!wa.ok) throw new Error('Sign in with Google (menu) first.');
+      const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+        headers: {'content-type': 'text/plain;charset=utf-8'},
+        body: JSON.stringify({pin: wa.pin, action: 'settaskcell', which: key,
+          serial: p.serial, row: p.row, value: val, ...authFields()})});
+      const j = await r.json();
+      if (!j.ok) throw new Error(j.error || 'failed');
+      p.tasks = p.tasks || {}; p.tasks[key] = val;
+      openPop(p.row, S.popAnchor, true);
+    } catch (e) { msg.textContent = '✗ ' + e.message; }
+  };
+  // 🏷 decals — dropdown marks Ordered / Received / In Stock / Installed
+  const dsel = pop.querySelector('.decalsel');
+  if (dsel) {
+    dsel.onclick = ev => ev.stopPropagation();
+    dsel.onchange = () => {
+      const pick = dsel.value;
+      dsel.value = '';
+      if (!pick) return;
+      popPinned = true;
+      const ms = taskCellMarks(p, 'decals', DECAL_MARKS);
+      if (pick === '__clear__') DECAL_MARKS.forEach(n => { ms[n] = ''; });
+      else {
+        const today = new Date().toLocaleDateString('en-US',
+          {month: 'numeric', day: 'numeric', year: '2-digit', timeZone: 'America/Denver'});
+        ms[pick] = ms[pick] ? '' : today;          // toggle: stamp today / un-mark
+      }
+      saveTaskCell('decals', taskCellValue(ms, DECAL_MARKS));
+    };
+  }
+  // 🎼 bass strings — Ordered / Received chips stamp today's date
+  // into the same Piano Log cell the Concurrent Work report reads
   pop.querySelectorAll('.bassbtn').forEach(b => b.onclick = async ev => {
     ev.stopPropagation(); popPinned = true;
     const key = b.dataset.task;
