@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Store Map — Brigham Larson Pianos</title>
 <link rel="icon" href="assets/blp-logo.png">
-<link rel="stylesheet" href="styles.css?v=155">
+<link rel="stylesheet" href="styles.css?v=156">
 </head>
 <body>
 
@@ -73,6 +73,7 @@
     <div class="navitem" data-view="dash"><span class="ic">👤</span>My Dashboard</div>
     <div class="navitem" data-view="report"><span class="ic">⚠️</span>Reports</div>
     <div class="navitem" data-view="training"><span class="ic">🎓</span>Training</div>
+    <div class="navitem" data-view="updates"><span class="ic">🚀</span>App Updates</div>
     <div class="navitem" data-view="sched" id="navSched" hidden><span class="ic">📅</span>Scheduling</div>
     <div class="navitem" data-view="team" id="navTeam" hidden><span class="ic">👥</span>Team</div>
     <div class="navitem" data-view="admdash" id="navAdmDash" hidden><span class="ic">🛡</span>Admin</div>
@@ -227,6 +228,15 @@
     </div>
   </div>
 
+  <div class="view panelview" id="view-updates" hidden>
+    <div class="panel">
+      <h2 class="ph">🚀 APP UPDATES</h2>
+      <p class="pd">What's new in the BLP apps — new features and new ways to record your work,
+        newest first. (Bug fixes aren't listed — things just quietly get better.)</p>
+      <div id="updatesBody"></div>
+    </div>
+  </div>
+
   <div class="view panelview" id="view-sched" hidden>
     <div class="panel">
       <h2 class="ph">📅 SCHEDULING — MANAGEMENT DASHBOARD</h2>
@@ -261,6 +271,6 @@
   </div>
 </div>
 
-<script src="app.js?v=199"></script>
+<script src="app.js?v=200"></script>
 </body>
 </html>

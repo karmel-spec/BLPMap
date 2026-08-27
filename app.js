@@ -8460,7 +8460,7 @@ function renderAdmDash() {
 
 /* ---------- views / nav / drawers ---------- */
 function showView(v) {
-  ['map', 'report', 'board', 'cal', 'media', 'shopmap', 'archive', 'dash', 'whiteboard', 'training', 'trainingdoc', 'sched', 'team', 'admdash'].forEach(x => $('#view-' + x).hidden = x !== v);
+  ['map', 'report', 'board', 'cal', 'media', 'shopmap', 'archive', 'dash', 'whiteboard', 'training', 'trainingdoc', 'sched', 'team', 'admdash', 'updates'].forEach(x => $('#view-' + x).hidden = x !== v);
   if (v === 'archive') renderArchive();
   document.querySelectorAll('.navitem[data-view]').forEach(el =>
     el.classList.toggle('on', el.dataset.view === v));
@@ -8470,6 +8470,34 @@ function showView(v) {
   if (v === 'sched') renderSched();
   if (v === 'team') renderTeam();
   if (v === 'admdash') renderAdmDash();
+  if (v === 'updates') renderUpdatesFeed();
+}
+/* 🚀 App Updates — the user-facing changelog. Same "App Updates" sheet the
+ * 📣 admin report logs into; everyone can read what's new. */
+async function renderUpdatesFeed() {
+  const el = $('#updatesBody');
+  if (!el) return;
+  if (!S.auRows) {
+    el.innerHTML = '<div class="empty">Loading the update log…</div>';
+    try {
+      const r = await fetch(BRIDGE_URL + '?fn=appupdates', {redirect: 'follow'});
+      S.auRows = (await r.json()).rows || [];
+    } catch (e) { el.innerHTML = '<div class="empty">✗ could not load updates — try again</div>'; return; }
+  }
+  const rows = S.auRows;
+  if (!rows.length) { el.innerHTML = '<div class="empty">No updates logged yet.</div>'; return; }
+  const day = iso => {
+    const d = new Date(iso);
+    return isNaN(d) ? String(iso).slice(0, 10)
+      : d.toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric', timeZone: 'America/Denver'});
+  };
+  let lastDay = '';
+  el.innerHTML = rows.map(r => {
+    const d = day(r.at);
+    const head = d !== lastDay ? `<h4 class="updday">${esc(d)}</h4>` : '';
+    lastDay = d;
+    return `${head}<div class="updrow">🚀 ${esc(r.text)}</div>`;
+  }).join('');
 }
 function switchView(v) {
   if (v === 'sched' && !isTimelogAdmin()) v = 'map';   // managers & owners only

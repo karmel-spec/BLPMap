@@ -1215,3 +1215,10 @@ tr.adjediting td{background:#fdf8ee}
   font-size:11px;cursor:pointer;padding:0;z-index:2}
 .searchclear:hover{background:#9e2020;color:#fff}
 .searchwrap .search{padding-right:32px}
+
+/* 🚀 App Updates feed */
+.updday{margin:18px 0 6px;font-size:12px;letter-spacing:1px;color:#9e2020;
+  border-bottom:2px solid #eadfdf;padding-bottom:4px}
+.updday:first-child{margin-top:2px}
+.updrow{background:#fff;border:1px solid #e3e6ea;border-radius:9px;padding:10px 13px;
+  margin:7px 0;font-size:13px;line-height:1.5;max-width:720px}
