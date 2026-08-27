@@ -3874,14 +3874,27 @@ function shopManagerHtml_(R) {
   }
 
   var gaps = [];
-  if (R.noMap.length) gaps.push('<b>' + R.noMap.length + '</b> shop-work pianos with <b>no map number</b>: '
-    + R.noMap.slice(0, 8).map(smName_).join('; '));
-  if (R.noPhase.length) gaps.push('<b>' + R.noPhase.length + '</b> on the map with <b>no shop phase</b>: '
-    + R.noPhase.slice(0, 8).map(function (p) { return smName_(p) + ' (#' + smSpot_(p) + ')'; }).join('; '));
-  if (R.noTrack.length) gaps.push('<b>' + R.noTrack.length + '</b> with <b>no track</b> — phases can\'t be planned: '
-    + R.noTrack.slice(0, 8).map(smName_).join('; '));
-  if (R.noCab.length) gaps.push('<b>' + R.noCab.length + '</b> past PRSB with <b>no cabinetry shelf</b> recorded: '
-    + R.noCab.slice(0, 8).map(function (p) { return smName_(p) + ' (#' + smSpot_(p) + ')'; }).join('; '));
+  // one piano per line, ALWAYS with the serial (Brigham 8/27)
+  function gapList_(list) {
+    var cap = 20;
+    var lis = list.slice(0, cap).map(function (p) {
+      var ser = String(p.serial || '').trim();
+      return '<li style="margin:2px 0">' + smName_(p)
+        + (p.location ? ' (#' + smSpot_(p) + ')' : '')
+        + ' — <b>' + (ser ? 'SER ' + ser : 'no serial in the log') + '</b></li>';
+    }).join('');
+    var more = list.length > cap
+      ? '<li>…and ' + (list.length - cap) + ' more — see the Store Map reports</li>' : '';
+    return '<ul style="margin:4px 0 2px 16px;padding:0">' + lis + more + '</ul>';
+  }
+  if (R.noMap.length) gaps.push('<b>' + R.noMap.length + '</b> shop-work pianos with <b>no map number</b>:'
+    + gapList_(R.noMap));
+  if (R.noPhase.length) gaps.push('<b>' + R.noPhase.length + '</b> on the map with <b>no shop phase</b>:'
+    + gapList_(R.noPhase));
+  if (R.noTrack.length) gaps.push('<b>' + R.noTrack.length + '</b> with <b>no track</b> — phases can\'t be planned:'
+    + gapList_(R.noTrack));
+  if (R.noCab.length) gaps.push('<b>' + R.noCab.length + '</b> past PRSB with <b>no cabinetry shelf</b> recorded:'
+    + gapList_(R.noCab));
   if (gaps.length) { sec('⚠️', 'Data gaps', null, 'Small fixes that keep the map and reports honest.'); ul(gaps); }
 
   if (R.soldPending.length) {
