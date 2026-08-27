@@ -1234,3 +1234,26 @@ tr.adjediting td{background:#fdf8ee}
 .adnosn input{width:auto;margin:0}
 .adtempnote{background:#fdf6e3;border:1px solid #e8d9a8;border-radius:8px;padding:8px 11px;
   margin-top:9px;font-size:11.5px;color:#6b5200;line-height:1.45}
+
+/* 🚚 today's moves — piano identity line, clickable */
+.mv.mvlink{cursor:pointer}
+.mv.mvlink:hover{background:#faf6ee}
+.mvpiano{margin-top:4px;font-size:11.5px;color:#4a5259;line-height:1.4}
+.mvpiano b{color:#1d2126}
+.mvgo2{color:#9e2020;font-weight:700;font-style:normal;white-space:nowrap}
+.tmvpiano{display:block;font-size:11px;color:#5b636b;font-style:normal;margin-top:2px}
+
+/* 🚚 mover clock-out checklist */
+.mvchkbox{width:400px;max-width:94vw;max-height:92vh;overflow:auto}
+.mvchklist{margin:8px 0 4px}
+.mvchkrow{display:flex;gap:10px;align-items:flex-start;border:1px solid #e3e6ea;border-radius:9px;
+  padding:9px 11px;margin:7px 0;cursor:pointer;font-size:12.5px;line-height:1.45}
+.mvchkrow input{margin-top:3px;width:17px;height:17px;flex:none}
+.mvchkrow small{display:block;color:#8a929a;font-size:10.5px}
+.mvchkrow i{display:block;font-style:normal;color:#4a5259;font-size:11.5px;margin-top:2px}
+.mvchkrow .mvchkwarn{color:#9a6a00;font-weight:700}
+.mvchkhint{background:#fdf6e3;border:1px solid #e8d9a8;border-radius:8px;padding:8px 11px;
+  font-size:11.5px;color:#6b5200;line-height:1.5;margin:8px 0}
+.mvchkgo{width:100%}
+.mvchkgo:disabled{opacity:.5;cursor:default}
+.mvchkx{cursor:pointer;font-size:18px;color:#9aa2ab}

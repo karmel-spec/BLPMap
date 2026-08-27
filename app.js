@@ -1038,21 +1038,103 @@ const CAL_EMBED = 'https://calendar.google.com/calendar/embed?src=pianomoving.bl
 function renderCal() {
   const evs = todaysMoves();
   $('#calToday').innerHTML = evs.length
-    ? evs.map(e => `<div class="tmv">
+    ? evs.map(e => {
+        const p = moveEventPiano(e);
+        return `<div class="tmv">
         <span>TODAY · ${e.time || 'ALL DAY'}</span>
-        <b>${esc(e.summary)}</b></div>`).join('')
+        <b>${esc(e.summary)}</b>
+        ${p ? `<i class="tmvpiano">🎹 ${esc(((p.year ? p.year + ' ' : '') + [p.make, p.model].filter(Boolean).join(' ')).slice(0, 34))} · SER ${esc(p.serial)} · 📍 ${esc(String(p.location || 'no spot'))}</i>` : ''}</div>`;
+      }).join('')
     : '<div class="tmv none">No moves on today’s calendar.</div>';
   const fr = $('#calFrame');
   if (!fr.src) fr.src = CAL_EMBED;
 }
 
+/* 🚚 mover clock-out verification (Brigham 8/27): before a mover's day
+ * clock-out, walk today's calendar moves and confirm the map is honest —
+ * pianos added, spots set, delivered phases flipped, plate data updated. */
+async function moverChecklistNeeded() {
+  const evs = todaysMoves();
+  if (!evs.length) return false;
+  const u = authUser();
+  const first = u && u.name ? u.name.split(/\s+/)[0].toLowerCase() : '';
+  if (!first) return false;
+  const crew = (S.data.crew || []).map(c => String(c).toLowerCase());
+  if (crew.some(c => c.includes(first))) return true;
+  // no crew list? fall back to their name appearing on today's events
+  return evs.some(e => ((e.summary || '') + (e.description || '')).toLowerCase().includes(first));
+}
+function moverChecklist() {
+  return new Promise(resolve => {
+    document.querySelectorAll('.mvchk').forEach(el => el.remove());
+    const evs = todaysMoves();
+    const ov = document.createElement('div');
+    ov.className = 'tagview mvchk';
+    ov.innerHTML = `<div class="tvbox mvchkbox">
+      <div class="tvhead"><div><b>🚚 Before you clock out…</b>
+        <span>today's moves — is the map honest about each one?</span></div>
+        <span class="x mvchkx">✕</span></div>
+      <div class="mvchklist">${evs.map((e, i) => {
+        const p = moveEventPiano(e);
+        const nm = p ? ((p.year ? p.year + ' ' : '')
+          + ([p.make, p.model].filter(Boolean).join(' ') || p.summary || '')).slice(0, 34) : '';
+        return `<label class="mvchkrow">
+          <input type="checkbox" class="mvchkbox2" data-i="${i}">
+          <span><b>${esc(String(e.summary || '').slice(0, 80))}</b><small>${esc(e.time || 'all day')}</small>
+            ${p ? `<i>🎹 ${esc(nm)} · SER ${esc(p.serial)} · 📍 ${esc(String(p.location || 'no spot'))}</i>`
+                : `<i class="mvchkwarn">⚠ no piano matched — if it came to the shop, add it (➕ below)</i>`}
+          </span></label>`;
+      }).join('')}</div>
+      <div class="mvchkhint">Check each move once you've verified:
+        map spot updated · new pianos added (➕ Request menu) · delivered
+        pianos set to <b>Delivered</b> · plates delivered or returned have
+        their <b>Plate</b> dropdown updated.</div>
+      <button class="ccfmyes mvchkgo" disabled>✓ All verified — clock out</button>
+      <div class="ccfmbtns" style="margin-top:8px">
+        <button class="ccfmno mvchkfix">Let me fix things first</button>
+      </div></div>`;
+    document.body.appendChild(ov);
+    const go = ov.querySelector('.mvchkgo');
+    const sync = () => {
+      go.disabled = [...ov.querySelectorAll('.mvchkbox2')].some(c => !c.checked);
+    };
+    ov.querySelectorAll('.mvchkbox2').forEach(c => c.onchange = sync);
+    sync();
+    const done = v => { ov.remove(); resolve(v); };
+    go.onclick = () => done(true);
+    ov.querySelector('.mvchkx').onclick = () => done(false);
+    ov.querySelector('.mvchkfix').onclick = () => done(false);
+  });
+}
+// the piano a calendar move belongs to — same serial-in-title convention
+// the map's scheduled/in-transit colors use
+function moveEventPiano(e) {
+  const blob = (e.summary || '') + (e.description || '');
+  return S.data.pianos.find(p => p.active && p.serial && p.serial.length > 4
+    && blob.includes(p.serial)) || null;
+}
 function renderMoves() {
   const evs = todaysMoves();
-  $('#moves').innerHTML = evs.length ? evs.map(e => `
-    <div class="mv">
+  $('#moves').innerHTML = evs.length ? evs.map(e => {
+    const p = moveEventPiano(e);
+    const nm = p ? ((p.year ? p.year + ' ' : '')
+      + ([p.make, p.model].filter(Boolean).join(' ') || p.summary || '')).slice(0, 36) : '';
+    return `
+    <div class="mv ${p ? 'mvlink' : ''}" ${p ? `data-row="${p.row}"` : ''} ${p ? 'title="tap to see it on the map"' : ''}>
       <b>${esc(e.summary)}</b>
       <span>${e.time || 'all day'}</span>
-    </div>`).join('') : '<div class="empty">No moves on today’s calendar.</div>';
+      ${p ? `<div class="mvpiano">🎹 ${esc(nm)} · SER <b>${esc(p.serial)}</b>
+        · 📍 ${esc(String(p.location || 'no spot'))} <i class="mvgo2">show on map ›</i></div>` : ''}
+    </div>`;
+  }).join('') : '<div class="empty">No moves on today’s calendar.</div>';
+  $('#moves').querySelectorAll('.mvlink').forEach(el => el.onclick = () => {
+    const p = S.data.pianos.find(x => x.row === +el.dataset.row);
+    if (!p) return;
+    S.feedOpen = false; syncFeed();
+    if (S.view !== 'map') switchView('map');
+    focusPiano(p);
+    openPop(p.row, S.popAnchor, true);
+  });
 }
 
 // phase number/letter drawn dead-center on the icon (always upright,
@@ -8044,9 +8126,12 @@ function renderDash() {
   if (cfx) cfx.onclick = e => { e.preventDefault(); clockFixModal(); };
   const pb = body.querySelector('.paybtn');
   if (pb) pb.onclick = async () => {
+    const dirPeek = pb.classList.contains('payin') ? 'in' : 'out';
+    // movers verify today's calendar against the map before clocking out
+    if (dirPeek === 'out' && await moverChecklistNeeded() && !(await moverChecklist())) return;
     pb.disabled = true;
     pb.textContent = pb.classList.contains('payin') ? 'Clocking in…' : 'Clocking out…';
-    const dir = pb.classList.contains('payin') ? 'in' : 'out';
+    const dir = dirPeek;
     const j = await dayPunch(dir === 'in' ? 'dayin' : 'dayout');
     if (j && j.error === 'geofence') {
       // outside the fence with a confident GPS fix: the punch was refused —
