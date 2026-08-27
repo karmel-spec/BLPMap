@@ -6272,16 +6272,16 @@ function taskQueuesTable() {
           <span class="pc ${list.length ? '' : 'zero'}" style="margin-left:6px">${list.length}</span></h4>
         ${next ? `<div class="mrow" data-row="${next.row}" style="cursor:pointer;background:#fdf6e3;border:1.5px solid #c9a227;border-radius:8px;padding:8px 10px;margin-bottom:8px">
             <b style="font-size:12.5px">NEXT UP${next.queuePos ? ' · queue #' + next.queuePos : ''}:</b>
-            ${esc(pianoName(next))} <span style="color:#8a929a">#${esc(next.serial)}
+            ${esc(pianoName(next))} <span style="color:#33383e">#${esc(next.serial)}
             · spot ${esc(String(next.location || '—'))}</span>
             ${d.note(next) ? `<div style="font-size:11px;color:#6f6a63">${esc(String(d.note(next)).slice(0, 60))}</div>` : ''}
           </div>` : `<div style="color:#8a929a;font-size:12px;padding:6px 0">Queue is clear. 🎉</div>`}
         ${list.slice(1).map((p, i) => `<div class="mrow" data-row="${p.row}"
             style="cursor:pointer;display:flex;gap:7px;padding:4px 2px;border-top:1px solid #f0f2f4;font-size:11.5px;align-items:baseline">
-            <b style="min-width:22px;color:#8a929a">${i + 2}.</b>
-            <span style="min-width:34px;color:#8a929a">${p.queuePos ? 'Q-' + p.queuePos : '—'}</span>
+            <b style="min-width:22px;color:#33383e">${i + 2}.</b>
+            <span style="min-width:34px;color:#33383e;font-weight:600">${p.queuePos ? 'Q-' + p.queuePos : '—'}</span>
             <span style="flex:1">${esc(pianoName(p))}</span>
-            <span style="color:#8a929a">#${esc(p.serial)}</span>
+            <span style="color:#33383e">#${esc(p.serial)}</span>
           </div>`).join('')}
       </div>`;
     }).join('') + `</div>`;
