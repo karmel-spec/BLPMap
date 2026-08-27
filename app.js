@@ -8495,6 +8495,7 @@ function goHome() {
   S.floor = 0; S.search = ''; S.zoom = 1; S.focusRow = null; S.openReport = null;
   popPinned = false; $('#pop').hidden = true;
   const search = $('#search'); if (search) search.value = '';
+  syncSearchClear();
   $('#searchac').hidden = true;
   closeNav();
   switchView('map');
@@ -8763,6 +8764,7 @@ function pickSuggest(i) {
   $('#searchac').hidden = true;
   $('#search').value = p.summary || p.serial || '';
   S.search = $('#search').value;
+  syncSearchClear();
   if (p.archived) { openArchived(p); return; }
   renderMap();
   focusPiano(p);
@@ -8775,7 +8777,21 @@ function moveSuggest(d) {
   const on = box.querySelector('.acrow.on');
   if (on) on.scrollIntoView({block: 'nearest'});
 }
+// one-tap ✕ clears the search instead of eight backspaces (Brigham 8/27)
+const searchClearBtn = $('#searchClear');
+function syncSearchClear() {
+  if (searchClearBtn) searchClearBtn.hidden = !$('#search').value;
+}
+if (searchClearBtn) searchClearBtn.onclick = () => {
+  const s = $('#search');
+  s.value = ''; S.search = ''; S.focusRow = null;
+  $('#searchac').hidden = true;
+  syncSearchClear();
+  renderMap();
+  s.focus();
+};
 $('#search').addEventListener('input', e => {
+  syncSearchClear();
   S.search = e.target.value;
   S.focusRow = null;
   if (S.view !== 'map') switchView('map');

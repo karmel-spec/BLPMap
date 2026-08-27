@@ -1207,3 +1207,11 @@ tr.adjediting td{background:#fdf8ee}
 .decalcur{flex:1;min-width:0;font-size:11.5px;color:#2f7d4f;font-weight:700}
 .decalcur .mna{font-weight:400}
 .decalsel{max-width:110px}
+
+/* ✕ clear inside the header search */
+.searchwrap{position:relative}
+.searchclear{position:absolute;right:7px;top:50%;transform:translateY(-50%);border:0;
+  background:#3a3f45;color:#d6dade;border-radius:50%;width:20px;height:20px;line-height:20px;
+  font-size:11px;cursor:pointer;padding:0;z-index:2}
+.searchclear:hover{background:#9e2020;color:#fff}
+.searchwrap .search{padding-right:32px}
