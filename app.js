@@ -1057,38 +1057,40 @@ function mediaCard(p) {
  * rides in the `stage` label ("Before S04 · Music desk plate pins"), which
  * lands in both the Drive filename and the PHOTO LOG — that's how the
  * wizard knows on any device which shots are already done. */
+// img = the matching sample photo from Brigham's guide doc (assets/photoguide/)
 const SHOT_LISTS = {
   upright: [
-    {t: 'Main image — straight front', h: 'Slightly angled front, cabinetry on, keys showing. Angle up enough to hide the top lid. Bench only if new / included in sale.', i: '🎹', c: 'MAIN'},
-    {t: 'Entire piano — left side', h: 'Whole piano from the side angle.', i: '◀️', c: 'FULL PIANO'},
-    {t: 'Entire piano — right side', h: 'Whole piano from the other side angle.', i: '▶️', c: 'FULL PIANO'},
-    {t: 'Music desk / panel detail', h: 'Close-up of the music desk or front panel detail.', i: '🎼', c: 'EXTERIOR CLOSE-UP'},
-    {t: 'Music desk, plate & pins', h: 'Desk with the plate and tuning pins in frame.', i: '📌', c: 'EXTERIOR CLOSE-UP'},
-    {t: 'Corner arm, cheek block, keyslip, keys', h: 'Front corner detail with keys showing.', i: '📐', c: 'EXTERIOR CLOSE-UP'},
-    {t: 'Decal, keys, hardware, pedals', h: 'Fallboard decal down to the pedals. Angled or straight — just match before & after.', i: '✨', c: 'EXTERIOR CLOSE-UP'},
-    {t: 'Toe block, caster, kneeboard & pedals', h: 'Low shot: toe block, caster, leg detail, kneeboard and pedals.', i: '🦶', c: 'EXTERIOR CLOSE-UP'},
-    {t: 'Pedals, trapwork & soundboard', h: 'Inside low: pedals, trapwork, felts, plate, bridges, soundboard finish.', i: '🔧', c: 'INTERIOR'},
-    {t: 'Wood corner, plate, pins, dampers, strings', h: 'Interior corner: refinished wood, plate, pins, felts, dampers, strings.', i: '🪵', c: 'INTERIOR'},
-    {t: 'Hammer line', h: 'Straight shot down the hammer line.', i: '🔨', c: 'INTERIOR'},
-    {t: 'Cabinetry, plate corner & entire action', h: 'Action brackets and the whole action; straight corner shot for a spinet/console.', i: '⚙️', c: 'INTERIOR'},
-    {t: 'Straight top view of entire inside', h: 'Shoot straight down into the whole inside.', i: '⬇️', c: 'INTERIOR'},
+    {t: 'Main image — straight front', h: 'Slightly angled front, cabinetry on, keys showing. Angle up enough to hide the top lid. Bench only if new / included in sale.', i: '🎹', c: 'MAIN', img: 'u01'},
+    {t: 'Entire piano — side angle 1', h: 'Whole piano from one side angle.', i: '◀️', c: 'FULL PIANO', img: 'u02'},
+    {t: 'Entire piano — side angle 2', h: 'Whole piano from the other side angle.', i: '▶️', c: 'FULL PIANO', img: 'u03'},
+    {t: 'Music desk / panel detail', h: 'Close-up of the music desk or front panel detail.', i: '🎼', c: 'EXTERIOR CLOSE-UP', img: 'u04'},
+    {t: 'Corner arm, cheek block, keyslip, keys', h: 'Front corner detail with keys showing.', i: '📐', c: 'EXTERIOR CLOSE-UP', img: 'u05'},
+    {t: 'Decal, keys, hardware, pedals', h: 'Fallboard decal down to the pedals.', i: '✨', c: 'EXTERIOR CLOSE-UP', img: 'u06'},
+    {t: 'Pedals & hardware', h: 'Angled or straight on is fine — just match the before & after.', i: '🥇', c: 'EXTERIOR CLOSE-UP', img: 'u07'},
+    {t: 'Toe block, caster, kneeboard & pedals', h: 'Low shot: toe block, caster, leg detail, kneeboard and pedals.', i: '🦶', c: 'EXTERIOR CLOSE-UP', img: 'u08'},
+    {t: 'Pedals & trapwork from inside', h: 'Bottom board open: pedals, trapwork, felts.', i: '🔧', c: 'INTERIOR', img: 'u09'},
+    {t: 'Lower interior — bridges, plate, soundboard', h: 'Low inside shot: plate, bridges, soundboard refinishing.', i: '🪵', c: 'INTERIOR', img: 'u10'},
+    {t: 'Hammer line', h: 'Straight shot down the hammer line.', i: '🔨', c: 'INTERIOR', img: 'u11'},
+    {t: 'Cabinetry, plate corner & entire action', h: 'Action brackets and the whole action; straight corner shot for a spinet/console.', i: '⚙️', c: 'INTERIOR', img: 'u12'},
+    {t: 'Top view — pins, strings, hammers', h: 'Shoot straight down featuring pins, strings and hammers.', i: '⬇️', c: 'INTERIOR', img: 'u13'},
   ],
   grand: [
-    {t: 'Main image — plate reflection or open-lid front', h: 'Plate reflection on the lid is the dream; otherwise angled front on the open-lid side showing the plate. Bench only if new / included.', i: '🎹', c: 'MAIN'},
-    {t: 'Entire piano — left side', h: 'Whole piano from the side angle.', i: '◀️', c: 'FULL PIANO'},
-    {t: 'Entire piano — right side', h: 'Whole piano from the other side angle.', i: '▶️', c: 'FULL PIANO'},
-    {t: 'Music desk, plate & pins', h: 'Music desk with plate and tuning pins in frame.', i: '🎼', c: 'EXTERIOR CLOSE-UP'},
-    {t: 'Corner arm, cheek block, keyslip, keys', h: 'Front corner detail with keys showing.', i: '📐', c: 'EXTERIOR CLOSE-UP'},
-    {t: 'Keyslip, keys, felt, hardware, decal', h: 'Along the keyslip: keys, felt, hardware and decal.', i: '✨', c: 'EXTERIOR CLOSE-UP'},
-    {t: 'Lyre & pedals', h: 'The lyre and pedals.', i: '🦶', c: 'EXTERIOR CLOSE-UP'},
-    {t: 'Leg & caster', h: 'One leg and caster detail.', i: '🦵', c: 'EXTERIOR CLOSE-UP'},
-    {t: 'Wood corner, plate, pins, dampers, strings', h: 'Interior corner: refinished wood, plate, pins, felts, dampers, strings.', i: '🪵', c: 'INTERIOR'},
-    {t: 'Hammer line', h: 'Straight shot down the hammer line.', i: '🔨', c: 'INTERIOR'},
-    {t: 'Bass strings, felts & plate circles', h: 'Bass strings with the felts and plate circles.', i: '🎻', c: 'INTERIOR'},
-    {t: 'Top view — pins, strings, hammers', h: 'Shoot straight down featuring pins, strings and hammers.', i: '⬇️', c: 'INTERIOR'},
-    {t: 'Entire plate, angled from the front', h: 'The whole plate at an angle from the front.', i: '🏆', c: 'INTERIOR'},
+    {t: 'Main image — straight', h: 'Plate reflection on the lid is the dream; otherwise angled front on the open-lid side showing the plate. Bench only if new / included.', i: '🎹', c: 'MAIN', img: 'g01'},
+    {t: 'Entire piano — side angle 1', h: 'Whole piano from one side angle, lid open.', i: '◀️', c: 'FULL PIANO', img: 'g02'},
+    {t: 'Entire piano — side angle 2', h: 'Whole piano from the other side angle, showing the plate.', i: '▶️', c: 'FULL PIANO', img: 'g03'},
+    {t: 'Music desk, plate & pins', h: 'Music desk with plate and tuning pins in frame.', i: '🎼', c: 'EXTERIOR CLOSE-UP', img: 'g04'},
+    {t: 'Corner arm, cheek block, keyslip, keys', h: 'Front corner detail with keys showing.', i: '📐', c: 'EXTERIOR CLOSE-UP', img: 'g05'},
+    {t: 'Keyslip, keys, felt, hardware, decal', h: 'Along the keyslip: keys, felt, hardware and decal.', i: '✨', c: 'EXTERIOR CLOSE-UP', img: 'g06'},
+    {t: 'Lyre & pedals', h: 'The lyre and pedals.', i: '🦶', c: 'EXTERIOR CLOSE-UP', img: 'g07'},
+    {t: 'Leg & caster', h: 'One leg and caster detail.', i: '🦵', c: 'EXTERIOR CLOSE-UP', img: 'g08'},
+    {t: 'Wood corner, plate, pins, dampers, strings', h: 'Interior corner: refinished wood, plate, pins, felts, dampers, strings.', i: '🪵', c: 'INTERIOR', img: 'g09'},
+    {t: 'Plate, pins & refinished wood detail', h: 'Include the wood refinishing, plate, pins, felts, dampers, strings, bridge.', i: '📌', c: 'INTERIOR', img: 'g10'},
+    {t: 'Straight top view of entire inside', h: 'Shoot straight down into the whole inside.', i: '⬇️', c: 'INTERIOR', img: 'g11'},
+    {t: 'Bass strings, felts & plate circles', h: 'Bass strings with the felts and plate circles.', i: '🎻', c: 'INTERIOR', img: 'g12'},
+    {t: 'Entire plate, angled from the front', h: 'The whole plate at an angle from the front.', i: '🏆', c: 'INTERIOR', img: 'g13'},
   ],
 };
+const shotSampleUrl = s => 'assets/photoguide/' + s.img + '.jpg';
 function shotStage(kind, idx, shot) {
   const k = kind === 'before' ? 'Before' : 'After';
   return `${k} S${String(idx + 1).padStart(2, '0')} ${shot.t.replace(/[^\w &-]+/g, ' ').replace(/\s+/g, ' ').trim()}`.slice(0, 80);
@@ -1110,40 +1112,66 @@ function openShotWizard(p, kind) {
   document.querySelectorAll('.shotwiz').forEach(el => el.remove());
   const list = SHOT_LISTS[p.type === 'grand' ? 'grand' : 'upright'];
   const listName = p.type === 'grand' ? 'GRAND' : 'UPRIGHT';
-  const W = {kind, idx: 0, done: {}, beforeIds: {}, busy: false};
+  const W = {kind, idx: 0, done: {}, beforeIds: {}, busy: false, stream: null, noCam: false};
   const ov = document.createElement('div');
-  ov.className = 'tagview shotwiz notranslate-camera';
+  ov.className = 'tagview shotwiz';
   document.body.appendChild(ov);
   const doneCount = () => Object.keys(W.done).length;
+  const stopCam = () => {
+    if (W.stream) { W.stream.getTracks().forEach(t => t.stop()); W.stream = null; }
+  };
+  const close = () => { stopCam(); ov.remove(); };
+
+  // live viewfinder inside the dotted square, with the reference photo
+  // (sample from the guide, or the matching BEFORE) kept visible on top
+  const ensureCam = async () => {
+    if (W.stream || W.noCam) return;
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { W.noCam = true; return; }
+    try {
+      W.stream = await navigator.mediaDevices.getUserMedia({
+        video: {facingMode: 'environment', width: {ideal: 2048}, height: {ideal: 2048}},
+        audio: false});
+    } catch (e) { W.noCam = true; }
+  };
+  const attachCam = () => {
+    const v = ov.querySelector('.swvideo');
+    if (v && W.stream) { v.srcObject = W.stream; v.play().catch(() => {}); }
+  };
 
   const render = () => {
     const s = list[W.idx];
     const isDone = !!W.done[W.idx];
     const beforeId = W.beforeIds[W.idx];
-    const ghost = (kind === 'after' && beforeId)
-      ? `<img class="swghost" alt="" src="https://drive.google.com/thumbnail?id=${beforeId}&sz=w480">`
-      : '';
-    const matchNote = kind === 'after'
-      ? (beforeId
-          ? `<div class="swmatch"><img alt="" src="https://drive.google.com/thumbnail?id=${beforeId}&sz=w160">
-             <span>← the BEFORE you're matching.<br>Same angle, square.</span></div>`
-          : `<div class="swmatch swnone">No tagged BEFORE for this shot — match the angle from the Before folder.</div>`)
-      : '';
+    const sample = shotSampleUrl(s);
+    // the reference to match: AFTER shots match their BEFORE when we have
+    // one; everything else matches the guide's sample photo
+    const refUrl = (kind === 'after' && beforeId)
+      ? `https://drive.google.com/thumbnail?id=${beforeId}&sz=w480` : sample;
+    const refLabel = (kind === 'after' && beforeId) ? 'the BEFORE you’re matching' : 'sample from the photo guide';
+    const live = !W.noCam;
     ov.innerHTML = `<div class="tvbox swbox">
       <div class="tvhead"><div><b>🧭 ${kind === 'before' ? 'BEFORE' : 'AFTER'} shots — ${esc(p.serial)}</b>
         <span>${esc((p.make || '') + ' ' + (p.model || ''))} · ${listName} list · square photos</span></div>
         <span class="x swx">✕</span></div>
       <div class="swstep">SHOT ${W.idx + 1} OF ${list.length} · ${s.c}</div>
       <div class="swtitle">${s.i} ${esc(s.t)}</div>
-      <div class="swframe ${isDone ? 'swdone' : ''}">${ghost}
-        <span class="swico">${isDone ? '✅' : '📷'}</span>
-        ${isDone ? '<span class="swdonelbl">already taken — retake replaces nothing, it adds another</span>' : ''}
+      <div class="swframe ${isDone ? 'swdone' : ''}">
+        ${live ? `<video class="swvideo" autoplay playsinline muted></video>
+                  <img class="swghost" alt="" src="${refUrl}">`
+               : `<img class="swsampleimg" alt="" src="${refUrl}">`}
+        ${isDone ? '<span class="swdonelbl">✓ already taken — shooting again adds another photo</span>' : ''}
       </div>
-      <div class="swhint">${esc(s.h)}</div>
-      ${matchNote}
+      <div class="swrefrow">
+        <img class="swref" alt="" src="${refUrl}">
+        <span>← ${refLabel}${live ? '<br>ghosted over your live camera — line it up' : ''}<br>${esc(s.h)}</span>
+      </div>
+      ${kind === 'after' && !beforeId ? '<div class="swmatch swnone">No tagged BEFORE for this shot yet — match the sample and the Before folder.</div>' : ''}
       <div class="swmsg"></div>
-      <button class="swsnap">📷 TAKE THIS SHOT</button>
-      <div class="swalt"><button class="swlib">🖼 use a photo from the library</button></div>
+      <button class="swsnap">${live ? '⚪ CAPTURE' : '📷 TAKE THIS SHOT'}</button>
+      <div class="swalt">
+        ${live ? '<button class="swcambtn">📷 use the phone camera app</button> · ' : ''}
+        <button class="swlib">🖼 photo library</button>
+      </div>
       <input type="file" class="swcam" accept="image/*" capture="environment" hidden>
       <input type="file" class="swfile" accept="image/*" hidden>
       <div class="swnav">
@@ -1155,15 +1183,16 @@ function openShotWizard(p, kind) {
         `<i data-i="${i}" class="${W.done[i] ? 'ok' : ''} ${i === W.idx ? 'on' : ''}" title="${esc(x.t)}"></i>`).join('')}</div>
     </div>`;
     wire();
+    attachCam();
   };
 
   const advance = () => {
-    // jump to the next not-done shot; fall back to simple next; close at end
     for (let i = W.idx + 1; i < list.length; i++) if (!W.done[i]) { W.idx = i; render(); return; }
     for (let i = 0; i < list.length; i++) if (!W.done[i]) { W.idx = i; render(); return; }
     finishScreen();
   };
   const finishScreen = () => {
+    stopCam();
     ov.innerHTML = `<div class="tvbox swbox">
       <div class="tvhead"><div><b>🧭 ${kind === 'before' ? 'BEFORE' : 'AFTER'} shots — ${esc(p.serial)}</b></div>
         <span class="x swx">✕</span></div>
@@ -1174,12 +1203,26 @@ function openShotWizard(p, kind) {
         : 'The missing shots stay on the list — reopen the wizard any time to finish.'}</div>
       <button class="swsnap swclose2">Done</button>
     </div>`;
-    ov.querySelector('.swx').onclick = () => ov.remove();
-    ov.querySelector('.swclose2').onclick = () => ov.remove();
+    ov.querySelector('.swx').onclick = close;
+    ov.querySelector('.swclose2').onclick = close;
   };
 
-  const upload = async file => {
-    if (!file || W.busy) return;
+  // square center-crop capture straight from the live viewfinder
+  const captureFrame = () => {
+    const v = ov.querySelector('.swvideo');
+    if (!v || !v.videoWidth) return null;
+    const side = Math.min(v.videoWidth, v.videoHeight);
+    const c = document.createElement('canvas');
+    const out = Math.min(2048, side);
+    c.width = out; c.height = out;
+    c.getContext('2d').drawImage(v,
+      (v.videoWidth - side) / 2, (v.videoHeight - side) / 2, side, side,
+      0, 0, out, out);
+    return c.toDataURL('image/jpeg', 0.85);
+  };
+
+  const upload = async dataUrl => {
+    if (!dataUrl || W.busy) return;
     const wa = writeAuth();
     const msg = ov.querySelector('.swmsg');
     if (!wa.ok) { msg.className = 'swmsg err'; msg.textContent = wa.renewing ? 'Sign-in expired — renewing, retry in a moment.' : 'Sign in first.'; return; }
@@ -1188,7 +1231,6 @@ function openShotWizard(p, kind) {
     const snapBtn = ov.querySelector('.swsnap');
     if (snapBtn) snapBtn.disabled = true;
     try {
-      const dataUrl = await downscalePhoto(file, 2048, 0.85);
       const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
         headers: {'content-type': 'text/plain;charset=utf-8'},
         body: JSON.stringify({pin: wa.pin, action: 'photo', kind, serial: p.serial, row: p.row,
@@ -1207,14 +1249,30 @@ function openShotWizard(p, kind) {
       if (snapBtn) snapBtn.disabled = false;
     }
   };
+  const uploadFile = async f => {
+    if (!f) return;
+    try { upload(await downscalePhoto(f, 2048, 0.85)); }
+    catch (e) {
+      const msg = ov.querySelector('.swmsg');
+      if (msg) { msg.className = 'swmsg err'; msg.textContent = '✗ ' + e.message; }
+    }
+  };
 
   function wire() {
     const cam = ov.querySelector('.swcam'), lib = ov.querySelector('.swfile');
-    ov.querySelector('.swx').onclick = () => ov.remove();
-    ov.querySelector('.swsnap').onclick = () => cam.click();
+    ov.querySelector('.swx').onclick = close;
+    ov.querySelector('.swsnap').onclick = () => {
+      if (!W.noCam) {
+        const shot = captureFrame();
+        if (shot) { upload(shot); return; }
+      }
+      cam.click();   // no live camera — the OS camera app instead
+    };
+    const cb = ov.querySelector('.swcambtn');
+    if (cb) cb.onclick = () => cam.click();
     ov.querySelector('.swlib').onclick = () => lib.click();
-    cam.onchange = () => { upload(cam.files[0]); cam.value = ''; };
-    lib.onchange = () => { upload(lib.files[0]); lib.value = ''; };
+    cam.onchange = () => { uploadFile(cam.files[0]); cam.value = ''; };
+    lib.onchange = () => { uploadFile(lib.files[0]); lib.value = ''; };
     ov.querySelector('.swprev').onclick = () => { if (W.idx > 0) { W.idx--; render(); } };
     ov.querySelector('.swnext').onclick = () =>
       W.idx === list.length - 1 ? finishScreen() : (W.idx++, render());
@@ -1224,7 +1282,7 @@ function openShotWizard(p, kind) {
 
   ov.innerHTML = `<div class="tvbox swbox"><div class="swhint" style="padding:30px;text-align:center">
     Loading the shot list…</div></div>`;
-  fetchShots(p.serial).then(rows => {
+  Promise.all([fetchShots(p.serial), ensureCam()]).then(([rows]) => {
     rows.forEach(row => {
       const ps = parseShotStage(row.stage || row.file);
       if (!ps) return;
