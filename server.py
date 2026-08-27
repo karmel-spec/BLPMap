@@ -137,6 +137,8 @@ def parse_pianos(raw):
                          if h.strip().upper() == 'ADMIN STEPS'), -1)
     key_svc_idx = next((i for i, h in enumerate(hdr)
                         if h.strip().upper() == 'KEY SERVICE'), -1)
+    bench_loc_idx = next((i for i, h in enumerate(hdr)
+                          if h.strip().upper() == 'BENCH LOCATION'), -1)
     tag_snap_idx = next((i for i, h in enumerate(hdr)
                          if h.strip().upper() == 'TAG SNAPSHOT'), -1)
     paperwork_idx = next((i for i, h in enumerate(hdr)
@@ -226,6 +228,7 @@ def parse_pianos(raw):
             'typeOverride': col(type_ov_idx) if type_ov_idx >= 0 else '',
             # shop-tag statics: BENCH, PROJECT CATEGORY (plan), NOTES, REPLATING ORDERED
             'bench': col(19)[:60], 'plan': col(23)[:220],
+            'benchLoc': (col(bench_loc_idx) if bench_loc_idx >= 0 else '')[:80],
             'planNotes': col(26)[:300], 'replate': col(50)[:20],
             # admin section: payment plan, last-emailed pay milestone, admin steps done
             'payPlan': col(pay_plan_idx) if pay_plan_idx >= 0 else '',

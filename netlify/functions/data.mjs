@@ -111,6 +111,8 @@ function parsePianos(text) {
     ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'ADMIN STEPS') : -1;
   const keySvcIdx = rows[1]
     ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'KEY SERVICE') : -1;
+  const benchLocIdx = rows[1]
+    ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'BENCH LOCATION') : -1;
   const tagSnapIdx = rows[1]
     ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'TAG SNAPSHOT') : -1;
   const paperworkIdx = rows[1]
@@ -182,6 +184,7 @@ function parsePianos(text) {
       typeOverride: (typeOvIdx >= 0 && col(typeOvIdx)) || '', status, location: loc,
       // shop-tag statics: BENCH, PROJECT CATEGORY (plan), NOTES, REPLATING ORDERED
       bench: col(19).slice(0, 60), plan: col(23).slice(0, 220),
+      benchLoc: benchLocIdx >= 0 ? col(benchLocIdx).slice(0, 80) : '',
       planNotes: col(26).slice(0, 300), replate: col(50).slice(0, 20),
       // admin section: payment plan, last-emailed pay milestone, admin steps done
       payPlan: payPlanIdx >= 0 ? col(payPlanIdx) : '',

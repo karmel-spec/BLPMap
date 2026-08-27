@@ -1162,3 +1162,8 @@ tr.adjediting td{background:#fdf8ee}
   color:#5b636b;border-bottom:2px solid #d8dce1;white-space:nowrap}
 .tmtable td{padding:5px 9px;border-bottom:1px solid #eef0f2;white-space:nowrap}
 .tmtable .tmtoday{background:#fdf6e3;box-shadow:inset 0 -2px 0 #c9a227}
+
+/* embedded Shop Manager pages (Scheduling / Team / Admin dashboards) */
+.shopframe{width:100%;height:calc(100vh - 230px);min-height:520px;border:1px solid #dfe3e8;
+  border-radius:10px;background:#fff}
+.frameft{margin-top:6px}

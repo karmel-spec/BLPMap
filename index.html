@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Store Map — Brigham Larson Pianos</title>
 <link rel="icon" href="assets/blp-logo.png">
-<link rel="stylesheet" href="styles.css?v=149">
+<link rel="stylesheet" href="styles.css?v=150">
 </head>
 <body>
 
@@ -74,6 +74,7 @@
     <div class="navitem" data-view="training"><span class="ic">🎓</span>Training</div>
     <div class="navitem" data-view="sched" id="navSched" hidden><span class="ic">📅</span>Scheduling</div>
     <div class="navitem" data-view="team" id="navTeam" hidden><span class="ic">👥</span>Team</div>
+    <div class="navitem" data-view="admdash" id="navAdmDash" hidden><span class="ic">🛡</span>Admin</div>
     <div class="crew">
       <b>Synced</b><span id="synced">loading…</span>
     </div>
@@ -241,14 +242,24 @@
         the team roster — pulled straight from the same sheets the Shop App uses.</p>
       <div class="teamtabs" id="teamTabs">
         <button data-tt="board" class="on">🎛 Shop Board</button>
+        <button data-tt="shopteam">🧑‍🔧 Team</button>
         <button data-tt="schedule">🗓 Schedule</button>
         <button data-tt="roster">📇 Roster</button>
       </div>
       <div id="teamBody"></div>
     </div>
   </div>
+
+  <div class="view panelview" id="view-admdash" hidden>
+    <div class="panel">
+      <h2 class="ph">🛡 ADMIN DASHBOARD</h2>
+      <p class="pd">Admin, managers &amp; owners — app requests, Brigham's task list, Curtis work,
+        QC and client reports, embedded live from the Shop Manager.</p>
+      <div id="admdashBody"></div>
+    </div>
+  </div>
 </div>
 
-<script src="app.js?v=191"></script>
+<script src="app.js?v=193"></script>
 </body>
 </html>

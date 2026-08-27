@@ -844,6 +844,9 @@ function doPost(e) {
         String(req.phase || '') + ': ' + String(req.note || '').slice(0, 120));
       return json_(pn);
     }
+    if (req.action === 'setbench') {
+      return json_(setBench_(req, who));
+    }
     if (req.action === 'setplatestatus') {
       var pls = setPlateStatus_(req);
       if (pls.ok) logAct_(who, 'Plate status', pls.summary || req.serial, pls.plateStatus || '(cleared)');
@@ -4646,6 +4649,24 @@ function phaseNote_(req, who) {
   var prev = String(sh.getRange(found.row, col).getValue() || '').trim();
   sh.getRange(found.row, col).setValue(prev ? line + '\n' + prev : line);
   return {ok: true, row: found.row, summary: found.summary};
+}
+/* Bench location (Brigham 8/27): where the piano's bench is right now —
+ * spot #, shelf, "with the piano"… — header-created BENCH LOCATION col. */
+function setBench_(req, who) {
+  var val = String(req.value == null ? '' : req.value).trim().slice(0, 80);
+  var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+  var found = findPiano_(sh, req.serial, req.row);
+  if (found.error) return found;
+  var last = sh.getLastColumn();
+  var hdr = sh.getRange(2, 1, 1, last).getValues()[0];
+  var col = -1;
+  for (var c = 0; c < hdr.length; c++) {
+    if (String(hdr[c] || '').trim().toUpperCase() === 'BENCH LOCATION') { col = c + 1; break; }
+  }
+  if (col < 0) { sh.getRange(2, last + 1).setValue('BENCH LOCATION'); col = last + 1; }
+  sh.getRange(found.row, col).setValue(val);
+  logAct_(who, 'Bench location', found.summary || req.serial, val || '(cleared)');
+  return {ok: true, row: found.row, summary: found.summary, benchLoc: val};
 }
 function setPlateStatus_(req) {
   var val = String(req.plateStatus == null ? '' : req.plateStatus).trim();

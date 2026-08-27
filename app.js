@@ -3162,6 +3162,13 @@ function popHTML(p) {
           `<span class="cabchip" title="${esc(cabPretty(t))}">${esc(t)}<i class="cabdel" data-t="${esc(t)}">✕</i></span>`).join('')}
           <button class="cabadd">＋ shelf</button>
         </span></div><div class="cabmsg phmsg"></div>` : ''}
+    ${p.serial ? `<div class="row rowflex"><span>🪑 Bench</span><b class="benchloc">${esc(p.benchLoc || '—')}</b></div>
+    <div class="movebox benchbox">
+        <input class="bnin" placeholder="bench location — spot #, shelf…" maxlength="40">
+        <button class="mvgo bngo">Set</button>
+        <button class="mvgo bnshot" title="photo of the bench → Tech folder">📸</button>
+      </div><div class="bnmsg phmsg"></div>
+      <input type="file" class="bnfile" accept="image/*" capture="environment" hidden>` : ''}
     ${p.serial ? `<button class="lhbtn">🕘 Location history</button><div class="lhout"></div>` : ''}`)}
 
     ${(body => p.serial ? secWrap('shop', '🔨 Shop Progress', body) : body)(`
@@ -3643,6 +3650,53 @@ function wirePop(p) {
       setTimeout(() => { if (!$('#pop').hidden) openPop(p.row, S.popAnchor, true); }, 1200);
     };
   })();
+  // 🪑 bench: location text via the bridge, photo straight to the Tech folder
+  const bngo = pop.querySelector('.bngo');
+  if (bngo) bngo.onclick = async ev => {
+    ev.stopPropagation(); popPinned = true;
+    const val = pop.querySelector('.bnin').value.trim();
+    const msg = pop.querySelector('.bnmsg');
+    if (!val) { msg.textContent = 'type where the bench is first'; return; }
+    const wa = writeAuth();
+    if (!wa.ok) { msg.textContent = wa.renewing ? 'Sign-in expired — retry in a moment.' : 'Sign in first.'; return; }
+    msg.textContent = 'saving…';
+    try {
+      const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+        headers: {'content-type': 'text/plain;charset=utf-8'},
+        body: JSON.stringify({pin: wa.pin, action: 'setbench', serial: p.serial, row: p.row,
+          value: val, ...authFields()})});
+      const j = await r.json();
+      if (!j.ok) throw new Error(j.error || 'failed');
+      p.benchLoc = val;
+      msg.textContent = '✓ bench location saved';
+      const bl = pop.querySelector('.benchloc'); if (bl) bl.textContent = val;
+    } catch (e) { msg.textContent = '✗ ' + e.message; }
+  };
+  const bnshot = pop.querySelector('.bnshot');
+  const bnfile = pop.querySelector('.bnfile');
+  if (bnshot && bnfile) {
+    bnshot.onclick = ev => { ev.stopPropagation(); popPinned = true; bnfile.click(); };
+    bnfile.onclick = ev => ev.stopPropagation();
+    bnfile.onchange = async () => {
+      const f = bnfile.files[0]; bnfile.value = '';
+      if (!f) return;
+      const msg = pop.querySelector('.bnmsg');
+      const wa = writeAuth();
+      if (!wa.ok) { msg.textContent = wa.renewing ? 'Sign-in expired — retry in a moment.' : 'Sign in first.'; return; }
+      msg.textContent = 'uploading bench photo…';
+      try {
+        const dataUrl = await downscalePhoto(f, 2048, 0.85);
+        const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+          headers: {'content-type': 'text/plain;charset=utf-8'},
+          body: JSON.stringify({pin: wa.pin, action: 'photo', kind: 'tech', serial: p.serial,
+            row: p.row, stage: 'Bench photo', mime: 'image/jpeg',
+            data: dataUrl.split(',')[1], ...authFields()})});
+        const j = await r.json();
+        if (!j.saved) throw new Error(j.error || 'upload failed');
+        msg.textContent = '✓ bench photo filed to the Tech folder';
+      } catch (e) { msg.textContent = '✗ ' + e.message; }
+    };
+  }
   const pws = pop.querySelector('.pwscan');
   if (pws) pws.onclick = ev => { ev.stopPropagation(); popPinned = true; scanPaperwork(p, pop); };
   pop.querySelectorAll('.pwadd').forEach(b => {
@@ -5532,9 +5586,11 @@ function renderAuth() {
   // 📅 Scheduling (management dashboard) — managers & owners only
   const ns = $('#navSched');
   if (ns) ns.hidden = !isTimelogAdmin();
-  // 👥 Team dashboard — admin + managers + owners
+  // 👥 Team + 🛡 Admin dashboards — admin + managers + owners
   const nt = $('#navTeam');
   if (nt) nt.hidden = !isTeamAdmin();
+  const na = $('#navAdmDash');
+  if (na) na.hidden = !isTeamAdmin();
   // top-bar identity chip — who's signed in, always visible
   const tw = $('#topWho');
   if (tw && !tw.dataset.wired) {
@@ -7960,6 +8016,13 @@ function teamClockFmt(iso) {
   const d = new Date(iso);
   return isNaN(d) ? '' : d.toLocaleTimeString('en-US', {hour: 'numeric', minute: '2-digit'});
 }
+// Brigham's board membership edits (8/27) — hides and group overrides sit on
+// top of the roster's Position column, matched on the full name
+const BOARD_HIDE = ['ben larson', 'karmel larson', 'brielle larson',
+  'susie marinez', 'susie martinez', 'louis larson', 'loius larson', 'abby larson'];
+const BOARD_GROUP = {'josh larson': 'Movers', 'lisa litton': 'Admin'};
+// on the board even though they're not on the roster's Current Team tab
+const BOARD_SEED = [{full: 'Lisa Litton', pos: 'Administrative', group: 'Admin'}];
 function teamBoardHTML() {
   const rows = (TEAM.roster && TEAM.roster['Current Team']) || [];
   const cat = pos => /intern/i.test(pos) ? 'Interns' : /refinish/i.test(pos) ? 'Refinishers'
@@ -7968,7 +8031,13 @@ function teamBoardHTML() {
   rows.slice(1).forEach(r => {
     const full = (String(r[0] || '').trim() + ' ' + String(r[1] || '').trim()).trim();
     if (!full) return;
-    groups[cat(String(r[2] || ''))].push({full, pos: String(r[2] || '')});
+    const key = full.toLowerCase().replace(/\s+/g, ' ');
+    if (BOARD_HIDE.includes(key)) return;
+    groups[BOARD_GROUP[key] || cat(String(r[2] || ''))].push({full, pos: String(r[2] || '')});
+  });
+  BOARD_SEED.forEach(s => {
+    const there = Object.values(groups).some(l => l.some(m => m.full.toLowerCase() === s.full.toLowerCase()));
+    if (!there) groups[s.group].push({full: s.full, pos: s.pos});
   });
   const norm = s => String(s || '').trim().toLowerCase();
   const firstOf = s => norm(s).split(/\s+/)[0];
@@ -8038,6 +8107,7 @@ function renderTeam() {
     b.classList.toggle('on', b.dataset.tt === TEAM.tab);
     if (!b.dataset.wired) { b.dataset.wired = '1'; b.onclick = () => { TEAM.tab = b.dataset.tt; renderTeam(); }; }
   });
+  if (TEAM.tab === 'shopteam') { el.innerHTML = shopFrameHTML('team'); return; }
   if (!TEAM.roster && !TEAM.loading) { teamFetchAll(); el.innerHTML = '<div class="empty">Loading the team…</div>'; return; }
   if (TEAM.loading) { el.innerHTML = '<div class="empty">Loading the team…</div>'; return; }
   el.innerHTML = TEAM.tab === 'board' ? teamBoardHTML()
@@ -8045,29 +8115,58 @@ function renderTeam() {
 }
 
 /* ---------- 📅 Scheduling — management dashboard (managers & owners) ----------
- * The landing shell. Shop App pages get recreated here section by section
- * as Brigham picks them; each section renders into #schedBody. */
+ * Shop Manager pages embedded via manager.html?embed=1 (chrome hidden,
+ * hash picks the page) — one source of truth, nothing duplicated. */
+const SHOP_MGR = 'https://blpshop.netlify.app/manager.html';
+function shopFrameHTML(tab) {
+  return `<iframe class="shopframe" src="${SHOP_MGR}?embed=1#${tab}"
+      title="Shop Manager — ${esc(tab)}"></iframe>
+    <p class="pd frameft">Signed-in view from the Shop Manager —
+      <a href="${SHOP_MGR}#${tab}" target="_blank" rel="noopener">open full page ↗</a></p>`;
+}
+const SCHED_TABS = [
+  ['dash', '📊 Dashboard'], ['review', '📝 Weekly Review'], ['planner', '🧮 Planner'],
+  ['week', '🗓 Week Schedule'], ['schedule', '📆 Schedule'], ['sequence', '🔢 Sequence'],
+  ['pipeline', '🚰 Pipeline'], ['walk', '🚶 Walk-the-Shop'],
+];
+const SCHED = {tab: 'planner'};
 function renderSched() {
   const el = $('#schedBody');
   if (!el) return;
   if (!isTimelogAdmin()) { el.innerHTML = '<div class="empty">Managers &amp; owners only.</div>'; return; }
-  el.innerHTML = `
-    <div class="schedgrid">
-      <div class="schedcard">
-        <h4>🗓 This week</h4>
-        <p>Team scheduling lives here next — tell Brigham which Shop App
-           pages to bring over and they land in this dashboard.</p>
-      </div>
-      <div class="schedcard">
-        <h4>🔗 Until then</h4>
-        <p><a href="https://blpshop.netlify.app/manager.html" target="_blank" rel="noopener">Open the Shop Manager app ↗</a></p>
-      </div>
-    </div>`;
+  el.innerHTML = `<div class="teamtabs">${SCHED_TABS.map(([id, label]) =>
+      `<button data-st="${id}" class="${SCHED.tab === id ? 'on' : ''}">${label}</button>`).join('')}</div>
+    <div id="schedFrame">${shopFrameHTML(SCHED.tab)}</div>`;
+  el.querySelectorAll('[data-st]').forEach(b => b.onclick = () => {
+    SCHED.tab = b.dataset.st;
+    el.querySelectorAll('[data-st]').forEach(x => x.classList.toggle('on', x.dataset.st === SCHED.tab));
+    $('#schedFrame').innerHTML = shopFrameHTML(SCHED.tab);
+  });
+}
+
+/* ---------- 🛡 Admin dashboard (admin + managers + owners) ---------- */
+const ADMDASH_TABS = [
+  ['requests', '💡 App Requests'], ['brigham', '🗒 Brigham Tasks'],
+  ['curtis', '🎨 Curtis'], ['qc', '✅ QC'], ['client', '📬 Client Reports'],
+];
+const ADMDASH = {tab: 'requests'};
+function renderAdmDash() {
+  const el = $('#admdashBody');
+  if (!el) return;
+  if (!isTeamAdmin()) { el.innerHTML = '<div class="empty">Admin, managers &amp; owners only.</div>'; return; }
+  el.innerHTML = `<div class="teamtabs">${ADMDASH_TABS.map(([id, label]) =>
+      `<button data-at="${id}" class="${ADMDASH.tab === id ? 'on' : ''}">${label}</button>`).join('')}</div>
+    <div id="admdashFrame">${shopFrameHTML(ADMDASH.tab)}</div>`;
+  el.querySelectorAll('[data-at]').forEach(b => b.onclick = () => {
+    ADMDASH.tab = b.dataset.at;
+    el.querySelectorAll('[data-at]').forEach(x => x.classList.toggle('on', x.dataset.at === ADMDASH.tab));
+    $('#admdashFrame').innerHTML = shopFrameHTML(ADMDASH.tab);
+  });
 }
 
 /* ---------- views / nav / drawers ---------- */
 function showView(v) {
-  ['map', 'report', 'board', 'cal', 'media', 'shopmap', 'archive', 'dash', 'whiteboard', 'training', 'trainingdoc', 'sched', 'team'].forEach(x => $('#view-' + x).hidden = x !== v);
+  ['map', 'report', 'board', 'cal', 'media', 'shopmap', 'archive', 'dash', 'whiteboard', 'training', 'trainingdoc', 'sched', 'team', 'admdash'].forEach(x => $('#view-' + x).hidden = x !== v);
   if (v === 'archive') renderArchive();
   document.querySelectorAll('.navitem[data-view]').forEach(el =>
     el.classList.toggle('on', el.dataset.view === v));
@@ -8076,10 +8175,11 @@ function showView(v) {
   if (v === 'whiteboard') renderWhiteboard();   // first open fetches the board
   if (v === 'sched') renderSched();
   if (v === 'team') renderTeam();
+  if (v === 'admdash') renderAdmDash();
 }
 function switchView(v) {
   if (v === 'sched' && !isTimelogAdmin()) v = 'map';   // managers & owners only
-  if (v === 'team' && !isTeamAdmin()) v = 'map';       // admin + managers + owners
+  if ((v === 'team' || v === 'admdash') && !isTeamAdmin()) v = 'map';   // admin + managers + owners
   S.view = v; showView(v); closeNav();
   // a leftover page scroll (from panning the map) can slide a view's top —
   // and its ✕ — up underneath the sticky header, where iOS bounce keeps it
