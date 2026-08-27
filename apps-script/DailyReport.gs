@@ -847,6 +847,9 @@ function doPost(e) {
     if (req.action === 'setbench') {
       return json_(setBench_(req, who));
     }
+    if (req.action === 'setkeystatus') {
+      return json_(setKeyStatus_(req, who));
+    }
     if (req.action === 'setplatestatus') {
       var pls = setPlateStatus_(req);
       if (pls.ok) logAct_(who, 'Plate status', pls.summary || req.serial, pls.plateStatus || '(cleared)');
@@ -4667,6 +4670,29 @@ function setBench_(req, who) {
   sh.getRange(found.row, col).setValue(val);
   logAct_(who, 'Bench location', found.summary || req.serial, val || '(cleared)');
   return {ok: true, row: found.row, summary: found.summary, benchLoc: val};
+}
+/* Keytop status (Brigham 8/27): Evaluate / In Key Queue #n / In Process /
+ * Done — header-created KEYTOP STATUS col, shown in the card's Concurrent
+ * section and the Concurrent Work report's keys category. */
+var KEYTOP_STATES = ['Evaluate', 'In Key Queue', 'In Process', 'Done'];
+function setKeyStatus_(req, who) {
+  var val = String(req.value == null ? '' : req.value).trim().slice(0, 40);
+  if (val && !KEYTOP_STATES.some(function (s) {
+    return val === s || val.indexOf(s + ' #') === 0;
+  })) return {error: 'bad keytop status: ' + val};
+  var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+  var found = findPiano_(sh, req.serial, req.row);
+  if (found.error) return found;
+  var last = sh.getLastColumn();
+  var hdr = sh.getRange(2, 1, 1, last).getValues()[0];
+  var col = -1;
+  for (var c = 0; c < hdr.length; c++) {
+    if (String(hdr[c] || '').trim().toUpperCase() === 'KEYTOP STATUS') { col = c + 1; break; }
+  }
+  if (col < 0) { sh.getRange(2, last + 1).setValue('KEYTOP STATUS'); col = last + 1; }
+  sh.getRange(found.row, col).setValue(val);
+  logAct_(who, 'Keytop status', found.summary || req.serial, val || '(cleared)');
+  return {ok: true, row: found.row, summary: found.summary, keytopStatus: val};
 }
 function setPlateStatus_(req) {
   var val = String(req.plateStatus == null ? '' : req.plateStatus).trim();

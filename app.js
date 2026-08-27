@@ -358,10 +358,37 @@ function pianoTaskDefs(p) {
   }
   return [...byId.values()];
 }
+// keytop status (Brigham 8/27): dropdown in the Concurrent section; the
+// "In Key Queue" choice carries a queue-position number ("In Key Queue #3")
+const KEYTOP_STATES = ['Evaluate', 'In Key Queue', 'In Process', 'Done'];
+function keytopParts(p) {
+  const raw = String(p.keytopStatus || '').trim();
+  const m = /^(Evaluate|In Key Queue|In Process|Done)(?:\s*#?\s*(\d+))?$/i.exec(raw);
+  if (!m) return {state: '', num: ''};
+  return {state: KEYTOP_STATES.find(s => s.toLowerCase() === m[1].toLowerCase()),
+          num: m[2] || ''};
+}
 function tasksBox(p) {
-  if (!p.serial || !trackKeysFor(p).length) return '';
+  if (!p.serial) return '';
+  const kt = keytopParts(p);
   return `<div class="taskbox"><div class="taskhead">Concurrent tasks
-      <span class="taskmsg"></span></div><div class="taskbody">loading…</div></div>`;
+      <span class="taskmsg"></span></div>
+    <div class="row phrow platerow">Plate
+      <select class="platesel">
+        <option value="" ${!(p.plateStatus || '').trim() ? 'selected' : ''}>— not tracked —</option>
+        ${PLATE_STAGES.map(v =>
+          `<option ${p.plateStatus === v ? 'selected' : ''}>${esc(v)}</option>`).join('')}
+      </select></div><div class="platemsg phmsg"></div>
+    <div class="row phrow keystatrow">Keytops
+      <select class="keystatsel">
+        <option value="" ${!kt.state ? 'selected' : ''}>— not tracked —</option>
+        ${KEYTOP_STATES.map(v =>
+          `<option value="${v}" ${kt.state === v ? 'selected' : ''}>${v === 'In Key Queue' ? 'In Key Queue #' : v}</option>`).join('')}
+      </select>
+      <input class="keyqnum" type="number" min="1" max="99" placeholder="#"
+        title="place in the key queue" value="${esc(kt.num)}" ${kt.state === 'In Key Queue' ? '' : 'hidden'}>
+    </div><div class="keystatmsg phmsg"></div>
+    ${trackKeysFor(p).length ? '<div class="taskbody">loading…</div>' : ''}</div>`;
 }
 async function loadTasks(p, pop) {
   const body = pop.querySelector('.taskbody');
@@ -3085,12 +3112,6 @@ function popHTML(p) {
              `<option value="${esc(ph)}" ${effPh === ph ? 'selected' : ''}>${esc(ph)}</option>`).join('')}
          </select></div>${gotoLine(p, effPh)}<div class="phmsg"></div>
        ${(p.phaseNotes || '').trim() ? `<div class="phnhist" style="font-size:11px;color:#6f6a63;background:#faf8f4;border-radius:6px;padding:6px 9px;margin:4px 0;white-space:pre-wrap">📝 ${esc(String(p.phaseNotes).slice(0, 500))}</div>` : ''}
-       <div class="row phrow platerow">Plate
-         <select class="platesel">
-           <option value="" ${!(p.plateStatus || '').trim() ? 'selected' : ''}>— not tracked —</option>
-           ${PLATE_STAGES.map(v =>
-             `<option ${p.plateStatus === v ? 'selected' : ''}>${esc(v)}</option>`).join('')}
-         </select></div><div class="platemsg phmsg"></div>
        <div class="row phrow colorow">Colors
          <span style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:0">
            <input class="colorpick" maxlength="80" placeholder="first pick — refinish/plating color + sheen"
@@ -3389,6 +3410,45 @@ function wirePop(p) {
     } catch (e) { msg.textContent = '✗ ' + e.message; }
     plsel.disabled = false;
   };
+  // keytop status dropdown (+ queue position when "In Key Queue")
+  const ksel = pop.querySelector('.keystatsel');
+  const knum = pop.querySelector('.keyqnum');
+  if (ksel) {
+    const saveKeytop = async () => {
+      const msg = pop.querySelector('.keystatmsg');
+      const {pin, ok} = writeAuth();
+      if (!ok) { msg.textContent = 'Sign in with Google (menu) first.'; return; }
+      const n = knum && !knum.hidden ? String(knum.value || '').trim() : '';
+      const val = ksel.value === 'In Key Queue'
+        ? 'In Key Queue' + (n ? ' #' + n : '') : ksel.value;
+      msg.textContent = 'saving…';
+      ksel.disabled = true;
+      try {
+        const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+          headers: {'content-type': 'text/plain;charset=utf-8'},
+          body: JSON.stringify({pin, action: 'setkeystatus', serial: p.serial, row: p.row,
+            value: val, ...authFields()})});
+        const j = await r.json();
+        if (j.error) throw new Error(j.error);
+        p.keytopStatus = val;
+        msg.textContent = '✓ saved';
+        setTimeout(() => { if (msg.isConnected) msg.textContent = ''; }, 1800);
+      } catch (e) { msg.textContent = '✗ ' + e.message; }
+      ksel.disabled = false;
+    };
+    ksel.onclick = ev => ev.stopPropagation();
+    ksel.onchange = () => {
+      if (knum) {
+        knum.hidden = ksel.value !== 'In Key Queue';
+        if (!knum.hidden && !knum.value) { knum.focus(); return; }  // saves once the # is typed
+      }
+      saveKeytop();
+    };
+    if (knum) {
+      knum.onclick = ev => ev.stopPropagation();
+      knum.onchange = saveKeytop;
+    }
+  }
   const ps = pop.querySelector('.phsel');
   if (ps) {
     ps.onclick = ev => ev.stopPropagation();
@@ -6561,7 +6621,7 @@ function tasksTable() {
       <span class="actcount">${rows.length} piano${rows.length === 1 ? '' : 's'}, queue order</span>
       ${(f.st || f.q || f.pl) ? '<button class="tkclear">✕ clear</button>' : ''}
     </div>
-    <table><tr><th>QUEUE</th><th>PIANO</th><th>SPOT</th><th>PHASE</th>${f.cat === 'plating' ? '<th>PLATE LOCATION</th>' : ''}<th>STATUS</th><th>NOTE ON FILE</th></tr>
+    <table><tr><th>QUEUE</th><th>PIANO</th><th>SPOT</th><th>PHASE</th>${f.cat === 'plating' ? '<th>PLATE LOCATION</th>' : ''}${f.cat === 'keys' ? '<th>KEYTOPS</th>' : ''}<th>STATUS</th><th>NOTE ON FILE</th></tr>
     ${rows.map(({p, v, st}) => {
       const c = PILL[st];
       return `<tr class="mrow" data-row="${p.row}">
@@ -6571,9 +6631,10 @@ function tasksTable() {
         <td>${esc(String(p.location || '—').slice(0, 14))}</td>
         <td>${esc((p.phase || '—').slice(0, 22))}</td>
         ${f.cat === 'plating' ? `<td>${plateBadge(p.plateStatus)}</td>` : ''}
+        ${f.cat === 'keys' ? `<td>${esc(p.keytopStatus || '—')}</td>` : ''}
         <td><span style="background:${c[0]};color:${c[1]};border-radius:999px;padding:2px 9px;font-size:11px;font-weight:800;white-space:nowrap">${st === 'needed' ? 'NEEDS ATTENTION' : st.toUpperCase()}</span></td>
         <td>${esc(v || '—')}</td></tr>`;
-    }).join('') || `<tr><td colspan="${f.cat === 'plating' ? 7 : 6}" class="empty">Nothing matches.</td></tr>`}
+    }).join('') || `<tr><td colspan="${f.cat === 'plating' || f.cat === 'keys' ? 7 : 6}" class="empty">Nothing matches.</td></tr>`}
     </table>`;
 }
 
