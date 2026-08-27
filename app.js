@@ -6373,12 +6373,17 @@ function briefsTable(kindOnly) {
     return `<h4 class="bfhd">${label}</h4>
       <p class="pd bfnote">${note}</p>
       <table><tr><th>DATE</th><th>BRIEFING</th><th></th></tr>
-      ${rows.map(b => `<tr>
+      ${rows.map(b => {
+        const docId = ((b.url || '').match(/\/d\/([-\w]{20,80})/) || [])[1];
+        return `<tr>
         <td style="white-space:nowrap">${esc((b.date || '').slice(0, 10))}</td>
         <td>${esc(b.subject)}</td>
         <td style="white-space:nowrap"><a target="_blank" rel="noopener" href="${esc(b.url)}">open doc \u2197</a>
+          ${docId ? `<a target="_blank" rel="noopener" title="printable copy \u2014 opens the print dialog"
+            href="https://blpstoremap.netlify.app/api/print?id=${docId}">\ud83d\udda8 print</a>` : ''}
           <button class="bfshare" data-url="${esc(b.url)}" data-title="${esc(b.subject)}"
-            title="share just this briefing">\u2197 share</button></td></tr>`).join('')
+            title="share just this briefing">\u2197 share</button></td></tr>`;
+      }).join('')
        || '<tr><td colspan="3" class="empty">Nothing archived yet \u2014 the next one lands with this evening\u2019s 7PM send.</td></tr>'}
       </table>`;
   };
