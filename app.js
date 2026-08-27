@@ -2135,15 +2135,13 @@ function renderMap() {
   svg.querySelectorAll('.cabunitbox, .cabunitnum, .cabcntc, .cabcnt2').forEach(el =>
     el.addEventListener('click', ev => { ev.stopPropagation(); openCabUnitModal(el.dataset.unit); }));
   sizePlan();
+  // cards open on CLICK only (082726hales16) — hover-open made panning the
+  // map spray cards everywhere; hover now just shows the cursor affordance
   svg.querySelectorAll('.piano').forEach(el => {
     el.addEventListener('click', ev => { ev.stopPropagation(); openPop(+el.dataset.row, el, true); });
-    el.addEventListener('mouseenter', () => openPop(+el.dataset.row, el, false));
-    el.addEventListener('mouseleave', scheduleHide);
   });
   svg.querySelectorAll('.holdcell[data-row]').forEach(el => {
     el.addEventListener('click', () => openPop(+el.dataset.row, el, true));
-    el.addEventListener('mouseenter', () => openPop(+el.dataset.row, el, false));
-    el.addEventListener('mouseleave', scheduleHide);
   });
   svg.querySelectorAll('.slot').forEach(el =>
     el.addEventListener('click', () => openSlotPop(el.dataset.slot)));
