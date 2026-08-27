@@ -122,6 +122,11 @@ function doGet(e) {
     try { return json_({events: fetchEvents_()}); }
     catch (err) { return json_({error: String(err), events: []}); }
   }
+  // dry-run preview of the 6pm late-clock nudge — who'd be texted right now
+  if (e && e.parameter && e.parameter.fn === 'latesweep') {
+    try { return json_(lateClockNudge({dry: true})); }
+    catch (err) { return json_({error: String(err)}); }
+  }
   // PHOTO LOG rows for one piano — feeds the 13-shot photo wizard (which
   // shots exist, and the Before file ids for After-mode ghost matching)
   if (e && e.parameter && e.parameter.fn === 'shots') {
@@ -4557,6 +4562,69 @@ function shareUpdates_(req, who) {
  * shows everyone. Training -> "Training Requests" tab + email shop@ + text
  * Mark AND Jacob. Texts go through the sales app's request-notify. */
 var TIMEOFF_TAB = 'Time Off';
+/* ⏰ Late-clock nudge (Brigham 8/27): weekday evenings after ~6pm, anyone
+ * still on the day clock or a piano clock — movers excepted, they work
+ * evening deliveries — gets a text asking what time their clock-out
+ * should be corrected to. One-time trigger install: run
+ * setupLateClockNudge() from the editor. */
+function setupLateClockNudge() {
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === 'lateClockNudge') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('lateClockNudge').timeBased()
+    .everyDays(1).atHour(18).inTimezone('America/Denver').create();
+  Logger.log('lateClockNudge trigger installed (daily, 6-7pm Denver)');
+}
+function moverFirsts_() {
+  // mover first names from the BLP TEAM roster's Position column
+  var out = {};
+  try {
+    var r = UrlFetchApp.fetch(
+      'https://blpsalesapp.netlify.app/.netlify/functions/team-roster?key=pianoman',
+      {muteHttpExceptions: true});
+    var rows = (JSON.parse(r.getContentText()).tabs || {})['Current Team'] || [];
+    for (var i = 1; i < rows.length; i++) {
+      if (/mover/i.test(String(rows[i][2] || ''))) {
+        out[String(rows[i][0] || '').trim().toLowerCase()] = 1;
+      }
+    }
+  } catch (e) {}
+  return out;
+}
+function lateClockNudge(e) {
+  var dry = e && e.dry;
+  var dow = Number(Utilities.formatDate(new Date(), 'America/Denver', 'u'));
+  if (dow > 6 && !dry) return;                       // Sundays stay quiet
+  var movers = moverFirsts_();
+  var firstOf = function (n) { return String(n || '').trim().split(/\s+/)[0].toLowerCase(); };
+  var late = {};                                     // first name -> lines
+  try {
+    (timeClockState_().open || []).forEach(function (o) {
+      if (movers[firstOf(o.tech)]) return;
+      (late[o.tech] = late[o.tech] || []).push('🎹 ' + (o.piano || o.serial)
+        + (o.phase ? ' (' + o.phase + ')' : ''));
+    });
+  } catch (e1) {}
+  try {
+    (payrollState_().open || []).forEach(function (o) {
+      if (movers[firstOf(o.tech)]) return;
+      (late[o.tech] = late[o.tech] || []).push('🕔 day clock (since '
+        + Utilities.formatDate(new Date(o.start), 'America/Denver', 'h:mm a') + ')');
+    });
+  } catch (e2) {}
+  var names = Object.keys(late);
+  if (dry) return {ok: true, wouldText: names.map(function (n) { return {name: n, open: late[n]}; })};
+  names.forEach(function (n) {
+    var msg = '⏰ BLP Store Map: it\'s after 6pm and you\'re still clocked in — '
+      + late[n].join(' + ')
+      + '. If you\'ve gone home, open the Store Map, clock out, then reply here or use '
+      + 'My Dashboard → "Request a time fix" with the time you actually finished. '
+      + 'What time should your clock-out be corrected to?';
+    notifyTeam_([n], msg);
+    logAct_('Store Map (auto)', 'Late clock nudge', n, late[n].join(' + ').slice(0, 140));
+  });
+  return {ok: true, texted: names};
+}
 function notifyTeam_(names, message) {
   for (var i = 0; i < names.length; i++) {
     try {
