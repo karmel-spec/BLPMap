@@ -122,6 +122,12 @@ function doGet(e) {
     try { return json_({events: fetchEvents_()}); }
     catch (err) { return json_({error: String(err), events: []}); }
   }
+  // PHOTO LOG rows for one piano — feeds the 13-shot photo wizard (which
+  // shots exist, and the Before file ids for After-mode ghost matching)
+  if (e && e.parameter && e.parameter.fn === 'shots') {
+    try { return json_(shotRows_(e.parameter.serial)); }
+    catch (err) { return json_({error: String(err), rows: []}); }
+  }
   // Tech photo folder for one piano — the Store Map's Media section links here
   if (e && e.parameter && e.parameter.fn === 'techfolder') {
     try {
@@ -959,8 +965,33 @@ function savePhoto_(req, who) {
   }
   log.appendRow([new Date(), serial, found.summary || '', String(req.stage || ''),
                  who, name, file.getUrl()]);
+  // wizard shots ask to be link-readable so the app can show the Before
+  // thumbnail as a ghost while shooting the matching After
+  if (req.share) { try { shareAnyoneWithLink_(file.getId()); } catch (e2) {} }
   return {ok: true, saved: true, name: name, link: file.getUrl(),
-          folder: tech.getName(), summary: found.summary};
+          id: file.getId(), folder: tech.getName(), summary: found.summary};
+}
+
+// PHOTO LOG rows for one serial (When/Stage/File/Link → id), newest last.
+function shotRows_(serial) {
+  var s = String(serial || '').trim();
+  if (!s) return {ok: true, rows: []};
+  var ss = SpreadsheetApp.openById(PIANO_LOG_ID);
+  var log = ss.getSheetByName(PHOTO_LOG_TAB);
+  if (!log) return {ok: true, rows: []};
+  var last = log.getLastRow();
+  if (last < 2) return {ok: true, rows: []};
+  var vals = log.getRange(2, 1, last - 1, 7).getValues();
+  var out = [];
+  for (var i = 0; i < vals.length; i++) {
+    if (String(vals[i][1] || '').trim() !== s) continue;
+    var link = String(vals[i][6] || '');
+    var m = /\/d\/([-\w]+)/.exec(link) || /[?&]id=([-\w]+)/.exec(link);
+    out.push({when: String(vals[i][0] || ''), stage: String(vals[i][3] || ''),
+              by: String(vals[i][4] || ''), file: String(vals[i][5] || ''),
+              id: m ? m[1] : ''});
+  }
+  return {ok: true, rows: out.slice(-300)};
 }
 
 // Resolve the piano's "Tech" photos subfolder. Prefers the Main Folder link on

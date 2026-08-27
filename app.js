@@ -1040,9 +1040,200 @@ function mediaCard(p) {
       <button class="tagbtn maddbtn" data-kind="before">📷 Add before photos</button>
       <button class="tagbtn maddbtn" data-kind="after">📷 Add after photos</button>
       <input type="file" class="maddin" accept="image/*" multiple hidden>
+    </div>
+    <div class="tagbtns mediaadd">
+      <button class="tagbtn wizbtn" data-kind="before">🧭 Before shot list (13)</button>
+      <button class="tagbtn wizbtn" data-kind="after">🧭 After shot list (13)</button>
     </div>` : ''}
     <div class="mdmsg"></div>
   </div>`;
+}
+
+/* ---------- 13-shot before/after camera wizard ----------
+ * Steps through Brigham's photo guide one shot at a time. Every photo is
+ * SQUARE and each AFTER must match its BEFORE angle, so in After mode the
+ * matching Before photo is shown as a ghost inside the framing box.
+ * Shots upload through the normal bridge `photo` action; the shot number
+ * rides in the `stage` label ("Before S04 · Music desk plate pins"), which
+ * lands in both the Drive filename and the PHOTO LOG — that's how the
+ * wizard knows on any device which shots are already done. */
+const SHOT_LISTS = {
+  upright: [
+    {t: 'Main image — straight front', h: 'Slightly angled front, cabinetry on, keys showing. Angle up enough to hide the top lid. Bench only if new / included in sale.', i: '🎹', c: 'MAIN'},
+    {t: 'Entire piano — left side', h: 'Whole piano from the side angle.', i: '◀️', c: 'FULL PIANO'},
+    {t: 'Entire piano — right side', h: 'Whole piano from the other side angle.', i: '▶️', c: 'FULL PIANO'},
+    {t: 'Music desk / panel detail', h: 'Close-up of the music desk or front panel detail.', i: '🎼', c: 'EXTERIOR CLOSE-UP'},
+    {t: 'Music desk, plate & pins', h: 'Desk with the plate and tuning pins in frame.', i: '📌', c: 'EXTERIOR CLOSE-UP'},
+    {t: 'Corner arm, cheek block, keyslip, keys', h: 'Front corner detail with keys showing.', i: '📐', c: 'EXTERIOR CLOSE-UP'},
+    {t: 'Decal, keys, hardware, pedals', h: 'Fallboard decal down to the pedals. Angled or straight — just match before & after.', i: '✨', c: 'EXTERIOR CLOSE-UP'},
+    {t: 'Toe block, caster, kneeboard & pedals', h: 'Low shot: toe block, caster, leg detail, kneeboard and pedals.', i: '🦶', c: 'EXTERIOR CLOSE-UP'},
+    {t: 'Pedals, trapwork & soundboard', h: 'Inside low: pedals, trapwork, felts, plate, bridges, soundboard finish.', i: '🔧', c: 'INTERIOR'},
+    {t: 'Wood corner, plate, pins, dampers, strings', h: 'Interior corner: refinished wood, plate, pins, felts, dampers, strings.', i: '🪵', c: 'INTERIOR'},
+    {t: 'Hammer line', h: 'Straight shot down the hammer line.', i: '🔨', c: 'INTERIOR'},
+    {t: 'Cabinetry, plate corner & entire action', h: 'Action brackets and the whole action; straight corner shot for a spinet/console.', i: '⚙️', c: 'INTERIOR'},
+    {t: 'Straight top view of entire inside', h: 'Shoot straight down into the whole inside.', i: '⬇️', c: 'INTERIOR'},
+  ],
+  grand: [
+    {t: 'Main image — plate reflection or open-lid front', h: 'Plate reflection on the lid is the dream; otherwise angled front on the open-lid side showing the plate. Bench only if new / included.', i: '🎹', c: 'MAIN'},
+    {t: 'Entire piano — left side', h: 'Whole piano from the side angle.', i: '◀️', c: 'FULL PIANO'},
+    {t: 'Entire piano — right side', h: 'Whole piano from the other side angle.', i: '▶️', c: 'FULL PIANO'},
+    {t: 'Music desk, plate & pins', h: 'Music desk with plate and tuning pins in frame.', i: '🎼', c: 'EXTERIOR CLOSE-UP'},
+    {t: 'Corner arm, cheek block, keyslip, keys', h: 'Front corner detail with keys showing.', i: '📐', c: 'EXTERIOR CLOSE-UP'},
+    {t: 'Keyslip, keys, felt, hardware, decal', h: 'Along the keyslip: keys, felt, hardware and decal.', i: '✨', c: 'EXTERIOR CLOSE-UP'},
+    {t: 'Lyre & pedals', h: 'The lyre and pedals.', i: '🦶', c: 'EXTERIOR CLOSE-UP'},
+    {t: 'Leg & caster', h: 'One leg and caster detail.', i: '🦵', c: 'EXTERIOR CLOSE-UP'},
+    {t: 'Wood corner, plate, pins, dampers, strings', h: 'Interior corner: refinished wood, plate, pins, felts, dampers, strings.', i: '🪵', c: 'INTERIOR'},
+    {t: 'Hammer line', h: 'Straight shot down the hammer line.', i: '🔨', c: 'INTERIOR'},
+    {t: 'Bass strings, felts & plate circles', h: 'Bass strings with the felts and plate circles.', i: '🎻', c: 'INTERIOR'},
+    {t: 'Top view — pins, strings, hammers', h: 'Shoot straight down featuring pins, strings and hammers.', i: '⬇️', c: 'INTERIOR'},
+    {t: 'Entire plate, angled from the front', h: 'The whole plate at an angle from the front.', i: '🏆', c: 'INTERIOR'},
+  ],
+};
+function shotStage(kind, idx, shot) {
+  const k = kind === 'before' ? 'Before' : 'After';
+  return `${k} S${String(idx + 1).padStart(2, '0')} ${shot.t.replace(/[^\w &-]+/g, ' ').replace(/\s+/g, ' ').trim()}`.slice(0, 80);
+}
+// parse "Before S04 …" (or a filename slug "Before-S04-…") back to [kind, idx]
+function parseShotStage(s) {
+  const m = /^(Before|After)[ \-_]?S(\d{2})/i.exec(String(s || '').trim());
+  return m ? {kind: m[1].toLowerCase(), idx: parseInt(m[2], 10) - 1} : null;
+}
+async function fetchShots(serial) {
+  try {
+    const r = await fetch(BRIDGE_URL + '?fn=shots&serial=' + encodeURIComponent(serial),
+      {redirect: 'follow'});
+    const j = await r.json();
+    return j.rows || [];
+  } catch (e) { return []; }
+}
+function openShotWizard(p, kind) {
+  document.querySelectorAll('.shotwiz').forEach(el => el.remove());
+  const list = SHOT_LISTS[p.type === 'grand' ? 'grand' : 'upright'];
+  const listName = p.type === 'grand' ? 'GRAND' : 'UPRIGHT';
+  const W = {kind, idx: 0, done: {}, beforeIds: {}, busy: false};
+  const ov = document.createElement('div');
+  ov.className = 'tagview shotwiz notranslate-camera';
+  document.body.appendChild(ov);
+  const doneCount = () => Object.keys(W.done).length;
+
+  const render = () => {
+    const s = list[W.idx];
+    const isDone = !!W.done[W.idx];
+    const beforeId = W.beforeIds[W.idx];
+    const ghost = (kind === 'after' && beforeId)
+      ? `<img class="swghost" alt="" src="https://drive.google.com/thumbnail?id=${beforeId}&sz=w480">`
+      : '';
+    const matchNote = kind === 'after'
+      ? (beforeId
+          ? `<div class="swmatch"><img alt="" src="https://drive.google.com/thumbnail?id=${beforeId}&sz=w160">
+             <span>← the BEFORE you're matching.<br>Same angle, square.</span></div>`
+          : `<div class="swmatch swnone">No tagged BEFORE for this shot — match the angle from the Before folder.</div>`)
+      : '';
+    ov.innerHTML = `<div class="tvbox swbox">
+      <div class="tvhead"><div><b>🧭 ${kind === 'before' ? 'BEFORE' : 'AFTER'} shots — ${esc(p.serial)}</b>
+        <span>${esc((p.make || '') + ' ' + (p.model || ''))} · ${listName} list · square photos</span></div>
+        <span class="x swx">✕</span></div>
+      <div class="swstep">SHOT ${W.idx + 1} OF ${list.length} · ${s.c}</div>
+      <div class="swtitle">${s.i} ${esc(s.t)}</div>
+      <div class="swframe ${isDone ? 'swdone' : ''}">${ghost}
+        <span class="swico">${isDone ? '✅' : '📷'}</span>
+        ${isDone ? '<span class="swdonelbl">already taken — retake replaces nothing, it adds another</span>' : ''}
+      </div>
+      <div class="swhint">${esc(s.h)}</div>
+      ${matchNote}
+      <div class="swmsg"></div>
+      <button class="swsnap">📷 TAKE THIS SHOT</button>
+      <div class="swalt"><button class="swlib">🖼 use a photo from the library</button></div>
+      <input type="file" class="swcam" accept="image/*" capture="environment" hidden>
+      <input type="file" class="swfile" accept="image/*" hidden>
+      <div class="swnav">
+        <button class="swprev" ${W.idx === 0 ? 'disabled' : ''}>‹ back</button>
+        <span class="swcount">${doneCount()}/${list.length} done</span>
+        <button class="swnext">${W.idx === list.length - 1 ? 'finish' : 'skip ›'}</button>
+      </div>
+      <div class="swdots">${list.map((x, i) =>
+        `<i data-i="${i}" class="${W.done[i] ? 'ok' : ''} ${i === W.idx ? 'on' : ''}" title="${esc(x.t)}"></i>`).join('')}</div>
+    </div>`;
+    wire();
+  };
+
+  const advance = () => {
+    // jump to the next not-done shot; fall back to simple next; close at end
+    for (let i = W.idx + 1; i < list.length; i++) if (!W.done[i]) { W.idx = i; render(); return; }
+    for (let i = 0; i < list.length; i++) if (!W.done[i]) { W.idx = i; render(); return; }
+    finishScreen();
+  };
+  const finishScreen = () => {
+    ov.innerHTML = `<div class="tvbox swbox">
+      <div class="tvhead"><div><b>🧭 ${kind === 'before' ? 'BEFORE' : 'AFTER'} shots — ${esc(p.serial)}</b></div>
+        <span class="x swx">✕</span></div>
+      <div class="swfin">${doneCount() >= list.length ? '🎉' : '👍'}</div>
+      <div class="swtitle" style="text-align:center">${doneCount()}/${list.length} shots in the ${kind} folder</div>
+      <div class="swhint" style="text-align:center">${doneCount() >= list.length
+        ? 'Full set! The photos are filed in the piano’s Drive folder.'
+        : 'The missing shots stay on the list — reopen the wizard any time to finish.'}</div>
+      <button class="swsnap swclose2">Done</button>
+    </div>`;
+    ov.querySelector('.swx').onclick = () => ov.remove();
+    ov.querySelector('.swclose2').onclick = () => ov.remove();
+  };
+
+  const upload = async file => {
+    if (!file || W.busy) return;
+    const wa = writeAuth();
+    const msg = ov.querySelector('.swmsg');
+    if (!wa.ok) { msg.className = 'swmsg err'; msg.textContent = wa.renewing ? 'Sign-in expired — renewing, retry in a moment.' : 'Sign in first.'; return; }
+    W.busy = true;
+    msg.className = 'swmsg'; msg.textContent = 'Uploading…';
+    const snapBtn = ov.querySelector('.swsnap');
+    if (snapBtn) snapBtn.disabled = true;
+    try {
+      const dataUrl = await downscalePhoto(file, 2048, 0.85);
+      const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+        headers: {'content-type': 'text/plain;charset=utf-8'},
+        body: JSON.stringify({pin: wa.pin, action: 'photo', kind, serial: p.serial, row: p.row,
+          stage: shotStage(kind, W.idx, list[W.idx]), share: 1, mime: 'image/jpeg',
+          data: dataUrl.split(',')[1], ...authFields()})});
+      const j = await r.json();
+      if (!j.saved) throw new Error(j.error || 'upload failed');
+      W.done[W.idx] = true;
+      if (kind === 'before' && j.id) W.beforeIds[W.idx] = j.id;
+      if (kind === 'before') p.bphoto = p.bphoto || true; else p.aphoto = p.aphoto || true;
+      W.busy = false;
+      advance();
+    } catch (e) {
+      W.busy = false;
+      msg.className = 'swmsg err'; msg.textContent = '✗ ' + e.message;
+      if (snapBtn) snapBtn.disabled = false;
+    }
+  };
+
+  function wire() {
+    const cam = ov.querySelector('.swcam'), lib = ov.querySelector('.swfile');
+    ov.querySelector('.swx').onclick = () => ov.remove();
+    ov.querySelector('.swsnap').onclick = () => cam.click();
+    ov.querySelector('.swlib').onclick = () => lib.click();
+    cam.onchange = () => { upload(cam.files[0]); cam.value = ''; };
+    lib.onchange = () => { upload(lib.files[0]); lib.value = ''; };
+    ov.querySelector('.swprev').onclick = () => { if (W.idx > 0) { W.idx--; render(); } };
+    ov.querySelector('.swnext').onclick = () =>
+      W.idx === list.length - 1 ? finishScreen() : (W.idx++, render());
+    ov.querySelectorAll('.swdots i').forEach(d =>
+      d.addEventListener('click', ev => { W.idx = +ev.target.closest('i').dataset.i; render(); }));
+  }
+
+  ov.innerHTML = `<div class="tvbox swbox"><div class="swhint" style="padding:30px;text-align:center">
+    Loading the shot list…</div></div>`;
+  fetchShots(p.serial).then(rows => {
+    rows.forEach(row => {
+      const ps = parseShotStage(row.stage || row.file);
+      if (!ps) return;
+      if (ps.kind === kind && ps.idx >= 0 && ps.idx < list.length) W.done[ps.idx] = true;
+      if (ps.kind === 'before' && row.id) W.beforeIds[ps.idx] = row.id;
+    });
+    for (let i = 0; i < list.length; i++) if (!W.done[i]) { W.idx = i; break; }
+    render();
+  });
 }
 const techFolderCache = new Map();
 // The Tech subfolder has no link in the sheet — the bridge knows where it is
@@ -3350,6 +3541,10 @@ function wirePop(p) {
       openPop(p.row, S.popAnchor, true);
     } catch (e) { if (pqm) pqm.textContent = ' ✗ ' + e.message; }
   };
+  pop.querySelectorAll('.wizbtn').forEach(b => b.onclick = ev => {
+    ev.stopPropagation(); popPinned = true;
+    openShotWizard(p, b.dataset.kind);
+  });
   (() => {
     const fin = pop.querySelector('.maddin');
     if (!fin) return;
