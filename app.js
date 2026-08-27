@@ -2590,6 +2590,30 @@ async function fetchClock() {
     if ((CLOCK.open && CLOCK.open.serial) !== was) { renderClockChip(); renderDock(); }
   } catch (e) { /* offline — keep last */ }
 }
+/* Confirmation popup before any piano clock change (Brigham 8/27) — a DOM
+ * modal (not confirm()) so Google-translate renders it for ES mode. */
+function clockConfirm(icon, title, lines) {
+  return new Promise(resolve => {
+    document.querySelectorAll('.ccfm').forEach(el => el.remove());
+    const ov = document.createElement('div');
+    ov.className = 'tagview ccfm';
+    ov.innerHTML = `<div class="tvbox ccfmbox">
+      <div class="ccfmicon">${icon}</div>
+      <h3>${title}</h3>
+      <div class="ccfmlines">${lines}</div>
+      <div class="ccfmbtns">
+        <button class="ccfmyes">✓ Yes, that's right</button>
+        <button class="ccfmno">Cancel</button>
+      </div></div>`;
+    document.body.appendChild(ov);
+    const done = v => { ov.remove(); resolve(v); };
+    ov.querySelector('.ccfmyes').onclick = ev => { ev.stopPropagation(); done(true); };
+    ov.querySelector('.ccfmno').onclick = ev => { ev.stopPropagation(); done(false); };
+    ov.onclick = ev => { ev.stopPropagation(); if (ev.target === ov) done(false); };
+  });
+}
+const pianoLabel = p => esc(((p.summary || [p.make, p.model].filter(Boolean).join(' ')) || '').slice(0, 34))
+  + ' · #' + esc(p.serial || '');
 async function punch(action, p, phase, source, endAt) {
   const {pin, ok} = writeAuth();
   if (!ok) return {error: 'Sign in first — hours are logged under your name.'};
@@ -2695,6 +2719,11 @@ function renderDock() {
     });
   };
   dock.querySelector('.dockout').onclick = async () => {
+    const cur = CLOCK.open || {};
+    const okOut = await clockConfirm('■', 'Clock out?',
+      `<div class="ccfmrow">■ Clock OUT of <b>${esc(String(cur.piano || cur.serial || '').slice(0, 34))} · #${esc(cur.serial || '')}</b>
+         <small>${cur.start ? clockElapsed(cur.start) + ' will be logged' : ''}</small></div>`);
+    if (!okOut) return;
     const j = await punch('clockout', null, '', 'dock');
     if (j.error) alert(j.error);
   };
@@ -3514,6 +3543,17 @@ function wirePop(p) {
         (sel && sel.value === '__other__' ? oth : sel).focus();
         return;
       }
+      // confirm exactly what's about to happen before the punch lands
+      const cur = CLOCK.open;
+      const isSwitch = cur && cur.serial && cur.serial !== p.serial;
+      const okGo = await clockConfirm(
+        isSwitch ? '\ud83d\udd01' : '\u25b6',
+        isSwitch ? 'Switch pianos?' : 'Clock in?',
+        (isSwitch ? `<div class="ccfmrow">\u25a0 Clock OUT of <b>${esc(String(cur.piano || cur.serial).slice(0, 34))} \u00b7 #${esc(cur.serial)}</b>
+             <small>${clockElapsed(cur.start)} will be logged</small></div>` : '') +
+        `<div class="ccfmrow">\u25b6 Clock IN on <b>${pianoLabel(p)}</b>
+           <small>phase: ${esc(ph)}</small></div>`);
+      if (!okGo) { cmsg.className = 'clkmsg phmsg'; cmsg.textContent = ''; return; }
       cmsg.className = 'clkmsg phmsg'; cmsg.textContent = 'Clocking in\u2026';
       const j = await punch('clockin', p, ph, S.scanArrived === p.serial ? 'scan' : 'card');
       if (j.error) { cmsg.className = 'clkmsg phmsg err'; cmsg.textContent = '\u2717 ' + j.error; return; }
@@ -3522,6 +3562,11 @@ function wirePop(p) {
     };
     if (outBtn) outBtn.onclick = async ev => {
       ev.stopPropagation(); popPinned = true;
+      const cur = CLOCK.open || {};
+      const okOut = await clockConfirm('\u25a0', 'Clock out?',
+        `<div class="ccfmrow">\u25a0 Clock OUT of <b>${esc(String(cur.piano || cur.serial || p.serial).slice(0, 34))} \u00b7 #${esc(cur.serial || p.serial)}</b>
+           <small>${cur.start ? clockElapsed(cur.start) + ' will be logged' : ''}</small></div>`);
+      if (!okOut) return;
       cmsg.className = 'clkmsg phmsg'; cmsg.textContent = 'Clocking out\u2026';
       const j = await punch('clockout', null, '', 'card');
       if (j.error) { cmsg.className = 'clkmsg phmsg err'; cmsg.textContent = '\u2717 ' + j.error; return; }

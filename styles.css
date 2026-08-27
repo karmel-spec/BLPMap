@@ -1167,3 +1167,16 @@ tr.adjediting td{background:#fdf8ee}
 .shopframe{width:100%;height:calc(100vh - 230px);min-height:520px;border:1px solid #dfe3e8;
   border-radius:10px;background:#fff}
 .frameft{margin-top:6px}
+
+/* clock in/out/switch confirmation popup */
+.ccfm{z-index:340}
+.ccfmbox{width:330px;max-width:92vw;text-align:center;padding:20px 18px}
+.ccfmicon{font-size:38px}
+.ccfmbox h3{margin:6px 0 10px;font-size:17px}
+.ccfmlines{text-align:left}
+.ccfmrow{border:1px solid #e3e6ea;border-radius:9px;padding:9px 12px;margin:7px 0;font-size:13px;line-height:1.45}
+.ccfmrow b{display:block}
+.ccfmrow small{color:#7a828a}
+.ccfmbtns{display:flex;gap:10px;margin-top:13px}
+.ccfmyes{flex:1;background:#2e7d4f;color:#fff;border:0;border-radius:10px;padding:12px 0;font-size:14px;font-weight:800;cursor:pointer}
+.ccfmno{flex:.6;background:#fff;color:#4a5259;border:1.5px solid #c9ced4;border-radius:10px;padding:12px 0;font-size:13px;font-weight:700;cursor:pointer}
