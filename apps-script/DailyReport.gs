@@ -2872,8 +2872,12 @@ function payMilestone_(req) {
  * a quiet day is a short email.
  * Run sendShopManagerReport() manually, or sendShopManagerReportTo('a@b.com')
  * to send a sample somewhere else. */
-var SHOPMGR_TO = 'shop@brighamlarsonpianos.com,brigham@brighamlarsonpianos.com,karmel@brighamlarsonpianos.com';
-var ADMIN_TO = 'info@brighamlarsonpianos.com,karmel@brighamlarsonpianos.com,brigham@brighamlarsonpianos.com';   // Admin Morning Brief
+// morning recipients (Brigham 8/28): shop brief → managers + owners;
+// admin brief → Melissa, info@, owners
+var SHOPMGR_TO = 'markhales.blp@gmail.com,matthewwessman.blp@gmail.com,jacobmower.blp@gmail.com,'
+  + 'brigham@brighamlarsonpianos.com,karmel@brighamlarsonpianos.com';
+var ADMIN_TO = 'melissa@brighamlarsonpianos.com,info@brighamlarsonpianos.com,'
+  + 'brigham@brighamlarsonpianos.com,karmel@brighamlarsonpianos.com';   // Admin Morning Brief
 var TRACKDEFS_URL = 'https://blpsalesapp.netlify.app/.netlify/functions/track-defs';
 var TASKS_URL = 'https://blpsalesapp.netlify.app/.netlify/functions/piano-tasks';
 // phase -> the specialty area that staffs it (mirrors the Store Map card)
@@ -4498,6 +4502,24 @@ function setupShopManagerBriefing() {
   return 'Briefings scheduled — evenings ~6:30 PM for the next morning. Shop: '
     + SHOPMGR_TO + ' | Admin: ' + ADMIN_TO;
 }
+/* 7:45am Mon–Fri: both briefs by EMAIL plus a TEXT carrying the doc link.
+ * Shop brief texts managers + owners; admin brief texts Melissa + owners
+ * (info@ is a mailbox — email only). Replaces the evening send (Brigham 8/28). */
+var SHOP_TEXT_NAMES = ['Mark', 'Matthew', 'Jacob', 'Brigham', 'Karmel'];
+var ADMIN_TEXT_NAMES = ['Melissa', 'Brigham', 'Karmel'];
+function morningBriefs() {
+  var dow = Number(Utilities.formatDate(new Date(), 'America/Denver', 'u'));
+  if (dow > 5 && !isManualRun_()) return;          // Mon–Fri only
+  var r = sendShopManagerReportTo_(SHOPMGR_TO, null, 0);   // today's shop + admin emails
+  var day = Utilities.formatDate(new Date(), 'America/Denver', 'EEE M/d');
+  notifyTeam_(SHOP_TEXT_NAMES,
+    '🌅 Shop brief ' + day + ' — ' + r.alerts + ' to review. ' + (r.doc || APP_URL));
+  if (r.admin && r.admin.sent) {
+    notifyTeam_(ADMIN_TEXT_NAMES,
+      '🌅 Admin brief ' + day + ' — ' + r.admin.alerts + ' to review. ' + (r.admin.doc || APP_URL));
+  }
+  return r;
+}
 function sendShopManagerReport() {
   var hour = Number(Utilities.formatDate(new Date(), 'America/Denver', 'H'));
   // the briefs moved to an evening send. A stale morning trigger still exists
@@ -4865,22 +4887,27 @@ function reinstallAllTriggers() {
  *    6AM report, ~6:30PM briefs, Monday 8AM digest, 6PM late-clock nudge.
  *  mode=nudgeonly — just the digest + nudge, leave report/briefs alone. */
 function fixTriggers_(mode) {
-  if (mode !== 'ensureall' && mode !== 'nudgeonly' && mode !== 'fridayonly') return {error: 'mode?'};
+  if (mode !== 'ensureall' && mode !== 'nudgeonly' && mode !== 'fridayonly'
+    && mode !== 'briefsonly') return {error: 'mode?'};
   var mine = ScriptApp.getProjectTriggers();
   var removed = [];
   mine.forEach(function (t) {
     var h = t.getHandlerFunction();
     var kill = mode === 'ensureall'
-      ? ['sendDailyReport', 'sendShopManagerReport', 'mondayAdminDigest', 'lateClockNudge', 'fridaySweep'].indexOf(h) >= 0
+      ? ['sendDailyReport', 'sendShopManagerReport', 'morningBriefs', 'mondayAdminDigest', 'lateClockNudge', 'fridaySweep'].indexOf(h) >= 0
       : mode === 'fridayonly' ? h === 'fridaySweep'
+      : mode === 'briefsonly' ? ['sendShopManagerReport', 'morningBriefs'].indexOf(h) >= 0
       : ['mondayAdminDigest', 'lateClockNudge'].indexOf(h) >= 0;
     if (kill) { ScriptApp.deleteTrigger(t); removed.push(h); }
   });
   if (mode === 'ensureall') {
     ScriptApp.newTrigger('sendDailyReport').timeBased()
       .everyDays(1).atHour(6).inTimezone('America/Denver').create();
-    ScriptApp.newTrigger('sendShopManagerReport').timeBased()
-      .everyDays(1).atHour(18).nearMinute(30).inTimezone('America/Denver').create();
+  }
+  // both morning briefs (emails + texts) — ~7:45am, weekday-gated inside
+  if (mode === 'ensureall' || mode === 'briefsonly') {
+    ScriptApp.newTrigger('morningBriefs').timeBased()
+      .everyDays(1).atHour(7).nearMinute(45).inTimezone('America/Denver').create();
   }
   if (mode !== 'fridayonly') {
     ScriptApp.newTrigger('mondayAdminDigest').timeBased()

@@ -1297,6 +1297,65 @@ async function fetchShots(serial) {
     return j.rows || [];
   } catch (e) { return []; }
 }
+/* 📸 keytop photo gate (Brigham 8/28): marking keytops Done needs a progress
+ * photo first, and the first keys/keytops clock-in on a piano needs a BEFORE
+ * photo of the keytops. Photos file to the Tech folder + PHOTO LOG. */
+function keytopPhotoGate(p, o) {
+  const old = document.querySelector('.dsheetov'); if (old) old.remove();
+  const ov = document.createElement('div');
+  ov.className = 'dsheetov';
+  ov.innerHTML = `<div class="dsheet"><button class="dsx">✕</button>
+    <h3>${o.title}</h3>
+    <div class="dssub">${o.sub}</div>
+    <div class="rfbar">
+      <label class="csvbtn" style="cursor:pointer">📷 Take the keytop photo
+        <input type="file" accept="image/*" capture="environment" hidden class="pg-file"></label>
+      <span class="pg-shot phmsg">photo required</span></div>
+    <div class="rfbar">
+      <button class="csvbtn pg-go" disabled>${o.goLabel}</button>
+      ${o.cancelLabel ? `<button class="csvbtn pg-cancel" style="background:none;border:1px solid #cfc9bf;color:inherit">${o.cancelLabel}</button>` : ''}
+      <span class="pg-msg phmsg"></span></div>
+  </div>`;
+  document.body.appendChild(ov);
+  const close = () => { ov.remove(); if (o.onCancel) o.onCancel(); };
+  ov.querySelector('.dsx').onclick = close;
+  const pc = ov.querySelector('.pg-cancel');
+  if (pc) pc.onclick = close;
+  const shotMsg = ov.querySelector('.pg-shot'), go = ov.querySelector('.pg-go');
+  ov.querySelector('.pg-file').onchange = async ev => {
+    const f = ev.target.files && ev.target.files[0];
+    if (!f) return;
+    const wa = writeAuth();
+    if (!wa.ok) { shotMsg.className = 'pg-shot phmsg err'; shotMsg.textContent = 'Sign in first.'; return; }
+    shotMsg.className = 'pg-shot phmsg'; shotMsg.textContent = 'Uploading…';
+    try {
+      const dataUrl = await downscalePhoto(f, 2048, 0.85);
+      const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+        headers: {'content-type': 'text/plain;charset=utf-8'},
+        body: JSON.stringify({pin: wa.pin, action: 'photo', kind: 'progress', serial: p.serial,
+          row: p.row, stage: o.stage, mime: 'image/jpeg',
+          data: dataUrl.split(',')[1], ...authFields()})});
+      const j = await r.json();
+      if (!j.saved) throw new Error(j.error || 'upload failed');
+      shotMsg.className = 'pg-shot phmsg ok'; shotMsg.textContent = '✓ photo filed';
+      go.disabled = false;
+    } catch (e) { shotMsg.className = 'pg-shot phmsg err'; shotMsg.textContent = '✗ ' + e.message; }
+  };
+  go.onclick = () => { ov.remove(); if (o.onGo) o.onGo(); };
+}
+// first keys clock-in on this piano → require the keytop BEFORE photo
+async function keytopBeforeGate(p) {
+  const rows = await fetchShots(p.serial);
+  if (rows.some(r2 => /keytop/i.test(r2.stage || ''))) return;   // already shot
+  keytopPhotoGate(p, {
+    title: '📸 Keytop BEFORE photo',
+    sub: `First key-service clock-in on <b>${pianoLabel(p)}</b> — take a BEFORE photo of
+      the keytops now, before any work starts. It files to the piano's Tech folder
+      and backs the before/after story.`,
+    stage: 'Keytops before',
+    goLabel: 'Done — photo filed ✓',
+  });
+}
 function openShotWizard(p, kind) {
   document.querySelectorAll('.shotwiz').forEach(el => el.remove());
   const list = SHOT_LISTS[p.type === 'grand' ? 'grand' : 'upright'];
@@ -2984,6 +3043,23 @@ function clockConfirm(icon, title, lines) {
 }
 const pianoLabel = p => esc(((p.summary || [p.make, p.model].filter(Boolean).join(' ')) || '').slice(0, 34))
   + ' · #' + esc(p.serial || '');
+/* clock-in ↔ phase sync (Brigham 8/28): job costing means every clock-in
+ * names the work — when that work is a real shop phase and the map says
+ * something else, invite the tech to update the phase right there. Forward
+ * moves still pass through the progress-photo gate, same as the dropdown. */
+async function maybeClockPhaseSync(p, ph) {
+  const seq = pianoPhases(p) || PHASES;
+  if (seq.indexOf(ph) < 0) return;                  // Moving, Admin, write-ins, states — skip
+  const cur = String(p.phase || '').trim();
+  if (!cur || cur === ph) return;
+  const ok = await clockConfirm('🔄', 'Update the shop phase?',
+    `<div class="ccfmrow">You clocked in to do <b>${esc(ph)}</b> — but this piano's shop
+       phase is still <b>${esc(cur)}</b>.</div>
+     <div class="ccfmrow">Approve updating the shop phase to <b>${esc(ph)}</b>?
+       <small>a forward move asks for the finished-work progress photo, same as the
+       phase dropdown — Cancel leaves it at ${esc(cur)}</small></div>`);
+  if (ok) setPhase(p, ph, $('#pop'));
+}
 async function punch(action, p, phase, source, endAt) {
   const {pin, ok} = writeAuth();
   if (!ok) return {error: 'Sign in first — hours are logged under your name.'};
@@ -3826,6 +3902,21 @@ function wirePop(p) {
         knum.hidden = ksel.value !== 'In Key Queue';
         if (!knum.hidden && !knum.value) { knum.focus(); return; }  // saves once the # is typed
       }
+      // 📸 keytops can't be marked Done without a progress photo (Brigham 8/28)
+      if (ksel.value === 'Done') {
+        keytopPhotoGate(p, {
+          title: '📸 Keytops — finish with a photo',
+          sub: `Add a progress photo of the finished keytops on <b>${pianoLabel(p)}</b>
+            before marking them <b>Done</b> — it files to the Tech folder for QC,
+            marketing and the client's progress updates.`,
+          stage: 'Keytops done',
+          goLabel: 'Mark keytops Done ✓',
+          cancelLabel: 'Cancel',
+          onGo: saveKeytop,
+          onCancel: () => { ksel.value = keytopParts(p).state || ''; },
+        });
+        return;
+      }
       saveKeytop();
     };
     if (knum) {
@@ -4179,6 +4270,10 @@ function wirePop(p) {
       if (j.error) { cmsg.className = 'clkmsg phmsg err'; cmsg.textContent = '\u2717 ' + j.error; return; }
       S.scanArrived = null;
       openPop(p.row, S.popAnchor, true);
+      // clocked-in work vs map phase: offer to sync the shop phase (Brigham 8/28)
+      await maybeClockPhaseSync(p, ph);
+      // first keys/keytops clock-in on this piano \u2192 require the BEFORE photo
+      if (/key\s*(service|top|work)|^keys?\b/i.test(ph)) keytopBeforeGate(p);
     };
     if (outBtn) outBtn.onclick = async ev => {
       ev.stopPropagation(); popPinned = true;
