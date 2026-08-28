@@ -1825,6 +1825,151 @@ function shopTagInner(d) {
   </div>`;
 }
 
+/* ---------- 🪑 Bench tag — hang tag, 3.5 × 5.5 portrait ----------
+ * A bench gets separated from its piano the moment it goes on a shelf, so
+ * the tag answers "whose is this, where did it come from, which piano does
+ * it match" without opening anything. Optional admin note rides along, and
+ * the QR opens the piano's card. Note lives in the piano's BENCH NOTE cell. */
+function benchTagFields(p) {
+  return {
+    serial: p.serial || '—',
+    piano: ((p.year ? p.year + ' ' : '') + (p.make || '')
+      + (p.model ? ' ' + p.model : '')).trim() || (p.summary || 'Piano').slice(0, 34),
+    sub: [p.size, p.colorFinal || p.colorPick].filter(Boolean).join(' · '),
+    client: ownerNameOf(p) || '—',
+    from: ownerCityStateOf(p) || '—',
+    arrived: p.entered
+      ? new Date(p.entered + 'T00:00:00').toLocaleDateString('en-US',
+          {month: 'long', day: 'numeric', year: 'numeric'})
+      : '—',
+    note: (p.benchNote || '').trim(),
+    qr: mapLink(p),
+  };
+}
+function benchTagInner(d) {
+  const logo = location.origin + '/assets/blp-logo.png';
+  const qrImg = 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data='
+    + encodeURIComponent(d.qr || '');
+  return `<div class="btag">
+    <div class="bt-head">
+      <img class="bt-logo" src="${logo}" alt="Brigham Larson Pianos">
+      <div class="bt-kind">BENCH TAG</div>
+    </div>
+    <div class="bt-sn"><small>MATCHES PIANO SERIAL</small>#${esc(d.serial)}</div>
+    <div class="bt-piano"><b>${esc(d.piano)}</b>${d.sub ? `<span>${esc(d.sub)}</span>` : ''}</div>
+    <div class="bt-mid">
+      <div class="bt-rows">
+        <div class="bt-kv"><span class="k">Client</span><span class="v">${esc(d.client)}</span></div>
+        <div class="bt-kv"><span class="k">From</span><span class="v">${esc(d.from)}</span></div>
+        <div class="bt-kv"><span class="k">Arrived</span><span class="v">${esc(d.arrived)}</span></div>
+      </div>
+      <img class="bt-qr" src="${qrImg}" alt="">
+    </div>
+    ${d.note ? `<div class="bt-note"><b>NOTE:</b> ${esc(d.note)}</div>` : ''}
+  </div>`;
+}
+const BENCH_TAG_CSS = `
+  .btag { width: 3.5in; height: 5.5in; background: #fff; border: 2.5px solid #0d0d0d;
+          border-radius: 10px; display: flex; flex-direction: column; overflow: hidden;
+          font: 10pt/1.4 Helvetica, Arial, sans-serif; color: #1a1a1a; }
+  .bt-head { padding: 0.62in 16px 10px; text-align: center; border-bottom: 2.5px solid #0d0d0d; }
+  .bt-logo { width: 100%; max-width: 190px; display: block; margin: 0 auto; }
+  .bt-kind { font: 800 13px/1 Helvetica; letter-spacing: 5px; color: #9e2020; margin-top: 9px; }
+  .bt-sn { background: #0d0d0d; color: #fff; text-align: center; padding: 9px 0;
+           font: 800 21px/1 Helvetica; letter-spacing: 2px; }
+  .bt-sn small { display: block; font: 700 8px/1 Helvetica; letter-spacing: 2.5px;
+                 opacity: .65; margin-bottom: 4px; }
+  .bt-piano { padding: 12px 16px 10px; text-align: center; border-bottom: 1px dashed #c9c3b8; }
+  .bt-piano b { display: block; font-size: 16px; line-height: 1.25; }
+  .bt-piano span { font-size: 11.5px; color: #6b645c; }
+  .bt-mid { display: flex; align-items: center; gap: 12px; padding: 13px 16px; flex: 1; }
+  .bt-rows { flex: 1; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .bt-kv { display: flex; gap: 7px; font-size: 11.5px; line-height: 1.45; }
+  .bt-kv .k { color: #8a8178; text-transform: uppercase; letter-spacing: .6px; font-size: 9px;
+              font-weight: 700; min-width: 52px; padding-top: 2px; }
+  .bt-kv .v { font-weight: 600; flex: 1; word-break: break-word; }
+  .bt-qr { width: 1.05in; height: 1.05in; flex: none; }
+  .bt-note { margin: 0 16px 14px; background: #fdf6e3; border: 1px solid #e8d9a8;
+             border-radius: 6px; padding: 7px 9px; font-size: 11px; line-height: 1.4; color: #5c4d1e; }`;
+function printBenchTag(p) {
+  const d = benchTagFields(p);
+  const w = window.open('', '_blank');
+  if (!w) { alert('Pop-up blocked — allow pop-ups to print bench tags.'); return; }
+  w.document.write(`<!doctype html><html><head><title>Bench tag — #${esc(d.serial)}</title><style>
+    * { box-sizing: border-box; margin: 0; }
+    body { font: 10pt/1.4 Helvetica, Arial, sans-serif; background: #f2efe9; color: #121212;
+           -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .bar { display: flex; align-items: center; gap: 14px; padding: 10px 16px; background: #17171b;
+           color: #e8e4dd; font-size: 13px; position: sticky; top: 0; }
+    .bar button { background: #B43333; color: #fff; border: 0; border-radius: 6px;
+                  padding: 8px 18px; font: inherit; font-weight: 700; cursor: pointer; }
+    .bar input { flex: 1; min-width: 120px; padding: 7px 10px; border-radius: 6px; border: 0;
+                 font: inherit; }
+    .sheet { display: flex; gap: 0.3in; padding: 0.35in; }
+    ${BENCH_TAG_CSS}
+    @media print { .bar { display: none; } body { background: #fff; }
+                   .sheet { padding: 0.25in; } @page { size: letter; margin: 0.25in; } }
+  </style></head><body>
+    <div class="bar">
+      <b>Bench tag</b>
+      <input id="bn" placeholder="add a note for this bench (optional)" value="${esc(d.note)}">
+      <button onclick="applyNote()">Update note</button>
+      <button onclick="print()">🖨 Print</button>
+      <span style="opacity:.7">2 copies — tape one on, keep one with the piano</span>
+    </div>
+    <div class="sheet" id="sheet">${benchTagInner(d)}${benchTagInner(d)}</div>
+    <script>
+      const D = ${JSON.stringify(d)};
+      function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c => (
+        {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+      function tag(d){ return ${JSON.stringify(benchTagInner({}).slice(0, 0))} + render(d); }
+      function render(d){
+        const qr = 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data='
+          + encodeURIComponent(d.qr || '');
+        return '<div class="btag"><div class="bt-head">'
+          + '<img class="bt-logo" src="${logoUrlForPrint()}" alt="Brigham Larson Pianos">'
+          + '<div class="bt-kind">BENCH TAG</div></div>'
+          + '<div class="bt-sn"><small>MATCHES PIANO SERIAL</small>#' + esc(d.serial) + '</div>'
+          + '<div class="bt-piano"><b>' + esc(d.piano) + '</b>'
+          + (d.sub ? '<span>' + esc(d.sub) + '</span>' : '') + '</div>'
+          + '<div class="bt-mid"><div class="bt-rows">'
+          + kv('Client', d.client) + kv('From', d.from) + kv('Arrived', d.arrived)
+          + '</div><img class="bt-qr" src="' + qr + '" alt=""></div>'
+          + (d.note ? '<div class="bt-note"><b>NOTE:</b> ' + esc(d.note) + '</div>' : '')
+          + '</div>';
+      }
+      function kv(k, v){ return '<div class="bt-kv"><span class="k">' + k
+        + '</span><span class="v">' + esc(v) + '</span></div>'; }
+      function applyNote(){
+        D.note = document.getElementById('bn').value.trim();
+        document.getElementById('sheet').innerHTML = render(D) + render(D);
+        if (window.opener && !window.opener.closed) {
+          try { window.opener.postMessage({benchNote: D.note, serial: D.serial, row: ${p.row}}, '*'); } catch(e) {}
+        }
+      }
+    <\/script>
+  </body></html>`);
+  w.document.close();
+}
+function logoUrlForPrint() { return location.origin + '/assets/blp-logo.png'; }
+// the print window sends the edited note back; persist it so a reprint (and
+// everyone else's card) keeps it
+addEventListener('message', async ev => {
+  const m = ev.data;
+  if (!m || typeof m !== 'object' || m.benchNote === undefined || !m.serial) return;
+  const p = S.data.pianos.find(x => x.row === m.row)
+    || S.data.pianos.find(x => (x.serial || '') === m.serial);
+  if (!p) return;
+  p.benchNote = m.benchNote;
+  const wa = writeAuth();
+  if (!wa.ok) return;
+  try {
+    await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+      headers: {'content-type': 'text/plain;charset=utf-8'},
+      body: JSON.stringify({pin: wa.pin, action: 'setbenchnote', serial: p.serial, row: p.row,
+        value: m.benchNote, ...authFields()})});
+  } catch (e) { /* the tag still prints — the note just isn't saved */ }
+});
 function printShopTag(p) {
   const d = shopTagFields(p);
   const h1 = d.h1;
@@ -3362,6 +3507,7 @@ function popHTML(p) {
         <input class="bnin" placeholder="bench location — spot #, shelf…" maxlength="40">
         <button class="mvgo bngo">Set</button>
         <button class="mvgo bnshot" title="photo of the bench → Tech folder">📸</button>
+        <button class="mvgo benchtag" title="printable bench tag">🖨</button>
       </div><div class="bnmsg phmsg"></div>
       <input type="file" class="bnfile" accept="image/*" capture="environment" hidden>` : ''}
     ${p.serial ? `<button class="lhbtn">🕘 Location history</button><div class="lhout"></div>` : ''}`)}
@@ -3411,6 +3557,7 @@ function popHTML(p) {
       ${priceLabel(p) ? `<a class="tagbtn" target="_blank" rel="noopener"
         href="${priceTagUrl(p)}">🏷 Price tag ↗</a>` : ''}
       ${p.serial ? `<button class="tagbtn shoptag">🖨 Shop tag</button>` : ''}
+      ${p.serial ? `<button class="tagbtn benchtag">🪑 Bench tag</button>` : ''}
       ${(() => {
         const sn = tagSnapOf(p);
         if (!sn) return '';
@@ -3874,6 +4021,12 @@ function wirePop(p) {
   }
   const st = pop.querySelector('.shoptag');
   if (st) st.onclick = ev => { ev.stopPropagation(); printShopTag(p); };
+  // 🪑 bench tag — same print flow from the Locations row and the tag row
+  pop.querySelectorAll('.benchtag').forEach(b => b.onclick = ev => {
+    ev.stopPropagation(); popPinned = true;
+    S.benchTagFor = p.row;
+    printBenchTag(p);
+  });
   const dt = pop.querySelector('.dtech');
   if (dt) dt.onclick = ev => { ev.preventDefault(); ev.stopPropagation(); openTechFolder(dt.dataset.serial, dt); };
   const tt = pop.querySelector('.tagthumb');

@@ -1,0 +1,135 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Bench Tag — 2 options</title>
+<style>
+  body{margin:0;font:14px/1.5 -apple-system,Helvetica,Arial,sans-serif;background:#20242a;color:#e8ebee;padding:26px}
+  h1{font:800 20px Georgia,serif;letter-spacing:2px;margin:0 0 4px}
+  .sub{color:#9aa3ac;font-size:13px;margin-bottom:24px}
+  .wrap{display:flex;gap:38px;align-items:flex-start;flex-wrap:wrap}
+  .col{width:430px}
+  .cname{font-weight:800;font-size:15px;color:#fff;margin:0 0 3px}
+  .cdesc{font-size:12px;color:#9aa3ac;margin:0 0 14px;min-height:66px}
+  .paper{background:#fff;color:#1a1a1a;box-shadow:0 14px 40px rgba(0,0,0,.5)}
+  .cap{font-size:11px;color:#8a929a;margin-top:8px}
+
+  /* ---------- shared tag bits ---------- */
+  .logo{width:100%;max-width:190px;display:block}
+  .kv{display:flex;gap:7px;font-size:11.5px;line-height:1.45}
+  .kv .k{color:#8a8178;text-transform:uppercase;letter-spacing:.6px;font-size:9px;font-weight:700;
+         min-width:56px;padding-top:2px}
+  .kv .v{font-weight:600;flex:1}
+
+  /* ---------- OPTION A: hang tag, portrait 3.5 x 5.5 ---------- */
+  .tagA{width:336px;height:528px;border:2.5px solid #0d0d0d;border-radius:10px;padding:0;
+        display:flex;flex-direction:column;position:relative;overflow:hidden}
+  .tagA .punch{position:absolute;top:15px;left:50%;transform:translateX(-50%);
+        width:26px;height:26px;border:2.5px solid #0d0d0d;border-radius:50%;background:#fff}
+  .tagA .head{padding:52px 18px 10px;text-align:center;border-bottom:2.5px solid #0d0d0d}
+  .tagA .head .bench{font:800 13px/1 Helvetica;letter-spacing:5px;color:#9e2020;margin-top:9px}
+  .tagA .sn{background:#0d0d0d;color:#fff;text-align:center;padding:9px 0;font:800 21px/1 Helvetica;
+        letter-spacing:2px}
+  .tagA .sn small{display:block;font:700 8px/1 Helvetica;letter-spacing:2.5px;opacity:.65;margin-bottom:4px}
+  .tagA .piano{padding:12px 18px 10px;text-align:center;border-bottom:1px dashed #c9c3b8}
+  .tagA .piano b{display:block;font-size:16px;line-height:1.25}
+  .tagA .piano span{font-size:11.5px;color:#6b645c}
+  .tagA .rows{padding:11px 18px;display:flex;flex-direction:column;gap:9px;flex:1}
+  .tagA .note{margin:0 18px 10px;background:#fdf6e3;border:1px solid #e8d9a8;border-radius:6px;
+        padding:7px 9px;font-size:11px;line-height:1.4;color:#5c4d1e}
+  .tagA .foot{border-top:2.5px solid #0d0d0d;display:flex;align-items:center;gap:12px;padding:11px 18px}
+  .tagA .foot img{width:82px;height:82px;flex:none}
+  .tagA .foot .scan b{display:block;font-size:11px}
+  .tagA .foot .scan span{font-size:10px;color:#6b645c;line-height:1.35;display:block}
+
+  /* ---------- OPTION B: landscape label 4 x 3, shop-tag family ---------- */
+  .tagB{width:432px;height:324px;border:2.5px solid #0d0d0d;display:flex;overflow:hidden}
+  .tagB .rail{background:#9e2020;color:#fff;width:34px;flex:none;display:flex;align-items:center;
+        justify-content:center}
+  .tagB .rail span{writing-mode:vertical-rl;transform:rotate(180deg);font:800 12px Helvetica;
+        letter-spacing:4px}
+  .tagB .body{flex:1;display:flex;flex-direction:column;padding:12px 14px}
+  .tagB .top{display:flex;align-items:flex-start;gap:12px;border-bottom:2px solid #0d0d0d;padding-bottom:9px}
+  .tagB .top .who{flex:1}
+  .tagB .top .who .lbl{font:700 8px Helvetica;letter-spacing:2.5px;color:#9e2020}
+  .tagB .top .who b{display:block;font-size:17px;line-height:1.2;margin-top:2px}
+  .tagB .top .who span{font-size:11.5px;color:#6b645c}
+  .tagB .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 14px;padding:10px 0 8px;flex:1;align-content:start}
+  .tagB .snbox{border:2px solid #0d0d0d;border-radius:5px;padding:5px 9px;grid-column:1/-1;
+        display:flex;align-items:baseline;gap:9px}
+  .tagB .snbox i{font:700 8px Helvetica;letter-spacing:2px;color:#8a8178;font-style:normal}
+  .tagB .snbox b{font:800 19px Helvetica;letter-spacing:1.5px}
+  .tagB .note{background:#fdf6e3;border-left:3px solid #c9a227;padding:6px 9px;font-size:10.5px;
+        line-height:1.4;color:#5c4d1e;grid-column:1/-1}
+  .tagB .foot{border-top:1px dashed #c9c3b8;display:flex;align-items:center;gap:11px;padding-top:9px}
+  .tagB .foot img{width:70px;height:70px;flex:none}
+  .tagB .foot .scan b{display:block;font-size:10.5px}
+  .tagB .foot .scan span{font-size:9.5px;color:#6b645c;display:block;line-height:1.35}
+  .tagB .foot .logo{max-width:112px;margin-left:auto}
+</style></head><body>
+<h1>BLP BENCH TAG — 2 OPTIONS</h1>
+<div class="sub">Same data both ways: client name · origin city/state · arrival date · piano make/model · serial · optional admin note · QR to the piano's Store Map card. Shown near actual print size.</div>
+
+<div class="wrap">
+
+<!-- ============ OPTION A ============ -->
+<div class="col">
+  <p class="cname">A · Hang tag (3.5″ × 5.5″ portrait)</p>
+  <p class="cdesc">Punch-hole tag that ties to the bench leg — the serial sits in a black band you can read across a room, and the QR is big enough to scan from a shelf. Built for benches stacked upstairs where you're reading spines, not faces.</p>
+  <div class="paper tagA">
+    <div class="punch"></div>
+    <div class="head">
+      <img class="logo" style="margin:0 auto" src="assets/blp-logo.png" alt="Brigham Larson Pianos">
+      <div class="bench">BENCH TAG</div>
+    </div>
+    <div class="sn"><small>MATCHES PIANO SERIAL</small>189150</div>
+    <div class="piano">
+      <b>1917 Steinway Model B</b>
+      <span>6'11" · Satin Black</span>
+    </div>
+    <div class="rows">
+      <div class="kv"><span class="k">Client</span><span class="v">Sharon Jensen</span></div>
+      <div class="kv"><span class="k">From</span><span class="v">Santaquin, UT</span></div>
+      <div class="kv"><span class="k">Arrived</span><span class="v">June 14, 2026</span></div>
+      <div class="kv"><span class="k">Bench at</span><span class="v">Shelf 8-3, upstairs</span></div>
+    </div>
+    <div class="note"><b>NOTE:</b> Original bench — client wants the finish matched to the piano, not refinished separately.</div>
+    <div class="foot">
+      <img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=https%3A%2F%2Fblpstoremap.netlify.app%2F%23piano%3D189150" alt="QR">
+      <div class="scan"><b>Scan for this piano</b>
+        <span>Opens the piano's card in the Store Map — photos, phase, and where the bench belongs.</span></div>
+    </div>
+  </div>
+  <div class="cap">Prints 2-up on a sheet · card stock or label stock</div>
+</div>
+
+<!-- ============ OPTION B ============ -->
+<div class="col">
+  <p class="cname">B · Label (4″ × 3″ landscape)</p>
+  <p class="cdesc">Adhesive label in the shop tag's family — red spine, logo, same typography — so a bench reads as part of the same system as the piano. Lower profile: sticks under the lid or on the underside of the seat, and there's more room for a note.</p>
+  <div class="paper tagB">
+    <div class="rail"><span>BENCH TAG</span></div>
+    <div class="body">
+      <div class="top">
+        <div class="who">
+          <div class="lbl">CLIENT</div>
+          <b>Sharon Jensen</b>
+          <span>Santaquin, UT · arrived June 14, 2026</span>
+        </div>
+      </div>
+      <div class="grid">
+        <div class="snbox"><i>SERIAL</i><b>189150</b></div>
+        <div class="kv"><span class="k">Piano</span><span class="v">1917 Steinway Model B</span></div>
+        <div class="kv"><span class="k">Size</span><span class="v">6'11" · Satin Black</span></div>
+        <div class="kv"><span class="k">Bench at</span><span class="v">Shelf 8-3, upstairs</span></div>
+        <div class="kv"><span class="k">Spot</span><span class="v">Map #79</span></div>
+        <div class="note"><b>NOTE:</b> Original bench — match the finish to the piano, don't refinish separately.</div>
+      </div>
+      <div class="foot">
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=https%3A%2F%2Fblpstoremap.netlify.app%2F%23piano%3D189150" alt="QR">
+        <div class="scan"><b>Scan for this piano</b><span>Store Map card</span></div>
+        <img class="logo" src="assets/blp-logo.png" alt="Brigham Larson Pianos">
+      </div>
+    </div>
+  </div>
+  <div class="cap">Prints 4-up on a sheet · Avery 4×3 shipping labels</div>
+</div>
+
+</div>
+</body></html>
