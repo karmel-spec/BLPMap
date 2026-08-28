@@ -8917,9 +8917,11 @@ function renderTaskBoard() {
     }).join('')}</div>` : '';
   const mine = TB.rows.filter(r => first(r.owner) === first(TB.person));
   const canEdit = first(TB.person) === first(me) || isOwner();
+  const ordVal = r => (r.order === null || r.order === undefined || r.order === '')
+    ? 1e9 - Date.parse(r.created || 0) / 1e6 : Number(r.order);
   const col = (key, label) => {
     const cards = mine.filter(r => r.col === key)
-      .sort((a, b) => (b.created || '').localeCompare(a.created || ''));
+      .sort((a, b) => ordVal(a) - ordVal(b));
     return `<div class="kcol ${key === 'done' ? 'kdone' : ''}" data-col="${key}">
       <h4>${label} <i>${cards.length}</i></h4>
       ${cards.map(c => `<div class="kcard" draggable="${canEdit}" data-id="${esc(c.id)}">
@@ -8929,9 +8931,7 @@ function renderTaskBoard() {
           ${tbDueChip(c.due, c.col)}
           ${c.from ? `<span class="chip c-from">from ${esc(c.from.split(/\s+/)[0])}</span>` : ''}
         </div>
-        ${canEdit ? `<div class="kmove">
-          ${key !== 'todo' ? `<button data-mv="${key === 'done' ? 'doing' : 'todo'}" data-id="${esc(c.id)}">◀</button>` : ''}
-          ${key !== 'done' ? `<button data-mv="${key === 'todo' ? 'doing' : 'done'}" data-id="${esc(c.id)}">▶</button>` : ''}
+        ${canEdit ? `<div class="kmove"><span class="kgrab">⠿ drag</span>
           <button class="kdel" data-id="${esc(c.id)}">🗑</button>
         </div>` : ''}
       </div>`).join('') || '<div class="kempty">—</div>'}
@@ -8964,21 +8964,14 @@ function renderTaskBoard() {
     const text = el.querySelector('.kc-text').value.trim();
     if (!text) return;
     go.disabled = true;
+    const minOrd = Math.min(0, ...mine.map(ordVal).filter(isFinite));
     const j = await tbSend({op: 'add', owner: TB.person, text,
       serial: el.querySelector('.kc-serial').value.trim(),
-      due: el.querySelector('.kc-due').value});
+      due: el.querySelector('.kc-due').value, order: minOrd - 1});
     go.disabled = false;
     if (j) { TB.rows = null; renderTaskBoard(); }
   };
-  el.querySelectorAll('[data-mv]').forEach(b => b.onclick = async () => {
-    b.disabled = true;
-    const j = await tbSend({op: 'move', id: b.dataset.id, col: b.dataset.mv});
-    if (j) {
-      const c = TB.rows.find(r => r.id === b.dataset.id);
-      if (c) c.col = b.dataset.mv;
-      renderTaskBoard();
-    } else b.disabled = false;
-  });
+
   el.querySelectorAll('.kdel').forEach(b => b.onclick = async () => {
     if (!confirm('Delete this card?')) return;
     const j = await tbSend({op: 'del', id: b.dataset.id});
@@ -8988,23 +8981,76 @@ function renderTaskBoard() {
     const p = S.data.pianos.find(x => (x.serial || '') === ch.dataset.serial);
     if (p) { switchView('map'); focusPiano(p); openPop(p.row, S.popAnchor, true); }
   });
-  // drag & drop between columns (desktop); ◀▶ cover phones
-  el.querySelectorAll('.kcard[draggable="true"]').forEach(card => {
-    card.addEventListener('dragstart', ev => ev.dataTransfer.setData('text/tcid', card.dataset.id));
-  });
-  el.querySelectorAll('.kcol').forEach(colEl => {
-    colEl.addEventListener('dragover', ev => { ev.preventDefault(); colEl.classList.add('kover'); });
-    colEl.addEventListener('dragleave', () => colEl.classList.remove('kover'));
-    colEl.addEventListener('drop', async ev => {
-      ev.preventDefault(); colEl.classList.remove('kover');
-      const id = ev.dataTransfer.getData('text/tcid');
-      if (!id) return;
-      const j = await tbSend({op: 'move', id, col: colEl.dataset.col});
-      if (j) {
+  // pointer-based drag & drop (mouse AND touch): drag cards between
+  // columns and up/down within a column to prioritize (Brigham 8/28)
+  if (canEdit) el.querySelectorAll('.kcard').forEach(card => {
+    card.addEventListener('pointerdown', ev => {
+      if (ev.target.closest('button, .chip')) return;
+      const id = card.dataset.id;
+      const startX = ev.clientX, startY = ev.clientY;
+      let dragging = false, ghost = null, ph = null;
+      const move = e => {
+        if (!dragging) {
+          if (Math.hypot(e.clientX - startX, e.clientY - startY) < 8) return;
+          dragging = true;
+          document.body.classList.add('kdragging');
+          ghost = card.cloneNode(true);
+          ghost.className = 'kcard kghost';
+          ghost.style.width = card.offsetWidth + 'px';
+          document.body.appendChild(ghost);
+          ph = document.createElement('div');
+          ph.className = 'kplace';
+          card.style.opacity = '.35';
+        }
+        e.preventDefault();
+        ghost.style.left = (e.clientX - ghost.offsetWidth / 2) + 'px';
+        ghost.style.top = (e.clientY - 18) + 'px';
+        const colEl = document.elementsFromPoint(e.clientX, e.clientY)
+          .find(n => n.classList && n.classList.contains('kcol'));
+        el.querySelectorAll('.kcol').forEach(c2 => c2.classList.toggle('kover', c2 === colEl));
+        if (!colEl) { if (ph.parentNode) ph.remove(); return; }
+        const cards = [...colEl.querySelectorAll('.kcard')].filter(c2 => c2 !== card);
+        let before = null;
+        for (const c2 of cards) {
+          const r2 = c2.getBoundingClientRect();
+          if (e.clientY < r2.top + r2.height / 2) { before = c2; break; }
+        }
+        if (before) colEl.insertBefore(ph, before);
+        else colEl.appendChild(ph);
+      };
+      const up = async e => {
+        removeEventListener('pointermove', move);
+        removeEventListener('pointerup', up);
+        removeEventListener('pointercancel', up);
+        document.body.classList.remove('kdragging');
+        el.querySelectorAll('.kcol').forEach(c2 => c2.classList.remove('kover'));
+        if (!dragging) return;
+        ghost.remove();
+        card.style.opacity = '';
+        const colEl = ph.parentNode ? ph.closest('.kcol') : null;
+        if (!colEl) { ph.remove(); return; }
+        // order = midpoint between the placeholder's neighbors
+        const sibs = [...colEl.querySelectorAll('.kcard')].filter(c2 => c2 !== card);
+        const idx = [...colEl.children].filter(n => n.classList.contains('kcard') || n === ph)
+          .filter(n => n !== card).indexOf(ph);
+        const oOf = n => { const r2 = TB.rows.find(x => x.id === n.dataset.id); return r2 ? ordVal(r2) : 0; };
+        const prev = idx > 0 ? oOf(sibs[idx - 1]) : null;
+        const next = idx < sibs.length ? oOf(sibs[idx]) : null;
+        let order;
+        if (prev === null && next === null) order = 0;
+        else if (prev === null) order = next - 1;
+        else if (next === null) order = prev + 1;
+        else order = (prev + next) / 2;
+        ph.remove();
+        const newCol = colEl.dataset.col;
         const c = TB.rows.find(r => r.id === id);
-        if (c) c.col = colEl.dataset.col;
+        if (c) { c.col = newCol; c.order = order; }
         renderTaskBoard();
-      }
+        tbSend({op: 'move', id, col: newCol, order});
+      };
+      addEventListener('pointermove', move, {passive: false});
+      addEventListener('pointerup', up);
+      addEventListener('pointercancel', up);
     });
   });
 }

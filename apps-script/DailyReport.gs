@@ -4609,7 +4609,7 @@ function taskBoardSheet_() {
   var sh = ss.getSheetByName('Task Boards');
   if (!sh) {
     sh = ss.insertSheet('Task Boards', ss.getSheets().length);
-    sh.getRange(1, 1, 1, 9).setValues([['Id', 'Owner', 'Col', 'Text', 'Serial', 'Due', 'From', 'Created', 'Done at']]);
+    sh.getRange(1, 1, 1, 10).setValues([['Id', 'Owner', 'Col', 'Text', 'Serial', 'Due', 'From', 'Created', 'Done at', 'Order']]);
     sh.setFrozenRows(1);
   }
   return sh;
@@ -4619,13 +4619,14 @@ function taskBoardRows_() {
   var last = sh.getLastRow();
   var out = [];
   if (last >= 2) {
-    var vals = sh.getRange(2, 1, last - 1, 9).getValues();
+    var vals = sh.getRange(2, 1, last - 1, 10).getValues();
     for (var i = 0; i < vals.length; i++) {
       var v = vals[i];
       if (!v[0] || !v[3]) continue;
       out.push({id: String(v[0]), owner: String(v[1] || ''), col: String(v[2] || 'todo'),
         text: String(v[3]).slice(0, 200), serial: String(v[4] || ''), due: String(v[5] || ''),
-        from: String(v[6] || ''), created: String(v[7] || ''), done: String(v[8] || '')});
+        from: String(v[6] || ''), created: String(v[7] || ''), done: String(v[8] || ''),
+        order: v[9] === '' || v[9] == null ? null : Number(v[9])});
     }
   }
   return {ok: true, rows: out};
@@ -4638,10 +4639,12 @@ function taskCard_(req, who) {
     var text = String(req.text || '').trim().slice(0, 200);
     if (!text) return {error: 'write the card first'};
     var id = 'tc' + Date.now().toString(36) + Math.floor(Math.random() * 1e4);
+    var ord = Number(req.order);
+    if (!isFinite(ord)) ord = 0;
     sh.appendRow([id, String(req.owner || name).slice(0, 40), 'todo', text,
       String(req.serial || '').slice(0, 20), String(req.due || '').slice(0, 12),
       String(req.from || (req.owner && req.owner !== name ? name : '')).slice(0, 30),
-      new Date().toISOString(), '']);
+      new Date().toISOString(), '', ord]);
     return {ok: true, id: id};
   }
   // ops on an existing card — find its row by Id
@@ -4657,6 +4660,8 @@ function taskCard_(req, who) {
     if (['todo', 'doing', 'done'].indexOf(col) < 0) return {error: 'bad column'};
     sh.getRange(row, 3).setValue(col);
     sh.getRange(row, 9).setValue(col === 'done' ? new Date().toISOString() : '');
+    if (req.order !== undefined && isFinite(Number(req.order)))
+      sh.getRange(row, 10).setValue(Number(req.order));
     return {ok: true};
   }
   if (op === 'edit') {

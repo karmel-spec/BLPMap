@@ -1332,3 +1332,21 @@ tr.adjediting td{background:#fdf8ee}
 .admreqmeta{font-size:11px;color:#8a929a;margin-top:4px}
 .brigdone{margin-left:auto;border:1.5px solid #2e7d4f;background:#fff;color:#2e7d4f;border-radius:7px;
   padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer}
+
+/* yellow post-it icon + drag & drop */
+.postit{display:inline-block;width:17px;height:17px;background:#f7e463;border-radius:1.5px;
+  position:relative;transform:rotate(-4deg);box-shadow:1px 1.5px 3px rgba(0,0,0,.45);vertical-align:-2px}
+.postit::after{content:'';position:absolute;right:0;bottom:0;width:0;height:0;
+  border-style:solid;border-width:0 6px 6px 0;border-color:transparent #b3a334 transparent transparent;
+  border-radius:0 0 2px 0}
+.postit::before{content:'';position:absolute;left:3px;top:5px;right:3px;height:1.5px;background:rgba(0,0,0,.16);
+  box-shadow:0 3.5px 0 rgba(0,0,0,.14),0 7px 0 rgba(0,0,0,.12)}
+.kghost{position:fixed;z-index:400;pointer-events:none;transform:rotate(2.5deg);
+  box-shadow:0 10px 26px rgba(0,0,0,.3);opacity:.95}
+.kplace{height:34px;border:2px dashed #9e2020;border-radius:8px;margin-bottom:8px;background:#fdf3f3}
+.kgrab{font-size:10.5px;color:#9aa3ac;cursor:grab;user-select:none}
+.kdragging, .kdragging *{cursor:grabbing !important}
+.kdragging .kan{touch-action:none}
+.kcard{touch-action:manipulation}
+/* the ⠿ handle is the guaranteed touch-drag zone (cards stay scrollable) */
+.kgrab{touch-action:none;cursor:grab;padding:2px 6px;margin-left:-6px}
