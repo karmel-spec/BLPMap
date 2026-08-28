@@ -8865,7 +8865,8 @@ const TB_HEADSHOTS = {
   "thayne larson": "https://www.brighamlarsonpianos.com/cdn/shop/files/Thayne.Larson.BW_d6685ac0-6746-4c41-98b5-57b3e19bcfbb.jpg?v=1735947791&width=240",
   "melissa terry": "https://www.brighamlarsonpianos.com/cdn/shop/files/5U4A1257.jpg?v=1775246484&width=240",
   "ezzy lopp": "https://www.brighamlarsonpianos.com/cdn/shop/files/Ezaray.Lopp.BW_cc6b4562-389e-4c78-b1fe-3dcd2590bd86.jpg?v=1777569159&width=240",
-  "alisa merrill": "https://www.brighamlarsonpianos.com/cdn/shop/files/Alisa.Merrill.BW_1.jpg?v=1735949942&width=240"
+  "alisa merrill": "https://www.brighamlarsonpianos.com/cdn/shop/files/Alisa.Merrill.BW_1.jpg?v=1735949942&width=240",
+  "lisa litton": "assets/headshots/lisa-litton.jpg"
   };
 const tbNorm = n => String(n || '').trim().toLowerCase().replace(/\s+/g, ' ');
 // full access to every board: the face strip + open/edit/add on anyone's
