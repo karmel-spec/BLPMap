@@ -1332,7 +1332,8 @@ tr.adjediting td{background:#fdf8ee}
 .kcol h4 i{font-style:normal;background:#fff;border-radius:999px;padding:0 8px;font-size:10px}
 .kcard{background:#fff;border-radius:8px;border:1px solid #dfe3e8;padding:9px 11px;margin-bottom:8px;
   font-size:12.5px;line-height:1.4;box-shadow:0 1px 3px rgba(0,0,0,.06)}
-.kcard b{font-weight:600}
+.kcard b{font-weight:600;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:8;overflow:hidden}
+.cm-text{min-height:76px}
 .kdone .kcard{opacity:.72}
 .kdone .kcard b{text-decoration:line-through}
 .kcard .chips{display:flex;gap:5px;margin-top:6px;flex-wrap:wrap}

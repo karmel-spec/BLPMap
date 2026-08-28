@@ -9052,7 +9052,7 @@ function renderTaskBoard() {
     const ov2 = modalShell('composemodal', `
       <span class="x">✕</span>
       <h3>＋ New card — ${esc(first)}'s board</h3>
-      <input class="kc-text" maxlength="200" placeholder="what needs doing?">
+      <input class="kc-text" maxlength="2000" placeholder="what needs doing?">
       <div class="cm-grid">
         <div><label>Due (optional)</label><input class="kc-due" type="date"></div>
         <div><label>Piano serial (optional)</label><input class="kc-serial" maxlength="20" list="serialList"></div>
@@ -9256,7 +9256,7 @@ function openCardModal(c, canEdit) {
   const ov = modalShell('cardmodal', `
     <span class="x">✕</span>
     <h3>🗒 Card${added ? ` <small class="cm-added">added ${new Date(added).toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'})}</small>` : ''}</h3>
-    <textarea class="cm-text" maxlength="200" rows="2" ${canEdit ? '' : 'readonly'}>${esc(c.text)}</textarea>
+    <textarea class="cm-text" maxlength="2000" rows="2" ${canEdit ? '' : 'readonly'}>${esc(c.text)}</textarea>
     <div class="cm-grid">
       <div><label>Due</label><input type="date" class="cm-due" value="${esc(c.due || '')}" ${canEdit ? '' : 'disabled'}></div>
       <div><label>Piano serial</label><input class="cm-serial" maxlength="20" list="serialList" value="${esc(c.serial || '')}" ${canEdit ? '' : 'disabled'}></div>

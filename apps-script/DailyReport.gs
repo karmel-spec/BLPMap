@@ -4730,7 +4730,7 @@ function taskCard_(req, who) {
   var op = String(req.op || '');
   var name = String(who || '').replace(/\s*<[^>]*>\s*/, '').replace(/\s*\(.*\)\s*$/, '');
   if (op === 'add') {
-    var text = String(req.text || '').trim().slice(0, 200);
+    var text = String(req.text || '').trim().slice(0, 2000);
     if (!text) return {error: 'write the card first'};
     var id = 'tc' + Date.now().toString(36) + Math.floor(Math.random() * 1e4);
     var ord = Number(req.order);
@@ -4766,7 +4766,7 @@ function taskCard_(req, who) {
     return {ok: true};
   }
   if (op === 'edit') {
-    if (req.text !== undefined) sh.getRange(row, 4).setValue(String(req.text).trim().slice(0, 200));
+    if (req.text !== undefined) sh.getRange(row, 4).setValue(String(req.text).trim().slice(0, 2000));
     if (req.due !== undefined) sh.getRange(row, 6).setValue(String(req.due).slice(0, 12));
     if (req.serial !== undefined) sh.getRange(row, 5).setValue(String(req.serial).slice(0, 20));
     tbNotify_(rowOwner, who, 'updated a card', String(req.id),
