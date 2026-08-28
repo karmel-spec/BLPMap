@@ -9205,6 +9205,7 @@ function openCardModal(c, canEdit) {
     ${canEdit ? `<div class="cm-snooze"><span>💤 Snooze</span>
       <button data-sz="1">+1d</button><button data-sz="3">+3d</button>
       <button data-sz="7">+1w</button><button data-sz="30">+1m</button>
+      <button class="cm-szpick">📅 pick date</button><input type="date" class="cm-szdate" tabindex="-1">
       ${c.snooze ? `<button data-sz="0">✕ wake up (${esc(c.snooze)})</button>` : ''}</div>` : ''}
     <label style="margin-top:10px">Notes & links ${canEdit ? '<small>— paste links, they become clickable</small>' : ''}</label>
     ${canEdit ? `<div class="movebox"><input class="cm-note" maxlength="300" placeholder="add a note or paste a link…">
@@ -9242,6 +9243,19 @@ function openCardModal(c, canEdit) {
       const j = await tbSend({op: 'snooze', id: c.id, until});
       if (j) { c.snooze = until; ov.hidden = true; renderTaskBoard(); }
     });
+    // 📅 custom snooze — pick any wake-up date
+    const szd = ov.querySelector('.cm-szdate');
+    ov.querySelector('.cm-szpick').onclick = () => {
+      szd.min = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+      try { szd.showPicker(); }
+      catch (e) { szd.classList.add('open'); szd.focus(); szd.click(); }
+    };
+    szd.onchange = async () => {
+      if (!szd.value) return;
+      msg.textContent = 'snoozing…';
+      const j = await tbSend({op: 'snooze', id: c.id, until: szd.value});
+      if (j) { c.snooze = szd.value; ov.hidden = true; renderTaskBoard(); }
+    };
     const addNote = async text => {
       if (!text) return;
       msg.textContent = 'adding…';

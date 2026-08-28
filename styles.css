@@ -1379,7 +1379,12 @@ tr.adjediting td{background:#fdf8ee}
   font:600 14px/1.4 inherit;resize:vertical}
 .cm-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px}
 .cm-grid input{width:100%;box-sizing:border-box;padding:7px 9px;border:1.5px solid #c9ced4;border-radius:8px;font:inherit;font-size:13px}
-.cm-snooze{display:flex;gap:6px;align-items:center;margin-top:10px;flex-wrap:wrap;font-size:12px;color:#5b636b}
+.cm-snooze{display:flex;gap:6px;align-items:center;margin-top:10px;flex-wrap:wrap;font-size:12px;color:#5b636b;position:relative}
+/* the custom-date input stays invisible; showPicker() opens the native calendar.
+   Browsers without showPicker get the .open fallback: a real visible input */
+.cm-szdate{position:absolute;left:0;bottom:0;width:1px;height:1px;opacity:0;pointer-events:none;border:0;padding:0}
+.cm-szdate.open{position:static;width:auto;height:auto;opacity:1;pointer-events:auto;
+  border:1.5px solid #c9a227;border-radius:999px;padding:2px 9px;font:inherit;font-size:11px;background:#fdf6e3;color:#6b5200}
 .cm-snooze button{border:1.5px solid #c9a227;background:#fdf6e3;color:#6b5200;border-radius:999px;
   padding:3px 11px;font-size:11px;font-weight:700;cursor:pointer}
 .cm-notes{max-height:220px;overflow-y:auto;margin-top:4px}
