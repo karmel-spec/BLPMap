@@ -5145,7 +5145,16 @@ function requestPrice_(req, who) {
       + '. Set it on ' + APP_URL + ' or in the Piano Log.',
     name: 'BLP Store Map',
   });
-  return {ok: true, summary: found.summary, sentTo: PRICE_REQUEST_TO};
+  // …and text Brigham (8/27) — he can answer straight from the text: the SMS
+  // gateway turns "<serial> <price>" into the same setprice write the app
+  // does, which lands in the Piano Log and flows into the price tag.
+  try {
+    notifyTeam_(['Brigham'], '💲 Price needed: ' + (found.summary || 'piano')
+      + ' · SN ' + req.serial + (found.location ? ' · spot ' + found.location : '')
+      + ' (asked by ' + (name || 'the team') + '). Reply with the price and I\'ll set it — '
+      + 'e.g. "' + req.serial + ' 12995".');
+  } catch (eT) { /* email already sent; the text is a bonus */ }
+  return {ok: true, summary: found.summary, sentTo: PRICE_REQUEST_TO, texted: true};
 }
 
 // printable price tag → PDF attachment → info@ ("please print and swap it")

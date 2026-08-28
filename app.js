@@ -5635,8 +5635,8 @@ async function submitPriceRequest(p, ov) {
     if (j.error === 'unauthorized') { lsDel('blpPin'); throw new Error('Not authorized — sign in again from the ☰ menu.'); }
     if (!j.ok) throw new Error(j.error || 'request failed');
     msg.className = 'tmmsg ok';
-    msg.textContent = '✓ Price request emailed to Brigham.';
-    setTimeout(() => { ov.hidden = true; }, 1800);
+    msg.textContent = '✓ Emailed AND texted to Brigham — his reply sets the price automatically.';
+    setTimeout(() => { ov.hidden = true; }, 2400);
   } catch (e) {
     msg.className = 'tmmsg err'; msg.textContent = '✗ ' + e.message;
     btn.disabled = false;
