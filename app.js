@@ -802,7 +802,7 @@ function ownerClass(p) {
 }
 function matches(p, q) {
   return (p.summary + ' ' + p.serial + ' ' + p.make + ' ' + p.model + ' '
-          + p.year + ' ' + p.location).toLowerCase().includes(q);
+          + p.year + ' ' + p.location + ' ' + (p.owner || '')).toLowerCase().includes(q);
 }
 function logLink(p) {
   // ?q= is the Piano Log's deep link: it pre-filters the list and, when the
@@ -9825,6 +9825,7 @@ function searchRank(p, q) {
   if (year.startsWith(q)) return 5;
   if (make.includes(q) || model.includes(q)) return 6;
   if (String(p.summary || '').toLowerCase().includes(q)) return 7;
+  if (String(p.owner || '').toLowerCase().includes(q)) return 7.5;   // owner first/last name
   if (spot.startsWith(q)) return 8;
   return 99;
 }
