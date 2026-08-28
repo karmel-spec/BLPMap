@@ -3536,8 +3536,8 @@ function popHTML(p) {
         </span></div><div class="cabmsg phmsg"></div>` : ''}
     ${p.serial ? `<div class="row rowflex"><span>🪑 Bench</span><b class="benchloc">${esc(p.benchLoc || '—')}</b></div>
     <div class="movebox benchbox">
-        <input class="bnin" placeholder="bench location — spot #, shelf…" maxlength="40">
-        <button class="mvgo bngo">Set</button>
+        <input class="bnin" placeholder="bench location — spot #, shelf…" maxlength="40"
+          value="${esc(p.benchLoc || '')}">
         <button class="mvgo bnshot" title="photo of the bench → Tech folder">📸</button>
         <button class="mvgo benchtag" title="printable bench tag">🖨</button>
       </div><div class="bnmsg phmsg"></div>
@@ -4275,27 +4275,37 @@ function wirePop(p) {
     };
   })();
   // 🪑 bench: location text via the bridge, photo straight to the Tech folder
-  const bngo = pop.querySelector('.bngo');
-  if (bngo) bngo.onclick = async ev => {
-    ev.stopPropagation(); popPinned = true;
-    const val = pop.querySelector('.bnin').value.trim();
-    const msg = pop.querySelector('.bnmsg');
-    if (!val) { msg.textContent = 'type where the bench is first'; return; }
-    const wa = writeAuth();
-    if (!wa.ok) { msg.textContent = wa.renewing ? 'Sign-in expired — retry in a moment.' : 'Sign in first.'; return; }
-    msg.textContent = 'saving…';
-    try {
-      const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
-        headers: {'content-type': 'text/plain;charset=utf-8'},
-        body: JSON.stringify({pin: wa.pin, action: 'setbench', serial: p.serial, row: p.row,
-          value: val, ...authFields()})});
-      const j = await r.json();
-      if (!j.ok) throw new Error(j.error || 'failed');
-      p.benchLoc = val;
-      msg.textContent = '✓ bench location saved';
-      const bl = pop.querySelector('.benchloc'); if (bl) bl.textContent = val;
-    } catch (e) { msg.textContent = '✗ ' + e.message; }
-  };
+  // bench location autosaves — debounced while typing, instantly on
+  // blur/Enter; no Set button (Brigham 8/28)
+  const bnin = pop.querySelector('.bnin');
+  if (bnin) {
+    let bnTimer = null, bnLast = (p.benchLoc || '').trim();
+    const bnSave = async () => {
+      const val = bnin.value.trim();
+      if (val === bnLast) return;
+      const msg = pop.querySelector('.bnmsg');
+      const wa = writeAuth();
+      if (!wa.ok) { msg.textContent = wa.renewing ? 'Sign-in expired — retry in a moment.' : 'Sign in first.'; return; }
+      msg.textContent = 'saving…';
+      try {
+        const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+          headers: {'content-type': 'text/plain;charset=utf-8'},
+          body: JSON.stringify({pin: wa.pin, action: 'setbench', serial: p.serial, row: p.row,
+            value: val, ...authFields()})});
+        const j = await r.json();
+        if (!j.ok) throw new Error(j.error || 'failed');
+        bnLast = val;
+        p.benchLoc = val;
+        msg.textContent = '✓ saved';
+        setTimeout(() => { if (msg.isConnected && msg.textContent === '✓ saved') msg.textContent = ''; }, 1600);
+        const bl = pop.querySelector('.benchloc'); if (bl) bl.textContent = val || '—';
+      } catch (e) { msg.textContent = '✗ ' + e.message; }
+    };
+    bnin.onclick = ev => ev.stopPropagation();
+    bnin.oninput = () => { popPinned = true; clearTimeout(bnTimer); bnTimer = setTimeout(bnSave, 1200); };
+    bnin.onblur = () => { clearTimeout(bnTimer); bnSave(); };
+    bnin.onkeydown = ev => { if (ev.key === 'Enter') { ev.preventDefault(); clearTimeout(bnTimer); bnSave(); } };
+  }
   const bnshot = pop.querySelector('.bnshot');
   const bnfile = pop.querySelector('.bnfile');
   if (bnshot && bnfile) {
