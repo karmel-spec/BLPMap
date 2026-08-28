@@ -1907,6 +1907,8 @@ function printBenchTag(p) {
            color: #e8e4dd; font-size: 13px; position: sticky; top: 0; }
     .bar button { background: #B43333; color: #fff; border: 0; border-radius: 6px;
                   padding: 8px 18px; font: inherit; font-weight: 700; cursor: pointer; }
+    .xclose { margin-left: auto; background: #3a3f45 !important; }
+
     .bar input { flex: 1; min-width: 120px; padding: 7px 10px; border-radius: 6px; border: 0;
                  font: inherit; }
     .sheet { display: flex; gap: 0.3in; padding: 0.35in; }
@@ -1920,6 +1922,7 @@ function printBenchTag(p) {
       <button onclick="applyNote()">Update note</button>
       <button onclick="print()">🖨 Print</button>
       <span style="opacity:.7">2 copies — tape one on, keep one with the piano</span>
+      <button class="xclose" onclick="window.close()" title="close this preview">✕ Close</button>
     </div>
     <div class="sheet" id="sheet">${benchTagInner(d)}${benchTagInner(d)}</div>
     <script>
@@ -2003,6 +2006,8 @@ function printShopTag(p) {
            color: #e8e4dd; font-size: 13px; position: sticky; top: 0; }
     .bar button { background: #B43333; color: #fff; border: 0; border-radius: 6px;
                   padding: 8px 18px; font: inherit; font-weight: 700; cursor: pointer; }
+    .xclose { margin-left: auto; background: #3a3f45 !important; }
+
     .sheet { width: 8.2in; margin: 0 auto; padding: 14px 0; }
     .tag { width: 8.06in; height: 4.72in; background: #fff; display: flex; overflow: hidden;
            box-shadow: 0 4px 14px rgba(0,0,0,.18); page-break-inside: avoid; }
@@ -2061,7 +2066,7 @@ function printShopTag(p) {
     }
   </style></head><body>
     <div class="bar"><b>Shop tag</b> — click any field to edit, tap 1·2·3 to set the refinishing level
-      <button onclick="doPrint()">🖨 Print — 2 per page</button></div>
+      <button onclick="doPrint()">🖨 Print — 2 per page</button><button class="xclose" onclick="window.close()" title="close this preview">✕ Close</button></div>
     <div class="sheet">${tag}<div class="cut">✂ cut</div>${tag.replace('class="tag"', 'class="tag copy2"')}</div>
     <script>
       const t1 = document.querySelectorAll('.tag')[0], t2 = document.querySelectorAll('.tag')[1];
@@ -8168,6 +8173,10 @@ function printReport(title, html) {
     .empty { color: #777; }
     @media print { .noprint { display: none; } }
   </style></head><body>
+    <div class="noprint" style="position:fixed;top:10px;right:12px;display:flex;gap:8px;z-index:9">
+      <button onclick="print()" style="background:#B43333;color:#fff;border:0;border-radius:6px;padding:8px 16px;font:inherit;font-weight:700;cursor:pointer">🖨 Print</button>
+      <button onclick="window.close()" title="close this preview" style="background:#3a3f45;color:#fff;border:0;border-radius:6px;padding:8px 14px;font:inherit;font-weight:700;cursor:pointer">✕ Close</button>
+    </div>
     <div class="hd"><div class="brand">BRIGHAM LARSON PIANOS</div>
     <div class="sub">${esc(title)} · ${esc(day)} · blpstoremap.netlify.app</div></div>
     ${html}
