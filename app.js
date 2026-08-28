@@ -3489,12 +3489,23 @@ function popHTML(p) {
     ${p.serial ? (() => {
       const mine = CLOCK.open;
       const onThis = mine && mine.serial === p.serial;
+      // everyone ELSE with an open session on this piano — pairing up is
+      // fine (training, two-person jobs), but flag it so a missed switch
+      // is easy to spot (Brigham 8/28)
+      const others = (CLOCK.all || []).filter(o => o.serial === p.serial
+        && (o.tech || '').toLowerCase() !== clockName().toLowerCase());
+      const together = others.length ? `<div class="clkothers">👥 Also clocked in here:
+          ${others.map(o => `<b>${esc((o.tech || '').split(/\s+/)[0] || o.tech)}</b>
+            <span class="cctime" data-start="${esc(o.start)}">${clockElapsed(o.start)}</span>`).join(' · ')}
+          <small>working together is fine — if this looks like a missed switch, tell a manager</small></div>` : '';
       if (onThis) return secWrap('clock', '⏱ Work Clock', `
         <div class="row rowflex"><span>Working on</span><b>${esc(mine.phase || '—')}</b></div>
+        ${together}
         <button class="clkbtn clkout">■ Clock out — <span class="cctime" data-start="${esc(mine.start)}">${clockElapsed(mine.start)}</span></button>
         <div class="clkmsg phmsg"></div>`);
       const opts = (pianoPhases(p) || PHASES).concat(PHASE_STATES);
       return secWrap('clock', '⏱ Work Clock', `
+        ${together}
         ${mine ? `<div class="clkwarn">⏱ You're on <b>#${esc(mine.serial)}</b>
           <span class="cctime" data-start="${esc(mine.start)}">${clockElapsed(mine.start)}</span> — clocking in here closes it.</div>` : ''}
         <div class="row rowflex"><span>What work?</span>
@@ -4104,9 +4115,15 @@ function wirePop(p) {
       // confirm exactly what's about to happen before the punch lands
       const cur = CLOCK.open;
       const isSwitch = cur && cur.serial && cur.serial !== p.serial;
+      const already = (CLOCK.all || []).filter(o => o.serial === p.serial
+        && (o.tech || '').toLowerCase() !== clockName().toLowerCase());
       const okGo = await clockConfirm(
         isSwitch ? '\ud83d\udd01' : '\u25b6',
         isSwitch ? 'Switch pianos?' : 'Clock in?',
+        (already.length ? `<div class="ccfmrow" style="border-color:#c9a227;background:#fdf6e3">\ud83d\udc65
+           <b>${esc(already.map(o => (o.tech || '').split(/\s+/)[0]).join(' & '))}</b>
+           ${already.length > 1 ? 'are' : 'is'} already clocked in on this piano \u2014
+           you'll BOTH be on it (fine for training / two-person work).</div>` : '') +
         (isSwitch ? `<div class="ccfmrow">\u25a0 Clock OUT of <b>${esc(String(cur.piano || cur.serial).slice(0, 34))} \u00b7 #${esc(cur.serial)}</b>
              <small>${clockElapsed(cur.start)} will be logged</small></div>` : '') +
         `<div class="ccfmrow">\u25b6 Clock IN on <b>${pianoLabel(p)}</b>
@@ -8719,14 +8736,20 @@ function teamBoardHTML() {
       : '🌗 ' + esc(w.why || 'partial day')) : '';
     const mins = o ? Math.max(0, Math.round((Date.now() - new Date(o.start)) / 60000)) : 0;
     const flag = o && !pw.on ? '<div class="tmflag">⚠ on a piano, no day punch</div>' : '';
-    return `<div class="tmtile ${o ? 'onpiano' : pw.on ? 'onday' : w ? 'away' : ''}">
+    // more than one open session on the same piano: fine for training or
+    // two-person jobs, but surfaced so a missed switch is easy to catch
+    const mates = o ? (TEAM.clock.open || []).filter(x => x.serial === o.serial
+      && norm(x.tech) !== norm(o.tech)) : [];
+    const shared = mates.length ? `<div class="tmshared">👥 with ${esc(mates.map(x =>
+      String(x.tech || '').split(/\s+/)[0]).join(', '))} — together or a missed switch?</div>` : '';
+    return `<div class="tmtile ${o ? 'onpiano' : pw.on ? 'onday' : w ? 'away' : ''} ${mates.length ? 'shared' : ''}">
       <b>${esc(m.full)}</b><small>${esc(m.pos)}</small>
       ${w ? `<div class="tmaway">${away}</div>` : `
       <div>🎹 ${o ? esc((o.piano || o.serial || '').slice(0, 26)) + ' · ' + esc(o.phase || '') +
         ' · ' + Math.floor(mins / 60) + ':' + String(mins % 60).padStart(2, '0') : '—'}</div>
       <div>🕔 ${pw.on ? 'in since ' + teamClockFmt(pw.start)
         : pw.mins ? 'done · ' + (pw.mins / 60).toFixed(1) + 'h today' : 'not clocked in'}</div>`}
-      ${flag}
+      ${shared}${flag}
     </div>`;
   };
   return Object.entries(groups).filter(([, l]) => l.length).map(([g, l]) =>
@@ -8767,7 +8790,22 @@ function renderTeam() {
   const el = $('#teamBody');
   if (!el) return;
   if (!isTeamAdmin()) { el.innerHTML = '<div class="empty">Admin, managers &amp; owners only.</div>'; return; }
-  document.querySelectorAll('#teamTabs button').forEach(b => {
+  // 🔄 managers/owners refresh the live board data on demand (Brigham 8/28)
+  const tt = $('#teamTabs');
+  if (tt && !tt.querySelector('.teamrefresh')) {
+    const rb = document.createElement('button');
+    rb.className = 'teamrefresh';
+    rb.textContent = '🔄 Refresh';
+    rb.onclick = async () => {
+      rb.disabled = true; rb.textContent = '🔄 Refreshing…';
+      TEAM.roster = TEAM.sched = TEAM.clock = TEAM.pay = TEAM.where = null;
+      TEAM.loading = false;
+      await teamFetchAll();
+      rb.disabled = false; rb.textContent = '🔄 Refresh';
+    };
+    tt.appendChild(rb);
+  }
+  document.querySelectorAll('#teamTabs button[data-tt]').forEach(b => {
     b.classList.toggle('on', b.dataset.tt === TEAM.tab);
     if (!b.dataset.wired) { b.dataset.wired = '1'; b.onclick = () => { TEAM.tab = b.dataset.tt; renderTeam(); }; }
   });
