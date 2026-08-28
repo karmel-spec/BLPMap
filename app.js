@@ -1921,7 +1921,6 @@ function printBenchTag(p) {
       <input id="bn" placeholder="add a note for this bench (optional)" value="${esc(d.note)}">
       <button onclick="applyNote()">Update note</button>
       <button onclick="print()">🖨 Print</button>
-      <span style="opacity:.7">2 copies — tape one on, keep one with the piano</span>
       <button class="xclose" onclick="window.close()" title="close this preview">✕ Close</button>
     </div>
     <div class="sheet" id="sheet">${benchTagInner(d)}${benchTagInner(d)}</div>
