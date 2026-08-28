@@ -5060,12 +5060,13 @@ function lateClockNudge(e) {
     notifyTeam_([n], msg);
     logAct_('Store Map (auto)', 'Late clock nudge', n, late[n].join(' + ').slice(0, 140));
   });
-  // summary text to Karmel (Brigham 8/27) — only when someone was nudged
+  // summary text to Brigham + Karmel — standing rule (Brigham 8/28): every
+  // batch of team texts gets a summary to both. Only when someone was nudged.
   if (names.length) {
     var sum = '⏰ Late-clock sweep: texted ' + names.length + ' — '
       + names.map(function (n) { return n.split(/\s+/)[0] + ' (' + late[n].join(' + ') + ')'; })
         .join('; ');
-    notifyTeam_(['Karmel'], sum.slice(0, 1100));
+    notifyTeam_(['Brigham', 'Karmel'], sum.slice(0, 1100));
   }
   return {ok: true, texted: names};
 }
