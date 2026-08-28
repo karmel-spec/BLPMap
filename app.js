@@ -8649,6 +8649,8 @@ function renderWhiteboard() {
 setTimeout(() => {
   const b = document.getElementById('wbBtn');
   if (b) b.onclick = () => switchView('whiteboard');
+  const tb = document.getElementById('boardBtn');
+  if (tb) tb.onclick = () => switchView('tboard');
 }, 0);
 
 /* ---------- 👥 TEAM dashboard (admin + managers + owners) ----------
@@ -8816,6 +8818,179 @@ function renderTeam() {
     : TEAM.tab === 'schedule' ? teamScheduleHTML() : teamRosterHTML();
 }
 
+/* ---------- 🗒 BLP Kanban task boards (Brigham 8/28, design B) ----------
+ * Everyone has a personal board (To Do / Doing / Done). Owners get the face
+ * strip and can open any team member's board. Cards can carry a piano
+ * serial (tap → its map card), a due date, and a "from" chip when someone
+ * else added it to your board. Rows live on the report sheet's Task Boards
+ * tab via the bridge. */
+const TB = {rows: null, loading: false, person: '', faces: null};
+const TB_COLS = [['todo', 'TO DO'], ['doing', 'DOING'], ['done', 'DONE']];
+const TB_AV_COLORS = ['#9e2020', '#2c5d96', '#2f7d4f', '#8a6d3b', '#6a3aa0', '#a05a2c', '#3a7a8a', '#b4536b'];
+function tbAvColor(name) {
+  let h = 0; for (const c of String(name)) h = (h * 31 + c.charCodeAt(0)) % 997;
+  return TB_AV_COLORS[h % TB_AV_COLORS.length];
+}
+function tbMe() { const u = authUser(); return (u && u.name) || ''; }
+async function tbFetch() {
+  TB.loading = true;
+  try {
+    const r = await fetch(BRIDGE_URL + '?fn=taskboard', {redirect: 'follow'});
+    TB.rows = (await r.json()).rows || [];
+  } catch (e) { TB.rows = TB.rows || []; }
+  // owners' face strip: current team + anyone who already has cards
+  if (isOwner() && !TB.faces) {
+    try {
+      const r2 = await fetch(TEAM_ROSTER_API + '?key=' + encodeURIComponent('pianoman'));
+      const j2 = await r2.json();
+      TB.faces = ((j2.tabs && j2.tabs['Current Team']) || []).slice(1)
+        .map(row => (String(row[0] || '').trim() + ' ' + String(row[1] || '').trim()).trim())
+        .filter(Boolean);
+    } catch (e) { TB.faces = []; }
+  }
+  TB.loading = false;
+  renderTaskBoard();
+}
+async function tbSend(body) {
+  const wa = writeAuth();
+  if (!wa.ok) { alert('Sign in with Google (☰ menu) first — cards are saved under your name.'); return null; }
+  try {
+    const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+      headers: {'content-type': 'text/plain;charset=utf-8'},
+      body: JSON.stringify({pin: wa.pin, action: 'taskcard', ...body, ...authFields()})});
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error || 'failed');
+    return j;
+  } catch (e) { alert('✗ ' + e.message); return null; }
+}
+function tbDueChip(due, col) {
+  if (!due) return '';
+  const d = new Date(due + 'T12:00:00');
+  if (isNaN(d)) return `<span class="chip c-dueok">${esc(due)}</span>`;
+  const days = Math.floor((d - new Date()) / 86400000);
+  const lbl = d.toLocaleDateString('en-US', {month: 'short', day: 'numeric'});
+  if (col === 'done') return `<span class="chip c-dueok">${esc(lbl)}</span>`;
+  return `<span class="chip ${days <= 1 ? 'c-due' : 'c-dueok'}">due ${esc(lbl)}</span>`;
+}
+function renderTaskBoard() {
+  const el = $('#tboardBody');
+  if (!el) return;
+  const me = tbMe();
+  if (!me) { el.innerHTML = '<div class="empty">Sign in with Google (☰ menu) to see your board.</div>'; return; }
+  if (!TB.person) TB.person = me;
+  if (TB.rows === null) {
+    if (!TB.loading) tbFetch();
+    el.innerHTML = '<div class="empty">Loading your board…</div>';
+    return;
+  }
+  const first = n => String(n || '').split(/\s+/)[0].toLowerCase();
+  const owners = [...new Set(TB.rows.map(r => r.owner).filter(Boolean))];
+  const people = isOwner()
+    ? [...new Set([me, ...(TB.faces || []), ...owners])]
+    : [me];
+  const strip = isOwner() ? `<div class="faces">${people.map(n => {
+      const cnt = TB.rows.filter(r => first(r.owner) === first(n) && r.col !== 'done').length;
+      const on = first(n) === first(TB.person);
+      const initials = n.split(/\s+/).map(w => w[0] || '').join('').slice(0, 2).toUpperCase();
+      return `<div class="face ${on ? 'on' : ''}" data-p="${esc(n)}">
+        <span class="n"><span class="av" style="background:${tbAvColor(n)}">${esc(initials)}</span>
+        ${cnt ? `<i class="cnt">${cnt}</i>` : ''}</span>
+        <small>${esc(n.split(/\s+/)[0])}</small></div>`;
+    }).join('')}</div>` : '';
+  const mine = TB.rows.filter(r => first(r.owner) === first(TB.person));
+  const canEdit = first(TB.person) === first(me) || isOwner();
+  const col = (key, label) => {
+    const cards = mine.filter(r => r.col === key)
+      .sort((a, b) => (b.created || '').localeCompare(a.created || ''));
+    return `<div class="kcol ${key === 'done' ? 'kdone' : ''}" data-col="${key}">
+      <h4>${label} <i>${cards.length}</i></h4>
+      ${cards.map(c => `<div class="kcard" draggable="${canEdit}" data-id="${esc(c.id)}">
+        <b>${esc(c.text)}</b>
+        <div class="chips">
+          ${c.serial ? `<span class="chip c-piano" data-serial="${esc(c.serial)}">🎹 ${esc(c.serial)}</span>` : ''}
+          ${tbDueChip(c.due, c.col)}
+          ${c.from ? `<span class="chip c-from">from ${esc(c.from.split(/\s+/)[0])}</span>` : ''}
+        </div>
+        ${canEdit ? `<div class="kmove">
+          ${key !== 'todo' ? `<button data-mv="${key === 'done' ? 'doing' : 'todo'}" data-id="${esc(c.id)}">◀</button>` : ''}
+          ${key !== 'done' ? `<button data-mv="${key === 'todo' ? 'doing' : 'done'}" data-id="${esc(c.id)}">▶</button>` : ''}
+          <button class="kdel" data-id="${esc(c.id)}">🗑</button>
+        </div>` : ''}
+      </div>`).join('') || '<div class="kempty">—</div>'}
+    </div>`;
+  };
+  el.innerHTML = `${strip}
+    <div class="khead"><b>${esc(TB.person.split(/\s+/)[0])}'s Board</b>
+      <span>${mine.filter(r => r.col !== 'done').length} open</span>
+      <button class="teamrefresh tbrefresh">🔄</button>
+      ${canEdit ? '<button class="kadd">＋ Add card</button>' : ''}</div>
+    ${canEdit ? `<div class="kcompose" hidden>
+      <input class="kc-text" maxlength="200" placeholder="what needs doing?">
+      <input class="kc-serial" maxlength="20" placeholder="piano serial (optional)" list="serialList">
+      <input class="kc-due" type="date" title="due (optional)">
+      <button class="kc-go">Add to ${esc(TB.person.split(/\s+/)[0])}'s To&nbsp;Do</button>
+    </div>` : ''}
+    <div class="kan">${TB_COLS.map(([k, l]) => col(k, l)).join('')}</div>`;
+  // wiring
+  el.querySelectorAll('.face').forEach(f => f.onclick = () => { TB.person = f.dataset.p; renderTaskBoard(); });
+  const rb = el.querySelector('.tbrefresh');
+  if (rb) rb.onclick = () => { TB.rows = null; renderTaskBoard(); };
+  const ka = el.querySelector('.kadd');
+  if (ka) ka.onclick = () => {
+    const c = el.querySelector('.kcompose');
+    c.hidden = !c.hidden;
+    if (!c.hidden) { serialDatalist(); c.querySelector('.kc-text').focus(); }
+  };
+  const go = el.querySelector('.kc-go');
+  if (go) go.onclick = async () => {
+    const text = el.querySelector('.kc-text').value.trim();
+    if (!text) return;
+    go.disabled = true;
+    const j = await tbSend({op: 'add', owner: TB.person, text,
+      serial: el.querySelector('.kc-serial').value.trim(),
+      due: el.querySelector('.kc-due').value});
+    go.disabled = false;
+    if (j) { TB.rows = null; renderTaskBoard(); }
+  };
+  el.querySelectorAll('[data-mv]').forEach(b => b.onclick = async () => {
+    b.disabled = true;
+    const j = await tbSend({op: 'move', id: b.dataset.id, col: b.dataset.mv});
+    if (j) {
+      const c = TB.rows.find(r => r.id === b.dataset.id);
+      if (c) c.col = b.dataset.mv;
+      renderTaskBoard();
+    } else b.disabled = false;
+  });
+  el.querySelectorAll('.kdel').forEach(b => b.onclick = async () => {
+    if (!confirm('Delete this card?')) return;
+    const j = await tbSend({op: 'del', id: b.dataset.id});
+    if (j) { TB.rows = TB.rows.filter(r => r.id !== b.dataset.id); renderTaskBoard(); }
+  });
+  el.querySelectorAll('.chip.c-piano').forEach(ch => ch.onclick = () => {
+    const p = S.data.pianos.find(x => (x.serial || '') === ch.dataset.serial);
+    if (p) { switchView('map'); focusPiano(p); openPop(p.row, S.popAnchor, true); }
+  });
+  // drag & drop between columns (desktop); ◀▶ cover phones
+  el.querySelectorAll('.kcard[draggable="true"]').forEach(card => {
+    card.addEventListener('dragstart', ev => ev.dataTransfer.setData('text/tcid', card.dataset.id));
+  });
+  el.querySelectorAll('.kcol').forEach(colEl => {
+    colEl.addEventListener('dragover', ev => { ev.preventDefault(); colEl.classList.add('kover'); });
+    colEl.addEventListener('dragleave', () => colEl.classList.remove('kover'));
+    colEl.addEventListener('drop', async ev => {
+      ev.preventDefault(); colEl.classList.remove('kover');
+      const id = ev.dataTransfer.getData('text/tcid');
+      if (!id) return;
+      const j = await tbSend({op: 'move', id, col: colEl.dataset.col});
+      if (j) {
+        const c = TB.rows.find(r => r.id === id);
+        if (c) c.col = colEl.dataset.col;
+        renderTaskBoard();
+      }
+    });
+  });
+}
+
 /* ---------- 📅 Scheduling — management dashboard (managers & owners) ----------
  * Shop Manager pages embedded via manager.html?embed=1 (chrome hidden,
  * hash picks the page) — one source of truth, nothing duplicated. */
@@ -8881,7 +9056,7 @@ function renderAdmDash() {
 
 /* ---------- views / nav / drawers ---------- */
 function showView(v) {
-  ['map', 'report', 'board', 'cal', 'media', 'shopmap', 'archive', 'dash', 'whiteboard', 'training', 'trainingdoc', 'sched', 'team', 'admdash', 'updates'].forEach(x => $('#view-' + x).hidden = x !== v);
+  ['map', 'report', 'board', 'cal', 'media', 'shopmap', 'archive', 'dash', 'whiteboard', 'training', 'trainingdoc', 'sched', 'team', 'admdash', 'updates', 'tboard'].forEach(x => $('#view-' + x).hidden = x !== v);
   if (v === 'archive') renderArchive();
   document.querySelectorAll('.navitem[data-view]').forEach(el =>
     el.classList.toggle('on', el.dataset.view === v));
@@ -8892,6 +9067,7 @@ function showView(v) {
   if (v === 'team') renderTeam();
   if (v === 'admdash') renderAdmDash();
   if (v === 'updates') renderUpdatesFeed();
+  if (v === 'tboard') renderTaskBoard();
 }
 /* 🚀 App Updates — the user-facing changelog. Same "App Updates" sheet the
  * 📣 admin report logs into; everyone can read what's new. */

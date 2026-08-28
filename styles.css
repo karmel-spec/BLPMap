@@ -1277,3 +1277,48 @@ tr.adjediting td{background:#fdf8ee}
 .clkothers{background:#fdf6e3;border:1px solid #e8d9a8;border-radius:8px;padding:7px 10px;
   margin:6px 0;font-size:12px;line-height:1.45;color:#6b5200}
 .clkothers small{display:block;color:#9a8b5a;font-size:10.5px;margin-top:2px}
+
+/* 🗒 BLP Kanban task boards */
+.faces{display:flex;gap:10px;align-items:flex-start;padding:10px 4px 12px;overflow-x:auto;
+  border-bottom:1px solid #e3e6ea;margin-bottom:12px}
+.face{display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;flex:none;width:62px}
+.face .n{position:relative}
+.face .av{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-weight:800;color:#fff;font-size:15px;border:2.5px solid transparent}
+.face.on .av{border-color:#9e2020;box-shadow:0 0 0 2px #f3d9d9}
+.face small{font-size:9.5px;color:#5b636b;font-weight:700;white-space:nowrap}
+.face .cnt{position:absolute;top:-3px;right:-6px;background:#9e2020;color:#fff;border-radius:999px;
+  font-size:9px;font-weight:800;padding:1px 5px}
+.khead{display:flex;align-items:center;gap:12px;padding:2px 2px 12px}
+.khead b{font-size:16px}
+.khead span{font-size:11.5px;color:#8a929a}
+.kadd{margin-left:auto;background:#9e2020;color:#fff;border:0;border-radius:8px;
+  padding:8px 15px;font-weight:800;font-size:12.5px;cursor:pointer}
+.khead .tbrefresh{margin-left:auto}
+.khead .kadd{margin-left:0}
+.kcompose{display:flex;gap:8px;flex-wrap:wrap;background:#fff;border:1px solid #dfe3e8;
+  border-radius:10px;padding:10px;margin-bottom:12px}
+.kcompose input{flex:1;min-width:130px;padding:8px 10px;border:1.5px solid #c9ced4;border-radius:8px;font:inherit;font-size:13px}
+.kc-go{background:#2f7d4f;color:#fff;border:0;border-radius:8px;padding:8px 14px;font-weight:800;font-size:12px;cursor:pointer}
+.kan{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+@media(max-width:760px){.kan{grid-template-columns:1fr}}
+.kcol{background:#e8ebee;border-radius:10px;padding:9px;min-height:120px}
+.kcol.kover{outline:2.5px dashed #9e2020;outline-offset:-2px}
+.kcol h4{font-size:10.5px;letter-spacing:1.5px;color:#5b636b;margin:2px 4px 9px;display:flex;justify-content:space-between}
+.kcol h4 i{font-style:normal;background:#fff;border-radius:999px;padding:0 8px;font-size:10px}
+.kcard{background:#fff;border-radius:8px;border:1px solid #dfe3e8;padding:9px 11px;margin-bottom:8px;
+  font-size:12.5px;line-height:1.4;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.kcard b{font-weight:600}
+.kdone .kcard{opacity:.72}
+.kdone .kcard b{text-decoration:line-through}
+.kcard .chips{display:flex;gap:5px;margin-top:6px;flex-wrap:wrap}
+.chip{font-size:9.5px;font-weight:800;border-radius:999px;padding:2px 8px}
+.c-piano{background:#eef3fb;color:#2c5d96;cursor:pointer}
+.c-due{background:#fdecec;color:#a03030}
+.c-dueok{background:#eaf5ec;color:#2f7d4f}
+.c-from{background:#f4ecfd;color:#6a3aa0}
+.kmove{display:flex;gap:6px;margin-top:7px}
+.kmove button{border:1px solid #d8dce1;background:#fafbfc;border-radius:6px;padding:2px 10px;
+  font-size:11px;cursor:pointer}
+.kmove .kdel{margin-left:auto;color:#9e2020}
+.kempty{color:#9aa3ac;text-align:center;padding:12px 0;font-size:12px}

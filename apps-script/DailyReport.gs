@@ -158,6 +158,10 @@ function doGet(e) {
   }
   // Work clock: all OPEN sessions + today's closed minutes per tech.
   // Feeds the card chip, the My Day dock and the Shop Board live tiles.
+  if (e && e.parameter && e.parameter.fn === 'taskboard') {
+    try { return json_(taskBoardRows_()); }
+    catch (err) { return json_({error: String(err), rows: []}); }
+  }
   if (e && e.parameter && e.parameter.fn === 'requests') {
     try { return json_(requestsList_()); }
     catch (err) { return json_({error: String(err), requests: []}); }
@@ -797,6 +801,9 @@ function doPost(e) {
       var sg = addRequest_(req);
       if (sg.ok) logAct_(who, 'App request', sg.id, String(req.type || '') + ': ' + String(req.text || '').slice(0, 90));
       return json_(sg);
+    }
+    if (req.action === 'taskcard') {
+      return json_(taskCard_(req, who));
     }
     if (req.action === 'requeststatus') {
       var rs = setRequestStatus_(req);
@@ -4591,6 +4598,75 @@ function shareUpdates_(req, who) {
     sh.getRange(unshared[k].row, 4, 1, 2).setValues([[nowIso, audience]]);
   }
   return {ok: true, updates: unshared.length, sent: names.length, audience: audience};
+}
+
+/* ===================== 🗒 TASK BOARDS (Brigham 8/28) =====================
+ * Per-person kanban ("BLP Kanban"): every team member has a board with
+ * To Do / Doing / Done. Rows live on a "Task Boards" tab; the app filters
+ * per owner and owners can open anyone's board from the face strip. */
+function taskBoardSheet_() {
+  var ss = SpreadsheetApp.openById('11RoeVRETag5rZYX6_tEH-rf6x8JL0JeZU0P5AT0WI-I');
+  var sh = ss.getSheetByName('Task Boards');
+  if (!sh) {
+    sh = ss.insertSheet('Task Boards', ss.getSheets().length);
+    sh.getRange(1, 1, 1, 9).setValues([['Id', 'Owner', 'Col', 'Text', 'Serial', 'Due', 'From', 'Created', 'Done at']]);
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+function taskBoardRows_() {
+  var sh = taskBoardSheet_();
+  var last = sh.getLastRow();
+  var out = [];
+  if (last >= 2) {
+    var vals = sh.getRange(2, 1, last - 1, 9).getValues();
+    for (var i = 0; i < vals.length; i++) {
+      var v = vals[i];
+      if (!v[0] || !v[3]) continue;
+      out.push({id: String(v[0]), owner: String(v[1] || ''), col: String(v[2] || 'todo'),
+        text: String(v[3]).slice(0, 200), serial: String(v[4] || ''), due: String(v[5] || ''),
+        from: String(v[6] || ''), created: String(v[7] || ''), done: String(v[8] || '')});
+    }
+  }
+  return {ok: true, rows: out};
+}
+function taskCard_(req, who) {
+  var sh = taskBoardSheet_();
+  var op = String(req.op || '');
+  var name = String(who || '').replace(/\s*<[^>]*>\s*/, '').replace(/\s*\(.*\)\s*$/, '');
+  if (op === 'add') {
+    var text = String(req.text || '').trim().slice(0, 200);
+    if (!text) return {error: 'write the card first'};
+    var id = 'tc' + Date.now().toString(36) + Math.floor(Math.random() * 1e4);
+    sh.appendRow([id, String(req.owner || name).slice(0, 40), 'todo', text,
+      String(req.serial || '').slice(0, 20), String(req.due || '').slice(0, 12),
+      String(req.from || (req.owner && req.owner !== name ? name : '')).slice(0, 30),
+      new Date().toISOString(), '']);
+    return {ok: true, id: id};
+  }
+  // ops on an existing card — find its row by Id
+  var last = sh.getLastRow();
+  var ids = last >= 2 ? sh.getRange(2, 1, last - 1, 1).getValues() : [];
+  var row = -1;
+  for (var i = 0; i < ids.length; i++) {
+    if (String(ids[i][0]) === String(req.id || '')) { row = i + 2; break; }
+  }
+  if (row < 0) return {error: 'card not found'};
+  if (op === 'move') {
+    var col = String(req.col || '');
+    if (['todo', 'doing', 'done'].indexOf(col) < 0) return {error: 'bad column'};
+    sh.getRange(row, 3).setValue(col);
+    sh.getRange(row, 9).setValue(col === 'done' ? new Date().toISOString() : '');
+    return {ok: true};
+  }
+  if (op === 'edit') {
+    if (req.text !== undefined) sh.getRange(row, 4).setValue(String(req.text).trim().slice(0, 200));
+    if (req.due !== undefined) sh.getRange(row, 6).setValue(String(req.due).slice(0, 12));
+    if (req.serial !== undefined) sh.getRange(row, 5).setValue(String(req.serial).slice(0, 20));
+    return {ok: true};
+  }
+  if (op === 'del') { sh.deleteRow(row); return {ok: true}; }
+  return {error: 'bad op'};
 }
 
 /* ===================== TIME OFF + TRAINING requests =====================

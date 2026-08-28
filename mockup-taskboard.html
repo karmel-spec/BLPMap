@@ -1,0 +1,141 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Task Board — 2 designs</title>
+<style>
+  body{margin:0;font:14px/1.5 -apple-system,Helvetica,Arial,sans-serif;background:#20242a;color:#e8ebee;padding:24px}
+  h1{font:800 20px Georgia,serif;letter-spacing:2px;margin:0 0 4px}
+  .sub{color:#9aa3ac;font-size:13px;margin-bottom:22px}
+  .cname{font-weight:800;font-size:15px;color:#fff;margin:26px 0 3px}
+  .cdesc{font-size:12px;color:#9aa3ac;margin:0 0 12px;max-width:880px}
+  .frame{background:#fff;color:#1d2126;border-radius:12px;box-shadow:0 14px 40px rgba(0,0,0,.5);
+         width:900px;overflow:hidden}
+
+  /* shared: avatar strip (owner view) */
+  .faces{display:flex;gap:10px;align-items:center;padding:12px 16px;border-bottom:1px solid #e3e6ea;
+         overflow-x:auto;background:#fafbfc}
+  .face{display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;flex:none;width:64px}
+  .face .av{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+        font-weight:800;color:#fff;font-size:15px;border:2.5px solid transparent}
+  .face.on .av{border-color:#9e2020;box-shadow:0 0 0 2px #f3d9d9}
+  .face small{font-size:9.5px;color:#5b636b;font-weight:700;white-space:nowrap}
+  .face .n{position:relative}
+  .face .cnt{position:absolute;top:-3px;right:-6px;background:#9e2020;color:#fff;border-radius:999px;
+        font-size:9px;font-weight:800;padding:1px 5px}
+
+  /* ============ DESIGN A: post-it wall ============ */
+  .wallhead{display:flex;align-items:center;gap:12px;padding:13px 16px;background:#0d0d0d;color:#fff}
+  .wallhead b{font:800 14px Georgia,serif;letter-spacing:2px}
+  .wallhead span{font-size:11px;color:#9aa3ac}
+  .wallhead .add{margin-left:auto;background:#f7e463;color:#4a3f00;border:0;border-radius:8px;
+        padding:7px 14px;font-weight:800;font-size:12px;transform:rotate(-1deg);box-shadow:2px 3px 6px rgba(0,0,0,.4)}
+  .wall{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0;background:
+        repeating-linear-gradient(0deg,#8a6f4d 0 2px,#967953 2px 90px);padding:14px;min-height:340px}
+  .wcol{padding:0 8px}
+  .wcol h4{color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.6);font-size:12px;letter-spacing:2px;
+        text-align:center;margin:2px 0 10px;background:rgba(13,13,13,.55);border-radius:6px;padding:5px}
+  .sticky{width:88%;margin:0 auto 12px;padding:12px 12px 14px;font:600 12.5px/1.45 'Comic Sans MS','Segoe Print',cursive;
+        box-shadow:2px 4px 8px rgba(0,0,0,.35);position:relative}
+  .sticky small{display:block;font:700 9px Helvetica;letter-spacing:.5px;color:rgba(0,0,0,.45);margin-top:7px}
+  .sticky .pin{position:absolute;top:-7px;left:50%;transform:translateX(-50%);width:14px;height:14px;
+        border-radius:50%;background:radial-gradient(circle at 35% 35%,#e66,#8b1a1a);box-shadow:0 2px 3px rgba(0,0,0,.4)}
+  .s-y{background:#f7e463;transform:rotate(-2deg)}
+  .s-p{background:#f9b8cf;transform:rotate(1.5deg)}
+  .s-g{background:#b8e6b8;transform:rotate(-1deg)}
+  .s-b{background:#a8d8f0;transform:rotate(2deg)}
+  .s-done{opacity:.75}
+  .s-done .txt{text-decoration:line-through}
+
+  /* ============ DESIGN B: BLP kanban ============ */
+  .khead{display:flex;align-items:center;gap:12px;padding:13px 16px;border-bottom:2.5px solid #0d0d0d}
+  .khead b{font:800 15px Helvetica}
+  .khead span{font-size:11px;color:#8a929a}
+  .khead .add{margin-left:auto;background:#9e2020;color:#fff;border:0;border-radius:8px;
+        padding:8px 15px;font-weight:800;font-size:12px}
+  .kan{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;padding:14px;background:#f2f4f6;min-height:340px}
+  .kcol{background:#e8ebee;border-radius:10px;padding:9px}
+  .kcol h4{font-size:10.5px;letter-spacing:1.5px;color:#5b636b;margin:2px 4px 9px;display:flex;justify-content:space-between}
+  .kcol h4 i{font-style:normal;background:#fff;border-radius:999px;padding:0 8px;font-size:10px}
+  .card{background:#fff;border-radius:8px;border:1px solid #dfe3e8;padding:9px 11px;margin-bottom:8px;
+        font-size:12.5px;line-height:1.4;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+  .card .chips{display:flex;gap:5px;margin-top:6px;flex-wrap:wrap}
+  .chip{font-size:9.5px;font-weight:800;border-radius:999px;padding:2px 8px}
+  .c-piano{background:#eef3fb;color:#2c5d96}
+  .c-due{background:#fdecec;color:#a03030}
+  .c-dueok{background:#eaf5ec;color:#2f7d4f}
+  .c-from{background:#f4ecfd;color:#6a3aa0}
+  .kdone .card{opacity:.72}
+  .kdone .card b{text-decoration:line-through}
+  .prog{height:5px;border-radius:3px;background:#eef0f2;margin-top:7px;overflow:hidden}
+  .prog i{display:block;height:100%;width:66%;background:#2e7d4f}
+</style></head><body>
+<h1>🗒 TASK BOARDS — 2 DESIGNS</h1>
+<div class="sub">Post-it icon between 🔢 and 🚚 → your own board. Owners also get the face strip: tap a team member to open their board. Same three columns and data both ways — the choice is personality.</div>
+
+<!-- ================= DESIGN A ================= -->
+<p class="cname">A · The Post-it Wall</p>
+<p class="cdesc">Leans all the way into the post-it idea — a cork-and-wood wall with real sticky notes, pinned and slightly crooked, in the shop's handwriting. Colors mean something: yellow = task, pink = waiting on someone, blue = idea/someday, green = done. Playful and instantly legible from across the room; techs will actually enjoy moving notes.</p>
+<div class="frame">
+  <div class="faces">
+    <div class="face on"><span class="n"><span class="av" style="background:#9e2020">BL</span><i class="cnt">6</i></span><small>Brigham</small></div>
+    <div class="face"><span class="n"><span class="av" style="background:#2c5d96">MH</span><i class="cnt">4</i></span><small>Mark</small></div>
+    <div class="face"><span class="n"><span class="av" style="background:#2f7d4f">JP</span><i class="cnt">3</i></span><small>Jake</small></div>
+    <div class="face"><span class="n"><span class="av" style="background:#8a6d3b">DA</span><i class="cnt">5</i></span><small>Doris</small></div>
+    <div class="face"><span class="n"><span class="av" style="background:#6a3aa0">SE</span><i class="cnt">2</i></span><small>Sadie</small></div>
+    <div class="face"><span class="n"><span class="av" style="background:#a05a2c">MC</span><i class="cnt">1</i></span><small>Marcelo</small></div>
+    <div class="face"><span class="n"><span class="av" style="background:#3a7a8a">KG</span><i class="cnt">4</i></span><small>Korban</small></div>
+  </div>
+  <div class="wallhead"><b>BRIGHAM'S WALL</b><span>tap a note to edit · drag between columns</span>
+    <button class="add">＋ new sticky</button></div>
+  <div class="wall">
+    <div class="wcol"><h4>📌 TO DO</h4>
+      <div class="sticky s-y"><span class="pin"></span><span class="txt">Approve temp piano from yesterday's pickup</span><small>added 8/27</small></div>
+      <div class="sticky s-p"><span class="pin"></span><span class="txt">Waiting on Curtis — plate quote for the Bösendorfer</span><small>waiting · 8/26</small></div>
+      <div class="sticky s-b"><span class="pin"></span><span class="txt">Idea: bench tags for all shelved benches upstairs</span><small>someday</small></div>
+    </div>
+    <div class="wcol"><h4>🔨 DOING</h4>
+      <div class="sticky s-y"><span class="pin"></span><span class="txt">Price the Steinway B #189150 — Sharon wants an answer Friday</span><small>started 8/27</small></div>
+      <div class="sticky s-y"><span class="pin"></span><span class="txt">Review payroll clock fixes (5 waiting)</span><small>started today</small></div>
+    </div>
+    <div class="wcol"><h4>✅ DONE</h4>
+      <div class="sticky s-g s-done"><span class="pin"></span><span class="txt">Text team the new photo wizard training</span><small>done 8/27</small></div>
+      <div class="sticky s-g s-done"><span class="pin"></span><span class="txt">Sign W-4 for Hunter</span><small>done 8/26</small></div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= DESIGN B ================= -->
+<p class="cname">B · BLP Kanban</p>
+<p class="cdesc">The shop-tag design language as a clean Trello: red accents, white cards, structured chips. Each card can carry a piano link (tap → its map card), a due date that turns red when close, and a "from" chip when someone else assigned it. More information per card, better for printing and for owners scanning many boards fast.</p>
+<div class="frame">
+  <div class="faces">
+    <div class="face"><span class="n"><span class="av" style="background:#9e2020">BL</span><i class="cnt">6</i></span><small>Brigham</small></div>
+    <div class="face on"><span class="n"><span class="av" style="background:#2c5d96">MH</span><i class="cnt">4</i></span><small>Mark</small></div>
+    <div class="face"><span class="n"><span class="av" style="background:#2f7d4f">JP</span><i class="cnt">3</i></span><small>Jake</small></div>
+    <div class="face"><span class="n"><span class="av" style="background:#8a6d3b">DA</span><i class="cnt">5</i></span><small>Doris</small></div>
+    <div class="face"><span class="n"><span class="av" style="background:#6a3aa0">SE</span><i class="cnt">2</i></span><small>Sadie</small></div>
+    <div class="face"><span class="n"><span class="av" style="background:#a05a2c">MC</span><i class="cnt">1</i></span><small>Marcelo</small></div>
+    <div class="face"><span class="n"><span class="av" style="background:#3a7a8a">KG</span><i class="cnt">4</i></span><small>Korban</small></div>
+  </div>
+  <div class="khead"><b>Mark's Board</b><span>Lead Shop Manager · 4 open</span>
+    <button class="add">＋ Add card</button></div>
+  <div class="kan">
+    <div class="kcol"><h4>TO DO <i>2</i></h4>
+      <div class="card"><b>Chase the back rail cloth order for #289994</b>
+        <div class="chips"><span class="chip c-piano">🎹 289994</span><span class="chip c-due">due Fri 8/29</span></div></div>
+      <div class="card"><b>Walk the shop with Hunter — week 3 check-in</b>
+        <div class="chips"><span class="chip c-from">from Brigham</span><span class="chip c-dueok">due Tue 9/2</span></div></div>
+    </div>
+    <div class="kcol"><h4>DOING <i>2</i></h4>
+      <div class="card"><b>Queue re-order after the 3 refinishing completions</b>
+        <div class="chips"><span class="chip c-due">due today</span></div>
+        <div class="prog"><i></i></div></div>
+      <div class="card"><b>Review Sadie's Hallet Davis damper work</b>
+        <div class="chips"><span class="chip c-piano">🎹 22947</span></div></div>
+    </div>
+    <div class="kcol kdone"><h4>DONE <i>2</i></h4>
+      <div class="card"><b>Approve Ezzy's duplicate punch fix</b>
+        <div class="chips"><span class="chip c-dueok">done 8/27</span></div></div>
+      <div class="card"><b>Plate status pass — all 6 at Curtis verified</b>
+        <div class="chips"><span class="chip c-dueok">done 8/26</span></div></div>
+    </div>
+  </div>
+</div>
+</body></html>
