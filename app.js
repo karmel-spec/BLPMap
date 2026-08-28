@@ -8788,6 +8788,19 @@ function shopFrameHTML(tab) {
     <p class="pd frameft">Signed-in view from the Shop Manager —
       <a href="${SHOP_MGR}#${tab}" target="_blank" rel="noopener">open full page ↗</a></p>`;
 }
+// embedded Shop Manager frames can't run Google sign-in (Google refuses to
+// render inside an iframe) — they ask us for the identity instead, and we
+// hand over the signed-in user's token (same OAuth client both sides)
+addEventListener('message', ev => {
+  if (ev.origin !== 'https://blpshop.netlify.app') return;
+  if (!ev.data || !ev.data.blpAuthRequest) return;
+  const u = authUser();
+  if (!u || !u.email) return;
+  try {
+    ev.source.postMessage({blpAuth: {idToken: (u.exp * 1000 > Date.now() + 30000) ? u.tok : '',
+      email: u.email, name: u.name || ''}}, ev.origin);
+  } catch (e) { /* frame gone */ }
+});
 const SCHED_TABS = [
   ['dash', '📊 Dashboard'], ['review', '📝 Weekly Review'], ['planner', '🧮 Planner'],
   ['week', '🗓 Week Schedule'], ['schedule', '📆 Schedule'], ['sequence', '🔢 Sequence'],
