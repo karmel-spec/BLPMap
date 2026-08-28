@@ -248,6 +248,8 @@ async function boot() {
   if (!S.data.stale && S.data.pianos.length) writeCache();
   tryDeepLink();   // #piano=SERIAL from a scanned shop tag → open that card
   tryReportLink(); // #report=<id> from a shared link → open that report
+  tryCardLink();   // #card=<id> from a task-board notification text/email
+  tryFixClockLink(); // #fixclock from a late-clock text → the time-fix form
   setInterval(async () => {
     try {
       const [m, d2] = await Promise.all([fetchSlots(), fetchData()]);
@@ -956,7 +958,20 @@ function tryCardLink() {
     openCardModal(c, tbNorm(c.owner) === tbNorm(tbMe()) || tbAdmin());
   })();
 }
-window.addEventListener('hashchange', () => { deepLinkDone = ''; tryDeepLink(); tryReportLink(); tryCardLink(); });
+/* #fixclock deep link — the late-clock nudge text links straight to the
+ * time-fix form. Survives the sign-in redirect via the same 10-min stash. */
+let fixLinkDone = false;
+function tryFixClockLink() {
+  const hit = /[#&]fixclock\b/.test(location.hash || '');
+  if (hit) lsSet('blpFC', String(Date.now()));
+  const st = +(lsGet('blpFC') || 0);
+  if (!hit && (!st || Date.now() - st > 600000)) return;
+  if (fixLinkDone || !authUser()) return;
+  fixLinkDone = true;
+  lsDel('blpFC');
+  clockFixModal();
+}
+window.addEventListener('hashchange', () => { deepLinkDone = ''; tryDeepLink(); tryReportLink(); tryCardLink(); tryFixClockLink(); });
 
 /* ---------- rendering ---------- */
 function renderAll() {
