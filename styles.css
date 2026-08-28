@@ -1362,6 +1362,7 @@ tr.adjediting td{background:#fdf8ee}
   border-radius:0 0 2px 0}
 .postit::before{content:'';position:absolute;left:3px;top:5px;right:3px;height:1.5px;background:rgba(0,0,0,.16);
   box-shadow:0 3.5px 0 rgba(0,0,0,.14),0 7px 0 rgba(0,0,0,.12)}
+.phpostit{width:19px;height:19px;margin-right:3px;vertical-align:-3px}
 .kghost{position:fixed;z-index:400;pointer-events:none;transform:rotate(2.5deg);
   box-shadow:0 10px 26px rgba(0,0,0,.3);opacity:.95}
 .kplace{height:34px;border:2px dashed #9e2020;border-radius:8px;margin-bottom:8px;background:#fdf3f3}
@@ -1408,8 +1409,8 @@ tr.adjediting td{background:#fdf8ee}
 .kreassign + .karch{margin-left:6px}
 #reassignmodal select, #reassignmodal input{width:100%;box-sizing:border-box;padding:8px 10px;
   border:1.5px solid #c9ced4;border-radius:8px;font:inherit;font-size:13px;margin:3px 0 8px}
-.cm-actions{display:flex;gap:10px;margin-top:12px}
-.cm-actions button{flex:1}
+.cm-actions{display:flex;gap:10px;margin-top:12px;align-items:stretch}
+.cm-actions button{flex:1;margin-top:0;padding:9px 14px}
 .cm-reassign{border:1.5px solid #2c5d96;background:#fff;color:#2c5d96;border-radius:8px;
   padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer}
 #colnamemodal input{width:100%;box-sizing:border-box;padding:9px 11px;border:1.5px solid #c9ced4;
