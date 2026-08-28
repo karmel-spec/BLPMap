@@ -8868,6 +8868,10 @@ const TB_HEADSHOTS = {
   "alisa merrill": "https://www.brighamlarsonpianos.com/cdn/shop/files/Alisa.Merrill.BW_1.jpg?v=1735949942&width=240"
   };
 const tbNorm = n => String(n || '').trim().toLowerCase().replace(/\s+/g, ' ');
+// full access to every board: the face strip + open/edit/add on anyone's
+// board — owners (Brigham, Karmel) plus Melissa (Brigham 8/28)
+const TB_ADMIN_EMAILS = OWNER_EMAILS.concat(['melissa@brighamlarsonpianos.com']);
+function tbAdmin() { return TB_ADMIN_EMAILS.includes(userEmail()); }
 const TB_AV_COLORS = ['#9e2020', '#2c5d96', '#2f7d4f', '#8a6d3b', '#6a3aa0', '#a05a2c', '#3a7a8a', '#b4536b'];
 function tbAvColor(name) {
   let h = 0; for (const c of String(name)) h = (h * 31 + c.charCodeAt(0)) % 997;
@@ -8894,7 +8898,7 @@ async function tbFetch() {
     TB.cols = j.cols || {};
   } catch (e) { TB.rows = TB.rows || []; }
   // owners' face strip: current team + anyone who already has cards
-  if (isOwner() && !TB.faces) {
+  if (tbAdmin() && !TB.faces) {
     try {
       const r2 = await fetch(TEAM_ROSTER_API + '?key=' + encodeURIComponent('pianoman'));
       const j2 = await r2.json();
@@ -8940,8 +8944,8 @@ function renderTaskBoard() {
   }
   // full-name matching (two Brighams taught us first-name matching lies)
   const sameOwner = (a, b) => tbNorm(a) === tbNorm(b);
-  const people = isOwner() ? tbPeople() : [me];
-  const strip = isOwner() ? `<div class="faces">${people.map(n => {
+  const people = tbAdmin() ? tbPeople() : [me];
+  const strip = tbAdmin() ? `<div class="faces">${people.map(n => {
       const cnt = TB.rows.filter(r => sameOwner(r.owner, n) && r.col !== 'done' && r.col !== 'archived').length;
       const on = sameOwner(n, TB.person);
       const initials = n.split(/\s+/).map(w => w[0] || '').join('').slice(0, 2).toUpperCase();
@@ -8957,7 +8961,7 @@ function renderTaskBoard() {
   const allMine = TB.rows.filter(r => sameOwner(r.owner, TB.person) && r.col !== 'archived');
   const snoozedN = allMine.filter(isSnoozed).length;
   const mine = allMine.filter(r => TB.showSnoozed || !isSnoozed(r));
-  const canEdit = sameOwner(TB.person, me) || isOwner();
+  const canEdit = sameOwner(TB.person, me) || tbAdmin();
   const boardCols = (TB.cols[tbNorm(TB.person)] || TB_COLS.map(([k, l]) => [k, l]))
     .map(c => Array.isArray(c) ? c : [c.key, c.label]);
   const colKeys = boardCols.map(c => c[0]);
