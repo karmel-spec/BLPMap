@@ -8845,7 +8845,8 @@ function renderTeam() {
 const TB = {rows: null, loading: false, person: '', faces: null, cols: {}};
 const TB_COLS = [['todo', 'TO DO'], ['doing', 'DOING'], ['done', 'DONE']];
 // off the strip (Brigham 8/28: Brigham Jr won't be working here anymore)
-const TB_EXCLUDE = ['brigham jr larson', 'brig jr. larson'];
+const TB_EXCLUDE = ['brigham jr larson', 'brig jr. larson',
+  'abby larson', 'brielle larson', 'ben larson', 'susie martinez', 'susie marinez'];
 // on the strip even though not on the roster's Current Team tab
 const TB_SEED = ['Lisa Litton'];
 // black & white headshots from the website's team page (Shopify CDN)
