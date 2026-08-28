@@ -7406,8 +7406,11 @@ function refinPending(p) {
 }
 const TQ_DEFS = [
   {key: 'keys', icon: '🎹', title: 'KEY SERVICE / KEYTOPS',
-   need: p => !taskAutoDone(p, 'keys') && ['needed', 'noted'].includes(taskStatus(taskVal(p, 'keys'))),
-   note: p => taskVal(p, 'keys')},
+   // the keytop selector is the authority: Done drops a piano off this
+   // queue even when the old key-work note still reads like a request (8/28)
+   need: p => !taskAutoDone(p, 'keys') && !/^Done/i.test(p.keytopStatus || '')
+     && ['needed', 'noted'].includes(taskStatus(taskVal(p, 'keys'))),
+   note: p => [p.keytopStatus, taskVal(p, 'keys')].filter(Boolean).join(' · ')},
   {key: 'plates', icon: '⚙️', title: 'PLATES TO CURTIS HARPER',
    need: p => ['Removed', 'Plate storage — BEFORE'].includes((p.plateStatus || '').trim()),
    note: p => p.plateStatus},
