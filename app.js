@@ -8842,8 +8842,31 @@ function renderTeam() {
  * serial (tap → its map card), a due date, and a "from" chip when someone
  * else added it to your board. Rows live on the report sheet's Task Boards
  * tab via the bridge. */
-const TB = {rows: null, loading: false, person: '', faces: null};
+const TB = {rows: null, loading: false, person: '', faces: null, cols: {}};
 const TB_COLS = [['todo', 'TO DO'], ['doing', 'DOING'], ['done', 'DONE']];
+// off the strip (Brigham 8/28: Brigham Jr won't be working here anymore)
+const TB_EXCLUDE = ['brigham jr larson', 'brig jr. larson'];
+// on the strip even though not on the roster's Current Team tab
+const TB_SEED = ['Lisa Litton'];
+// black & white headshots from the website's team page (Shopify CDN)
+const TB_HEADSHOTS = {
+  "brigham larson": "https://www.brighamlarsonpianos.com/cdn/shop/files/Brigham.Larson.BW.jpg?v=1709675863&width=240",
+  "karmel larson": "https://www.brighamlarsonpianos.com/cdn/shop/files/Copy_of_999A8339-Edit_e9215d62-9f45-4050-9554-f4e2f78cdfcb.jpg?v=1735944534&width=240",
+  "mckinly lopp": "https://www.brighamlarsonpianos.com/cdn/shop/files/McKinly.Lopp.BW_129ac078-af8a-43c7-8f6b-289dcd5a3c8c.jpg?v=1725655625&width=240",
+  "curtis biggs": "https://www.brighamlarsonpianos.com/cdn/shop/files/Curtis.Biggs.BW_1.jpg?v=1735942281&width=240",
+  "matthew wessman": "https://www.brighamlarsonpianos.com/cdn/shop/files/IMG_0550_1_8ffe567c-f80c-4f25-bd13-6612fcae0870.jpg?v=1735942280&width=240",
+  "jake pulver": "https://www.brighamlarsonpianos.com/cdn/shop/files/5U4A1089_2.jpg?v=1775244857&width=240",
+  "korban greenhalgh": "https://www.brighamlarsonpianos.com/cdn/shop/files/Korban.Greenhalgh.BW_5229d778-dd21-4a40-826d-6abd075d2503.jpg?v=1735947374&width=240",
+  "marcelo cornejo": "https://www.brighamlarsonpianos.com/cdn/shop/files/MARCE-BW_2.jpg?v=1735947379&width=240",
+  "doris arancibia": "https://www.brighamlarsonpianos.com/cdn/shop/files/DORIS-BW_2.jpg?v=1735946727&width=240",
+  "guadalupe chavoya": "https://www.brighamlarsonpianos.com/cdn/shop/files/O2A0765-2.jpg?v=1735948643&width=240",
+  "carlos bombela perez": "https://www.brighamlarsonpianos.com/cdn/shop/files/O2A0789-2.jpg?v=1735948900&width=240",
+  "thayne larson": "https://www.brighamlarsonpianos.com/cdn/shop/files/Thayne.Larson.BW_d6685ac0-6746-4c41-98b5-57b3e19bcfbb.jpg?v=1735947791&width=240",
+  "melissa terry": "https://www.brighamlarsonpianos.com/cdn/shop/files/5U4A1257.jpg?v=1775246484&width=240",
+  "ezzy lopp": "https://www.brighamlarsonpianos.com/cdn/shop/files/Ezaray.Lopp.BW_cc6b4562-389e-4c78-b1fe-3dcd2590bd86.jpg?v=1777569159&width=240",
+  "alisa merrill": "https://www.brighamlarsonpianos.com/cdn/shop/files/Alisa.Merrill.BW_1.jpg?v=1735949942&width=240"
+  };
+const tbNorm = n => String(n || '').trim().toLowerCase().replace(/\s+/g, ' ');
 const TB_AV_COLORS = ['#9e2020', '#2c5d96', '#2f7d4f', '#8a6d3b', '#6a3aa0', '#a05a2c', '#3a7a8a', '#b4536b'];
 function tbAvColor(name) {
   let h = 0; for (const c of String(name)) h = (h * 31 + c.charCodeAt(0)) % 997;
@@ -8854,7 +8877,9 @@ async function tbFetch() {
   TB.loading = true;
   try {
     const r = await fetch(BRIDGE_URL + '?fn=taskboard', {redirect: 'follow'});
-    TB.rows = (await r.json()).rows || [];
+    const j = await r.json();
+    TB.rows = j.rows || [];
+    TB.cols = j.cols || {};
   } catch (e) { TB.rows = TB.rows || []; }
   // owners' face strip: current team + anyone who already has cards
   if (isOwner() && !TB.faces) {
@@ -8901,33 +8926,44 @@ function renderTaskBoard() {
     el.innerHTML = '<div class="empty">Loading your board…</div>';
     return;
   }
-  const first = n => String(n || '').split(/\s+/)[0].toLowerCase();
+  // full-name matching (two Brighams taught us first-name matching lies)
+  const sameOwner = (a, b) => tbNorm(a) === tbNorm(b);
   const owners = [...new Set(TB.rows.map(r => r.owner).filter(Boolean))];
-  const people = isOwner()
-    ? [...new Set([me, ...(TB.faces || []), ...owners])]
-    : [me];
+  const peopleSet = new Map();
+  (isOwner() ? [me, ...TB_SEED, ...(TB.faces || []), ...owners] : [me]).forEach(n => {
+    const k = tbNorm(n);
+    if (!k || TB_EXCLUDE.includes(k)) return;
+    if (!peopleSet.has(k)) peopleSet.set(k, n);
+  });
+  const people = [...peopleSet.values()].sort((a, b) => a.localeCompare(b));
   const strip = isOwner() ? `<div class="faces">${people.map(n => {
-      const cnt = TB.rows.filter(r => first(r.owner) === first(n) && r.col !== 'done').length;
-      const on = first(n) === first(TB.person);
+      const cnt = TB.rows.filter(r => sameOwner(r.owner, n) && r.col !== 'done' && r.col !== 'archived').length;
+      const on = sameOwner(n, TB.person);
       const initials = n.split(/\s+/).map(w => w[0] || '').join('').slice(0, 2).toUpperCase();
+      const hs = TB_HEADSHOTS[tbNorm(n)];
       return `<div class="face ${on ? 'on' : ''}" data-p="${esc(n)}">
-        <span class="n"><span class="av" style="background:${tbAvColor(n)}">${esc(initials)}</span>
+        <span class="n"><span class="av" style="background:${tbAvColor(n)}">${hs
+          ? `<img src="${esc(hs)}" alt="" loading="lazy">` : esc(initials)}</span>
         ${cnt ? `<i class="cnt">${cnt}</i>` : ''}</span>
         <small>${esc(n.split(/\s+/)[0])}</small></div>`;
     }).join('')}</div>` : '';
   const today = localDay();
   const isSnoozed = r => r.snooze && r.snooze > today && r.col !== 'done';
-  const allMine = TB.rows.filter(r => first(r.owner) === first(TB.person));
+  const allMine = TB.rows.filter(r => sameOwner(r.owner, TB.person) && r.col !== 'archived');
   const snoozedN = allMine.filter(isSnoozed).length;
   const mine = allMine.filter(r => TB.showSnoozed || !isSnoozed(r));
-  const canEdit = first(TB.person) === first(me) || isOwner();
+  const canEdit = sameOwner(TB.person, me) || isOwner();
+  const boardCols = (TB.cols[tbNorm(TB.person)] || TB_COLS.map(([k, l]) => [k, l]))
+    .map(c => Array.isArray(c) ? c : [c.key, c.label]);
+  const colKeys = boardCols.map(c => c[0]);
+  const homeCol = r => colKeys.includes(r.col) ? r.col : (r.col === 'archived' ? 'archived' : colKeys[0]);
   const ordVal = r => (r.order === null || r.order === undefined || r.order === '')
     ? 1e9 - Date.parse(r.created || 0) / 1e6 : Number(r.order);
   const col = (key, label) => {
-    const cards = mine.filter(r => r.col === key)
+    const cards = mine.filter(r => homeCol(r) === key)
       .sort((a, b) => ordVal(a) - ordVal(b));
     return `<div class="kcol ${key === 'done' ? 'kdone' : ''}" data-col="${key}">
-      <h4>${label} <i>${cards.length}</i></h4>
+      <h4><span>${esc(label)}${canEdit ? ` <button class="kcolren" data-k="${esc(key)}" title="rename column">✎</button>` : ''}</span> <i>${cards.length}</i></h4>
       ${cards.map(c => `<div class="kcard" draggable="${canEdit}" data-id="${esc(c.id)}">
         <b>${esc(c.text)}</b>
         <div class="chips">
@@ -8938,7 +8974,7 @@ function renderTaskBoard() {
           ${(c.notes || '').trim() ? `<span class="chip c-notes">🗒 ${String(c.notes).split('\n').filter(Boolean).length}</span>` : ''}
         </div>
         ${canEdit ? `<div class="kmove"><span class="kgrab">⠿ drag</span>
-          <button class="kdel" data-id="${esc(c.id)}">🗑</button>
+          <button class="karch" data-id="${esc(c.id)}" title="archive — done and off the board (never deleted)">✔ Done</button>
         </div>` : ''}
       </div>`).join('') || '<div class="kempty">—</div>'}
     </div>`;
@@ -8948,14 +8984,14 @@ function renderTaskBoard() {
       <span>${allMine.filter(r => r.col !== 'done' && !isSnoozed(r)).length} open</span>
       ${snoozedN ? `<button class="ksnoozetog">💤 ${snoozedN} snoozed${TB.showSnoozed ? ' — hide' : ''}</button>` : ''}
       <button class="teamrefresh tbrefresh">🔄</button>
-      ${canEdit ? '<button class="kadd">＋ Add card</button>' : ''}</div>
+      ${canEdit ? '<button class="kadd">＋ Add card</button><button class="kaddcol" title="add a column">＋ Column</button>' : ''}</div>
     ${canEdit ? `<div class="kcompose" hidden>
       <input class="kc-text" maxlength="200" placeholder="what needs doing?">
       <input class="kc-serial" maxlength="20" placeholder="piano serial (optional)" list="serialList">
       <input class="kc-due" type="date" title="due (optional)">
       <button class="kc-go">Add to ${esc(TB.person.split(/\s+/)[0])}'s To&nbsp;Do</button>
     </div>` : ''}
-    <div class="kan">${TB_COLS.map(([k, l]) => col(k, l)).join('')}</div>`;
+    <div class="kan" style="grid-template-columns:repeat(${boardCols.length},1fr)">${boardCols.map(([k, l]) => col(k, l)).join('')}</div>`;
   // wiring
   el.querySelectorAll('.face').forEach(f => f.onclick = () => { TB.person = f.dataset.p; renderTaskBoard(); });
   const rb = el.querySelector('.tbrefresh');
@@ -8979,10 +9015,29 @@ function renderTaskBoard() {
     if (j) { TB.rows = null; renderTaskBoard(); }
   };
 
-  el.querySelectorAll('.kdel').forEach(b => b.onclick = async () => {
-    if (!confirm('Delete this card?')) return;
-    const j = await tbSend({op: 'del', id: b.dataset.id});
-    if (j) { TB.rows = TB.rows.filter(r => r.id !== b.dataset.id); renderTaskBoard(); }
+  el.querySelectorAll('.karch').forEach(b => b.onclick = async () => {
+    b.disabled = true;
+    const j = await tbSend({op: 'archive', id: b.dataset.id});
+    if (j) { const c = TB.rows.find(r => r.id === b.dataset.id); if (c) c.col = 'archived'; renderTaskBoard(); }
+    else b.disabled = false;
+  });
+  const saveCols = async cols => {
+    const j = await tbSend({op: 'setcols', owner: TB.person, cols});
+    if (j) { TB.cols[tbNorm(TB.person)] = cols; renderTaskBoard(); }
+  };
+  const kac = el.querySelector('.kaddcol');
+  if (kac) kac.onclick = () => {
+    if (boardCols.length >= 6) { alert('Six columns is the limit — archive or merge first.'); return; }
+    const label = prompt('Name for the new column:');
+    if (!label || !label.trim()) return;
+    saveCols([...boardCols, ['c' + Date.now().toString(36), label.trim().slice(0, 24)]]);
+  };
+  el.querySelectorAll('.kcolren').forEach(b => b.onclick = ev2 => {
+    ev2.stopPropagation();
+    const cur = boardCols.find(c => c[0] === b.dataset.k);
+    const label = prompt('Rename this column:', cur ? cur[1] : '');
+    if (!label || !label.trim()) return;
+    saveCols(boardCols.map(c => c[0] === b.dataset.k ? [c[0], label.trim().slice(0, 24)] : c));
   });
   const stog = el.querySelector('.ksnoozetog');
   if (stog) stog.onclick = () => { TB.showSnoozed = !TB.showSnoozed; renderTaskBoard(); };
@@ -9103,7 +9158,7 @@ function openCardModal(c, canEdit) {
                : `<div class="noterow"><b>${tbLinkify(L)}</b></div>`;
     }).join('') || '<div class="pwnone" style="display:block;padding:4px 0">No notes yet.</div>'}</div>
     <div class="cm-msg phmsg"></div>
-    ${canEdit ? '<button class="cm-del">🗑 Delete card</button>' : ''}`);
+    ${canEdit ? '<button class="cm-del">✔ Done — archive this card</button>' : ''}`);
   const msg = ov.querySelector('.cm-msg');
   const save = async patch => {
     msg.textContent = 'saving…';
@@ -9157,9 +9212,8 @@ function openCardModal(c, canEdit) {
       } catch (e) { msg.textContent = '✗ ' + e.message; }
     };
     ov.querySelector('.cm-del').onclick = async () => {
-      if (!confirm('Delete this card?')) return;
-      const j = await tbSend({op: 'del', id: c.id});
-      if (j) { TB.rows = TB.rows.filter(r => r.id !== c.id); ov.hidden = true; renderTaskBoard(); }
+      const j = await tbSend({op: 'archive', id: c.id});
+      if (j) { c.col = 'archived'; ov.hidden = true; renderTaskBoard(); }
     };
     serialDatalist();
   }

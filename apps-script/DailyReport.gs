@@ -4614,6 +4614,49 @@ function taskBoardSheet_() {
   }
   return sh;
 }
+function boardColsSheet_() {
+  var ss = SpreadsheetApp.openById('11RoeVRETag5rZYX6_tEH-rf6x8JL0JeZU0P5AT0WI-I');
+  var sh = ss.getSheetByName('Board Columns');
+  if (!sh) {
+    sh = ss.insertSheet('Board Columns', ss.getSheets().length);
+    sh.getRange(1, 1, 1, 2).setValues([['Owner', 'Cols JSON']]);
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+function boardColsAll_() {
+  var sh = boardColsSheet_();
+  var last = sh.getLastRow();
+  var out = {};
+  if (last >= 2) {
+    var vals = sh.getRange(2, 1, last - 1, 2).getValues();
+    for (var i = 0; i < vals.length; i++) {
+      if (!vals[i][0]) continue;
+      try { out[String(vals[i][0]).toLowerCase()] = JSON.parse(String(vals[i][1] || '[]')); }
+      catch (e) {}
+    }
+  }
+  return out;
+}
+function setBoardCols_(req) {
+  var owner = String(req.owner || '').trim();
+  if (!owner) return {error: 'owner required'};
+  var cols = req.cols;
+  if (!cols || !cols.length || cols.length > 8) return {error: 'bad columns'};
+  var sh = boardColsSheet_();
+  var last = sh.getLastRow();
+  var row = -1;
+  if (last >= 2) {
+    var owners = sh.getRange(2, 1, last - 1, 1).getValues();
+    for (var i = 0; i < owners.length; i++) {
+      if (String(owners[i][0]).toLowerCase() === owner.toLowerCase()) { row = i + 2; break; }
+    }
+  }
+  var json = JSON.stringify(cols).slice(0, 2000);
+  if (row < 0) sh.appendRow([owner, json]);
+  else sh.getRange(row, 2).setValue(json);
+  return {ok: true};
+}
 function taskBoardRows_() {
   var sh = taskBoardSheet_();
   var last = sh.getLastRow();
@@ -4630,7 +4673,7 @@ function taskBoardRows_() {
         notes: String(v[10] || '').slice(0, 2000), snooze: String(v[11] || '')});
     }
   }
-  return {ok: true, rows: out};
+  return {ok: true, rows: out, cols: boardColsAll_()};
 }
 function taskCard_(req, who) {
   var sh = taskBoardSheet_();
@@ -4648,6 +4691,7 @@ function taskCard_(req, who) {
       new Date().toISOString(), '', ord]);
     return {ok: true, id: id};
   }
+  if (op === 'setcols') return setBoardCols_(req);
   // ops on an existing card — find its row by Id
   var last = sh.getLastRow();
   var ids = last >= 2 ? sh.getRange(2, 1, last - 1, 1).getValues() : [];
@@ -4657,8 +4701,8 @@ function taskCard_(req, who) {
   }
   if (row < 0) return {error: 'card not found'};
   if (op === 'move') {
-    var col = String(req.col || '');
-    if (['todo', 'doing', 'done'].indexOf(col) < 0) return {error: 'bad column'};
+    var col = String(req.col || '').slice(0, 24);
+    if (!col) return {error: 'bad column'};
     sh.getRange(row, 3).setValue(col);
     sh.getRange(row, 9).setValue(col === 'done' ? new Date().toISOString() : '');
     if (req.order !== undefined && isFinite(Number(req.order)))
@@ -4684,7 +4728,13 @@ function taskCard_(req, who) {
     sh.getRange(row, 12).setValue(String(req.until || '').slice(0, 12));
     return {ok: true};
   }
-  if (op === 'del') { sh.deleteRow(row); return {ok: true}; }
+  if (op === 'del' || op === 'archive') {
+    // NEVER delete (Brigham 8/28) — archive: off every board, kept forever
+    sh.getRange(row, 3).setValue('archived');
+    sh.getRange(row, 9).setValue(new Date().toISOString());
+    return {ok: true, archived: true};
+  }
+  if (op === 'setcols') return setBoardCols_(req);
   return {error: 'bad op'};
 }
 
