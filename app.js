@@ -399,9 +399,11 @@ function taskCellMarks(p, key, names) {
   const v = String((p.tasks || {})[key] || '');
   const out = {rest: v};
   for (const n of names) {
-    const m = new RegExp(n.replace(' ', '\\s+') + '\\s*([\\d/.-]+)?', 'i').exec(out.rest);
+    // value may carry a date and who did it: "Ordered 8/21/26 (Mark)"
+    const m = new RegExp(n.replace(' ', '\\s+') + '\\s*([\\d/.-]+)?\\s*(\\(([^)]*)\\))?', 'i').exec(out.rest);
     out[n] = m ? (m[1] || '✓') : '';
-    out.rest = out.rest.replace(new RegExp(n.replace(' ', '\\s+') + '\\s*[\\d/.-]*', 'gi'), '');
+    out[n + 'By'] = m && m[3] ? m[3].trim() : '';
+    out.rest = out.rest.replace(new RegExp(n.replace(' ', '\\s+') + '\\s*[\\d/.-]*\\s*(\\([^)]*\\))?', 'gi'), '');
   }
   out.rest = out.rest.replace(/\s*·\s*/g, ' ').replace(/\s+/g, ' ').trim();
   return out;
@@ -429,10 +431,14 @@ function decalsRow(p) {
     </div><div class="bassmsg bassmsg-decals phmsg"></div>`;
 }
 function orderChipsRow(p, key, label) {
-  const ms = orderMarks(p, key);
-  const chip = (k, ico) => ms[k.toLowerCase()]
-    ? `<button class="bassbtn on" data-task="${key}" data-k="${k}" title="tap to clear">${ico} ${k} ${esc(ms[k.toLowerCase()])} ✕</button>`
-    : `<button class="bassbtn" data-task="${key}" data-k="${k}">${ico} Mark ${k.toLowerCase()}</button>`;
+  const ms = taskCellMarks(p, key, ['Ordered', 'Received']);
+  // set marks show date · who and open the editor (date + who are editable —
+  // parts often arrive before anyone marks them, and the marker isn't always
+  // the receiver — Brigham 8/28)
+  const chip = (k, ico) => ms[k]
+    ? `<button class="bassbtn on" data-task="${key}" data-k="${k}" title="tap to edit the date or who">
+        ${ico} ${k} ${esc(ms[k] === '✓' ? '' : ms[k])}${ms[k + 'By'] ? ' · ' + esc(ms[k + 'By']) : ''} ✎</button>`
+    : `<button class="bassbtn" data-task="${key}" data-k="${k}">${ico} ${k}</button>`;
   return `<div class="row phrow bassrow">${label}
       <span class="bassbtns">${chip('Ordered', '📦')}${chip('Received', '📬')}</span>
     </div><div class="bassmsg bassmsg-${key} phmsg"></div>`;
@@ -3960,22 +3966,12 @@ function wirePop(p) {
       saveTaskCell('decals', taskCellValue(ms, DECAL_MARKS));
     };
   }
-  // 🎼 bass strings — Ordered / Received chips stamp today's date
-  // into the same Piano Log cell the Concurrent Work report reads
-  pop.querySelectorAll('.bassbtn').forEach(b => b.onclick = async ev => {
-    ev.stopPropagation(); popPinned = true;
-    const key = b.dataset.task;
-    const msg = pop.querySelector('.bassmsg-' + key);
+  // 🎼 bass strings — Ordered / Received open a small editor: pick the real
+  // date (parts often arrive before they're marked) and who did it (the
+  // marker isn't always the receiver) — Brigham 8/28
+  const bassSave = async (key, val, msg) => {
     const wa = writeAuth();
     if (!wa.ok) { msg.textContent = 'Sign in with Google (menu) first.'; return; }
-    const marks = orderMarks(p, key);
-    const k = b.dataset.k.toLowerCase();
-    const today = new Date().toLocaleDateString('en-US',
-      {month: 'numeric', day: 'numeric', year: '2-digit', timeZone: 'America/Denver'});
-    marks[k] = marks[k] ? '' : today;              // toggle: set today / clear
-    const val = [marks.ordered ? 'Ordered ' + marks.ordered : '',
-                 marks.received ? 'Received ' + marks.received : '',
-                 marks.rest].filter(Boolean).join(' · ');
     msg.textContent = 'saving…';
     try {
       const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
@@ -3987,6 +3983,53 @@ function wirePop(p) {
       p.tasks = p.tasks || {}; p.tasks[key] = val;
       openPop(p.row, S.popAnchor, true);
     } catch (e) { msg.textContent = '✗ ' + e.message; }
+  };
+  pop.querySelectorAll('.bassbtn').forEach(b => b.onclick = ev => {
+    ev.stopPropagation(); popPinned = true;
+    const key = b.dataset.task, k = b.dataset.k;
+    const msg = pop.querySelector('.bassmsg-' + key);
+    const ms = taskCellMarks(p, key, ['Ordered', 'Received']);
+    // M/D/YY ↔ ISO for the date input
+    const toIso = s => { const m = /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/.exec(String(s || '').trim());
+      if (!m) return new Date().toLocaleDateString('sv-SE', {timeZone: 'America/Denver'});
+      return (m[3].length === 2 ? '20' + m[3] : m[3]) + '-' + m[1].padStart(2, '0') + '-' + m[2].padStart(2, '0'); };
+    const toShort = iso => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+      return m ? (+m[2]) + '/' + (+m[3]) + '/' + m[1].slice(2) : iso; };
+    const me = (clockName() || '').split(/\s+/)[0];
+    const names = [...new Set([me, ...Object.keys(TB_HEADSHOTS).map(n =>
+      n.split(' ')[0].replace(/^./, c => c.toUpperCase()))])].filter(Boolean).sort();
+    const ov2 = modalShell('bassmodal', `
+      <span class="x">✕</span>
+      <h3>${k === 'Ordered' ? '📦' : '📬'} Bass strings — ${k.toLowerCase()}</h3>
+      <div class="cm-grid">
+        <div><label>Date ${k.toLowerCase()}</label><input type="date" class="bm-date" value="${esc(toIso(ms[k] === '✓' ? '' : ms[k]))}"></div>
+        <div><label>By whom</label><input class="bm-who" maxlength="20" list="bmNames" value="${esc(ms[k + 'By'] || me)}">
+          <datalist id="bmNames">${names.map(n => `<option value="${esc(n)}">`).join('')}</datalist></div>
+      </div>
+      <div class="rfbar" style="margin-top:12px">
+        <button class="ccfmyes bm-save">Save</button>
+        ${ms[k] ? '<button class="csvbtn bm-clear" style="background:none;border:1px solid #d3a0a0;color:#9e2020">✕ Clear</button>' : ''}
+      </div>`);
+    const build = () => {
+      // fold each mark's "(who)" back in so editing one never drops the other's
+      ['Ordered', 'Received'].forEach(n => {
+        if (ms[n] && ms[n] !== '✓' && ms[n + 'By'] && !ms[n].includes('(')) {
+          ms[n] += ' (' + ms[n + 'By'] + ')';
+        }
+      });
+      return taskCellValue(ms, ['Ordered', 'Received']);
+    };
+    const withBy = (dateShort, who) => dateShort + (who ? ' (' + who + ')' : '');
+    ov2.querySelector('.bm-save').onclick = () => {
+      const dIso = ov2.querySelector('.bm-date').value;
+      const who = ov2.querySelector('.bm-who').value.trim();
+      if (!dIso) { ov2.querySelector('.bm-date').focus(); return; }
+      ms[k] = withBy(toShort(dIso), who);
+      ov2.hidden = true;
+      bassSave(key, build(), msg);
+    };
+    const bc = ov2.querySelector('.bm-clear');
+    if (bc) bc.onclick = () => { ms[k] = ''; ms[k + 'By'] = ''; ov2.hidden = true; bassSave(key, build(), msg); };
   });
   // 🆕 temp-entry approve / reject (owners, Melissa, managers)
   const tempResolve = async approve => {
