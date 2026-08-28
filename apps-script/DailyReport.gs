@@ -132,10 +132,13 @@ function doGet(e) {
     try { return json_(fixTriggers_(String(e.parameter.mode || ''))); }
     catch (err) { return json_({error: String(err)}); }
   }
-  // dry-run preview of the 6pm late-clock nudge — who'd be texted right now
+  // late-clock nudge: dry-run preview by default; &send=1 (key-gated)
+  // actually fires the sweep — for a manual evening run
   if (e && e.parameter && e.parameter.fn === 'latesweep') {
-    try { return json_(lateClockNudge({dry: true})); }
-    catch (err) { return json_({error: String(err)}); }
+    try {
+      var doSend = e.parameter.send === '1' && e.parameter.key === TEAM_PIN;
+      return json_(lateClockNudge(doSend ? null : {dry: true}));
+    } catch (err) { return json_({error: String(err)}); }
   }
   // PHOTO LOG rows for one piano — feeds the 13-shot photo wizard (which
   // shots exist, and the Before file ids for After-mode ghost matching)
@@ -4644,8 +4647,7 @@ function fixTriggers_(mode) {
   ScriptApp.newTrigger('lateClockNudge').timeBased()
     .everyDays(1).atHour(18).inTimezone('America/Denver').create();
   var now = ScriptApp.getProjectTriggers().map(function (t) { return t.getHandlerFunction(); });
-  return {ok: true, as: Session.getEffectiveUser().getEmail(), mode: mode,
-          removed: removed, triggers: now};
+  return {ok: true, mode: mode, removed: removed, triggers: now};
 }
 function setupLateClockNudge() {
   ScriptApp.getProjectTriggers().forEach(function (t) {
