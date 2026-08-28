@@ -973,6 +973,9 @@ function doPost(e) {
         (tk.previous || '(none)') + ' → ' + (tk.track || '(none)'));
       return json_(tk);
     }
+    if (req.action === 'cardmedia') {
+      return json_(cardMedia_(req, who));
+    }
     if (req.action === 'photo') {
       var pt = savePhoto_(req, who);
       if (pt.saved) logAct_(who,
@@ -1035,6 +1038,27 @@ function doPost(e) {
 // Save a phone photo into the piano's existing "Tech" Drive subfolder, named
 // by serial + current phase + date, and record it on the PHOTO LOG tab so
 // client-update drafts can pull "photos for this stage" later.
+/* 🎬 task-board card media (Brigham 8/28): videos are too big for the
+ * Netlify blob store, so they land in Drive under "Task Board Media" and
+ * the share link goes back to become a card note. ~30MB raw ceiling
+ * (base64 inflates ≈33% against Apps Script's 50MB POST cap). */
+function cardMedia_(req, who) {
+  if (!req.data) return {error: 'no media data'};
+  var root = DriveApp.getFolderById(PHOTOS_ROOT_ID);
+  var it = root.getFoldersByName('Task Board Media');
+  var folder = it.hasNext() ? it.next() : root.createFolder('Task Board Media');
+  var mime = String(req.mime || 'video/mp4');
+  var ext = /webm/.test(mime) ? '.webm' : /quicktime|\/mov/.test(mime) ? '.mov'
+    : /image\/png/.test(mime) ? '.png' : /image/.test(mime) ? '.jpg' : '.mp4';
+  var day = Utilities.formatDate(new Date(), 'America/Denver', 'yyyy-MM-dd');
+  var name = 'card-' + String(req.cardId || 'x').slice(0, 30) + '__' + day
+    + '__' + Math.floor(Math.random() * 1e4) + ext;
+  var file = folder.createFile(Utilities.newBlob(
+    Utilities.base64Decode(String(req.data)), mime, name));
+  try { file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch (e) {}
+  logAct_(who, 'Card media', String(req.cardId || ''), name);
+  return {ok: true, url: file.getUrl(), name: name};
+}
 function savePhoto_(req, who) {
   if (!req.data) return {error: 'no image data'};
   var ss = SpreadsheetApp.openById(PIANO_LOG_ID);

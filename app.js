@@ -9512,7 +9512,9 @@ function openCardModal(c, canEdit) {
     ${canEdit ? `<div class="movebox"><input class="cm-note" maxlength="300" placeholder="add a note or paste a link…">
       <button class="mvgo cm-noteadd">Add</button>
       <button class="mvgo cm-photo" title="attach a photo">📸</button>
-      <input type="file" class="cm-file" accept="image/*" hidden></div>` : ''}
+      <button class="mvgo cm-video" title="attach a video (up to ~30 seconds)">🎬</button>
+      <input type="file" class="cm-file" accept="image/*" hidden>
+      <input type="file" class="cm-vfile" accept="video/*" hidden></div>` : ''}
     <div class="cm-notes">${(c.notes || '').split('\n').filter(Boolean).map(L => {
       const m = /^(\d{1,2}\/\d{1,2})\s+([^:]{1,40}):\s*([\s\S]*)$/.exec(L.trim());
       return m ? `<div class="noterow"><b>${tbLinkify(m[3])}</b><small>${esc(m[2])} · ${esc(m[1])}</small></div>`
@@ -9585,6 +9587,37 @@ function openCardModal(c, canEdit) {
         if (!j.url) throw new Error(j.error || 'upload failed');
         const url = j.url;
         await addNote('📷 ' + url);
+      } catch (e) { msg.textContent = '✗ ' + e.message; }
+    };
+    // 🎬 video → Drive "Task Board Media" via the bridge (blob store is
+    // photos-only at ~6MB; Drive takes ~30MB ≈ a 30-second phone clip)
+    const vf = ov.querySelector('.cm-vfile');
+    ov.querySelector('.cm-video').onclick = () => vf.click();
+    vf.onchange = async () => {
+      const f = vf.files[0]; vf.value = '';
+      if (!f) return;
+      if (f.size > 30 * 1024 * 1024) {
+        msg.textContent = '✗ video too big (' + Math.round(f.size / 1048576)
+          + 'MB) — keep it under 30MB (~30 seconds), or trim it first';
+        return;
+      }
+      const wa = writeAuth();
+      if (!wa.ok) { msg.textContent = 'Sign in first.'; return; }
+      msg.textContent = 'uploading video… (' + Math.round(f.size / 1048576) + 'MB — hang tight)';
+      try {
+        const b64 = await new Promise((res, rej) => {
+          const rd = new FileReader();
+          rd.onload = () => res(String(rd.result).split(',')[1]);
+          rd.onerror = () => rej(new Error('could not read the file'));
+          rd.readAsDataURL(f);
+        });
+        const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+          headers: {'content-type': 'text/plain;charset=utf-8'},
+          body: JSON.stringify({pin: wa.pin, action: 'cardmedia', cardId: c.id,
+            mime: f.type || 'video/mp4', data: b64, ...authFields()})});
+        const j = await r.json();
+        if (!j.url) throw new Error(j.error || 'upload failed');
+        await addNote('🎬 ' + j.url);
       } catch (e) { msg.textContent = '✗ ' + e.message; }
     };
     ov.querySelector('.cm-reassign').onclick = () => { ov.hidden = true; openReassignModal(c); };
