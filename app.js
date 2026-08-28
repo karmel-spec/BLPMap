@@ -1956,6 +1956,18 @@ function printBenchTag(p) {
   w.document.close();
 }
 function logoUrlForPrint() { return location.origin + '/assets/blp-logo.png'; }
+// tag prints leave an activity-log breadcrumb (with the note, when there is
+// one) — the activity log is the automatic record; notes stay in 📝 Notes
+async function logTagPrint(p, kind, note) {
+  const wa = writeAuth();
+  if (!wa.ok) return;
+  try {
+    await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+      headers: {'content-type': 'text/plain;charset=utf-8'},
+      body: JSON.stringify({pin: wa.pin, action: 'tagprinted', kind,
+        serial: p.serial, row: p.row, note: note || '', ...authFields()})});
+  } catch (e) { /* the tag printed either way */ }
+}
 // the print window sends the edited note back; persist it so a reprint (and
 // everyone else's card) keeps it
 addEventListener('message', async ev => {
@@ -1972,6 +1984,7 @@ addEventListener('message', async ev => {
       headers: {'content-type': 'text/plain;charset=utf-8'},
       body: JSON.stringify({pin: wa.pin, action: 'setbenchnote', serial: p.serial, row: p.row,
         value: m.benchNote, ...authFields()})});
+    if (!$('#pop').hidden && S.popRow === p.row) openPop(p.row, S.popAnchor, true);
   } catch (e) { /* the tag still prints — the note just isn't saved */ }
 });
 function printShopTag(p) {
@@ -3572,11 +3585,23 @@ function popHTML(p) {
           ${drift ? '<i>\u26a0</i>' : ''}</button>`;
       })()}
     </div>
-    ${p.serial ? secWrap('act', '📝 Activity & Notes', `
+    ${p.serial ? secWrap('notes', '📝 Notes', `
       <div class="movebox notebox">
         <input class="pnin" placeholder="add a note about this piano…" maxlength="240">
         <button class="mvgo pngo">Add</button>
       </div><div class="pnmsg phmsg"></div>
+      <div class="noteslist">${(() => {
+        const lines = String(p.pianoNotes || '').split('\n').map(s => s.trim()).filter(Boolean);
+        if (!lines.length) return '<div class="pwnone" style="display:block;padding:3px 0 4px">No notes yet — anything typed here stays on the piano.</div>';
+        return lines.slice(0, 30).map(L => {
+          const m = /^(\d{1,2}\/\d{1,2})\s+([^:]{1,40}):\s*([\s\S]*)$/.exec(L);
+          return m ? `<div class="noterow"><b>${esc(m[3])}</b><small>${esc(m[2])} · ${esc(m[1])}</small></div>`
+                   : `<div class="noterow"><b>${esc(L)}</b></div>`;
+        }).join('');
+      })()}</div>`, false) : ''}
+    ${p.serial ? secWrap('act', '🕘 Activity Log', `
+      <p class="pd" style="margin:0 0 6px">Automatic record of work on this piano — phases, moves,
+        photos, tags printed. Typed notes live in 📝 Notes above.</p>
       <div class="actlist"></div>
       <button class="tagbtn actload">🕘 Load this piano's activity log</button>`, false) : ''}
     ${isAdminUser() ? secWrap('log', '📖 Piano Log', logExtrasBody(p), false) : ''}`;
@@ -3901,8 +3926,9 @@ function wirePop(p) {
       if (!j.ok) throw new Error(j.error || 'failed');
       inp.value = '';
       msg.textContent = '✓ noted';
-      setTimeout(() => { if (msg.isConnected) msg.textContent = ''; }, 1800);
-      loadActivity();
+      // keep the card's notes list in step without a full data refetch
+      p.pianoNotes = (j.line ? j.line + '\n' : '') + (p.pianoNotes || '');
+      setTimeout(() => { if (!$('#pop').hidden) openPop(p.row, S.popAnchor, true); }, 700);
     } catch (e) { msg.textContent = '✗ ' + e.message; }
   };
   const pnin = pop.querySelector('.pnin');
@@ -4024,12 +4050,16 @@ function wirePop(p) {
     pi.onchange = () => uploadPhoto(p, pi, pop);
   }
   const st = pop.querySelector('.shoptag');
-  if (st) st.onclick = ev => { ev.stopPropagation(); printShopTag(p); };
+  if (st) st.onclick = ev => {
+    ev.stopPropagation(); printShopTag(p);
+    logTagPrint(p, 'shop', '');
+  };
   // 🪑 bench tag — same print flow from the Locations row and the tag row
   pop.querySelectorAll('.benchtag').forEach(b => b.onclick = ev => {
     ev.stopPropagation(); popPinned = true;
     S.benchTagFor = p.row;
     printBenchTag(p);
+    logTagPrint(p, 'bench', (p.benchNote || '').trim());
   });
   const dt = pop.querySelector('.dtech');
   if (dt) dt.onclick = ev => { ev.preventDefault(); ev.stopPropagation(); openTechFolder(dt.dataset.serial, dt); };

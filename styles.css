@@ -1261,3 +1261,9 @@ tr.adjediting td{background:#fdf8ee}
 /* away tiles on the Team shop board — dashed blue-gray, not guilt-gray */
 .tmtile.away{border:1.5px dashed #7d93a8;background:#f4f7fa;color:#5b6b7a}
 .tmaway{font-weight:700;color:#4a617a;margin-top:2px}
+
+/* 📝 Notes (team-typed) — distinct from the automatic activity log */
+.noteslist{max-height:260px;overflow-y:auto;margin-top:4px}
+.noterow{border-top:1px solid #f0f2f4;padding:6px 2px;font-size:12.5px;line-height:1.45}
+.noterow b{font-weight:600;display:block}
+.noterow small{color:#8a929a;font-size:10.5px}

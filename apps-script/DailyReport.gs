@@ -929,6 +929,9 @@ function doPost(e) {
     if (req.action === 'setimportant') {
       return json_(setImportant_(req, who));
     }
+    if (req.action === 'tagprinted') {
+      return json_(tagPrinted_(req, who));
+    }
     if (req.action === 'pianonote') {
       return json_(pianoNote_(req, who));
     }
@@ -4985,13 +4988,49 @@ function setImportant_(req, who) {
 }
 /* General per-piano note (Brigham 8/27) — lands in the ACTIVITY LOG, shown
  * in the card's Activity & Notes section. */
+/* NOTES vs ACTIVITY LOG (Brigham 8/27): notes are typed BY people and live
+ * in the piano's own PIANO NOTES cell; the activity log is the automatic
+ * record of what the app did. A note also leaves an activity breadcrumb,
+ * but the note itself is the thing that persists on the card. */
+function notesCol_(sh) {
+  var last = sh.getLastColumn();
+  var hdr = sh.getRange(2, 1, 1, last).getValues()[0];
+  for (var c = 0; c < hdr.length; c++) {
+    if (String(hdr[c] || '').trim().toUpperCase() === 'PIANO NOTES') return c + 1;
+  }
+  sh.getRange(2, last + 1).setValue('PIANO NOTES');
+  return last + 1;
+}
+// prepend "M/d Name: text" newest-first, same shape as PHASE NOTES
+function addPianoNote_(sh, row, who, text) {
+  var col = notesCol_(sh);
+  var name = String(who || '').replace(/\s*<[^>]*>\s*/, '').replace(/\s*\(.*\)\s*$/, '');
+  var stamp = Utilities.formatDate(new Date(), 'America/Denver', 'M/d');
+  var line = stamp + ' ' + (name || 'team') + ': ' + text;
+  var prev = String(sh.getRange(row, col).getValue() || '').trim();
+  sh.getRange(row, col).setValue(prev ? line + '\n' + prev : line);
+  return line;
+}
 function pianoNote_(req, who) {
   var note = String(req.note || '').trim().slice(0, 300);
   if (!note) return {error: 'no note'};
   var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
   var found = findPiano_(sh, req.serial, req.row);
   if (found.error) return found;
-  logAct_(who, 'Note', found.summary || req.serial, note);
+  var line = addPianoNote_(sh, found.row, who, note);
+  logAct_(who, 'Note added', found.summary || req.serial, note);
+  return {ok: true, row: found.row, summary: found.summary, line: line};
+}
+/* A tag was printed — activity-log breadcrumb, with the note if there was
+ * one, so the card shows who put which tag on the piano and when. */
+function tagPrinted_(req, who) {
+  var kind = String(req.kind || 'tag').slice(0, 20);
+  var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+  var found = findPiano_(sh, req.serial, req.row);
+  if (found.error) return found;
+  var note = String(req.note || '').trim().slice(0, 200);
+  logAct_(who, kind === 'bench' ? 'Bench tag printed' : 'Shop tag printed',
+    found.summary || req.serial, note ? 'note: ' + note : '(no note)');
   return {ok: true, row: found.row, summary: found.summary};
 }
 /* Bench tag note (Brigham 8/27): optional admin line printed on the bench
@@ -5008,7 +5047,10 @@ function setBenchNote_(req, who) {
     if (String(hdr[c] || '').trim().toUpperCase() === 'BENCH NOTE') { col = c + 1; break; }
   }
   if (col < 0) { sh.getRange(2, last + 1).setValue('BENCH NOTE'); col = last + 1; }
+  var prevVal = String(sh.getRange(found.row, col).getValue() || '').trim();
   sh.getRange(found.row, col).setValue(val);
+  // a bench note is a team-typed note — it belongs in the notes area too
+  if (val && val !== prevVal) addPianoNote_(sh, found.row, who, 'Bench tag: ' + val);
   logAct_(who, 'Bench tag note', found.summary || req.serial, val || '(cleared)');
   return {ok: true, row: found.row, summary: found.summary, benchNote: val};
 }
