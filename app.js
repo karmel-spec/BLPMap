@@ -8915,7 +8915,11 @@ function renderTaskBoard() {
         ${cnt ? `<i class="cnt">${cnt}</i>` : ''}</span>
         <small>${esc(n.split(/\s+/)[0])}</small></div>`;
     }).join('')}</div>` : '';
-  const mine = TB.rows.filter(r => first(r.owner) === first(TB.person));
+  const today = localDay();
+  const isSnoozed = r => r.snooze && r.snooze > today && r.col !== 'done';
+  const allMine = TB.rows.filter(r => first(r.owner) === first(TB.person));
+  const snoozedN = allMine.filter(isSnoozed).length;
+  const mine = allMine.filter(r => TB.showSnoozed || !isSnoozed(r));
   const canEdit = first(TB.person) === first(me) || isOwner();
   const ordVal = r => (r.order === null || r.order === undefined || r.order === '')
     ? 1e9 - Date.parse(r.created || 0) / 1e6 : Number(r.order);
@@ -8930,6 +8934,8 @@ function renderTaskBoard() {
           ${c.serial ? `<span class="chip c-piano" data-serial="${esc(c.serial)}">🎹 ${esc(c.serial)}</span>` : ''}
           ${tbDueChip(c.due, c.col)}
           ${c.from ? `<span class="chip c-from">from ${esc(c.from.split(/\s+/)[0])}</span>` : ''}
+          ${isSnoozed(c) ? `<span class="chip c-snooze">💤 until ${esc(c.snooze.slice(5))}</span>` : ''}
+          ${(c.notes || '').trim() ? `<span class="chip c-notes">🗒 ${String(c.notes).split('\n').filter(Boolean).length}</span>` : ''}
         </div>
         ${canEdit ? `<div class="kmove"><span class="kgrab">⠿ drag</span>
           <button class="kdel" data-id="${esc(c.id)}">🗑</button>
@@ -8939,7 +8945,8 @@ function renderTaskBoard() {
   };
   el.innerHTML = `${strip}
     <div class="khead"><b>${esc(TB.person.split(/\s+/)[0])}'s Board</b>
-      <span>${mine.filter(r => r.col !== 'done').length} open</span>
+      <span>${allMine.filter(r => r.col !== 'done' && !isSnoozed(r)).length} open</span>
+      ${snoozedN ? `<button class="ksnoozetog">💤 ${snoozedN} snoozed${TB.showSnoozed ? ' — hide' : ''}</button>` : ''}
       <button class="teamrefresh tbrefresh">🔄</button>
       ${canEdit ? '<button class="kadd">＋ Add card</button>' : ''}</div>
     ${canEdit ? `<div class="kcompose" hidden>
@@ -8977,6 +8984,14 @@ function renderTaskBoard() {
     const j = await tbSend({op: 'del', id: b.dataset.id});
     if (j) { TB.rows = TB.rows.filter(r => r.id !== b.dataset.id); renderTaskBoard(); }
   });
+  const stog = el.querySelector('.ksnoozetog');
+  if (stog) stog.onclick = () => { TB.showSnoozed = !TB.showSnoozed; renderTaskBoard(); };
+  el.querySelectorAll('.kcard').forEach(card => card.addEventListener('click', ev => {
+    if (ev.target.closest('button, .chip, .kgrab')) return;
+    if (TB.dragJustHappened) return;
+    const c = TB.rows.find(r => r.id === card.dataset.id);
+    if (c) openCardModal(c, canEdit);
+  }));
   el.querySelectorAll('.chip.c-piano').forEach(ch => ch.onclick = () => {
     const p = S.data.pianos.find(x => (x.serial || '') === ch.dataset.serial);
     if (p) { switchView('map'); focusPiano(p); openPop(p.row, S.popAnchor, true); }
@@ -9045,6 +9060,8 @@ function renderTaskBoard() {
         const newCol = colEl.dataset.col;
         const c = TB.rows.find(r => r.id === id);
         if (c) { c.col = newCol; c.order = order; }
+        TB.dragJustHappened = true;
+        setTimeout(() => { TB.dragJustHappened = false; }, 250);
         renderTaskBoard();
         tbSend({op: 'move', id, col: newCol, order});
       };
@@ -9053,6 +9070,99 @@ function renderTaskBoard() {
       addEventListener('pointercancel', up);
     });
   });
+}
+
+
+/* card detail popup: edit text/due/serial, notes with auto-links, photos
+ * (stored via the salesapp2 request-shot blob store), snooze, delete */
+function tbLinkify(t) {
+  return esc(t).replace(/(https?:\/\/[^\s<]+)/g,
+    u => `<a href="${u}" target="_blank" rel="noopener">${u.length > 46 ? u.slice(0, 44) + '…' : u}</a>`);
+}
+function openCardModal(c, canEdit) {
+  const ov = modalShell('cardmodal', `
+    <span class="x">✕</span>
+    <h3>🗒 Card</h3>
+    <textarea class="cm-text" maxlength="200" rows="2" ${canEdit ? '' : 'readonly'}>${esc(c.text)}</textarea>
+    <div class="cm-grid">
+      <div><label>Due</label><input type="date" class="cm-due" value="${esc(c.due || '')}" ${canEdit ? '' : 'disabled'}></div>
+      <div><label>Piano serial</label><input class="cm-serial" maxlength="20" list="serialList" value="${esc(c.serial || '')}" ${canEdit ? '' : 'disabled'}></div>
+    </div>
+    ${canEdit ? `<div class="cm-snooze"><span>💤 Snooze</span>
+      <button data-sz="1">+1d</button><button data-sz="3">+3d</button>
+      <button data-sz="7">+1w</button><button data-sz="30">+1m</button>
+      ${c.snooze ? `<button data-sz="0">✕ wake up (${esc(c.snooze)})</button>` : ''}</div>` : ''}
+    <label style="margin-top:10px">Notes & links ${canEdit ? '<small>— paste links, they become clickable</small>' : ''}</label>
+    ${canEdit ? `<div class="movebox"><input class="cm-note" maxlength="300" placeholder="add a note or paste a link…">
+      <button class="mvgo cm-noteadd">Add</button>
+      <button class="mvgo cm-photo" title="attach a photo">📸</button>
+      <input type="file" class="cm-file" accept="image/*" hidden></div>` : ''}
+    <div class="cm-notes">${(c.notes || '').split('\n').filter(Boolean).map(L => {
+      const m = /^(\d{1,2}\/\d{1,2})\s+([^:]{1,40}):\s*([\s\S]*)$/.exec(L.trim());
+      return m ? `<div class="noterow"><b>${tbLinkify(m[3])}</b><small>${esc(m[2])} · ${esc(m[1])}</small></div>`
+               : `<div class="noterow"><b>${tbLinkify(L)}</b></div>`;
+    }).join('') || '<div class="pwnone" style="display:block;padding:4px 0">No notes yet.</div>'}</div>
+    <div class="cm-msg phmsg"></div>
+    ${canEdit ? '<button class="cm-del">🗑 Delete card</button>' : ''}`);
+  const msg = ov.querySelector('.cm-msg');
+  const save = async patch => {
+    msg.textContent = 'saving…';
+    const j = await tbSend({op: 'edit', id: c.id, ...patch});
+    if (j) { Object.assign(c, patch); msg.textContent = '✓ saved';
+      setTimeout(() => { if (msg.isConnected) msg.textContent = ''; }, 1500); renderTaskBoard(); }
+    else msg.textContent = '';
+  };
+  const txt = ov.querySelector('.cm-text');
+  if (canEdit) {
+    let t;
+    txt.oninput = () => { clearTimeout(t); t = setTimeout(() => save({text: txt.value.trim()}), 1200); };
+    txt.onblur = () => { clearTimeout(t); if (txt.value.trim() !== c.text) save({text: txt.value.trim()}); };
+    ov.querySelector('.cm-due').onchange = ev2 => save({due: ev2.target.value});
+    ov.querySelector('.cm-serial').onchange = ev2 => save({serial: ev2.target.value.trim()});
+    ov.querySelectorAll('[data-sz]').forEach(b => b.onclick = async () => {
+      const d = +b.dataset.sz;
+      const until = d ? new Date(Date.now() + d * 86400000).toISOString().slice(0, 10) : '';
+      msg.textContent = d ? 'snoozing…' : 'waking…';
+      const j = await tbSend({op: 'snooze', id: c.id, until});
+      if (j) { c.snooze = until; ov.hidden = true; renderTaskBoard(); }
+    });
+    const addNote = async text => {
+      if (!text) return;
+      msg.textContent = 'adding…';
+      const j = await tbSend({op: 'note', id: c.id, text});
+      if (j) { c.notes = (j.line || text) + '\n' + (c.notes || ''); ov.hidden = true;
+        openCardModal(c, canEdit); renderTaskBoard(); }
+      else msg.textContent = '';
+    };
+    ov.querySelector('.cm-noteadd').onclick = () => addNote(ov.querySelector('.cm-note').value.trim());
+    ov.querySelector('.cm-note').onkeydown = ev2 => {
+      if (ev2.key === 'Enter') addNote(ov.querySelector('.cm-note').value.trim()); };
+    const pf = ov.querySelector('.cm-file');
+    ov.querySelector('.cm-photo').onclick = () => pf.click();
+    pf.onchange = async () => {
+      const f = pf.files[0]; pf.value = '';
+      if (!f) return;
+      msg.textContent = 'uploading photo…';
+      try {
+        const dataUrl = await downscalePhoto(f, 1600, 0.82);
+        const r = await fetch('https://blpsalesapp.netlify.app/.netlify/functions/request-shot', {
+          method: 'POST', headers: {'content-type': 'application/json'},
+          body: JSON.stringify({key: 'pianoman', id: 'card-' + c.id,
+            photo: dataUrl.split(',')[1], photoType: 'image/jpeg',
+            photoName: 'card-photo.jpg'})});
+        const j = await r.json();
+        if (!j.url) throw new Error(j.error || 'upload failed');
+        const url = j.url;
+        await addNote('📷 ' + url);
+      } catch (e) { msg.textContent = '✗ ' + e.message; }
+    };
+    ov.querySelector('.cm-del').onclick = async () => {
+      if (!confirm('Delete this card?')) return;
+      const j = await tbSend({op: 'del', id: c.id});
+      if (j) { TB.rows = TB.rows.filter(r => r.id !== c.id); ov.hidden = true; renderTaskBoard(); }
+    };
+    serialDatalist();
+  }
 }
 
 /* ---------- 📅 Scheduling — management dashboard (managers & owners) ----------

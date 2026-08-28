@@ -1350,3 +1350,22 @@ tr.adjediting td{background:#fdf8ee}
 .kcard{touch-action:manipulation}
 /* the ⠿ handle is the guaranteed touch-drag zone (cards stay scrollable) */
 .kgrab{touch-action:none;cursor:grab;padding:2px 6px;margin-left:-6px}
+
+/* card detail modal + snooze */
+#cardmodal .tmcard, #cardmodal > div{max-width:430px}
+.cm-text{width:100%;box-sizing:border-box;padding:9px 11px;border:1.5px solid #c9ced4;border-radius:8px;
+  font:600 14px/1.4 inherit;resize:vertical}
+.cm-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px}
+.cm-grid input{width:100%;box-sizing:border-box;padding:7px 9px;border:1.5px solid #c9ced4;border-radius:8px;font:inherit;font-size:13px}
+.cm-snooze{display:flex;gap:6px;align-items:center;margin-top:10px;flex-wrap:wrap;font-size:12px;color:#5b636b}
+.cm-snooze button{border:1.5px solid #c9a227;background:#fdf6e3;color:#6b5200;border-radius:999px;
+  padding:3px 11px;font-size:11px;font-weight:700;cursor:pointer}
+.cm-notes{max-height:220px;overflow-y:auto;margin-top:4px}
+.cm-notes a{color:#2c5d96;word-break:break-all}
+.cm-del{margin-top:12px;border:1.5px solid #d3a0a0;background:#fff;color:#9e2020;border-radius:8px;
+  padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer}
+.cm-msg{min-height:14px}
+.c-snooze{background:#f0eafd;color:#5b4a8a}
+.c-notes{background:#f2f4f6;color:#5b636b}
+.ksnoozetog{border:1px solid #c9c3e0;background:#f7f5fd;color:#5b4a8a;border-radius:999px;
+  padding:3px 10px;font-size:10.5px;font-weight:700;cursor:pointer}

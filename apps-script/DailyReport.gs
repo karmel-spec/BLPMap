@@ -4609,7 +4609,7 @@ function taskBoardSheet_() {
   var sh = ss.getSheetByName('Task Boards');
   if (!sh) {
     sh = ss.insertSheet('Task Boards', ss.getSheets().length);
-    sh.getRange(1, 1, 1, 10).setValues([['Id', 'Owner', 'Col', 'Text', 'Serial', 'Due', 'From', 'Created', 'Done at', 'Order']]);
+    sh.getRange(1, 1, 1, 12).setValues([['Id', 'Owner', 'Col', 'Text', 'Serial', 'Due', 'From', 'Created', 'Done at', 'Order', 'Notes', 'Snooze until']]);
     sh.setFrozenRows(1);
   }
   return sh;
@@ -4619,14 +4619,15 @@ function taskBoardRows_() {
   var last = sh.getLastRow();
   var out = [];
   if (last >= 2) {
-    var vals = sh.getRange(2, 1, last - 1, 10).getValues();
+    var vals = sh.getRange(2, 1, last - 1, 12).getValues();
     for (var i = 0; i < vals.length; i++) {
       var v = vals[i];
       if (!v[0] || !v[3]) continue;
       out.push({id: String(v[0]), owner: String(v[1] || ''), col: String(v[2] || 'todo'),
         text: String(v[3]).slice(0, 200), serial: String(v[4] || ''), due: String(v[5] || ''),
         from: String(v[6] || ''), created: String(v[7] || ''), done: String(v[8] || ''),
-        order: v[9] === '' || v[9] == null ? null : Number(v[9])});
+        order: v[9] === '' || v[9] == null ? null : Number(v[9]),
+        notes: String(v[10] || '').slice(0, 2000), snooze: String(v[11] || '')});
     }
   }
   return {ok: true, rows: out};
@@ -4668,6 +4669,19 @@ function taskCard_(req, who) {
     if (req.text !== undefined) sh.getRange(row, 4).setValue(String(req.text).trim().slice(0, 200));
     if (req.due !== undefined) sh.getRange(row, 6).setValue(String(req.due).slice(0, 12));
     if (req.serial !== undefined) sh.getRange(row, 5).setValue(String(req.serial).slice(0, 20));
+    return {ok: true};
+  }
+  if (op === 'note') {
+    var txt = String(req.text || '').trim().slice(0, 300);
+    if (!txt) return {error: 'no note'};
+    var stamp = Utilities.formatDate(new Date(), 'America/Denver', 'M/d');
+    var line = stamp + ' ' + (name || 'team') + ': ' + txt;
+    var prev = String(sh.getRange(row, 11).getValue() || '').trim();
+    sh.getRange(row, 11).setValue(prev ? line + '\n' + prev : line);
+    return {ok: true, line: line};
+  }
+  if (op === 'snooze') {
+    sh.getRange(row, 12).setValue(String(req.until || '').slice(0, 12));
     return {ok: true};
   }
   if (op === 'del') { sh.deleteRow(row); return {ok: true}; }
