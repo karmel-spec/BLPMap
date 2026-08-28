@@ -1308,6 +1308,9 @@ tr.adjediting td{background:#fdf8ee}
 .face .cnt{position:absolute;top:-3px;right:-6px;background:#9e2020;color:#fff;border-radius:999px;
   font-size:9px;font-weight:800;padding:1px 5px}
 .khead{display:flex;align-items:center;gap:12px;padding:2px 2px 12px}
+.khav{width:36px;height:36px;border-radius:50%;overflow:hidden;flex:none;display:flex;
+  align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:13px}
+.khav img{width:100%;height:100%;object-fit:cover;display:block;filter:grayscale(1)}
 .khead b{font-size:16px}
 .khead span{font-size:11.5px;color:#8a929a}
 .kadd{margin-left:auto;background:#9e2020;color:#fff;border:0;border-radius:8px;
@@ -1393,6 +1396,8 @@ tr.adjediting td{background:#fdf8ee}
   padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer}
 .cm-msg{min-height:14px}
 .c-snooze{background:#f0eafd;color:#5b4a8a}
+.c-age{background:#f5f0e6;color:#8a6d3b}
+.cm-added{font-size:11px;font-weight:600;color:#9aa3ac;margin-left:6px}
 .c-notes{background:#f2f4f6;color:#5b636b}
 .ksnoozetog{border:1px solid #c9c3e0;background:#f7f5fd;color:#5b4a8a;border-radius:999px;
   padding:3px 10px;font-size:10.5px;font-weight:700;cursor:pointer}

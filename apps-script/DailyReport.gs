@@ -4675,6 +4675,56 @@ function taskBoardRows_() {
   }
   return {ok: true, rows: out, cols: boardColsAll_()};
 }
+/* When someone touches a board that isn't their own, tell the owner:
+ * Brigham & Karmel get a text, everyone else gets an email — each with a
+ * link straight to the card (#card=<id>). Best-effort, never blocks the op. */
+var TB_TEXT_OWNERS = {'brigham larson': 'Brigham', 'karmel larson': 'Karmel'};
+function tbOwnerEmail_(firstName) {
+  try {
+    var ts = SpreadsheetApp.openById('1j1FP78rRj1jrl2z-_vIg95kN3GuG8TI4dpOheSnIoPc')
+      .getSheetByName('Current Team');
+    var tv = ts.getRange(2, 1, Math.max(1, ts.getLastRow() - 1), 31).getValues();
+    for (var k = 0; k < tv.length; k++) {
+      if (String(tv[k][0] || '').trim().toLowerCase() === String(firstName || '').toLowerCase()) {
+        var em = String(tv[k][30] || '').trim();
+        if (em.indexOf('@') > 0) return em;
+      }
+    }
+  } catch (e) {}
+  return '';
+}
+function tbNotify_(owner, who, what, cardId, cardText) {
+  try {
+    owner = String(owner || '').trim();
+    if (!owner) return;
+    var norm = function (s) { return String(s || '').trim().toLowerCase().replace(/\s+/g, ' '); };
+    var actorName = String(who || '').replace(/\s*<[^>]*>\s*/, ' ').replace(/\s*\(.*\)\s*$/, '').trim();
+    var am = /<([^>]+)>/.exec(String(who || ''));
+    var actorEmail = am ? am[1].toLowerCase() : '';
+    if (norm(actorName) && norm(actorName) === norm(owner)) return;   // own board
+    var link = cardId ? APP_URL + '/#card=' + encodeURIComponent(cardId) : APP_URL + '/#tboard';
+    var snippet = cardText ? ' — “' + String(cardText).slice(0, 90)
+      + (String(cardText).length > 90 ? '…' : '') + '”' : '';
+    var actor = actorName || 'Someone';
+    if (TB_TEXT_OWNERS[norm(owner)]) {
+      notifyTeam_([TB_TEXT_OWNERS[norm(owner)]],
+        '🗒 Task board: ' + actor + ' ' + what + snippet + ' ' + link);
+      return;
+    }
+    var email = tbOwnerEmail_(owner.split(/\s+/)[0]);
+    if (!email || email.toLowerCase() === actorEmail) return;
+    MailApp.sendEmail({
+      to: email,
+      subject: '🗒 Your task board — ' + actor + ' ' + what,
+      htmlBody: '<div style="font:14px/1.5 Helvetica,Arial,sans-serif;color:#1d2126">'
+        + '<p><b>' + actor + '</b> ' + what + ' on your BLP task board.</p>'
+        + (cardText ? '<p style="border-left:3px solid #9e2020;padding:6px 12px;background:#f7f8f9">'
+            + String(cardText).slice(0, 200) + '</p>' : '')
+        + '<p><a href="' + link + '" style="background:#9e2020;color:#fff;padding:10px 18px;'
+        + 'border-radius:8px;text-decoration:none;font-weight:700">Open the card</a></p>'
+        + '<p style="color:#8a929a;font-size:12px">Brigham Larson Pianos — Store Map</p></div>'});
+  } catch (e) { /* notification is best-effort */ }
+}
 function taskCard_(req, who) {
   var sh = taskBoardSheet_();
   var op = String(req.op || '');
@@ -4689,6 +4739,7 @@ function taskCard_(req, who) {
       String(req.serial || '').slice(0, 20), String(req.due || '').slice(0, 12),
       String(req.from || (req.owner && req.owner !== name ? name : '')).slice(0, 30),
       new Date().toISOString(), '', ord]);
+    tbNotify_(String(req.owner || ''), who, 'added a card to your board', id, text);
     return {ok: true, id: id};
   }
   if (op === 'setcols') return setBoardCols_(req);
@@ -4700,19 +4751,26 @@ function taskCard_(req, who) {
     if (String(ids[i][0]) === String(req.id || '')) { row = i + 2; break; }
   }
   if (row < 0) return {error: 'card not found'};
+  // whose board this card sits on + its text, for change notifications
+  var rowVals = sh.getRange(row, 2, 1, 3).getValues()[0];
+  var rowOwner = String(rowVals[0] || ''), rowText = String(rowVals[2] || '');
   if (op === 'move') {
     var col = String(req.col || '').slice(0, 24);
     if (!col) return {error: 'bad column'};
+    var prevCol = String(rowVals[1] || '');
     sh.getRange(row, 3).setValue(col);
     sh.getRange(row, 9).setValue(col === 'done' ? new Date().toISOString() : '');
     if (req.order !== undefined && isFinite(Number(req.order)))
       sh.getRange(row, 10).setValue(Number(req.order));
+    if (col !== prevCol) tbNotify_(rowOwner, who, 'moved a card to ' + col, String(req.id), rowText);
     return {ok: true};
   }
   if (op === 'edit') {
     if (req.text !== undefined) sh.getRange(row, 4).setValue(String(req.text).trim().slice(0, 200));
     if (req.due !== undefined) sh.getRange(row, 6).setValue(String(req.due).slice(0, 12));
     if (req.serial !== undefined) sh.getRange(row, 5).setValue(String(req.serial).slice(0, 20));
+    tbNotify_(rowOwner, who, 'updated a card', String(req.id),
+      req.text !== undefined ? String(req.text) : rowText);
     return {ok: true};
   }
   if (op === 'note') {
@@ -4722,10 +4780,13 @@ function taskCard_(req, who) {
     var line = stamp + ' ' + (name || 'team') + ': ' + txt;
     var prev = String(sh.getRange(row, 11).getValue() || '').trim();
     sh.getRange(row, 11).setValue(prev ? line + '\n' + prev : line);
+    tbNotify_(rowOwner, who, 'added a note — ' + txt.slice(0, 80), String(req.id), rowText);
     return {ok: true, line: line};
   }
   if (op === 'snooze') {
     sh.getRange(row, 12).setValue(String(req.until || '').slice(0, 12));
+    tbNotify_(rowOwner, who, req.until ? 'snoozed a card until ' + String(req.until).slice(0, 10)
+      : 'woke a card up', String(req.id), rowText);
     return {ok: true};
   }
   if (op === 'reassign') {
@@ -4742,12 +4803,15 @@ function taskCard_(req, who) {
     var line = stamp + ' ' + (name || 'team') + ': ' + rnote;
     var prev = String(sh.getRange(row, 11).getValue() || '').trim();
     sh.getRange(row, 11).setValue(prev ? line + '\n' + prev : line);
+    tbNotify_(target, who, 'sent a card to your board'
+      + (req.note ? ' — ' + String(req.note).trim().slice(0, 80) : ''), String(req.id), rowText);
     return {ok: true, line: line};
   }
   if (op === 'del' || op === 'archive') {
     // NEVER delete (Brigham 8/28) — archive: off every board, kept forever
     sh.getRange(row, 3).setValue('archived');
     sh.getRange(row, 9).setValue(new Date().toISOString());
+    tbNotify_(rowOwner, who, 'marked a card done (archived)', '', rowText);
     return {ok: true, archived: true};
   }
   if (op === 'setcols') return setBoardCols_(req);

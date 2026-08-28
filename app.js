@@ -924,7 +924,33 @@ function tryReportLink() {
   switchView('report');
   renderReport();
 }
-window.addEventListener('hashchange', () => { deepLinkDone = ''; tryDeepLink(); tryReportLink(); });
+/* #card=<id> deep link — task-board notification links open straight to the card */
+let cardLinkDone = '';
+function tryCardLink() {
+  const m = /[#&]card=([A-Za-z0-9]+)/.exec(location.hash || '');
+  let cid = m ? m[1] : '';
+  // the Google sign-in redirect strips the hash — remember for 10 minutes
+  if (cid) lsSet('blpTC', cid + '|' + Date.now());
+  else {
+    const st = (lsGet('blpTC') || '').split('|');
+    if (st[0] && Date.now() - (+st[1] || 0) < 600000) cid = st[0];
+  }
+  if (!cid || cid === cardLinkDone || !tbMe()) return;
+  cardLinkDone = cid;
+  lsDel('blpTC');
+  showView('tboard');
+  (async () => {
+    if (TB.rows === null && !TB.loading) tbFetch();
+    let t = 0;
+    while (TB.rows === null && t++ < 60) await new Promise(r => setTimeout(r, 250));
+    const c = (TB.rows || []).find(r => r.id === cid);
+    if (!c) return;
+    TB.person = c.owner;
+    renderTaskBoard();
+    openCardModal(c, tbNorm(c.owner) === tbNorm(tbMe()) || tbAdmin());
+  })();
+}
+window.addEventListener('hashchange', () => { deepLinkDone = ''; tryDeepLink(); tryReportLink(); tryCardLink(); });
 
 /* ---------- rendering ---------- */
 function renderAll() {
@@ -2868,6 +2894,21 @@ async function loadMyRequests(ov) {
 setTimeout(() => {
   const btn = document.getElementById('suggestBtn');
   if (btn) btn.onclick = openSuggestBox;
+  // 🔄 hard refresh — reload the whole app past every cache so the newest
+  // features and data come down, from any screen (Brigham 8/28)
+  const hrb = document.getElementById('hardRefreshBtn');
+  if (hrb) hrb.onclick = async () => {
+    hrb.textContent = '⏳';
+    try {
+      if (window.caches) {
+        const ks = await caches.keys();
+        await Promise.all(ks.map(k => caches.delete(k)));
+      }
+    } catch (e) {}
+    const u = new URL(location.href);
+    u.searchParams.set('r', Date.now().toString(36));
+    location.replace(u.toString());
+  };
   // 🔢 one-tap Shop Queue report (Brigham 8/25) — same path as a shared link
   const qb = document.getElementById('queueBtn');
   if (qb) qb.onclick = () => {
@@ -8867,7 +8908,7 @@ const TB_HEADSHOTS = {
   "melissa terry": "https://www.brighamlarsonpianos.com/cdn/shop/files/5U4A1257.jpg?v=1775246484&width=240",
   "ezzy lopp": "https://www.brighamlarsonpianos.com/cdn/shop/files/Ezaray.Lopp.BW_cc6b4562-389e-4c78-b1fe-3dcd2590bd86.jpg?v=1777569159&width=240",
   "alisa merrill": "https://www.brighamlarsonpianos.com/cdn/shop/files/Alisa.Merrill.BW_1.jpg?v=1735949942&width=240",
-  "lisa litton": "assets/headshots/lisa-litton.jpg"
+  "lisa litton": "assets/headshots/lisa-litton.jpg?v=2"
   };
 const tbNorm = n => String(n || '').trim().toLowerCase().replace(/\s+/g, ' ');
 // full access to every board: the face strip + open/edit/add on anyone's
@@ -8983,6 +9024,7 @@ function renderTaskBoard() {
           ${c.from ? `<span class="chip c-from">from ${esc(c.from.split(/\s+/)[0])}</span>` : ''}
           ${isSnoozed(c) ? `<span class="chip c-snooze">💤 until ${esc(c.snooze.slice(5))}</span>` : ''}
           ${(c.notes || '').trim() ? `<span class="chip c-notes">🗒 ${String(c.notes).split('\n').filter(Boolean).length}</span>` : ''}
+          ${tbAgeChip(c)}
         </div>
         ${canEdit ? `<div class="kmove"><span class="kgrab">⠿ drag</span>
           <button class="kreassign" data-id="${esc(c.id)}" title="hand this card to someone else's board">↪ Reassign</button>
@@ -8991,40 +9033,47 @@ function renderTaskBoard() {
       </div>`).join('') || '<div class="kempty">—</div>'}
     </div>`;
   };
+  const bhs = TB_HEADSHOTS[tbNorm(TB.person)];
+  const binit = TB.person.split(/\s+/).map(w => w[0] || '').join('').slice(0, 2).toUpperCase();
   el.innerHTML = `${strip}
-    <div class="khead"><b>${esc(TB.person.split(/\s+/)[0])}'s Board</b>
-      <span>${allMine.filter(r => r.col !== 'done' && !isSnoozed(r)).length} open</span>
+    <div class="khead"><span class="khav" style="background:${tbAvColor(TB.person)}">${bhs
+        ? `<img src="${esc(bhs)}" alt="">` : esc(binit)}</span>
+      <b>${esc(TB.person.split(/\s+/)[0])}'s Board</b>
+      <span>${allMine.filter(r => r.col !== 'done' && !isSnoozed(r)).length} open · ${snoozedN} snoozed · ${allMine.length} total</span>
       ${snoozedN ? `<button class="ksnoozetog">💤 ${snoozedN} snoozed${TB.showSnoozed ? ' — hide' : ''}</button>` : ''}
-      <button class="teamrefresh tbrefresh">🔄</button>
-      ${canEdit ? '<button class="kadd">＋ Add card</button><button class="kaddcol" title="add a column">＋ Column</button>' : ''}</div>
-    ${canEdit ? `<div class="kcompose" hidden>
-      <input class="kc-text" maxlength="200" placeholder="what needs doing?">
-      <input class="kc-serial" maxlength="20" placeholder="piano serial (optional)" list="serialList">
-      <input class="kc-due" type="date" title="due (optional)">
-      <button class="kc-go">Add to ${esc(TB.person.split(/\s+/)[0])}'s To&nbsp;Do</button>
-    </div>` : ''}
+      ${canEdit ? '<button class="kadd">＋ Card</button><button class="kaddcol" title="add a column">＋ Column</button>' : ''}</div>
     <div class="kan">${boardCols.map(([k, l]) => col(k, l)).join('')}</div>`;
   // wiring
   el.querySelectorAll('.face').forEach(f => f.onclick = () => { TB.person = f.dataset.p; renderTaskBoard(); });
-  const rb = el.querySelector('.tbrefresh');
-  if (rb) rb.onclick = () => { TB.rows = null; renderTaskBoard(); };
   const ka = el.querySelector('.kadd');
   if (ka) ka.onclick = () => {
-    const c = el.querySelector('.kcompose');
-    c.hidden = !c.hidden;
-    if (!c.hidden) { serialDatalist(); c.querySelector('.kc-text').focus(); }
-  };
-  const go = el.querySelector('.kc-go');
-  if (go) go.onclick = async () => {
-    const text = el.querySelector('.kc-text').value.trim();
-    if (!text) return;
-    go.disabled = true;
-    const minOrd = Math.min(0, ...mine.map(ordVal).filter(isFinite));
-    const j = await tbSend({op: 'add', owner: TB.person, text,
-      serial: el.querySelector('.kc-serial').value.trim(),
-      due: el.querySelector('.kc-due').value, order: minOrd - 1});
-    go.disabled = false;
-    if (j) { TB.rows = null; renderTaskBoard(); }
+    serialDatalist();
+    const first = TB.person.split(/\s+/)[0];
+    const ov2 = modalShell('composemodal', `
+      <span class="x">✕</span>
+      <h3>＋ New card — ${esc(first)}'s board</h3>
+      <input class="kc-text" maxlength="200" placeholder="what needs doing?">
+      <div class="cm-grid">
+        <div><label>Due (optional)</label><input class="kc-due" type="date"></div>
+        <div><label>Piano serial (optional)</label><input class="kc-serial" maxlength="20" list="serialList"></div>
+      </div>
+      <button class="ccfmyes kc-go" style="width:100%;margin-top:12px">Add to ${esc(first)}'s To&nbsp;Do</button>`);
+    const txtIn = ov2.querySelector('.kc-text');
+    const go = async () => {
+      const text = txtIn.value.trim();
+      if (!text) { txtIn.focus(); return; }
+      const gb = ov2.querySelector('.kc-go');
+      gb.disabled = true;
+      const minOrd = Math.min(0, ...mine.map(ordVal).filter(isFinite));
+      const j = await tbSend({op: 'add', owner: TB.person, text,
+        serial: ov2.querySelector('.kc-serial').value.trim(),
+        due: ov2.querySelector('.kc-due').value, order: minOrd - 1});
+      gb.disabled = false;
+      if (j) { ov2.hidden = true; TB.rows = null; renderTaskBoard(); }
+    };
+    ov2.querySelector('.kc-go').onclick = go;
+    txtIn.onkeydown = ev2 => { if (ev2.key === 'Enter') go(); };
+    txtIn.focus();
   };
 
   el.querySelectorAll('.kreassign').forEach(b => b.onclick = () => {
@@ -9193,10 +9242,20 @@ function openReassignModal(c) {
     } else msg.textContent = '';
   };
 }
+/* 🕓 how old a card is — from its Created stamp; done/archived cards skip it */
+function tbAgeChip(c) {
+  const t = Date.parse(c.created || '');
+  if (!t || c.col === 'done' || c.col === 'archived') return '';
+  const days = Math.floor((Date.now() - t) / 86400000);
+  if (days < 2) return '';
+  const d = new Date(t);
+  return `<span class="chip c-age" title="added ${d.toLocaleDateString()}">🕓 ${days}d old</span>`;
+}
 function openCardModal(c, canEdit) {
+  const added = Date.parse(c.created || '');
   const ov = modalShell('cardmodal', `
     <span class="x">✕</span>
-    <h3>🗒 Card</h3>
+    <h3>🗒 Card${added ? ` <small class="cm-added">added ${new Date(added).toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'})}</small>` : ''}</h3>
     <textarea class="cm-text" maxlength="200" rows="2" ${canEdit ? '' : 'readonly'}>${esc(c.text)}</textarea>
     <div class="cm-grid">
       <div><label>Due</label><input type="date" class="cm-due" value="${esc(c.due || '')}" ${canEdit ? '' : 'disabled'}></div>

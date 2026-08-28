@@ -1,0 +1,159 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Photo Guide — 3 concepts</title>
+<style>
+  body { margin:0; font:14px/1.45 -apple-system, Helvetica, Arial, sans-serif; background:#20242a; color:#e8ebee; padding:26px; }
+  h1 { font:800 21px Georgia, serif; letter-spacing:2px; margin:0 0 4px; }
+  .sub { color:#9aa3ac; margin-bottom:22px; font-size:13px; }
+  .wrap { display:flex; gap:30px; align-items:flex-start; flex-wrap:wrap; }
+  .concept { width:390px; }
+  .cname { font-weight:800; font-size:15px; margin:0 0 2px; color:#fff; }
+  .cdesc { font-size:12px; color:#9aa3ac; margin:0 0 12px; min-height:52px; }
+  .phone { width:380px; height:730px; background:#f4f5f6; border-radius:26px; border:6px solid #0d0d0d;
+           overflow:hidden; position:relative; box-shadow:0 18px 50px rgba(0,0,0,.5); color:#1d2126; }
+  .hdr { background:#0d0d0d; color:#fff; padding:12px 14px; display:flex; align-items:center; gap:8px; }
+  .hdr b { font-family:Georgia, serif; letter-spacing:2px; font-size:13px; }
+  .hdr span { margin-left:auto; font-size:16px; letter-spacing:4px; }
+  .red { color:#9e2020; } .badge { background:#9e2020; color:#fff; border-radius:10px; font-size:10px; font-weight:800; padding:2px 8px; }
+  .sq { width:46px; height:46px; border-radius:8px; background:#e6e9ec; border:1.5px solid #c9ced4; flex:none;
+        display:flex; align-items:center; justify-content:center; font-size:22px; }
+  .done .sq { background:#e7f3e7; border-color:#3c7a3c; }
+  .check { position:absolute; right:-4px; top:-6px; background:#3c7a3c; color:#fff; border-radius:50%;
+           width:17px; height:17px; font-size:11px; display:flex; align-items:center; justify-content:center; }
+  /* ---------- concept A: checklist sheet ---------- */
+  .card { background:#fff; margin:12px; border:1px solid #d8dce1; border-radius:12px; overflow:hidden; box-shadow:0 3px 10px rgba(0,0,0,.08); }
+  .sechead { background:#9e2020; color:#fff; font-weight:800; font-size:11.5px; letter-spacing:1px; padding:7px 12px; display:flex; }
+  .sechead span { margin-left:auto; font-weight:600; opacity:.9; }
+  .shot { display:flex; gap:10px; padding:8px 12px; border-top:1px solid #eef0f2; align-items:center; position:relative; }
+  .shot small { display:block; color:#7a828a; font-size:10.5px; line-height:1.3; }
+  .shot b { font-size:12.5px; }
+  .snap { margin-left:auto; flex:none; background:#0d0d0d; color:#fff; border-radius:8px; padding:7px 10px; font-size:11px; font-weight:700; }
+  .progress { padding:10px 14px; display:flex; align-items:center; gap:10px; }
+  .bar { flex:1; height:9px; border-radius:5px; background:#e3e6ea; overflow:hidden; }
+  .bar i { display:block; height:100%; width:46%; background:#9e2020; }
+  .ptxt { font-weight:800; font-size:12px; }
+  /* ---------- concept B: wizard ---------- */
+  .wiz { padding:0 16px; text-align:center; }
+  .wizstep { font-weight:800; letter-spacing:2px; color:#9e2020; font-size:11px; margin:14px 0 4px; }
+  .wiztitle { font-weight:800; font-size:17px; margin:0 0 8px; }
+  .frame { width:250px; height:250px; margin:6px auto; border:2.5px dashed #9e2020; border-radius:12px; background:#fff;
+           display:flex; align-items:center; justify-content:center; font-size:88px; position:relative; }
+  .frame .ghost { position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+                  font-size:88px; opacity:.22; }
+  .frame .lbl { position:absolute; bottom:6px; left:0; right:0; font-size:10px; color:#7a828a; }
+  .wizdesc { font-size:12px; color:#4a5259; margin:8px 14px; line-height:1.45; }
+  .beforethumb { display:flex; gap:8px; align-items:center; justify-content:center; margin:8px 0; font-size:11px; color:#7a828a; }
+  .beforethumb .tsq { width:58px; height:58px; border-radius:8px; background:#ddd; border:2px solid #c9a227;
+                      display:flex; align-items:center; justify-content:center; font-size:26px; }
+  .bigsnap { background:#9e2020; color:#fff; font-weight:800; border-radius:12px; padding:13px 0; margin:10px 30px;
+             font-size:15px; letter-spacing:1px; box-shadow:0 4px 12px rgba(158,32,32,.35); }
+  .wiznav { display:flex; justify-content:space-between; padding:4px 30px; font-size:12.5px; color:#7a828a; font-weight:700; }
+  .dots { display:flex; gap:4px; justify-content:center; margin-top:8px; }
+  .dots i { width:7px; height:7px; border-radius:50%; background:#cfd4d9; }
+  .dots i.on { background:#9e2020; } .dots i.ok { background:#3c7a3c; }
+  /* ---------- concept C: printable + strip ---------- */
+  .mediarow { padding:10px 12px; border-top:1px solid #eef0f2; }
+  .mediarow h5 { margin:0 0 6px; font-size:11px; letter-spacing:1px; color:#9e2020; }
+  .strip { display:flex; gap:5px; flex-wrap:wrap; }
+  .cell { width:36px; height:36px; border-radius:7px; border:1.5px solid #c9ced4; background:#eceef1; font-size:16px;
+          display:flex; align-items:center; justify-content:center; position:relative; }
+  .cell.ok { background:#e7f3e7; border-color:#3c7a3c; }
+  .cell.ok::after { content:'✓'; position:absolute; right:-3px; top:-6px; background:#3c7a3c; color:#fff;
+                    border-radius:50%; width:14px; height:14px; font-size:9px; display:flex; align-items:center; justify-content:center; }
+  .sheet { background:#fff; margin:12px; border:1px solid #d8dce1; border-radius:6px; padding:12px 14px; font-size:10px; }
+  .sheet h3 { font:800 13px Georgia, serif; letter-spacing:2px; margin:0; border-bottom:2.5px solid #0d0d0d; padding-bottom:5px; }
+  .sheet .cols { display:flex; gap:12px; margin-top:8px; }
+  .sheet ul { margin:4px 0 0; padding-left:15px; }
+  .sheet li { margin-bottom:3px; line-height:1.3; }
+  .sheet h6 { margin:6px 0 0; font-size:10px; color:#9e2020; letter-spacing:.5px; }
+  .printbtn { background:#0d0d0d; color:#fff; border-radius:8px; text-align:center; font-weight:700;
+              font-size:12px; padding:9px; margin:0 12px 12px; }
+</style></head><body>
+<h1>BEFORE / AFTER PHOTO GUIDE — 3 WAYS</h1>
+<div class="sub">All three read the same shot list (13 squares · upright vs grand · AFTER must match BEFORE)</div>
+<div class="wrap">
+
+<!-- ================= CONCEPT A ================= -->
+<div class="concept">
+  <p class="cname">A · Shot Checklist in the piano card</p>
+  <p class="cdesc">Tapping 📷 “Before photos” on a piano's data card opens this checklist sheet. Each row = one required shot with its own 📷 button; rows tick green as photos land in the Tech folder. Progress bar shows 6/13. Lightest lift — lives where the team already works.</p>
+  <div class="phone">
+    <div class="hdr"><b>BRIGHAM LARSON PIANOS</b><span>🔢 🚚 💡 ☰</span></div>
+    <div class="card">
+      <div class="sechead">📷 BEFORE PHOTOS — 1917 STEINWAY B · 189150 <span>✕</span></div>
+      <div class="progress"><div class="ptxt red">6 / 13</div><div class="bar"><i></i></div><div class="ptxt">GRAND</div></div>
+      <div class="shot done"><div class="sq">🎹<div class="check">✓</div></div><div><b>1 · Main image, straight</b><small>Slightly angled front, keys showing, lid reflection if possible</small></div></div>
+      <div class="shot done"><div class="sq">◀️<div class="check">✓</div></div><div><b>2 · Full piano — left side</b><small>Entire piano from side angle</small></div></div>
+      <div class="shot done"><div class="sq">▶️<div class="check">✓</div></div><div><b>3 · Full piano — right side</b><small>Entire piano from side angle</small></div></div>
+      <div class="shot"><div class="sq">🎼</div><div><b>4 · Music desk, plate &amp; pins</b><small>Close-up exterior</small></div><div class="snap">📷 take</div></div>
+      <div class="shot"><div class="sq">🦶</div><div><b>5 · Lyre &amp; pedals</b><small>Close-up exterior</small></div><div class="snap">📷 take</div></div>
+      <div class="shot"><div class="sq">🔨</div><div><b>9 · Hammer line</b><small>Interior</small></div><div class="snap">📷 take</div></div>
+      <div class="shot"><div class="sq">🪵</div><div><b>10 · Wood corner, plate, pins, dampers</b><small>Interior</small></div><div class="snap">📷 take</div></div>
+      <div class="shot" style="border-top:2px solid #e3e6ea;color:#9aa3ac"><div style="font-size:11px">…6 more shots · scroll · ☑ Mark BEFORE set done writes col Q</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= CONCEPT B ================= -->
+<div class="concept">
+  <p class="cname">B · Shot-by-shot camera wizard</p>
+  <p class="cdesc">Full-screen step-through: one shot at a time with a framing sketch, tap the big red button, auto-advance. The killer feature: when shooting AFTERS, the matching BEFORE photo shows as a ghost overlay + thumbnail so angles match exactly like the guide demands.</p>
+  <div class="phone">
+    <div class="hdr"><b>BRIGHAM LARSON PIANOS</b><span class="badge">AFTER · 189150</span></div>
+    <div class="wiz">
+      <div class="wizstep">SHOT 4 OF 13 · EXTERIOR CLOSE-UP</div>
+      <div class="wiztitle">Music desk, plate &amp; pins</div>
+      <div class="frame"><div class="ghost">🎼</div>📷<div class="lbl">BEFORE shown as ghost — line it up, then shoot</div></div>
+      <div class="beforethumb"><div class="tsq">🎼</div>← the BEFORE shot you're matching<br>square · same angle</div>
+      <div class="bigsnap">📷 &nbsp;TAKE THIS SHOT</div>
+      <div class="wiznav"><span>‹ back</span><span>skip ›</span></div>
+      <div class="dots"><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="on"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= CONCEPT C ================= -->
+<div class="concept">
+  <p class="cname">C · Printable shot card + mini tracker</p>
+  <p class="cdesc">A printable one-pager (like the shop tag) with the full upright & grand shot lists — pin it by the photo corner or clip it to the piano. In the app, the data card's media section gains a 13-cell strip showing exactly which shots exist. No new camera flow.</p>
+  <div class="phone">
+    <div class="hdr"><b>BRIGHAM LARSON PIANOS</b><span>🔢 🚚 💡 ☰</span></div>
+    <div class="card">
+      <div class="sechead">📷 MEDIA — 1917 STEINWAY B · 189150</div>
+      <div class="mediarow"><h5>BEFORE SET · 6/13</h5>
+        <div class="strip">
+          <div class="cell ok">🎹</div><div class="cell ok">◀️</div><div class="cell ok">▶️</div><div class="cell">🎼</div>
+          <div class="cell ok">🦶</div><div class="cell">🦵</div><div class="cell">🪞</div><div class="cell ok">🔨</div>
+          <div class="cell">🪵</div><div class="cell ok">🎻</div><div class="cell">⬇️</div><div class="cell">🔩</div><div class="cell">🛠</div>
+        </div></div>
+      <div class="mediarow"><h5>AFTER SET · 0/13 — match the befores!</h5>
+        <div class="strip"><div class="cell">🎹</div><div class="cell">◀️</div><div class="cell">▶️</div><div class="cell">🎼</div><div class="cell">🦶</div></div></div>
+      <div class="printbtn">🖨 Print the Shot Card (upright + grand)</div>
+    </div>
+    <div class="sheet">
+      <h3>PHOTO SHOT CARD · SQUARE FORMAT</h3>
+      <div class="cols">
+        <div><h6>UPRIGHT — 13 SHOTS</h6><ul>
+          <li><b>1</b> Main straight front, keys showing</li>
+          <li><b>2-3</b> Entire piano, each side</li>
+          <li><b>4</b> Music desk / panel detail</li>
+          <li><b>5</b> Music desk, plate &amp; pins</li>
+          <li><b>6</b> Corner arm, cheek block, keyslip</li>
+          <li><b>7</b> Decal, keys, hardware, pedals</li>
+          <li><b>8</b> Toe block, caster, kneeboard</li>
+          <li><b>9-13</b> Interior: trapwork · plate corner · hammer line · action · top-down inside</li>
+        </ul></div>
+        <div><h6>GRAND — 13 SHOTS</h6><ul>
+          <li><b>1</b> Plate reflection on lid (dream) or open-lid front</li>
+          <li><b>2-3</b> Entire piano, each side</li>
+          <li><b>4</b> Music desk, plate &amp; pins</li>
+          <li><b>5</b> Corner arm, cheek block, keys</li>
+          <li><b>6</b> Keyslip, felt, hardware, decal</li>
+          <li><b>7</b> Lyre &amp; pedals</li>
+          <li><b>8</b> Leg &amp; caster</li>
+          <li><b>9-13</b> Interior: plate corner · hammer line · bass strings · pins top-down · full plate angled</li>
+        </ul></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div></body></html>
