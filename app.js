@@ -9128,25 +9128,52 @@ function renderTaskBoard() {
     if (p) { switchView('map'); focusPiano(p); openPop(p.row, S.popAnchor, true); }
   });
   // pointer-based drag & drop (mouse AND touch): drag cards between
-  // columns and up/down within a column to prioritize (Brigham 8/28)
+  // columns and up/down within a column to prioritize (Brigham 8/28).
+  // On touch the card body needs a 350ms LONG-PRESS before it lifts —
+  // a moving thumb scrolls the column instead of grabbing the card
+  // (Brigham 8/28); the ⠿ handle still drags instantly.
   if (canEdit) el.querySelectorAll('.kcard').forEach(card => {
     card.addEventListener('pointerdown', ev => {
       if (ev.target.closest('button, .chip')) return;
       const id = card.dataset.id;
       const startX = ev.clientX, startY = ev.clientY;
-      let dragging = false, ghost = null, ph = null;
+      const isTouch = ev.pointerType !== 'mouse';
+      const onHandle = !!ev.target.closest('.kgrab');
+      let dragging = false, ghost = null, ph = null, holdT = null;
+      let armed = !isTouch || onHandle;   // touch on the card body must hold first
+      const lift = (x, y) => {
+        dragging = true;
+        document.body.classList.add('kdragging');
+        ghost = card.cloneNode(true);
+        ghost.className = 'kcard kghost';
+        ghost.style.width = card.offsetWidth + 'px';
+        document.body.appendChild(ghost);
+        ghost.style.left = (x - ghost.offsetWidth / 2) + 'px';
+        ghost.style.top = (y - 18) + 'px';
+        ph = document.createElement('div');
+        ph.className = 'kplace';
+        card.style.opacity = '.35';
+        if (navigator.vibrate) try { navigator.vibrate(15); } catch (e2) {}
+      };
+      // once lifted, keep the finger from scrolling the page mid-drag
+      const blockScroll = e => { if (dragging) e.preventDefault(); };
+      if (isTouch) addEventListener('touchmove', blockScroll, {passive: false});
+      if (isTouch && !onHandle) holdT = setTimeout(() => { armed = true; lift(startX, startY); }, 350);
       const move = e => {
         if (!dragging) {
+          if (!armed) {
+            // finger travelled before the hold finished — it's a scroll
+            if (Math.hypot(e.clientX - startX, e.clientY - startY) > 10) {
+              clearTimeout(holdT);
+              removeEventListener('pointermove', move);
+              removeEventListener('pointerup', up);
+              removeEventListener('pointercancel', up);
+              removeEventListener('touchmove', blockScroll);
+            }
+            return;
+          }
           if (Math.hypot(e.clientX - startX, e.clientY - startY) < 8) return;
-          dragging = true;
-          document.body.classList.add('kdragging');
-          ghost = card.cloneNode(true);
-          ghost.className = 'kcard kghost';
-          ghost.style.width = card.offsetWidth + 'px';
-          document.body.appendChild(ghost);
-          ph = document.createElement('div');
-          ph.className = 'kplace';
-          card.style.opacity = '.35';
+          lift(e.clientX, e.clientY);
         }
         e.preventDefault();
         ghost.style.left = (e.clientX - ghost.offsetWidth / 2) + 'px';
@@ -9165,9 +9192,11 @@ function renderTaskBoard() {
         else colEl.appendChild(ph);
       };
       const up = async e => {
+        clearTimeout(holdT);
         removeEventListener('pointermove', move);
         removeEventListener('pointerup', up);
         removeEventListener('pointercancel', up);
+        removeEventListener('touchmove', blockScroll);
         document.body.classList.remove('kdragging');
         el.querySelectorAll('.kcol').forEach(c2 => c2.classList.remove('kover'));
         if (!dragging) return;

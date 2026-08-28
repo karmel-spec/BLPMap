@@ -1373,7 +1373,7 @@ tr.adjediting td{background:#fdf8ee}
 .kgrab{font-size:10.5px;color:#9aa3ac;cursor:grab;user-select:none}
 .kdragging, .kdragging *{cursor:grabbing !important}
 .kdragging .kan{touch-action:none}
-.kcard{touch-action:manipulation}
+.kcard{touch-action:manipulation;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 /* the ⠿ handle is the guaranteed touch-drag zone (cards stay scrollable) */
 .kgrab{touch-action:none;cursor:grab;padding:2px 6px;margin-left:-6px}
 
