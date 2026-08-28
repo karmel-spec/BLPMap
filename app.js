@@ -1869,28 +1869,32 @@ function benchTagInner(d) {
   </div>`;
 }
 const BENCH_TAG_CSS = `
-  .btag { width: 3.5in; height: 5.5in; background: #fff; border: 2.5px solid #0d0d0d;
-          border-radius: 10px; display: flex; flex-direction: column; overflow: hidden;
-          font: 10pt/1.4 Helvetica, Arial, sans-serif; color: #1a1a1a; }
-  .bt-head { padding: 0.62in 16px 10px; text-align: center; border-bottom: 2.5px solid #0d0d0d; }
-  .bt-logo { width: 100%; max-width: 190px; display: block; margin: 0 auto; }
-  .bt-kind { font: 800 13px/1 Helvetica; letter-spacing: 5px; color: #9e2020; margin-top: 9px; }
-  .bt-sn { background: #0d0d0d; color: #fff; text-align: center; padding: 9px 0;
-           font: 800 21px/1 Helvetica; letter-spacing: 2px; }
-  .bt-sn small { display: block; font: 700 8px/1 Helvetica; letter-spacing: 2.5px;
-                 opacity: .65; margin-bottom: 4px; }
-  .bt-piano { padding: 12px 16px 10px; text-align: center; border-bottom: 1px dashed #c9c3b8; }
-  .bt-piano b { display: block; font-size: 16px; line-height: 1.25; }
-  .bt-piano span { font-size: 11.5px; color: #6b645c; }
-  .bt-mid { display: flex; align-items: center; gap: 12px; padding: 13px 16px; flex: 1; }
-  .bt-rows { flex: 1; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
-  .bt-kv { display: flex; gap: 7px; font-size: 11.5px; line-height: 1.45; }
-  .bt-kv .k { color: #8a8178; text-transform: uppercase; letter-spacing: .6px; font-size: 9px;
-              font-weight: 700; min-width: 52px; padding-top: 2px; }
+  .btag { width: 3.5in; height: 4.25in; background: #fff; border: 2.5px solid #0d0d0d;
+          border-radius: 9px; display: flex; flex-direction: column; overflow: hidden;
+          font: 10pt/1.35 Helvetica, Arial, sans-serif; color: #1a1a1a; }
+  /* top strip stays clear for tape — just enough, not a whole inch */
+  .bt-head { padding: 0.34in 14px 8px; text-align: center; border-bottom: 2.5px solid #0d0d0d; }
+  .bt-logo { width: 100%; max-width: 165px; display: block; margin: 0 auto; }
+  .bt-kind { font: 800 11px/1 Helvetica; letter-spacing: 4.5px; color: #9e2020; margin-top: 7px; }
+  .bt-sn { background: #0d0d0d; color: #fff; text-align: center; padding: 7px 0;
+           font: 800 20px/1 Helvetica; letter-spacing: 2px; }
+  .bt-sn small { display: block; font: 700 7.5px/1 Helvetica; letter-spacing: 2.5px;
+                 opacity: .65; margin-bottom: 3px; }
+  .bt-piano { padding: 8px 14px 7px; text-align: center; border-bottom: 1px dashed #c9c3b8; }
+  .bt-piano b { display: block; font-size: 15px; line-height: 1.2; }
+  .bt-piano span { font-size: 11px; color: #6b645c; }
+  .bt-mid { display: flex; align-items: center; gap: 11px; padding: 9px 14px; }
+  .bt-rows { flex: 1; display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+  .bt-kv { display: flex; gap: 6px; font-size: 11.5px; line-height: 1.35; }
+  .bt-kv .k { color: #8a8178; text-transform: uppercase; letter-spacing: .6px; font-size: 8.5px;
+              font-weight: 700; min-width: 48px; padding-top: 2px; }
   .bt-kv .v { font-weight: 600; flex: 1; word-break: break-word; }
-  .bt-qr { width: 1.05in; height: 1.05in; flex: none; }
-  .bt-note { margin: 0 16px 14px; background: #fdf6e3; border: 1px solid #e8d9a8;
-             border-radius: 6px; padding: 7px 9px; font-size: 11px; line-height: 1.4; color: #5c4d1e; }`;
+  .bt-qr { width: 1.02in; height: 1.02in; flex: none; }
+  .bt-note { margin: 0 14px 10px; background: #fdf6e3; border: 1px solid #e8d9a8;
+             border-radius: 6px; padding: 6px 9px; font-size: 10.5px; line-height: 1.35;
+             color: #5c4d1e; }
+  /* no note? close the tag up instead of leaving a gap */
+  .bt-mid:last-child { padding-bottom: 13px; }`;
 function printBenchTag(p) {
   const d = benchTagFields(p);
   const w = window.open('', '_blank');
