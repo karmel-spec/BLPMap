@@ -1322,3 +1322,13 @@ tr.adjediting td{background:#fdf8ee}
   font-size:11px;cursor:pointer}
 .kmove .kdel{margin-left:auto;color:#9e2020}
 .kempty{color:#9aa3ac;text-align:center;padding:12px 0;font-size:12px}
+
+/* native admin dashboard */
+.admreq{background:#fff;border:1px solid #dfe3e8;border-radius:9px;padding:10px 13px;margin:8px 0}
+.admreqtop{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.admreqtop small{color:#8a929a;font-size:10.5px}
+.admreqtop select{margin-left:auto;padding:4px 8px;border:1.5px solid #c9ced4;border-radius:7px;font-size:11.5px}
+.admreqtext{font-size:13px;line-height:1.5;margin-top:5px}
+.admreqmeta{font-size:11px;color:#8a929a;margin-top:4px}
+.brigdone{margin-left:auto;border:1.5px solid #2e7d4f;background:#fff;color:#2e7d4f;border-radius:7px;
+  padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer}

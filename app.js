@@ -9048,19 +9048,205 @@ const ADMDASH_TABS = [
   ['requests', '💡 App Requests'], ['brigham', '🗒 Brigham Tasks'],
   ['curtis', '🎨 Curtis'], ['qc', '✅ QC'], ['client', '📬 Client Reports'],
 ];
-const ADMDASH = {tab: 'requests'};
+/* Native admin dashboard (Brigham 8/28): no Shop App frames, no second
+ * sign-in — every tab reads/writes the same sheets directly. The Shop App
+ * is being sunset one page at a time. */
+const ADMDASH = {tab: 'requests', req: null, brig: null, curtis: null, busy: false};
+const REQ_STATES = ['Requested', 'In progress', 'Live', 'Tested', 'Declined'];
+async function admFetchRequests() {
+  try {
+    const r = await fetch(BRIDGE_URL + '?fn=requests', {redirect: 'follow'});
+    ADMDASH.req = (await r.json()).requests || [];
+  } catch (e) { ADMDASH.req = ADMDASH.req || []; }
+  renderAdmDash();
+}
+function admRequestsHTML() {
+  if (!ADMDASH.req) { admFetchRequests(); return '<div class="empty">Loading app requests…</div>'; }
+  const open = ADMDASH.req.filter(r => !['Tested', 'Declined'].includes(r.status));
+  const closed = ADMDASH.req.filter(r => ['Tested', 'Declined'].includes(r.status));
+  const row = r => `<div class="admreq">
+      <div class="admreqtop"><b>${esc(r.who)}</b>
+        <span class="chip ${r.type === 'bug' ? 'c-due' : r.type === 'idea' ? 'c-from' : 'c-piano'}">${esc(r.type || 'edit')}</span>
+        <small>${esc(String(r.date).slice(0, 10))} · ${esc(r.id)}</small>
+        <select class="reqst" data-id="${esc(r.id)}">
+          ${REQ_STATES.map(st => `<option ${r.status === st ? 'selected' : ''}>${st}</option>`).join('')}
+        </select></div>
+      <div class="admreqtext">${esc(r.text)}</div>
+      <div class="admreqmeta">${r.context ? esc(r.context) + ' · ' : ''}${r.screenshot
+        ? `<a href="${esc(r.screenshot)}" target="_blank" rel="noopener">📎 screenshot ↗</a>` : ''}</div>
+    </div>`;
+  return `<h4 class="tmsec">Open <span class="pc">${open.length}</span></h4>${open.map(row).join('')
+    || '<div class="empty">Nothing open. 🎉</div>'}
+    <details style="margin-top:14px"><summary style="cursor:pointer;color:#8a929a">Completed / declined (${closed.length})</summary>
+      ${closed.slice(0, 40).map(row).join('')}</details>`;
+}
+async function admFetchBrigham() {
+  try {
+    const r = await fetch('https://blpsalesapp.netlify.app/.netlify/functions/brigham-tasks?key='
+      + encodeURIComponent('pianoman'));
+    ADMDASH.brig = (await r.json()).rows || [];
+  } catch (e) { ADMDASH.brig = ADMDASH.brig || []; }
+  renderAdmDash();
+}
+function admBrighamHTML() {
+  if (!ADMDASH.brig) { admFetchBrigham(); return '<div class="empty">Loading Brigham\u2019s tasks…</div>'; }
+  // rows: [When, Piano, Note, From, Priority, Status, Done date]; row 1 = headers
+  const rows = ADMDASH.brig.slice(1).map((v, i) => ({row: i + 2, when: v[0], piano: v[1],
+    note: v[2], from: v[3], pri: v[4], status: v[5], done: v[6]}));
+  const open = rows.filter(r => !/done|complete/i.test(String(r.status || '')));
+  const doneRows = rows.filter(r => /done|complete/i.test(String(r.status || '')));
+  const line = r => `<div class="admreq">
+      <div class="admreqtop"><b>${esc(String(r.piano || '').slice(0, 34) || '(general)')}</b>
+        ${r.pri ? `<span class="chip c-due">${esc(r.pri)}</span>` : ''}
+        <small>${esc(String(r.when).slice(0, 10))}${r.from ? ' · from ' + esc(r.from) : ''}</small>
+        <button class="brigdone" data-row="${r.row}">✓ Done</button></div>
+      <div class="admreqtext">${esc(r.note || '')}</div></div>`;
+  return `<div class="movebox notebox">
+      <input class="brig-note" maxlength="200" placeholder="new task for Brigham…">
+      <input class="brig-piano" maxlength="30" placeholder="piano (optional)" list="serialList" style="max-width:150px">
+      <button class="mvgo brig-add">Add</button>
+    </div><div class="brigmsg phmsg"></div>
+    <h4 class="tmsec">Open <span class="pc">${open.length}</span></h4>${open.map(line).join('')
+    || '<div class="empty">Brigham\u2019s list is clear. 🎉</div>'}
+    <details style="margin-top:14px"><summary style="cursor:pointer;color:#8a929a">Done (${doneRows.length})</summary>
+      ${doneRows.slice(-30).reverse().map(line).join('')}</details>`;
+}
+async function admFetchCurtis() {
+  try {
+    const r = await fetch('https://blpsalesapp.netlify.app/.netlify/functions/curtis-orders?key='
+      + encodeURIComponent('pianoman'));
+    ADMDASH.curtis = (await r.json()).tabs || {};
+  } catch (e) { ADMDASH.curtis = ADMDASH.curtis || {}; }
+  renderAdmDash();
+}
+function admCurtisHTML() {
+  if (!ADMDASH.curtis) { admFetchCurtis(); return '<div class="empty">Loading Curtis\u2019s orders…</div>'; }
+  const tabs = Object.entries(ADMDASH.curtis);
+  if (!tabs.length) return '<div class="empty">No order tabs found.</div>';
+  return tabs.map(([name, rows]) => {
+    if (!rows || rows.length < 2) return '';
+    return `<h4 class="tmsec">${esc(name)} <span class="pc">${rows.length - 1}</span></h4>
+      <div class="tmscroll"><table class="tmtable">
+        <tr>${rows[0].map(h => `<th>${esc(String(h || ''))}</th>`).join('')}</tr>
+        ${rows.slice(1).map(r => `<tr>${rows[0].map((_, i) =>
+          `<td>${esc(String(r[i] || ''))}</td>`).join('')}</tr>`).join('')}
+      </table></div>`;
+  }).join('') + `<p class="pd">Add or edit orders with the 🎨 Curtis Harper button in the 📨 Request menu —
+    every request lands on this sheet.</p>`;
+}
+function admQcHTML() {
+  return `<p class="pd">QC lives on each piano now: open a piano\u2019s card → 📁 Paperwork holds the
+      scanned QC checklists, and the phase checklist gates QC &amp; Assembly. Look a piano up:</p>
+    <div class="movebox notebox"><input class="qcfind" maxlength="30" list="serialList"
+      placeholder="serial — opens the piano\u2019s card"><button class="mvgo qcgo">Open</button></div>
+    <div class="qcmsg phmsg"></div>
+    <p class="pd"><a href="https://docs.google.com/document/d/1f7AU5PtX1bP4-b48MHMSn1nzpN5FbMmTd1Yh0kaBcVY/edit"
+      target="_blank" rel="noopener">📄 The QC checklist document ↗</a></p>
+    ${(() => {
+      const inQC = S.data.pianos.filter(p => p.active && (p.phase || '') === 'QC & Assembly');
+      return `<h4 class="tmsec">In QC &amp; Assembly right now <span class="pc">${inQC.length}</span></h4>
+        <div class="tmgrid">${inQC.map(p => `<div class="tmtile mrowqc" data-row="${p.row}" style="cursor:pointer">
+          <b>${esc(((p.year ? p.year + ' ' : '') + [p.make, p.model].filter(Boolean).join(' ')).slice(0, 30))}</b>
+          <small>#${esc(p.serial)} · spot ${esc(String(p.location || '—'))}</small></div>`).join('')
+          || '<div class="empty">None in QC right now.</div>'}</div>`;
+    })()}`;
+}
+function admClientHTML() {
+  const optIn = S.data.pianos.filter(p => p.active && (p.clientReports || '').trim().toLowerCase() === 'yes');
+  const unasked = S.data.pianos.filter(p => p.active && p.serial && inShopwork(p)
+    && !['yes', 'no'].includes((p.clientReports || '').trim().toLowerCase()));
+  return `<p class="pd">Client-report pianos (opt-in on each card\u2019s 🔐 Admin section). Open a piano to
+      draft/send from its 🤝 Client Reports History.</p>
+    <h4 class="tmsec">Opted in <span class="pc">${optIn.length}</span></h4>
+    <div class="tmgrid">${optIn.map(p => `<div class="tmtile mrowqc" data-row="${p.row}" style="cursor:pointer">
+      <b>${esc(((p.year ? p.year + ' ' : '') + [p.make, p.model].filter(Boolean).join(' ')).slice(0, 30))}</b>
+      <small>#${esc(p.serial)} · ${esc(p.phase || '—')} · ${esc(ownerNameOf(p) || '')}</small></div>`).join('')
+      || '<div class="empty">No pianos opted in yet.</div>'}</div>
+    <details style="margin-top:14px"><summary style="cursor:pointer;color:#8a929a">Shop pianos not yet asked (${unasked.length})</summary>
+      <div class="tmgrid" style="margin-top:8px">${unasked.slice(0, 30).map(p => `<div class="tmtile mrowqc" data-row="${p.row}" style="cursor:pointer">
+        <b>${esc(((p.year ? p.year + ' ' : '') + [p.make, p.model].filter(Boolean).join(' ')).slice(0, 30))}</b>
+        <small>#${esc(p.serial)}</small></div>`).join('')}</div></details>`;
+}
 function renderAdmDash() {
   const el = $('#admdashBody');
   if (!el) return;
   if (!isTeamAdmin()) { el.innerHTML = '<div class="empty">Admin, managers &amp; owners only.</div>'; return; }
+  const body = ADMDASH.tab === 'requests' ? admRequestsHTML()
+    : ADMDASH.tab === 'brigham' ? admBrighamHTML()
+    : ADMDASH.tab === 'curtis' ? admCurtisHTML()
+    : ADMDASH.tab === 'qc' ? admQcHTML() : admClientHTML();
   el.innerHTML = `<div class="teamtabs">${ADMDASH_TABS.map(([id, label]) =>
-      `<button data-at="${id}" class="${ADMDASH.tab === id ? 'on' : ''}">${label}</button>`).join('')}</div>
-    <div id="admdashFrame">${shopFrameHTML(ADMDASH.tab)}</div>`;
+      `<button data-at="${id}" class="${ADMDASH.tab === id ? 'on' : ''}">${label}</button>`).join('')}
+      <button class="teamrefresh admrefresh">🔄</button></div>
+    <div id="admdashPane">${body}</div>`;
   el.querySelectorAll('[data-at]').forEach(b => b.onclick = () => {
-    ADMDASH.tab = b.dataset.at;
-    el.querySelectorAll('[data-at]').forEach(x => x.classList.toggle('on', x.dataset.at === ADMDASH.tab));
-    $('#admdashFrame').innerHTML = shopFrameHTML(ADMDASH.tab);
+    ADMDASH.tab = b.dataset.at; renderAdmDash();
   });
+  el.querySelector('.admrefresh').onclick = () => {
+    ADMDASH.req = ADMDASH.brig = ADMDASH.curtis = null; renderAdmDash();
+  };
+  // requests: status dropdown writes through the bridge (Google-verified)
+  el.querySelectorAll('.reqst').forEach(sel => sel.onchange = async () => {
+    const wa = writeAuth();
+    if (!wa.ok) { alert('Sign in with Google first.'); return; }
+    sel.disabled = true;
+    try {
+      const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+        headers: {'content-type': 'text/plain;charset=utf-8'},
+        body: JSON.stringify({pin: wa.pin, action: 'requeststatus', id: sel.dataset.id,
+          status: sel.value, ...authFields()})});
+      const j = await r.json();
+      if (!j.ok) throw new Error(j.error || 'failed');
+      const req = ADMDASH.req.find(x => x.id === sel.dataset.id);
+      if (req) req.status = sel.value;
+      renderAdmDash();
+    } catch (e) { alert('✗ ' + e.message); sel.disabled = false; }
+  });
+  // brigham tasks: add + mark done via the salesapp2 function
+  const bAdd = el.querySelector('.brig-add');
+  if (bAdd) bAdd.onclick = async () => {
+    const note = el.querySelector('.brig-note').value.trim();
+    if (!note) return;
+    bAdd.disabled = true;
+    const msg = el.querySelector('.brigmsg');
+    msg.textContent = 'adding…';
+    try {
+      const u = authUser();
+      const r = await fetch('https://blpsalesapp.netlify.app/.netlify/functions/brigham-tasks', {
+        method: 'POST', headers: {'content-type': 'application/json'},
+        body: JSON.stringify({key: 'pianoman', add: {piano: el.querySelector('.brig-piano').value.trim(),
+          note, from: (u && u.name) || 'Store Map'}})});
+      const j = await r.json();
+      if (j.error) throw new Error(j.error);
+      ADMDASH.brig = null; renderAdmDash();
+    } catch (e) { msg.textContent = '✗ ' + e.message; bAdd.disabled = false; }
+  };
+  el.querySelectorAll('.brigdone').forEach(b => b.onclick = async () => {
+    b.disabled = true;
+    try {
+      const r = await fetch('https://blpsalesapp.netlify.app/.netlify/functions/brigham-tasks', {
+        method: 'POST', headers: {'content-type': 'application/json'},
+        body: JSON.stringify({key: 'pianoman', update: {row: +b.dataset.row, status: 'Done'}})});
+      const j = await r.json();
+      if (j.error) throw new Error(j.error);
+      ADMDASH.brig = null; renderAdmDash();
+    } catch (e) { alert('✗ ' + e.message); b.disabled = false; }
+  });
+  // qc + client tiles open the piano's card
+  el.querySelectorAll('.mrowqc').forEach(t => t.onclick = () => {
+    const p = S.data.pianos.find(x => x.row === +t.dataset.row);
+    if (p) { switchView('map'); focusPiano(p); openPop(p.row, S.popAnchor, true); }
+  });
+  const qgo = el.querySelector('.qcgo');
+  if (qgo) qgo.onclick = () => {
+    const q = el.querySelector('.qcfind').value.trim().toLowerCase();
+    const p = S.data.pianos.find(x => x.active && (x.serial || '').toLowerCase() === q)
+      || S.data.pianos.find(x => x.active && matches(x, q));
+    const msg = el.querySelector('.qcmsg');
+    if (!p) { msg.textContent = 'no match'; return; }
+    switchView('map'); focusPiano(p); openPop(p.row, S.popAnchor, true);
+  };
+  if (ADMDASH.tab === 'brigham' || ADMDASH.tab === 'qc') serialDatalist();
 }
 
 /* ---------- views / nav / drawers ---------- */
