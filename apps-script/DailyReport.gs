@@ -140,6 +140,14 @@ function doGet(e) {
       return json_(lateClockNudge(doSend ? null : {dry: true}));
     } catch (err) { return json_({error: String(err)}); }
   }
+  // Friday-report chaser: dry-run preview by default; &send=1 (key-gated)
+  // texts the stragglers now instead of waiting for the next sweep
+  if (e && e.parameter && e.parameter.fn === 'fridaysweep') {
+    try {
+      var fSend = e.parameter.send === '1' && e.parameter.key === TEAM_PIN;
+      return json_(fridaySweepRun_(fSend));
+    } catch (err) { return json_({error: String(err)}); }
+  }
   // PHOTO LOG rows for one piano — feeds the 13-shot photo wizard (which
   // shots exist, and the Before file ids for After-mode ghost matching)
   if (e && e.parameter && e.parameter.fn === 'shots') {
@@ -4857,13 +4865,14 @@ function reinstallAllTriggers() {
  *    6AM report, ~6:30PM briefs, Monday 8AM digest, 6PM late-clock nudge.
  *  mode=nudgeonly — just the digest + nudge, leave report/briefs alone. */
 function fixTriggers_(mode) {
-  if (mode !== 'ensureall' && mode !== 'nudgeonly') return {error: 'mode?'};
+  if (mode !== 'ensureall' && mode !== 'nudgeonly' && mode !== 'fridayonly') return {error: 'mode?'};
   var mine = ScriptApp.getProjectTriggers();
   var removed = [];
   mine.forEach(function (t) {
     var h = t.getHandlerFunction();
     var kill = mode === 'ensureall'
-      ? ['sendDailyReport', 'sendShopManagerReport', 'mondayAdminDigest', 'lateClockNudge'].indexOf(h) >= 0
+      ? ['sendDailyReport', 'sendShopManagerReport', 'mondayAdminDigest', 'lateClockNudge', 'fridaySweep'].indexOf(h) >= 0
+      : mode === 'fridayonly' ? h === 'fridaySweep'
       : ['mondayAdminDigest', 'lateClockNudge'].indexOf(h) >= 0;
     if (kill) { ScriptApp.deleteTrigger(t); removed.push(h); }
   });
@@ -4873,10 +4882,19 @@ function fixTriggers_(mode) {
     ScriptApp.newTrigger('sendShopManagerReport').timeBased()
       .everyDays(1).atHour(18).nearMinute(30).inTimezone('America/Denver').create();
   }
-  ScriptApp.newTrigger('mondayAdminDigest').timeBased()
-    .onWeekDay(ScriptApp.WeekDay.MONDAY).atHour(8).inTimezone('America/Denver').create();
-  ScriptApp.newTrigger('lateClockNudge').timeBased()
-    .everyDays(1).atHour(18).inTimezone('America/Denver').create();
+  if (mode !== 'fridayonly') {
+    ScriptApp.newTrigger('mondayAdminDigest').timeBased()
+      .onWeekDay(ScriptApp.WeekDay.MONDAY).atHour(8).inTimezone('America/Denver').create();
+    ScriptApp.newTrigger('lateClockNudge').timeBased()
+      .everyDays(1).atHour(18).inTimezone('America/Denver').create();
+  }
+  // Friday-report chaser — 2pm/4pm/6pm Mountain, Fridays (self-gated too)
+  if (mode === 'ensureall' || mode === 'fridayonly') {
+    [14, 16, 18].forEach(function (h2) {
+      ScriptApp.newTrigger('fridaySweep').timeBased()
+        .onWeekDay(ScriptApp.WeekDay.FRIDAY).atHour(h2).inTimezone('America/Denver').create();
+    });
+  }
   var now = ScriptApp.getProjectTriggers().map(function (t) { return t.getHandlerFunction(); });
   return {ok: true, mode: mode, removed: removed, triggers: now};
 }
@@ -4903,6 +4921,85 @@ function moverFirsts_() {
     }
   } catch (e) {}
   return out;
+}
+/* ---------- Friday-report chaser (Brigham 8/28) ----------
+ * Fridays at 2pm, 4pm and 6pm Mountain: text every tech whose column for
+ * today on the year tab is still blank (Brigham + Karmel get one summary
+ * text per sweep), and text Brigham + Karmel once when everyone is in.
+ * Courtney and Victoria no longer work at BLP — never chased. */
+var FRIDAY_EXCLUDE = ['courtney', 'victoria'];
+var FRIDAY_COPY = ['Brigham', 'Karmel'];
+function fridayReportStatus_() {
+  var ss = SpreadsheetApp.openById('11RoeVRETag5rZYX6_tEH-rf6x8JL0JeZU0P5AT0WI-I');
+  var year = Utilities.formatDate(new Date(), 'America/Denver', 'yyyy');
+  var sh = null, tabs = ss.getSheets();
+  for (var i = 0; i < tabs.length; i++) {
+    if (tabs[i].getName().indexOf(year) >= 0) { sh = tabs[i]; break; }
+  }
+  if (!sh) return {error: 'no ' + year + ' tab'};
+  var vals = sh.getDataRange().getValues();
+  var today = Utilities.formatDate(new Date(), 'America/Denver', 'M/d/yy');
+  var col = -1;
+  for (var c = 1; c < vals[0].length; c++) {
+    var h = vals[0][c];
+    var hs = (h instanceof Date) ? Utilities.formatDate(h, 'America/Denver', 'M/d/yy')
+      : String(h || '').trim();
+    if (hs === today) { col = c; break; }
+  }
+  if (col < 0) return {error: 'no column headed ' + today + ' — not a report day'};
+  var missing = [], done = [];
+  for (var r = 1; r < vals.length; r++) {
+    var n = String(vals[r][0] || '').trim();
+    if (!n || FRIDAY_EXCLUDE.indexOf(n.toLowerCase()) >= 0) continue;
+    (String(vals[r][col] || '').trim() ? done : missing).push(n);
+  }
+  return {ok: true, missing: missing, done: done,
+    dateKey: Utilities.formatDate(new Date(), 'America/Denver', 'yyyy-MM-dd')};
+}
+function fridaySweep() {
+  var now = new Date();
+  if (Utilities.formatDate(now, 'America/Denver', 'u') !== '5') return;   // Fridays only
+  var hr = parseInt(Utilities.formatDate(now, 'America/Denver', 'H'), 10);
+  if ([14, 16, 18].indexOf(hr) < 0) return;   // 2pm / 4pm / 6pm sweeps
+  fridaySweepRun_(true);
+}
+function fridaySweepRun_(send) {
+  var st = fridayReportStatus_();
+  if (!st.ok) return st;
+  var now = new Date();
+  var log = SpreadsheetApp.openById('11RoeVRETag5rZYX6_tEH-rf6x8JL0JeZU0P5AT0WI-I')
+    .getSheetByName('Reminder Log');
+  // what already went out today (idempotency across sweeps + retries)
+  var sentAllIn = false, hourKey = 'friday-h' + Utilities.formatDate(now, 'America/Denver', 'H');
+  var hourDone = false;
+  var lv = log.getDataRange().getValues();
+  for (var i = 1; i < lv.length; i++) {
+    var d = String(lv[i][1]).slice(0, 10);
+    if (d !== st.dateKey) continue;
+    if (String(lv[i][2]) === 'friday-allin') sentAllIn = true;
+    if (String(lv[i][2]) === hourKey) hourDone = true;
+  }
+  if (!send) return {ok: true, dryrun: true, missing: st.missing, done: st.done,
+    wouldText: st.missing.length ? st.missing.concat(FRIDAY_COPY) : (sentAllIn ? [] : FRIDAY_COPY)};
+  if (st.missing.length) {
+    if (hourDone) return {ok: true, skipped: 'this hour already swept', missing: st.missing};
+    st.missing.forEach(function (tech) {
+      notifyTeam_([tech], '📝 BLP: your Friday report isn’t in yet — please add it '
+        + 'before the end of the day. ' + APP_URL + ' → My Dashboard → Friday Report');
+      log.appendRow([now.toISOString(), st.dateKey, 'friday-report', tech, '']);
+    });
+    notifyTeam_(FRIDAY_COPY, '📝 Friday report chaser — still missing: '
+      + st.missing.join(', ') + ' (' + st.done.length + ' in). Reminder texts just went out.');
+    log.appendRow([now.toISOString(), st.dateKey, hourKey, st.missing.join(', '), '']);
+    return {ok: true, texted: st.missing, copied: FRIDAY_COPY};
+  }
+  if (!sentAllIn) {
+    notifyTeam_(FRIDAY_COPY, '🎉 All Friday reports are in — ' + st.done.length
+      + ' of ' + st.done.length + '. Nothing left to chase.');
+    log.appendRow([now.toISOString(), st.dateKey, 'friday-allin', 'ALL', '']);
+    return {ok: true, allIn: true};
+  }
+  return {ok: true, allIn: true, alreadyAnnounced: true};
 }
 function lateClockNudge(e) {
   var dry = e && e.dry;
