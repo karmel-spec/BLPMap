@@ -9001,7 +9001,7 @@ function renderTaskBoard() {
       <input class="kc-due" type="date" title="due (optional)">
       <button class="kc-go">Add to ${esc(TB.person.split(/\s+/)[0])}'s To&nbsp;Do</button>
     </div>` : ''}
-    <div class="kan" style="grid-template-columns:repeat(${boardCols.length},1fr)">${boardCols.map(([k, l]) => col(k, l)).join('')}</div>`;
+    <div class="kan">${boardCols.map(([k, l]) => col(k, l)).join('')}</div>`;
   // wiring
   el.querySelectorAll('.face').forEach(f => f.onclick = () => { TB.person = f.dataset.p; renderTaskBoard(); });
   const rb = el.querySelector('.tbrefresh');
@@ -9039,19 +9039,30 @@ function renderTaskBoard() {
     const j = await tbSend({op: 'setcols', owner: TB.person, cols});
     if (j) { TB.cols[tbNorm(TB.person)] = cols; renderTaskBoard(); }
   };
+  // prompt() is suppressed in the installed-app context — use a real modal
+  const colNameModal = (title, initial, onGo) => {
+    const ov = modalShell('colnamemodal', `
+      <span class="x">✕</span>
+      <h3>${title}</h3>
+      <input class="cnm-in" maxlength="24" placeholder="column name" value="${esc(initial || '')}">
+      <button class="ccfmyes cnm-go" style="width:100%;margin-top:10px">Save</button>`);
+    const inp = ov.querySelector('.cnm-in');
+    const go = () => { const v = inp.value.trim(); if (!v) return; ov.hidden = true; onGo(v.slice(0, 24)); };
+    ov.querySelector('.cnm-go').onclick = go;
+    inp.onkeydown = ev2 => { if (ev2.key === 'Enter') go(); };
+    inp.focus(); inp.select();
+  };
   const kac = el.querySelector('.kaddcol');
   if (kac) kac.onclick = () => {
-    if (boardCols.length >= 6) { alert('Six columns is the limit — archive or merge first.'); return; }
-    const label = prompt('Name for the new column:');
-    if (!label || !label.trim()) return;
-    saveCols([...boardCols, ['c' + Date.now().toString(36), label.trim().slice(0, 24)]]);
+    if (boardCols.length >= 20) { alert('Twenty columns is plenty — archive or merge first.'); return; }
+    colNameModal('＋ New column', '', label =>
+      saveCols([...boardCols, ['c' + Date.now().toString(36), label]]));
   };
   el.querySelectorAll('.kcolren').forEach(b => b.onclick = ev2 => {
     ev2.stopPropagation();
     const cur = boardCols.find(c => c[0] === b.dataset.k);
-    const label = prompt('Rename this column:', cur ? cur[1] : '');
-    if (!label || !label.trim()) return;
-    saveCols(boardCols.map(c => c[0] === b.dataset.k ? [c[0], label.trim().slice(0, 24)] : c));
+    colNameModal('✎ Rename column', cur ? cur[1] : '', label =>
+      saveCols(boardCols.map(c => c[0] === b.dataset.k ? [c[0], label] : c)));
   });
   const stog = el.querySelector('.ksnoozetog');
   if (stog) stog.onclick = () => { TB.showSnoozed = !TB.showSnoozed; renderTaskBoard(); };

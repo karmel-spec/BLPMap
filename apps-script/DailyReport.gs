@@ -4642,7 +4642,7 @@ function setBoardCols_(req) {
   var owner = String(req.owner || '').trim();
   if (!owner) return {error: 'owner required'};
   var cols = req.cols;
-  if (!cols || !cols.length || cols.length > 8) return {error: 'bad columns'};
+  if (!cols || !cols.length || cols.length > 30) return {error: 'bad columns'};
   var sh = boardColsSheet_();
   var last = sh.getLastRow();
   var row = -1;
