@@ -422,16 +422,16 @@ function decalsRow(p) {
         ? have.map(n => `${n === 'Installed' ? '✅' : n === 'In Stock' ? '📥' : n === 'Received' ? '📬' : '📦'} ${n}${ms[n] === '✓' ? '' : ' ' + esc(ms[n])}`).join(' · ')
         : '<i class="mna">— not tracked —</i>'}</span>
       <select class="decalsel">
-        <option value="" selected>mark…</option>
-        ${DECAL_MARKS.map(n => `<option value="${n}">${ms[n] ? '✕ un-mark ' : ''}${n}</option>`).join('')}
-        ${have.length ? '<option value="__clear__">clear all marks</option>' : ''}
+        <option value="" selected>set…</option>
+        ${DECAL_MARKS.map(n => `<option value="${n}">${ms[n] ? '✕ clear ' : ''}${n}</option>`).join('')}
+        ${have.length ? '<option value="__clear__">clear all</option>' : ''}
       </select>
     </div><div class="bassmsg bassmsg-decals phmsg"></div>`;
 }
 function orderChipsRow(p, key, label) {
   const ms = orderMarks(p, key);
   const chip = (k, ico) => ms[k.toLowerCase()]
-    ? `<button class="bassbtn on" data-task="${key}" data-k="${k}" title="tap to un-mark">${ico} ${k} ${esc(ms[k.toLowerCase()])} ✕</button>`
+    ? `<button class="bassbtn on" data-task="${key}" data-k="${k}" title="tap to clear">${ico} ${k} ${esc(ms[k.toLowerCase()])} ✕</button>`
     : `<button class="bassbtn" data-task="${key}" data-k="${k}">${ico} Mark ${k.toLowerCase()}</button>`;
   return `<div class="row phrow bassrow">${label}
       <span class="bassbtns">${chip('Ordered', '📦')}${chip('Received', '📬')}</span>
@@ -4313,6 +4313,22 @@ async function setMedia(p, field, pop, skip) {
       if (wrap) wrap.outerHTML = skip ? '<b class="mskip">— skipped</b>' : '<b class="myes">✓ have</b>';
       msg.className = 'mdmsg ok';
       msg.textContent = skip ? '✓ Skipped — removed from the media reports' : '✓ Saved to the Piano Log';
+      // before photos done ⇒ tick "Before Photos" on the admin checklist too
+      // (Brigham 8/27) — one action, both records honest
+      if (field === 'bphoto' && !skip && !adminStepsOf(p).includes('Before Photos')) {
+        try {
+          const steps = ADMIN_STEPS.filter(s =>
+            adminStepsOf(p).includes(s) || s === 'Before Photos').join(' | ');
+          const ra = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+            headers: {'content-type': 'text/plain;charset=utf-8'},
+            body: JSON.stringify({pin, serial: p.serial, action: 'setadminsteps',
+              steps, row: p.row, ...authFields()})});
+          if ((await ra.json()).ok) {
+            p.adminSteps = steps;
+            msg.textContent = '✓ Saved — and ticked “Before Photos” on the admin checklist';
+          }
+        } catch (e2) { /* the media save already succeeded; don't undo it */ }
+      }
     } else {
       throw new Error(j.error === 'unauthorized' ? 'Wrong PIN' : (j.error || 'update failed'));
     }
@@ -8498,19 +8514,32 @@ function teamBoardHTML() {
     const mins = done.reduce((s, t) => s + (t.minutes || 0), 0);
     return {on: false, mins};
   };
-  const whereFor = full => TEAM.where[full] || TEAM.where[firstOf(full)] ||
-    TEAM.where[Object.keys(TEAM.where).find(k => firstOf(k) === firstOf(full)) || ''] || '';
+  // whereis: {st: off|part|field, why, until} keyed by lowercase first name —
+  // tile priority mirrors the Shop App: 🎹 piano → 🕔 day-only → 🏖/🚗/🌗
+  // away → and only then a genuine "not clocked in" (Brigham's V71 notes)
+  // nicknames: the schedule/punches use these, the roster uses full names
+  const ALIAS = {guadalupe: 'lupita'};
+  const whereFor = full => {
+    const f = firstOf(full);
+    const w = TEAM.where[f] || TEAM.where[full.toLowerCase()] || TEAM.where[ALIAS[f]] || null;
+    return w && typeof w === 'object' ? w : (w ? {st: 'off', why: String(w)} : null);
+  };
   const tile = m => {
-    const o = openFor(m.full), pw = payFor(m.full), wh = whereFor(m.full);
+    const o = openFor(m.full), pw = payFor(m.full);
+    const w = (!o && !pw.on) ? whereFor(m.full) : null;
+    const away = w ? (w.st === 'off' ? '🏖 ' + esc(w.why || 'day off')
+      : w.st === 'field' ? '🚗 field — ' + esc(w.why || 'appointment') + (w.until ? ' · until ' + esc(w.until) : '')
+      : '🌗 ' + esc(w.why || 'partial day')) : '';
     const mins = o ? Math.max(0, Math.round((Date.now() - new Date(o.start)) / 60000)) : 0;
     const flag = o && !pw.on ? '<div class="tmflag">⚠ on a piano, no day punch</div>' : '';
-    return `<div class="tmtile ${o ? 'onpiano' : pw.on ? 'onday' : ''}">
+    return `<div class="tmtile ${o ? 'onpiano' : pw.on ? 'onday' : w ? 'away' : ''}">
       <b>${esc(m.full)}</b><small>${esc(m.pos)}</small>
+      ${w ? `<div class="tmaway">${away}</div>` : `
       <div>🎹 ${o ? esc((o.piano || o.serial || '').slice(0, 26)) + ' · ' + esc(o.phase || '') +
         ' · ' + Math.floor(mins / 60) + ':' + String(mins % 60).padStart(2, '0') : '—'}</div>
       <div>🕔 ${pw.on ? 'in since ' + teamClockFmt(pw.start)
-        : pw.mins ? 'done · ' + (pw.mins / 60).toFixed(1) + 'h today' : 'not clocked in'}</div>
-      ${wh ? `<div class="tmwhere">${esc(String(wh).slice(0, 44))}</div>` : ''}${flag}
+        : pw.mins ? 'done · ' + (pw.mins / 60).toFixed(1) + 'h today' : 'not clocked in'}</div>`}
+      ${flag}
     </div>`;
   };
   return Object.entries(groups).filter(([, l]) => l.length).map(([g, l]) =>

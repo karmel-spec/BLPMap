@@ -1257,3 +1257,7 @@ tr.adjediting td{background:#fdf8ee}
 .mvchkgo{width:100%}
 .mvchkgo:disabled{opacity:.5;cursor:default}
 .mvchkx{cursor:pointer;font-size:18px;color:#9aa2ab}
+
+/* away tiles on the Team shop board — dashed blue-gray, not guilt-gray */
+.tmtile.away{border:1.5px dashed #7d93a8;background:#f4f7fa;color:#5b6b7a}
+.tmaway{font-weight:700;color:#4a617a;margin-top:2px}
