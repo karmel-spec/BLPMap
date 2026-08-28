@@ -9192,22 +9192,54 @@ function renderTaskBoard() {
       <h3>＋ New card — ${esc(first)}'s board</h3>
       <input class="kc-text" maxlength="2000" placeholder="what needs doing?">
       <div class="cm-grid">
+        <div><label>Column</label><select class="kc-col">
+          ${boardCols.map(([k2, l2], i2) => `<option value="${esc(k2)}" ${i2 === 0 ? 'selected' : ''}>${esc(l2)}</option>`).join('')}
+        </select></div>
         <div><label>Due (optional)</label><input class="kc-due" type="date"></div>
         <div><label>Piano serial (optional)</label><input class="kc-serial" maxlength="20" list="serialList"></div>
       </div>
-      <button class="ccfmyes kc-go" style="width:100%;margin-top:12px">Add to ${esc(first)}'s To&nbsp;Do</button>`);
+      <div class="rfbar" style="margin-top:8px">
+        <label class="csvbtn" style="cursor:pointer">📸 Add a photo / screenshot
+          <input type="file" accept="image/*" class="kc-file" hidden></label>
+        <span class="kc-pmsg phmsg">optional</span></div>
+      <button class="ccfmyes kc-go" style="width:100%;margin-top:12px">Add card</button>`);
     const txtIn = ov2.querySelector('.kc-text');
+    let photoFile = null;
+    ov2.querySelector('.kc-file').onchange = ev2 => {
+      photoFile = ev2.target.files && ev2.target.files[0];
+      const pm = ov2.querySelector('.kc-pmsg');
+      pm.textContent = photoFile ? '✓ ' + (photoFile.name || 'photo attached') : 'optional';
+    };
     const go = async () => {
       const text = txtIn.value.trim();
       if (!text) { txtIn.focus(); return; }
       const gb = ov2.querySelector('.kc-go');
-      gb.disabled = true;
+      gb.disabled = true; gb.textContent = 'Adding…';
       const minOrd = Math.min(0, ...mine.map(ordVal).filter(isFinite));
+      const col2 = ov2.querySelector('.kc-col').value;
       const j = await tbSend({op: 'add', owner: TB.person, text,
         serial: ov2.querySelector('.kc-serial').value.trim(),
         due: ov2.querySelector('.kc-due').value, order: minOrd - 1});
-      gb.disabled = false;
-      if (j) { ov2.hidden = true; TB.rows = null; renderTaskBoard(); }
+      if (!j) { gb.disabled = false; gb.textContent = 'Add card'; return; }
+      // cards are born in the first column — move if another was picked
+      if (j.id && col2 && col2 !== boardCols[0][0]) {
+        await tbSend({op: 'move', id: j.id, col: col2, order: minOrd - 1});
+      }
+      // photo chosen at creation: blob-store it, note the link on the card
+      if (j.id && photoFile) {
+        gb.textContent = 'Uploading photo…';
+        try {
+          const dataUrl = await downscalePhoto(photoFile, 1600, 0.82);
+          const r2 = await fetch('https://blpsalesapp.netlify.app/.netlify/functions/request-shot', {
+            method: 'POST', headers: {'content-type': 'application/json'},
+            body: JSON.stringify({key: 'pianoman', id: 'card-' + j.id,
+              photo: dataUrl.split(',')[1], photoType: 'image/jpeg',
+              photoName: 'card-photo.jpg'})});
+          const j2 = await r2.json();
+          if (j2.url) await tbSend({op: 'note', id: j.id, text: '📷 ' + j2.url});
+        } catch (e2) { /* the card is in — photo is best-effort */ }
+      }
+      ov2.hidden = true; TB.rows = null; renderTaskBoard();
     };
     ov2.querySelector('.kc-go').onclick = go;
     txtIn.onkeydown = ev2 => { if (ev2.key === 'Enter') go(); };
@@ -9297,6 +9329,28 @@ function renderTaskBoard() {
       const blockScroll = e => { if (dragging) e.preventDefault(); };
       if (isTouch) addEventListener('touchmove', blockScroll, {passive: false});
       if (isTouch && !onHandle) holdT = setTimeout(() => { armed = true; lift(startX, startY); }, 350);
+      // edge auto-scroll while dragging — on phones only one column fits on
+      // screen, so dragging to the screen edge must scroll the board sideways
+      // to reach the other columns (and columns scroll vertically) — 8/28
+      let scrollRAF = null, lastPt = null;
+      const autoScroll = () => {
+        if (!dragging || !lastPt) { scrollRAF = null; return; }
+        const kan = el.querySelector('.kan');
+        if (kan) {
+          const kr = kan.getBoundingClientRect();
+          const EDGE = 56, SPD = 13;
+          if (lastPt.x < kr.left + EDGE) kan.scrollLeft -= SPD;
+          else if (lastPt.x > kr.right - EDGE) kan.scrollLeft += SPD;
+          const colEl = document.elementsFromPoint(lastPt.x, lastPt.y)
+            .find(n => n.classList && n.classList.contains('kcol'));
+          if (colEl) {
+            const rr = colEl.getBoundingClientRect();
+            if (lastPt.y < rr.top + 70) colEl.scrollTop -= SPD;
+            else if (lastPt.y > rr.bottom - EDGE) colEl.scrollTop += SPD;
+          }
+        }
+        scrollRAF = requestAnimationFrame(autoScroll);
+      };
       const move = e => {
         if (!dragging) {
           if (!armed) {
@@ -9314,6 +9368,8 @@ function renderTaskBoard() {
           lift(e.clientX, e.clientY);
         }
         e.preventDefault();
+        lastPt = {x: e.clientX, y: e.clientY};
+        if (!scrollRAF) scrollRAF = requestAnimationFrame(autoScroll);
         ghost.style.left = (e.clientX - ghost.offsetWidth / 2) + 'px';
         ghost.style.top = (e.clientY - 18) + 'px';
         const colEl = document.elementsFromPoint(e.clientX, e.clientY)
@@ -9331,6 +9387,7 @@ function renderTaskBoard() {
       };
       const up = async e => {
         clearTimeout(holdT);
+        if (scrollRAF) { cancelAnimationFrame(scrollRAF); scrollRAF = null; }
         removeEventListener('pointermove', move);
         removeEventListener('pointerup', up);
         removeEventListener('pointercancel', up);
