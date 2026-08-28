@@ -8874,6 +8874,17 @@ function tbAvColor(name) {
   return TB_AV_COLORS[h % TB_AV_COLORS.length];
 }
 function tbMe() { const u = authUser(); return (u && u.name) || ''; }
+function tbPeople() {
+  const me = tbMe();
+  const owners = [...new Set((TB.rows || []).map(r => r.owner).filter(Boolean))];
+  const set = new Map();
+  [me, ...TB_SEED, ...(TB.faces || []), ...owners].forEach(n => {
+    const k = tbNorm(n);
+    if (!k || TB_EXCLUDE.includes(k)) return;
+    if (!set.has(k)) set.set(k, n);
+  });
+  return [...set.values()].sort((a, b) => a.localeCompare(b));
+}
 async function tbFetch() {
   TB.loading = true;
   try {
@@ -8929,14 +8940,7 @@ function renderTaskBoard() {
   }
   // full-name matching (two Brighams taught us first-name matching lies)
   const sameOwner = (a, b) => tbNorm(a) === tbNorm(b);
-  const owners = [...new Set(TB.rows.map(r => r.owner).filter(Boolean))];
-  const peopleSet = new Map();
-  (isOwner() ? [me, ...TB_SEED, ...(TB.faces || []), ...owners] : [me]).forEach(n => {
-    const k = tbNorm(n);
-    if (!k || TB_EXCLUDE.includes(k)) return;
-    if (!peopleSet.has(k)) peopleSet.set(k, n);
-  });
-  const people = [...peopleSet.values()].sort((a, b) => a.localeCompare(b));
+  const people = isOwner() ? tbPeople() : [me];
   const strip = isOwner() ? `<div class="faces">${people.map(n => {
       const cnt = TB.rows.filter(r => sameOwner(r.owner, n) && r.col !== 'done' && r.col !== 'archived').length;
       const on = sameOwner(n, TB.person);
@@ -8975,6 +8979,7 @@ function renderTaskBoard() {
           ${(c.notes || '').trim() ? `<span class="chip c-notes">🗒 ${String(c.notes).split('\n').filter(Boolean).length}</span>` : ''}
         </div>
         ${canEdit ? `<div class="kmove"><span class="kgrab">⠿ drag</span>
+          <button class="kreassign" data-id="${esc(c.id)}" title="hand this card to someone else's board">↪ Reassign</button>
           <button class="karch" data-id="${esc(c.id)}" title="archive — done and off the board (never deleted)">✔ Done</button>
         </div>` : ''}
       </div>`).join('') || '<div class="kempty">—</div>'}
@@ -9016,6 +9021,10 @@ function renderTaskBoard() {
     if (j) { TB.rows = null; renderTaskBoard(); }
   };
 
+  el.querySelectorAll('.kreassign').forEach(b => b.onclick = () => {
+    const c = TB.rows.find(r => r.id === b.dataset.id);
+    if (c) openReassignModal(c);
+  });
   el.querySelectorAll('.karch').forEach(b => b.onclick = async () => {
     b.disabled = true;
     const j = await tbSend({op: 'archive', id: b.dataset.id});
@@ -9135,6 +9144,38 @@ function tbLinkify(t) {
   return esc(t).replace(/(https?:\/\/[^\s<]+)/g,
     u => `<a href="${u}" target="_blank" rel="noopener">${u.length > 46 ? u.slice(0, 44) + '…' : u}</a>`);
 }
+/* hand a card to another team member's board — the receiver sees a
+ * "from <you>" chip and the trail lands in the card's notes */
+function openReassignModal(c) {
+  const people = tbPeople().filter(n => !sameName(n, c.owner));
+  function sameName(a, b) { return tbNorm(a) === tbNorm(b); }
+  const ov = modalShell('reassignmodal', `
+    <span class="x">✕</span>
+    <h3>↪ Reassign card</h3>
+    <div class="admreqtext" style="margin:4px 0 10px"><b>${esc(c.text)}</b></div>
+    <label>To whose board?</label>
+    <select class="ra-who">${people.map(n =>
+      `<option value="${esc(n)}">${esc(n)}</option>`).join('')}</select>
+    <label>Note <small>(optional — travels with the card)</small></label>
+    <input class="ra-note" maxlength="200" placeholder="why it's theirs / what's needed…">
+    <button class="ccfmyes ra-go" style="width:100%;margin-top:12px">↪ Move it to their board</button>
+    <div class="ra-msg phmsg"></div>`);
+  ov.querySelector('.ra-go').onclick = async () => {
+    const who = ov.querySelector('.ra-who').value;
+    const note = ov.querySelector('.ra-note').value.trim();
+    const msg = ov.querySelector('.ra-msg');
+    msg.textContent = 'moving…';
+    const j = await tbSend({op: 'reassign', id: c.id, owner: who, note});
+    if (j) {
+      c.owner = who; c.col = 'todo'; c.from = tbMe();
+      c.notes = (j.line || '') + '\n' + (c.notes || '');
+      ov.hidden = true;
+      const cm = document.getElementById('cardmodal');
+      if (cm) cm.hidden = true;
+      renderTaskBoard();
+    } else msg.textContent = '';
+  };
+}
 function openCardModal(c, canEdit) {
   const ov = modalShell('cardmodal', `
     <span class="x">✕</span>
@@ -9159,7 +9200,9 @@ function openCardModal(c, canEdit) {
                : `<div class="noterow"><b>${tbLinkify(L)}</b></div>`;
     }).join('') || '<div class="pwnone" style="display:block;padding:4px 0">No notes yet.</div>'}</div>
     <div class="cm-msg phmsg"></div>
-    ${canEdit ? '<button class="cm-del">✔ Done — archive this card</button>' : ''}`);
+    ${canEdit ? `<div class="cm-actions">
+      <button class="cm-reassign">↪ Reassign</button>
+      <button class="cm-del">✔ Done — archive</button></div>` : ''}`);
   const msg = ov.querySelector('.cm-msg');
   const save = async patch => {
     msg.textContent = 'saving…';
@@ -9212,6 +9255,7 @@ function openCardModal(c, canEdit) {
         await addNote('📷 ' + url);
       } catch (e) { msg.textContent = '✗ ' + e.message; }
     };
+    ov.querySelector('.cm-reassign').onclick = () => { ov.hidden = true; openReassignModal(c); };
     ov.querySelector('.cm-del').onclick = async () => {
       const j = await tbSend({op: 'archive', id: c.id});
       if (j) { c.col = 'archived'; ov.hidden = true; renderTaskBoard(); }

@@ -4728,6 +4728,22 @@ function taskCard_(req, who) {
     sh.getRange(row, 12).setValue(String(req.until || '').slice(0, 12));
     return {ok: true};
   }
+  if (op === 'reassign') {
+    var target = String(req.owner || '').trim().slice(0, 40);
+    if (!target) return {error: 'who gets it?'};
+    var prevOwner = String(sh.getRange(row, 2).getValue() || '');
+    sh.getRange(row, 2).setValue(target);          // new owner
+    sh.getRange(row, 3).setValue('todo');          // lands in their To Do
+    sh.getRange(row, 7).setValue(name.slice(0, 30));   // from = who handed it over
+    sh.getRange(row, 10).setValue(-(Date.now() / 1e6));  // top of their board
+    var rnote = '\u21aa reassigned from ' + (prevOwner || 'someone') + ' to ' + target
+      + (req.note ? ' \u2014 ' + String(req.note).trim().slice(0, 200) : '');
+    var stamp = Utilities.formatDate(new Date(), 'America/Denver', 'M/d');
+    var line = stamp + ' ' + (name || 'team') + ': ' + rnote;
+    var prev = String(sh.getRange(row, 11).getValue() || '').trim();
+    sh.getRange(row, 11).setValue(prev ? line + '\n' + prev : line);
+    return {ok: true, line: line};
+  }
   if (op === 'del' || op === 'archive') {
     // NEVER delete (Brigham 8/28) — archive: off every board, kept forever
     sh.getRange(row, 3).setValue('archived');

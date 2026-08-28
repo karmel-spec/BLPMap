@@ -1380,3 +1380,14 @@ tr.adjediting td{background:#fdf8ee}
   padding:2px 10px;font-size:10.5px;font-weight:700;cursor:pointer;margin-left:auto}
 .cm-del{border-color:#2e7d4f !important;color:#2e7d4f !important}
 @media(max-width:760px){.kan{grid-template-columns:1fr !important}}
+
+/* ↪ reassign */
+.kreassign{border:1.5px solid #2c5d96;background:#fff;color:#2c5d96;border-radius:6px;
+  padding:2px 10px;font-size:10.5px;font-weight:700;cursor:pointer;margin-left:auto}
+.kreassign + .karch{margin-left:6px}
+#reassignmodal select, #reassignmodal input{width:100%;box-sizing:border-box;padding:8px 10px;
+  border:1.5px solid #c9ced4;border-radius:8px;font:inherit;font-size:13px;margin:3px 0 8px}
+.cm-actions{display:flex;gap:10px;margin-top:12px}
+.cm-actions button{flex:1}
+.cm-reassign{border:1.5px solid #2c5d96;background:#fff;color:#2c5d96;border-radius:8px;
+  padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer}
