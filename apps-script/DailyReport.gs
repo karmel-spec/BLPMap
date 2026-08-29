@@ -797,7 +797,7 @@ function doPost(e) {
       return json_(pqa);
     }
     if (req.action === 'briefdoc') {
-      try { return json_(briefDocOnly_()); }
+      try { return json_(briefDocOnly_(Number(req.day) || 0)); }   // day: 0=today, 3=Monday from Friday
       catch (e2) { return json_({error: String(e2).slice(0, 300)}); }
     }
     if (req.action === 'sendbrief') {
