@@ -2908,7 +2908,7 @@ function openSuggestBox() {
       </div>
       <textarea class="sgtext" maxlength="1500" placeholder="What's wrong / what would make it better? A sentence or two is plenty."></textarea>
       <div class="sgrow">
-        <label class="sgshot">📷 Attach screenshot<input type="file" accept="image/*" hidden></label>
+        <label class="sgshot">📷 Attach screenshot<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden></label>
         <span class="sgshotname"></span>
         <button class="sgsend">Send it 🚀</button>
       </div>
@@ -2957,7 +2957,7 @@ function openSuggestBox() {
       return;
     }
     const pin = wa.pin;
-    let shotFailed = false;
+    let shotFailed = '';   // '' = fine, otherwise the why + what-to-do text
     msg.className = 'sgmsg'; msg.textContent = shotFile ? 'Uploading screenshot…' : 'Sending…';
     const body = {pin, action: 'suggest', type, text,
       context: 'view:' + (S.view || 'map') + (openSerial ? ' · piano #' + openSerial : ''),
@@ -2970,7 +2970,12 @@ function openSuggestBox() {
         // an undecodable image (HEIC on desktop, corrupt file) must not
         // sink the whole request — file it without the picture instead
         const dataUrl = await downscalePhoto(shotFile, 1600, 0.85).catch(() => null);
-        if (!dataUrl) { shotFailed = true; }
+        if (!dataUrl) {
+          shotFailed = 'this browser can\u2019t read that image format'
+            + (/\.heic$|\.heif$/i.test(shotFile.name || '') || /heic|heif/i.test(shotFile.type || '')
+               ? ' (it\u2019s a HEIC photo from an iPhone)' : '')
+            + ' \u2014 take a screenshot (that saves as PNG) or convert it to JPG/PNG, then attach it to a follow-up suggestion';
+        }
         else {
         const up = await fetch('https://blpsalesapp.netlify.app/.netlify/functions/request-shot', {
           method: 'POST', headers: {'content-type': 'application/json'},
@@ -2982,7 +2987,7 @@ function openSuggestBox() {
             photoName: (shotFile.name || 'screenshot.png').replace(/[^\w.-]+/g, '_').slice(0, 40)})});
         const uj = await up.json().catch(() => ({}));
         if (uj.url) body.screenshotUrl = uj.url;
-        else shotFailed = true;
+        else shotFailed = 'the upload service didn\u2019t accept it (probably a momentary hiccup) \u2014 wait a minute and attach the picture to a follow-up suggestion';
         }
       }
       const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
@@ -2991,7 +2996,7 @@ function openSuggestBox() {
       if (!j.ok) throw new Error(j.error || 'failed');
       msg.className = 'sgmsg ok';
       msg.textContent = '✓ Filed as ' + j.id + (shotFailed
-        ? ' — but the screenshot upload failed, so it went in without the picture.'
+        ? ' — but it went in WITHOUT the picture: ' + shotFailed + '.'
         : ' — thank you! You\u2019ll see it move to Live here when it ships.');
       ov.querySelector('.sgtext').value = ''; clearShot();
       loadMyRequests(ov);
