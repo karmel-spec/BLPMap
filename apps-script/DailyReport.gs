@@ -3595,7 +3595,8 @@ function smTuningQueue_(pianos) {
     var p = pianos[i];
     if ((p.phase || '') !== 'For Sale' || !p.serial) continue;
     var loc = String(p.location || '').trim();
-    if (!loc || /rent|attic|sold|deliver|storage|shop/i.test(loc)) continue;
+    if (!loc || /rent|attic|sold|deliver|storage|shop|where did/i.test(loc)) continue;
+    if (/digital|realpiano|clavinova|keyboard/i.test([p.make, p.model, p.summary, p.type].join(' '))) continue;
     var sn = String(p.serial).toUpperCase();
     var dig = sn.replace(/\D/g, '');
     if (upTitles.indexOf(sn) !== -1 || (dig.length >= 5 && upTitles.indexOf(dig) !== -1)) continue;

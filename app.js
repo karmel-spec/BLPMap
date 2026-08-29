@@ -7567,7 +7567,9 @@ const TQ_DEFS = [
        // "For Sale" on shop-work and restoration-candidate pianos (8/29)
        if ((p.phase || '') !== 'For Sale') return false;
        const loc = (p.location || '').trim();
-       if (!loc || /rent|attic|sold|deliver|storage|shop/i.test(loc)) return false;
+       if (!loc || /rent|attic|sold|deliver|storage|shop|where did/i.test(loc)) return false;
+       // digitals never need tuning
+       if (/digital|realpiano|clavinova|keyboard/i.test([p.make, p.model, p.summary, p.type].join(' '))) return false;
        return !tuningInfo(p).next;
      });
      const rank = p => {
