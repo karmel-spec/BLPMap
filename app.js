@@ -9814,12 +9814,28 @@ function renderSched() {
   if (!isTimelogAdmin()) { el.innerHTML = '<div class="empty">Managers &amp; owners only.</div>'; return; }
   el.innerHTML = `<div class="teamtabs">${SCHED_TABS.map(([id, label]) =>
       `<button data-st="${id}" class="${SCHED.tab === id ? 'on' : ''}">${label}</button>`).join('')}</div>
-    <div id="schedFrame">${shopFrameHTML(SCHED.tab)}</div>`;
+    <div id="schedFrame"></div>`;
   el.querySelectorAll('[data-st]').forEach(b => b.onclick = () => {
     SCHED.tab = b.dataset.st;
     el.querySelectorAll('[data-st]').forEach(x => x.classList.toggle('on', x.dataset.st === SCHED.tab));
-    $('#schedFrame').innerHTML = shopFrameHTML(SCHED.tab);
+    schedPane();
   });
+  schedPane();
+}
+// native panes (Brigham 8/29: Shop App is being sunset — no more iframes).
+// 'schedule' reuses the Team dashboard's native Team Schedules table.
+function schedPane() {
+  const host = $('#schedFrame');
+  if (!host) return;
+  if (SCHED.tab === 'schedule') {
+    if (!TEAM.sched && !TEAM.loading) { teamFetchAll(); }
+    host.innerHTML = `<div class="smgr">${TEAM.sched ? teamScheduleHTML()
+      : '<div class="empty">Loading the team schedule…</div>'}</div>`;
+    if (!TEAM.sched) setTimeout(() => { if (SCHED.tab === 'schedule' && TEAM.sched) schedPane(); }, 2500);
+    return;
+  }
+  if (window.renderSchedNative) renderSchedNative(SCHED.tab, host);
+  else host.innerHTML = '<div class="empty">Still loading the scheduling module — try again in a second.</div>';
 }
 
 /* ---------- 🛡 Admin dashboard (admin + managers + owners) ---------- */
