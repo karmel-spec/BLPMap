@@ -729,9 +729,14 @@ function tuningInfo(p) {
   if (!t || !p.serial || p.serial.length < 5) return {};
   const hit = list => list.filter(r => r[2].includes(p.serial));
   const up = hit(t.upcoming || [])[0];
-  const past = hit(t.past || []).pop();
+  const hist = hit(t.past || []);
   return {next: up ? {date: up[0], time: up[1]} : null,
-          last: past ? past[0] : null};
+          last: hist.length ? hist[hist.length - 1][0] : null,
+          hist};
+}
+// days since an ISO date (for tuning-age chips and the tuning queue)
+function daysSince(iso) {
+  return Math.floor((Date.now() - new Date(iso + 'T12:00')) / 86400000);
 }
 
 // out on rental: accounted for on the map (recital-seating rented zone)
@@ -3724,6 +3729,14 @@ function popHTML(p) {
       </div><div class="snzmsg phmsg"></div>` : ''}` : ''}
     ${p.serial ? `<div class="tagbtns histbtns"><button class="tagbtn rreports">📄 Tech Reports History</button></div>` : ''}`)}
 
+    ${p.serial ? secWrap('tune', '🎵 Tuning', `
+      <div class="row">Last tuned <b>${ti.last ? esc(fmtDayYear(ti.last)) + ' · ' + daysSince(ti.last) + 'd ago' : '— none on record (18-mo calendar scan)'}</b></div>
+      ${ti.next ? `<div class="row">Scheduled <b class="tunesched">🎵 ${esc(fmtDay(ti.next.date))} · ${esc(ti.next.time)}</b></div>`
+                : `<div class="row" style="opacity:.75">Nothing scheduled</div>`}
+      ${(ti.hist || []).length ? `<div class="row" style="margin-top:6px;font-size:12px;opacity:.85">History:</div>
+        <div style="font-size:12px;line-height:1.7">${ti.hist.slice(-8).reverse().map(r =>
+          `<div>${esc(fmtDayYear(r[0]))} — ${esc(r[2])}</div>`).join('')}</div>` : ''}`) : ''}
+
     ${(body => p.serial ? secWrap('media', '📷 Media', body) : body)(`
     ${mediaCard(p)}
     ${photo}`)}
@@ -3732,9 +3745,7 @@ function popHTML(p) {
 
     ${admin}
 
-    <div class="row" style="margin-top:10px">Last tuned <b>${ti.last ? esc(fmtDayYear(ti.last)) : '—'}</b></div>
-    ${ti.next ? `<div class="row">Tuning scheduled <b class="tunesched">🎵 ${esc(fmtDay(ti.next.date))} · ${esc(ti.next.time)}</b></div>` : ''}
-    ${p.serial ? `<button class="tunebtn reqbtn">📨 Request… ▾</button>
+    ${p.serial ? `<button class="tunebtn reqbtn" style="margin-top:10px">📨 Request… ▾</button>
       <div class="reqmenu" hidden>
         <button data-req="move">🚚 Move</button>
         <button data-req="tune">🎵 Tuning</button>
@@ -7515,13 +7526,44 @@ const TQ_DEFS = [
   {key: 'bass', icon: '🎼', title: 'BASS STRINGS TO ORDER',
    need: p => !taskAutoDone(p, 'bass') && ['needed', 'noted'].includes(taskStatus(taskVal(p, 'bass'))),
    note: p => taskVal(p, 'bass')},
+  /* tuning queue: showroom for-sale pianos ranked most-overdue first.
+   * Its own pool (the shared one excludes For Sale). Order:
+   *   1. no tuning on record & been here 6+ months (most overdue)
+   *   2. known last tuning, oldest first
+   *   3. no record but arrived recently (likely prepped on arrival)
+   * Pianos with a tuning already on the calendar drop off. */
+  {key: 'tuning', icon: '🎵', title: 'TUNING QUEUE — KORBAN',
+   pool: () => {
+     const rows = S.data.pianos.filter(p => {
+       if (!p.active || !p.serial) return false;
+       if (!/for sale/i.test(p.status || '')) return false;
+       const loc = (p.location || '').trim();
+       if (!loc || /rent|attic|sold|deliver|storage|shop/i.test(loc)) return false;
+       return !tuningInfo(p).next;
+     });
+     const rank = p => {
+       const ti = tuningInfo(p);
+       if (ti.last) return 100000 - daysSince(ti.last);
+       const ent = (p.entered || '').slice(0, 10);
+       const here = /^\d{4}-/.test(ent) ? daysSince(ent) : 9999;
+       return here >= 180 ? here - 9999 : 200000 - here;
+     };
+     return rows.sort((x, y) => rank(x) - rank(y));
+   },
+   need: () => true,
+   note: p => {
+     const ti = tuningInfo(p);
+     if (ti.last) return 'last tuned ' + fmtDayYear(ti.last) + ' · ' + daysSince(ti.last) + 'd ago';
+     const ent = (p.entered || '').slice(0, 10);
+     return 'no tuning on record' + (/^\d{4}-/.test(ent) ? ' · entered ' + fmtDayYear(ent) : '');
+   }},
 ];
 function taskQueueLists() {
   const pool = S.data.pianos
     .filter(p => p.active && p.serial && (p.queuePos || p.phase)
       && (p.phase || '') !== 'For Sale' && (p.phase || '') !== 'Delivered')
     .sort((a, b) => (a.queuePos || 999) - (b.queuePos || 999) || a.row - b.row);
-  return TQ_DEFS.map(d => ({d, list: pool.filter(d.need)}));
+  return TQ_DEFS.map(d => ({d, list: (d.pool ? d.pool() : pool).filter(d.need)}));
 }
 function taskQueuesTable() {
   const qs = taskQueueLists();

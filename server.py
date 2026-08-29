@@ -391,6 +391,7 @@ def build_payload():
         'pianos': pianos,
         'events': events,
         'crew': crew_today(events),
+        'tunings': tunings,
         'fetchedAt': datetime.now().isoformat(timespec='seconds'),
         'stale': False,
     }
