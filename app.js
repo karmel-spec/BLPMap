@@ -9134,8 +9134,19 @@ function tbPeople() {
 async function tbFetch() {
   TB.loading = true;
   try {
-    const r = await fetch(BRIDGE_URL + '?fn=taskboard', {redirect: 'follow'});
-    const j = await r.json();
+    // fast path (speed step 4): Sheets via Netlify service account,
+    // ~0.5s vs the bridge's 3-6s; bridge stays as the fallback
+    let j = null;
+    try {
+      const rf = await fetch('https://blpsalesapp.netlify.app/.netlify/functions/storemap-taskboard?key='
+        + encodeURIComponent('pianoman'));
+      if (rf.ok) j = await rf.json();
+      if (j && j.error) j = null;
+    } catch (e2) { j = null; }
+    if (!j) {
+      const r = await fetch(BRIDGE_URL + '?fn=taskboard', {redirect: 'follow'});
+      j = await r.json();
+    }
     TB.rows = j.rows || [];
     TB.cols = j.cols || {};
   } catch (e) { TB.rows = TB.rows || []; }
