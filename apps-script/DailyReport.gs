@@ -268,6 +268,9 @@ function tunings_() {
   var tz = 'America/Denver';
   var now = new Date();
   var past = [], upcoming = [], seenCal = 0;
+  var lastBy = {};   // digit-run -> newest past tuning date, over the FULL
+                     // 540-day window (past[] itself is capped at 800 rows,
+                     // which silently hid tunings older than ~10 months)
   for (var c = 0; c < TUNING_CALS.length; c++) {
     var cal = calById_(TUNING_CALS[c]);
     if (!cal) continue;
@@ -281,13 +284,19 @@ function tunings_() {
       var rec = [Utilities.formatDate(st, tz, 'yyyy-MM-dd'),
                  Utilities.formatDate(st, tz, 'HH:mm'),
                  t.slice(0, 70)];
-      (st < now ? past : upcoming).push(rec);
+      if (st < now) {
+        past.push(rec);
+        var runs = t.match(/\d{5,}/g) || [];
+        for (var r2 = 0; r2 < runs.length; r2++) {
+          if (!lastBy[runs[r2]] || rec[0] > lastBy[runs[r2]]) lastBy[runs[r2]] = rec[0];
+        }
+      } else { upcoming.push(rec); }
     }
   }
   if (!seenCal) return {error: 'no tuning calendar shared with ' + 'the bridge account (brigham@)', upcoming: [], past: []};
   var bySt = function (a, b) { return (a[0] + a[1]) < (b[0] + b[1]) ? -1 : 1; };
   past.sort(bySt); upcoming.sort(bySt);
-  var out = {upcoming: upcoming, past: past.slice(-800)};
+  var out = {upcoming: upcoming, past: past.slice(-800), lastBySerial: lastBy};
   try { cache.put('tunings', JSON.stringify(out), 1800); } catch (ig) {}
   return out;
 }

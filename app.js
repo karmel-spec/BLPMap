@@ -737,8 +737,12 @@ function tuningInfo(p) {
   });
   const up = hit(t.upcoming || [])[0];
   const hist = hit(t.past || []);
+  // the raw past[] list is capped at 800 events; lastBySerial covers the
+  // full 540-day window so old tunings still show a date
+  const lb = (t.lastBySerial && dig.length >= 5 && t.lastBySerial[dig]) || null;
+  const lastHist = hist.length ? hist[hist.length - 1][0] : null;
   return {next: up ? {date: up[0], time: up[1]} : null,
-          last: hist.length ? hist[hist.length - 1][0] : null,
+          last: (lastHist && lb) ? (lastHist > lb ? lastHist : lb) : (lastHist || lb),
           hist};
 }
 // days since an ISO date (for tuning-age chips and the tuning queue)
