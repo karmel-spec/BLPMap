@@ -4976,12 +4976,13 @@ function fixTriggers_(mode) {
     ScriptApp.newTrigger('lateClockNudge').timeBased()
       .everyDays(1).atHour(18).inTimezone('America/Denver').create();
   }
-  // Friday-report chaser — 2pm/4pm/6pm Mountain, Fridays (self-gated too)
+  // Friday-report chaser — Friday 6:15pm + Saturday 10am follow-up if any
+  // reports are still missing (Brigham 8/28; self-gated in fridaySweep too)
   if (mode === 'ensureall' || mode === 'fridayonly') {
-    [14, 16, 18].forEach(function (h2) {
-      ScriptApp.newTrigger('fridaySweep').timeBased()
-        .onWeekDay(ScriptApp.WeekDay.FRIDAY).atHour(h2).inTimezone('America/Denver').create();
-    });
+    ScriptApp.newTrigger('fridaySweep').timeBased()
+      .onWeekDay(ScriptApp.WeekDay.FRIDAY).atHour(18).nearMinute(15).inTimezone('America/Denver').create();
+    ScriptApp.newTrigger('fridaySweep').timeBased()
+      .onWeekDay(ScriptApp.WeekDay.SATURDAY).atHour(10).inTimezone('America/Denver').create();
   }
   var now = ScriptApp.getProjectTriggers().map(function (t) { return t.getHandlerFunction(); });
   return {ok: true, mode: mode, removed: removed, triggers: now};
@@ -5017,16 +5018,17 @@ function moverFirsts_() {
  * Courtney and Victoria no longer work at BLP — never chased. */
 var FRIDAY_EXCLUDE = ['courtney', 'victoria'];
 var FRIDAY_COPY = ['Brigham', 'Karmel'];
-function fridayReportStatus_() {
+function fridayReportStatus_(dayOffset) {
+  var when = new Date(Date.now() + (dayOffset || 0) * 86400000);
   var ss = SpreadsheetApp.openById('11RoeVRETag5rZYX6_tEH-rf6x8JL0JeZU0P5AT0WI-I');
-  var year = Utilities.formatDate(new Date(), 'America/Denver', 'yyyy');
+  var year = Utilities.formatDate(when, 'America/Denver', 'yyyy');
   var sh = null, tabs = ss.getSheets();
   for (var i = 0; i < tabs.length; i++) {
     if (tabs[i].getName().indexOf(year) >= 0) { sh = tabs[i]; break; }
   }
   if (!sh) return {error: 'no ' + year + ' tab'};
   var vals = sh.getDataRange().getValues();
-  var today = Utilities.formatDate(new Date(), 'America/Denver', 'M/d/yy');
+  var today = Utilities.formatDate(when, 'America/Denver', 'M/d/yy');
   var col = -1;
   for (var c = 1; c < vals[0].length; c++) {
     var h = vals[0][c];
@@ -5042,17 +5044,23 @@ function fridayReportStatus_() {
     (String(vals[r][col] || '').trim() ? done : missing).push(n);
   }
   return {ok: true, missing: missing, done: done,
-    dateKey: Utilities.formatDate(new Date(), 'America/Denver', 'yyyy-MM-dd')};
+    dateKey: Utilities.formatDate(when, 'America/Denver', 'yyyy-MM-dd')};
 }
 function fridaySweep() {
+  // one nudge Friday 6:15pm, one follow-up Saturday 10am ONLY if reports are
+  // still missing (Brigham 8/28) — Saturday reads Friday's column
   var now = new Date();
-  if (Utilities.formatDate(now, 'America/Denver', 'u') !== '5') return;   // Fridays only
+  var dow = Utilities.formatDate(now, 'America/Denver', 'u');
   var hr = parseInt(Utilities.formatDate(now, 'America/Denver', 'H'), 10);
-  if ([14, 16, 18].indexOf(hr) < 0) return;   // 2pm / 4pm / 6pm sweeps
-  fridaySweepRun_(true);
+  if (dow === '5' && hr === 18) return fridaySweepRun_(true, 0);
+  if (dow === '6' && hr === 10) return fridaySweepRun_(true, -1);
 }
-function fridaySweepRun_(send) {
-  var st = fridayReportStatus_();
+function fridaySweepRun_(send, dayOffset) {
+  if (dayOffset === undefined) {
+    // manual runs: on a Saturday, chase yesterday's (Friday's) column
+    dayOffset = Utilities.formatDate(new Date(), 'America/Denver', 'u') === '6' ? -1 : 0;
+  }
+  var st = fridayReportStatus_(dayOffset);
   if (!st.ok) return st;
   var now = new Date();
   var log = SpreadsheetApp.openById('11RoeVRETag5rZYX6_tEH-rf6x8JL0JeZU0P5AT0WI-I')

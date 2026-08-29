@@ -9583,6 +9583,64 @@ function tbAgeChip(c) {
   const d = new Date(t);
   return `<span class="chip c-age" title="added ${d.toLocaleDateString()}">🕓 ${days}d old</span>`;
 }
+/* 💬 text a card's answer / next steps to teammates (Brigham 8/28) — the
+ * same team-picker as sharing a report by text: tap names, then one sms:
+ * link opens the user's Messages app with everything prefilled. */
+function openCardTextModal(c) {
+  const ov = modalShell('cardtextmodal', `
+    <span class="x">✕</span>
+    <h3>💬 Text about this card</h3>
+    <div class="dssub" style="font-size:12px;margin:4px 0 8px">“${esc(c.text.slice(0, 90))}${c.text.length > 90 ? '…' : ''}”</div>
+    <textarea class="ct-msg" rows="3" maxlength="500" placeholder="the answer / next steps…"></textarea>
+    <div class="shteam" style="margin-top:10px"><b>💬 To</b>
+      <div class="shlist"><i>loading the team list…</i></div></div>`);
+  const list = ov.querySelector('.shlist');
+  const msgIn = ov.querySelector('.ct-msg');
+  const sel = new Set();
+  const body = () => (msgIn.value.trim() ? msgIn.value.trim() + '\n' : '')
+    + '🗒 ' + c.text.slice(0, 80) + (c.text.length > 80 ? '…' : '') + '\n'
+    + APP_URL + '/#card=' + encodeURIComponent(c.id);
+  const paint = () => {
+    if (!phonesCache || !phonesCache.length) {
+      list.innerHTML = '<i>no team phone numbers on file yet (Tech Phones tab)</i>';
+      return;
+    }
+    const all = sel.size === phonesCache.length;
+    const picked = [...sel].map(i => phonesCache[i]);
+    list.innerHTML = `<button class="shper shall ${all ? 'on' : ''}">${all ? '✓ ' : ''}Everyone</button>`
+      + phonesCache.map((t, i) =>
+          `<button class="shper ${sel.has(i) ? 'on' : ''}" data-i="${i}">${sel.has(i) ? '✓ ' : ''}${esc(t.name)}</button>`).join('')
+      + `<div class="shacts">${sel.size
+          ? `<a class="shbtn shgo ct-go" href="#">💬 Text ${sel.size === 1 ? esc(picked[0].name.split(' ')[0]) : sel.size + ' people'}</a>`
+          : '<i>tap who should get it — then one text goes to them all</i>'}</div>`;
+    list.querySelectorAll('.shper').forEach(b => b.onclick = () => {
+      if (b.classList.contains('shall')) {
+        if (all) sel.clear();
+        else phonesCache.forEach((t, i) => sel.add(i));
+      } else {
+        const i = +b.dataset.i;
+        if (sel.has(i)) sel.delete(i); else sel.add(i);
+      }
+      paint();
+    });
+    const go = list.querySelector('.ct-go');
+    if (go) go.onclick = ev2 => {
+      ev2.preventDefault();   // build at tap time so the latest message rides along
+      location.href = 'sms:' + picked.map(t => t.phone).join(',')
+        + '?&body=' + encodeURIComponent(body());
+    };
+  };
+  if (phonesCache) { paint(); msgIn.focus(); return; }
+  const wa = writeAuth();
+  if (!wa.ok) { list.innerHTML = '<i>sign in first to load the team list</i>'; return; }
+  fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+    headers: {'content-type': 'text/plain;charset=utf-8'},
+    body: JSON.stringify({pin: wa.pin, action: 'phones', ...authFields()})})
+    .then(r => r.json())
+    .then(j => { phonesCache = j.phones || []; paint(); })
+    .catch(() => { list.innerHTML = '<i>couldn’t load the team list — try again in a moment</i>'; });
+  msgIn.focus();
+}
 function openCardModal(c, canEdit) {
   const added = Date.parse(c.created || '');
   const ov = modalShell('cardmodal', `
@@ -9613,6 +9671,7 @@ function openCardModal(c, canEdit) {
     <div class="cm-msg phmsg"></div>
     ${canEdit ? `<div class="cm-actions">
       <button class="cm-reassign">↪ Reassign</button>
+      <button class="cm-sms">💬 Text</button>
       <button class="cm-del">✔ Done — archive</button></div>` : ''}`);
   const msg = ov.querySelector('.cm-msg');
   const save = async patch => {
@@ -9710,6 +9769,7 @@ function openCardModal(c, canEdit) {
         await addNote('🎬 ' + j.url);
       } catch (e) { msg.textContent = '✗ ' + e.message; }
     };
+    ov.querySelector('.cm-sms').onclick = () => { ov.hidden = true; openCardTextModal(c); };
     ov.querySelector('.cm-reassign').onclick = () => { ov.hidden = true; openReassignModal(c); };
     ov.querySelector('.cm-del').onclick = async () => {
       const j = await tbSend({op: 'archive', id: c.id});

@@ -1399,6 +1399,10 @@ tr.adjediting td{background:#fdf8ee}
 .c-snooze{background:#f0eafd;color:#5b4a8a}
 .c-age{background:#f5f0e6;color:#8a6d3b}
 .cm-added{font-size:11px;font-weight:600;color:#9aa3ac;margin-left:6px}
+.cm-sms{border:1.5px solid #c9a227;background:#fff;color:#8a6a00;border-radius:8px;
+  padding:9px 14px;font-size:12px;font-weight:700;cursor:pointer}
+#cardtextmodal .ct-msg{width:100%;box-sizing:border-box;padding:9px 11px;border:1.5px solid #c9ced4;
+  border-radius:8px;font:inherit;font-size:13px}
 .c-notes{background:#f2f4f6;color:#5b636b}
 .ksnoozetog{border:1px solid #c9c3e0;background:#f7f5fd;color:#5b4a8a;border-radius:999px;
   padding:3px 10px;font-size:10.5px;font-weight:700;cursor:pointer}
