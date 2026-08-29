@@ -9112,14 +9112,24 @@ async function tbFetch() {
 async function tbSend(body) {
   const wa = writeAuth();
   if (!wa.ok) { alert('Sign in with Google (☰ menu) first — cards are saved under your name.'); return null; }
-  try {
-    const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
-      headers: {'content-type': 'text/plain;charset=utf-8'},
-      body: JSON.stringify({pin: wa.pin, action: 'taskcard', ...body, ...authFields()})});
-    const j = await r.json();
-    if (!j.ok) throw new Error(j.error || 'failed');
-    return j;
-  } catch (e) { alert('✗ ' + e.message); return null; }
+  // the Apps Script bridge occasionally answers with an HTML error page
+  // (over-capacity blip) — retry a couple of times before bothering anyone
+  let lastErr = '';
+  for (let a = 0; a < 3; a++) {
+    try {
+      const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+        headers: {'content-type': 'text/plain;charset=utf-8'},
+        body: JSON.stringify({pin: wa.pin, action: 'taskcard', ...body, ...authFields()})});
+      const txt = await r.text();
+      let j;
+      try { j = JSON.parse(txt); }
+      catch (e2) { lastErr = 'the Google bridge hiccuped'; await new Promise(res => setTimeout(res, 1200 * (a + 1))); continue; }
+      if (!j.ok) { lastErr = j.error || 'failed'; break; }   // real rejection — don't retry
+      return j;
+    } catch (e) { lastErr = e.message; await new Promise(res => setTimeout(res, 1200 * (a + 1))); }
+  }
+  alert('✗ ' + lastErr + ' — give it a second and try again.');
+  return null;
 }
 function tbDueChip(due, col) {
   if (!due) return '';
@@ -9197,7 +9207,8 @@ function renderTaskBoard() {
       <b>${esc(TB.person.split(/\s+/)[0])}'s Board</b>
       <span>${allMine.filter(r => r.col !== 'done' && !isSnoozed(r)).length} open · ${snoozedN} snoozed · ${allMine.length} total</span>
       ${snoozedN ? `<button class="ksnoozetog">💤 ${snoozedN} snoozed${TB.showSnoozed ? ' — hide' : ''}</button>` : ''}
-      ${canEdit ? '<button class="kadd">＋ Card</button><button class="kaddcol" title="add a column">＋ Column</button>' : ''}</div>
+      ${canEdit ? '<button class="kadd">＋ Card</button><button class="kaddcol" title="add a column">＋ Column</button>' : ''}
+      <button class="karchbtn" title="archived cards — search & restore">🗂</button></div>
     <div class="kan">${boardCols.map(([k, l]) => col(k, l)).join('')}</div>`;
   // wiring
   el.querySelectorAll('.face').forEach(f => f.onclick = () => { TB.person = f.dataset.p; renderTaskBoard(); });
@@ -9217,16 +9228,28 @@ function renderTaskBoard() {
         <div><label>Piano serial (optional)</label><input class="kc-serial" maxlength="20" list="serialList"></div>
       </div>
       <div class="rfbar" style="margin-top:8px">
-        <label class="csvbtn" style="cursor:pointer">📸 Add a photo / screenshot
+        <label class="csvbtn" style="cursor:pointer">📸 Photo / screenshot
           <input type="file" accept="image/*" class="kc-file" hidden></label>
+        <label class="csvbtn" style="cursor:pointer">🎬 Video
+          <input type="file" accept="video/*" class="kc-vfile" hidden></label>
         <span class="kc-pmsg phmsg">optional</span></div>
       <button class="ccfmyes kc-go" style="width:100%;margin-top:12px">Add card</button>`);
     const txtIn = ov2.querySelector('.kc-text');
-    let photoFile = null;
-    ov2.querySelector('.kc-file').onchange = ev2 => {
-      photoFile = ev2.target.files && ev2.target.files[0];
-      const pm = ov2.querySelector('.kc-pmsg');
-      pm.textContent = photoFile ? '✓ ' + (photoFile.name || 'photo attached') : 'optional';
+    let photoFile = null, videoFile = null;
+    const pmsg = () => {
+      const parts = [];
+      if (photoFile) parts.push('📸 ' + (photoFile.name || 'photo'));
+      if (videoFile) parts.push('🎬 ' + (videoFile.name || 'video'));
+      ov2.querySelector('.kc-pmsg').textContent = parts.length ? '✓ ' + parts.join(' + ') : 'optional';
+    };
+    ov2.querySelector('.kc-file').onchange = ev2 => { photoFile = ev2.target.files && ev2.target.files[0]; pmsg(); };
+    ov2.querySelector('.kc-vfile').onchange = ev2 => {
+      const f2 = ev2.target.files && ev2.target.files[0];
+      if (f2 && f2.size > 30 * 1024 * 1024) {
+        ov2.querySelector('.kc-pmsg').textContent = '✗ video too big (' + Math.round(f2.size / 1048576) + 'MB) — keep it under 30MB (~30s)';
+        return;
+      }
+      videoFile = f2; pmsg();
     };
     const go = async () => {
       const text = txtIn.value.trim();
@@ -9257,6 +9280,25 @@ function renderTaskBoard() {
           if (j2.url) await tbSend({op: 'note', id: j.id, text: '📷 ' + j2.url});
         } catch (e2) { /* the card is in — photo is best-effort */ }
       }
+      // video chosen at creation → Drive via the bridge, link noted (8/28)
+      if (j.id && videoFile) {
+        gb.textContent = 'Uploading video… (' + Math.round(videoFile.size / 1048576) + 'MB)';
+        try {
+          const wa2 = writeAuth();
+          const b64 = await new Promise((res, rej) => {
+            const rd = new FileReader();
+            rd.onload = () => res(String(rd.result).split(',')[1]);
+            rd.onerror = () => rej(new Error('read failed'));
+            rd.readAsDataURL(videoFile);
+          });
+          const r3 = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+            headers: {'content-type': 'text/plain;charset=utf-8'},
+            body: JSON.stringify({pin: wa2.pin, action: 'cardmedia', cardId: j.id,
+              mime: videoFile.type || 'video/mp4', data: b64, ...authFields()})});
+          const j3 = await r3.json();
+          if (j3.url) await tbSend({op: 'note', id: j.id, text: '🎬 ' + j3.url});
+        } catch (e3) { /* best-effort */ }
+      }
       ov2.hidden = true; TB.rows = null; renderTaskBoard();
     };
     ov2.querySelector('.kc-go').onclick = go;
@@ -9268,11 +9310,16 @@ function renderTaskBoard() {
     const c = TB.rows.find(r => r.id === b.dataset.id);
     if (c) openReassignModal(c);
   });
+  // optimistic (Brigham 8/28: "a lot of waiting") — the card leaves the
+  // board instantly; the bridge write happens behind it and rolls back on failure
   el.querySelectorAll('.karch').forEach(b => b.onclick = async () => {
-    b.disabled = true;
-    const j = await tbSend({op: 'archive', id: b.dataset.id});
-    if (j) { const c = TB.rows.find(r => r.id === b.dataset.id); if (c) c.col = 'archived'; renderTaskBoard(); }
-    else b.disabled = false;
+    const c = TB.rows.find(r => r.id === b.dataset.id);
+    if (!c) return;
+    const was = c.col;
+    c.col = 'archived';
+    renderTaskBoard();
+    const j = await tbSend({op: 'archive', id: c.id});
+    if (!j) { c.col = was; renderTaskBoard(); }
   });
   const saveCols = async cols => {
     const j = await tbSend({op: 'setcols', owner: TB.person, cols});
@@ -9305,6 +9352,49 @@ function renderTaskBoard() {
   });
   const stog = el.querySelector('.ksnoozetog');
   if (stog) stog.onclick = () => { TB.showSnoozed = !TB.showSnoozed; renderTaskBoard(); };
+  // 🗂 archive: search everything ever done on this board, restore if needed
+  el.querySelector('.karchbtn').onclick = () => {
+    const arch = TB.rows.filter(r => sameOwner(r.owner, TB.person) && r.col === 'archived')
+      .sort((a2, b2) => String(b2.done || '').localeCompare(String(a2.done || '')));
+    const ov2 = modalShell('archmodal', `
+      <span class="x">✕</span>
+      <h3>🗂 ${esc(TB.person.split(/\s+/)[0])}'s archive
+        <small class="cm-added">${arch.length} card${arch.length === 1 ? '' : 's'} — never deleted</small></h3>
+      <input class="arch-q" placeholder="search archived cards — text, serial, notes…">
+      <div class="arch-list"></div>`);
+    const list = ov2.querySelector('.arch-list'), qIn = ov2.querySelector('.arch-q');
+    const paint = () => {
+      const q = qIn.value.trim().toLowerCase();
+      const hits = arch.filter(r => !q
+        || (r.text + ' ' + r.serial + ' ' + (r.notes || '') + ' ' + (r.from || '')).toLowerCase().includes(q));
+      list.innerHTML = hits.slice(0, 80).map(r => `<div class="archrow" data-id="${esc(r.id)}">
+          <div><b>${esc(r.text.slice(0, 110))}</b>
+            <small>${r.serial ? '🎹 ' + esc(r.serial) + ' · ' : ''}archived ${r.done ? esc(String(r.done).slice(0, 10)) : '—'}</small></div>
+          ${canEdit ? `<button class="arch-restore" data-id="${esc(r.id)}">↩ Restore</button>` : ''}
+        </div>`).join('')
+        + (hits.length > 80 ? `<div class="pwnone" style="display:block;padding:6px 0">…${hits.length - 80} more — narrow the search</div>` : '')
+        || '<div class="pwnone" style="display:block;padding:8px 0">No archived cards match.</div>';
+      list.querySelectorAll('.archrow').forEach(el2 => el2.onclick = ev2 => {
+        if (ev2.target.closest('button')) return;
+        const c = TB.rows.find(r => r.id === el2.dataset.id);
+        if (c) { ov2.hidden = true; openCardModal(c, canEdit); }
+      });
+      list.querySelectorAll('.arch-restore').forEach(b => b.onclick = async ev2 => {
+        ev2.stopPropagation();
+        b.disabled = true; b.textContent = '…';
+        const j = await tbSend({op: 'move', id: b.dataset.id,
+          col: (boardCols[0] || ['todo'])[0], order: -(Date.now() / 1e6)});
+        if (j) {
+          const c = TB.rows.find(r => r.id === b.dataset.id);
+          if (c) c.col = (boardCols[0] || ['todo'])[0];
+          ov2.hidden = true; renderTaskBoard();
+        } else { b.disabled = false; b.textContent = '↩ Restore'; }
+      });
+    };
+    qIn.oninput = paint;
+    paint();
+    qIn.focus();
+  };
   el.querySelectorAll('.kcard').forEach(card => card.addEventListener('click', ev => {
     if (ev.target.closest('button, .chip, .kgrab')) return;
     if (TB.dragJustHappened) return;

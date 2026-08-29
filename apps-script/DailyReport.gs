@@ -4721,7 +4721,7 @@ function taskBoardRows_() {
       var v = vals[i];
       if (!v[0] || !v[3]) continue;
       out.push({id: String(v[0]), owner: String(v[1] || ''), col: String(v[2] || 'todo'),
-        text: String(v[3]).slice(0, 200), serial: String(v[4] || ''), due: String(v[5] || ''),
+        text: String(v[3]).slice(0, 2000), serial: String(v[4] || ''), due: String(v[5] || ''),
         from: String(v[6] || ''), created: String(v[7] || ''), done: String(v[8] || ''),
         order: v[9] === '' || v[9] == null ? null : Number(v[9]),
         notes: String(v[10] || '').slice(0, 2000), snooze: String(v[11] || '')});
