@@ -3607,7 +3607,7 @@ function smTuningQueue_(pianos) {
       note = 'last tuned ' + last + ' \u00b7 ' + d + 'd ago';
     } else {
       var ent = String(p.entered || '').slice(0, 10);
-      var here = /^\d{4}-/.test(ent) ? daysSince(ent) : 9999;
+      var here = /^\d{4}-/.test(ent) ? Math.min(daysSince(ent), 9999) : 9999;
       rank = here >= 180 ? -here : 200000 - here;
       note = 'no tuning on record' + (/^\d{4}-/.test(ent) ? ' \u00b7 entered ' + ent : '');
     }

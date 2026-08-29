@@ -7574,7 +7574,8 @@ const TQ_DEFS = [
        const ti = tuningInfo(p);
        if (ti.last) return 100000 - daysSince(ti.last);
        const ent = (p.entered || '').slice(0, 10);
-       const here = /^\d{4}-/.test(ent) ? daysSince(ent) : 9999;
+       // clamp: garbage entered dates (a 1900 typo) must not dominate
+       const here = /^\d{4}-/.test(ent) ? Math.min(daysSince(ent), 9999) : 9999;
        return here >= 180 ? -here : 200000 - here;
      };
      return rows.sort((x, y) => rank(x) - rank(y));
