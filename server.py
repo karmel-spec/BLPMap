@@ -645,7 +645,10 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_GET(self):
         if self.path.split('?')[0] == '/api/data':
-            body = json.dumps(get_data()).encode()
+            data = get_data()
+            if 'scope=active' in self.path:
+                data = dict(data, pianos=[p for p in data.get('pianos', []) if p.get('active')], scope='active')
+            body = json.dumps(data).encode()
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
             self.send_header('Content-Length', str(len(body)))

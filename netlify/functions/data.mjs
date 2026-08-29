@@ -327,10 +327,18 @@ const CORS = { 'access-control-allow-origin': '*' };
 const jsonRes = (body, init = {}) =>
   Response.json(body, { ...init, headers: { ...CORS, ...(init.headers || {}) } });
 
-export default async () => {
+export default async (req) => {
   const now = Date.now();
+  // ?scope=active → only in-shop pianos (~640KB instead of ~5.5MB with the
+  // full sold/delivered history) — the app boots on this and lazily pulls
+  // the full set in the background (Brigham 8/29: make the app faster)
+  let activeOnly = false;
+  try { activeOnly = new URL(req.url).searchParams.get('scope') === 'active'; } catch (e) {}
+  const trim = payload => activeOnly
+    ? { ...payload, pianos: (payload.pianos || []).filter(p => p.active), scope: 'active' }
+    : payload;
   if (cache.payload && now - cache.at < CACHE_MS) {
-    return jsonRes({ ...cache.payload, cached: true });
+    return jsonRes({ ...trim(cache.payload), cached: true });
   }
   try {
     const icsUrl = process.env.BLP_MOVING_ICS;
@@ -355,9 +363,9 @@ export default async () => {
       stale: false, calendarConfigured: events.length > 0 || !!icsUrl,
     };
     cache = { at: now, payload };
-    return jsonRes(payload);
+    return jsonRes(trim(payload));
   } catch (err) {
-    if (cache.payload) return jsonRes({ ...cache.payload, stale: true });
+    if (cache.payload) return jsonRes({ ...trim(cache.payload), stale: true });
     return jsonRes({ error: String(err), pianos: [], events: [], crew: [] },
       { status: 502 });
   }

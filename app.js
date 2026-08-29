@@ -193,10 +193,34 @@ const esc = s => String(s ?? '').replace(/[&<>"]/g,
   c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
 
 const EMPTY = {pianos: [], events: [], crew: [], fetchedAt: null, stale: true};
-async function fetchData() {
-  const r = await fetch('/api/data');
+async function fetchData(scope) {
+  const r = await fetch('/api/data' + (scope === 'active' ? '?scope=active' : ''));
   if (!r.ok) throw new Error('api ' + r.status);
   return r.json();
+}
+/* speed: boot + refresh use the ~640KB active-only payload; the ~5MB
+ * sold/delivered history loads ONCE in the background a few seconds after
+ * first paint (the archive view + delivered search need it) and is kept
+ * merged in on every later refresh (Brigham 8/29) */
+let inactiveCache = null, inactiveLoading = false;
+function mergeInactive(d) {
+  if (d && d.scope === 'active' && inactiveCache) {
+    d.pianos = d.pianos.concat(inactiveCache);
+  }
+  return d;
+}
+async function loadInactive() {
+  if (inactiveCache || inactiveLoading) return;
+  inactiveLoading = true;
+  try {
+    const full = await fetchData();
+    inactiveCache = (full.pianos || []).filter(p => !p.active);
+    if (S.data && S.data.scope === 'active') {
+      S.data.pianos = S.data.pianos.filter(p => p.active).concat(inactiveCache);
+      index(); renderAll();
+    }
+  } catch (e) { /* archive stays lazy — retried on demand */ }
+  inactiveLoading = false;
 }
 async function fetchSlots() {
   // live geometry regenerated from the Store Map sheet; committed
@@ -236,7 +260,7 @@ async function boot() {
   }
   // kick both requests off together, and draw the floor plan the moment
   // the geometry lands — pianos pop in as soon as their data arrives
-  const dataP = fetchData().catch(() => null);
+  const dataP = fetchData('active').catch(() => null);
   try {
     const m = await fetchSlots();
     if (m && m.floors) S.map = m;
@@ -250,10 +274,11 @@ async function boot() {
   tryReportLink(); // #report=<id> from a shared link → open that report
   tryCardLink();   // #card=<id> from a task-board notification text/email
   tryFixClockLink(); // #fixclock from a late-clock text → the time-fix form
+  setTimeout(loadInactive, 4000);   // sold/delivered history, off the critical path
   setInterval(async () => {
     try {
-      const [m, d2] = await Promise.all([fetchSlots(), fetchData()]);
-      S.map = m; S.data = d2;
+      const [m, d2] = await Promise.all([fetchSlots(), fetchData('active')]);
+      S.map = m; S.data = mergeInactive(d2);
       index(); renderAll();
       if (!d2.stale && d2.pianos.length) writeCache();
     } catch (e) { /* keep last */ }
@@ -8325,6 +8350,11 @@ function renderReport() {
 function renderArchive() {
   const el = $('#archBody');
   if (!el) return;
+  // delivered history loads lazily — pull it now if the archive opened early
+  if (S.data && S.data.scope === 'active' && !inactiveCache) {
+    loadInactive().then(() => { if (inactiveCache) renderArchive(); });
+    if (inactiveLoading) { el.innerHTML = '<div class="empty">Loading the delivered archive…</div>'; return; }
+  }
   const q = ($('#archSearch').value || '').trim().toLowerCase();
   const rows = (S.data.pianos || []).filter(p => p.archived)
     .filter(p => !q || (p.summary + ' ' + p.serial + ' ' + p.make + ' ' + p.model + ' '
@@ -8891,6 +8921,7 @@ async function teamFetchAll() {
   ]);
   TEAM.roster = ros && ros.tabs ? ros.tabs : null;
   TEAM.sched = sch && sch.tabs ? sch.tabs['Team Schedule'] : null;
+  try { lsSet('blpTeam1', JSON.stringify({roster: TEAM.roster, sched: TEAM.sched, at: Date.now()})); } catch (e) {}
   TEAM.clock = clk && clk.open ? clk : {open: [], todayMinutes: {}};
   TEAM.pay = pay && pay.open ? pay : {open: [], today: (pay && pay.today) || []};
   TEAM.where = (whr && whr.who) || {};
@@ -9027,8 +9058,20 @@ function renderTeam() {
     if (!b.dataset.wired) { b.dataset.wired = '1'; b.onclick = () => { TEAM.tab = b.dataset.tt; renderTeam(); }; }
   });
   if (TEAM.tab === 'shopteam') { el.innerHTML = shopFrameHTML('team'); return; }
-  if (!TEAM.roster && !TEAM.loading) { teamFetchAll(); el.innerHTML = '<div class="empty">Loading the team…</div>'; return; }
-  if (TEAM.loading) { el.innerHTML = '<div class="empty">Loading the team…</div>'; return; }
+  if (!TEAM.roster) {
+    if (!TEAM.loading) teamFetchAll();
+    // paint the cached roster/schedule instantly while the live data loads
+    try {
+      const c = JSON.parse(lsGet('blpTeam1') || 'null');
+      if (c && c.roster) {
+        TEAM.roster = c.roster; TEAM.sched = TEAM.sched || c.sched;
+        TEAM.clock = TEAM.clock || {open: [], todayMinutes: {}};
+        TEAM.pay = TEAM.pay || {open: [], today: []};
+        TEAM.where = TEAM.where || {};
+      }
+    } catch (e) {}
+    if (!TEAM.roster) { el.innerHTML = '<div class="empty">Loading the team…</div>'; return; }
+  }
   el.innerHTML = TEAM.tab === 'board' ? teamBoardHTML()
     : TEAM.tab === 'schedule' ? teamScheduleHTML() : teamRosterHTML();
 }
@@ -9107,6 +9150,8 @@ async function tbFetch() {
     } catch (e) { TB.faces = []; }
   }
   TB.loading = false;
+  // cache-first: next open paints instantly from the last-known board
+  try { lsSet('blpTB1', JSON.stringify({rows: TB.rows, cols: TB.cols, faces: TB.faces, at: Date.now()})); } catch (e) {}
   renderTaskBoard();
 }
 async function tbSend(body) {
@@ -9148,8 +9193,12 @@ function renderTaskBoard() {
   if (!TB.person) TB.person = me;
   if (TB.rows === null) {
     if (!TB.loading) tbFetch();
-    el.innerHTML = '<div class="empty">Loading your board…</div>';
-    return;
+    // show the last-known board instantly while the fresh one loads
+    try {
+      const c = JSON.parse(lsGet('blpTB1') || 'null');
+      if (c && c.rows) { TB.rows = c.rows; TB.cols = c.cols || {}; if (!TB.faces) TB.faces = c.faces || null; }
+    } catch (e) {}
+    if (TB.rows === null) { el.innerHTML = '<div class="empty">Loading your board…</div>'; return; }
   }
   // the face strip needs the roster — if sign-in resolved AFTER the first
   // board fetch (or the roster call failed), pick it up now and repaint
@@ -9394,16 +9443,16 @@ function renderTaskBoard() {
         const c = TB.rows.find(r => r.id === el2.dataset.id);
         if (c) { ov2.hidden = true; openCardModal(c, canEdit); }
       });
-      list.querySelectorAll('.arch-restore').forEach(b => b.onclick = async ev2 => {
+      list.querySelectorAll('.arch-restore').forEach(b => b.onclick = ev2 => {
         ev2.stopPropagation();
-        b.disabled = true; b.textContent = '…';
-        const j = await tbSend({op: 'move', id: b.dataset.id,
-          col: (boardCols[0] || ['todo'])[0], order: -(Date.now() / 1e6)});
-        if (j) {
-          const c = TB.rows.find(r => r.id === b.dataset.id);
-          if (c) c.col = (boardCols[0] || ['todo'])[0];
-          ov2.hidden = true; renderTaskBoard();
-        } else { b.disabled = false; b.textContent = '↩ Restore'; }
+        const c = TB.rows.find(r => r.id === b.dataset.id);
+        if (!c) return;
+        const home = (boardCols[0] || ['todo'])[0];
+        c.col = home; c.order = -(Date.now() / 1e6);   // instant
+        ov2.hidden = true; renderTaskBoard();
+        tbSend({op: 'move', id: c.id, col: home, order: c.order}).then(j => {
+          if (!j) { c.col = 'archived'; renderTaskBoard(); }
+        });
       });
     };
     qIn.oninput = paint;
@@ -9573,20 +9622,20 @@ function openReassignModal(c) {
     <input class="ra-note" maxlength="200" placeholder="why it's theirs / what's needed…">
     <button class="ccfmyes ra-go" style="width:100%;margin-top:12px">↪ Move it to their board</button>
     <div class="ra-msg phmsg"></div>`);
-  ov.querySelector('.ra-go').onclick = async () => {
+  ov.querySelector('.ra-go').onclick = () => {
     const who = ov.querySelector('.ra-who').value;
     const note = ov.querySelector('.ra-note').value.trim();
-    const msg = ov.querySelector('.ra-msg');
-    msg.textContent = 'moving…';
-    const j = await tbSend({op: 'reassign', id: c.id, owner: who, note});
-    if (j) {
-      c.owner = who; c.col = 'todo'; c.from = tbMe();
-      c.notes = (j.line || '') + '\n' + (c.notes || '');
-      ov.hidden = true;
-      const cm = document.getElementById('cardmodal');
-      if (cm) cm.hidden = true;
-      renderTaskBoard();
-    } else msg.textContent = '';
+    if (!who) return;
+    const was = {owner: c.owner, col: c.col, from: c.from, notes: c.notes};
+    c.owner = who; c.col = 'todo'; c.from = tbMe();   // instant
+    ov.hidden = true;
+    const cm = document.getElementById('cardmodal');
+    if (cm) cm.hidden = true;
+    renderTaskBoard();
+    tbSend({op: 'reassign', id: c.id, owner: who, note}).then(j => {
+      if (j) { c.notes = (j.line || '') + '\n' + (was.notes || ''); }
+      else { Object.assign(c, was); renderTaskBoard(); }
+    });
   };
 }
 /* 🕓 how old a card is — from its Created stamp; done/archived cards skip it */
@@ -9703,12 +9752,14 @@ function openCardModal(c, canEdit) {
     txt.onblur = () => { clearTimeout(t); if (txt.value.trim() !== c.text) save({text: txt.value.trim()}); };
     ov.querySelector('.cm-due').onchange = ev2 => save({due: ev2.target.value});
     ov.querySelector('.cm-serial').onchange = ev2 => save({serial: ev2.target.value.trim()});
-    ov.querySelectorAll('[data-sz]').forEach(b => b.onclick = async () => {
+    ov.querySelectorAll('[data-sz]').forEach(b => b.onclick = () => {
       const d = +b.dataset.sz;
       const until = d ? new Date(Date.now() + d * 86400000).toISOString().slice(0, 10) : '';
-      msg.textContent = d ? 'snoozing…' : 'waking…';
-      const j = await tbSend({op: 'snooze', id: c.id, until});
-      if (j) { c.snooze = until; ov.hidden = true; renderTaskBoard(); }
+      const was = c.snooze;
+      c.snooze = until; ov.hidden = true; renderTaskBoard();   // instant
+      tbSend({op: 'snooze', id: c.id, until}).then(j => {
+        if (!j) { c.snooze = was; renderTaskBoard(); }
+      });
     });
     // 📅 custom snooze — pick any wake-up date
     const szd = ov.querySelector('.cm-szdate');
@@ -9717,19 +9768,28 @@ function openCardModal(c, canEdit) {
       try { szd.showPicker(); }
       catch (e) { szd.classList.add('open'); szd.focus(); szd.click(); }
     };
-    szd.onchange = async () => {
+    szd.onchange = () => {
       if (!szd.value) return;
-      msg.textContent = 'snoozing…';
-      const j = await tbSend({op: 'snooze', id: c.id, until: szd.value});
-      if (j) { c.snooze = szd.value; ov.hidden = true; renderTaskBoard(); }
+      const was = c.snooze;
+      c.snooze = szd.value; ov.hidden = true; renderTaskBoard();   // instant
+      tbSend({op: 'snooze', id: c.id, until: szd.value}).then(j => {
+        if (!j) { c.snooze = was; renderTaskBoard(); }
+      });
     };
     const addNote = async text => {
       if (!text) return;
-      msg.textContent = 'adding…';
-      const j = await tbSend({op: 'note', id: c.id, text});
-      if (j) { c.notes = (j.line || text) + '\n' + (c.notes || ''); ov.hidden = true;
-        openCardModal(c, canEdit); renderTaskBoard(); }
-      else msg.textContent = '';
+      // instant: pin the note locally with today's stamp, sync behind it
+      const stamp = new Date().toLocaleDateString('en-US',
+        {month: 'numeric', day: 'numeric', timeZone: 'America/Denver'});
+      const localLine = stamp + ' ' + ((tbMe() || 'me').split(/\s+/)[0]) + ': ' + text;
+      const was = c.notes;
+      c.notes = localLine + '\n' + (c.notes || '');
+      ov.hidden = true; openCardModal(c, canEdit); renderTaskBoard();
+      tbSend({op: 'note', id: c.id, text}).then(j => {
+        if (j) { c.notes = (j.line || localLine) + '\n' + (was || ''); }
+        else { c.notes = was; const cm2 = document.getElementById('cardmodal');
+          if (cm2 && !cm2.hidden) { cm2.hidden = true; openCardModal(c, canEdit); } }
+      });
     };
     ov.querySelector('.cm-noteadd').onclick = () => addNote(ov.querySelector('.cm-note').value.trim());
     ov.querySelector('.cm-note').onkeydown = ev2 => {
@@ -9786,9 +9846,12 @@ function openCardModal(c, canEdit) {
     };
     ov.querySelector('.cm-sms').onclick = () => { ov.hidden = true; openCardTextModal(c); };
     ov.querySelector('.cm-reassign').onclick = () => { ov.hidden = true; openReassignModal(c); };
-    ov.querySelector('.cm-del').onclick = async () => {
-      const j = await tbSend({op: 'archive', id: c.id});
-      if (j) { c.col = 'archived'; ov.hidden = true; renderTaskBoard(); }
+    ov.querySelector('.cm-del').onclick = () => {
+      const was = c.col;
+      c.col = 'archived'; ov.hidden = true; renderTaskBoard();   // instant
+      tbSend({op: 'archive', id: c.id}).then(j => {
+        if (!j) { c.col = was; renderTaskBoard(); }
+      });
     };
     serialDatalist();
   }
