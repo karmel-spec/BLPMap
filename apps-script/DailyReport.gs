@@ -2935,8 +2935,8 @@ function payMilestone_(req) {
  * to send a sample somewhere else. */
 // morning recipients (Brigham 8/28): shop brief → managers + owners;
 // admin brief → Melissa, info@, owners
-var SHOPMGR_TO = 'markhales.blp@gmail.com,matthewwessman.blp@gmail.com,jacobmower.blp@gmail.com,'
-  + 'brigham@brighamlarsonpianos.com,karmel@brighamlarsonpianos.com';
+var SHOPMGR_TO = 'shop@brighamlarsonpianos.com,markhales.blp@gmail.com,matthewwessman.blp@gmail.com,'
+  + 'jacobmower.blp@gmail.com,brigham@brighamlarsonpianos.com,karmel@brighamlarsonpianos.com';
 var ADMIN_TO = 'melissa@brighamlarsonpianos.com,info@brighamlarsonpianos.com,'
   + 'brigham@brighamlarsonpianos.com,karmel@brighamlarsonpianos.com';   // Admin Morning Brief
 var TRACKDEFS_URL = 'https://blpsalesapp.netlify.app/.netlify/functions/track-defs';
