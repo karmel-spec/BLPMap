@@ -1141,8 +1141,25 @@ function mediaFolderFor_(sh, row, serial, kind) {
   var parentIt = tech.getParents();
   var parent = parentIt.hasNext() ? parentIt.next() : tech;
   var name = kind === 'before' ? 'Before Photos' : 'After Photos';
-  var it = parent.getFoldersByName(name);
-  var folder = it.hasNext() ? it.next() : parent.createFolder(name);
+  // reuse ANY existing before/after-ish folder before creating one (Brigham
+  // 8/28: no duplicate folders). Hand-made names count: "Before", "BEFORE
+  // pics", "22947 Before Photos", "Before & After"…
+  var re = kind === 'before' ? /before/i : /after/i;
+  var folder = null;
+  var it = parent.getFolders();
+  while (it.hasNext()) {
+    var f2 = it.next();
+    if (re.test(f2.getName())) { folder = f2; break; }
+  }
+  if (!folder && serial && String(serial).length >= 4) {
+    // …or one filed elsewhere in Drive under the serial number
+    var q = DriveApp.searchFolders('title contains ' + JSON.stringify(String(serial)));
+    while (q.hasNext()) {
+      var cand = q.next();
+      if (re.test(cand.getName())) { folder = cand; break; }
+    }
+  }
+  if (!folder) folder = parent.createFolder(name);
   try { sh.getRange(row, col).setValue(folder.getUrl()); } catch (e) {}
   return folder;
 }
@@ -1172,6 +1189,26 @@ function techFolderFor_(sh, row, serial) {
       if (underRoot_(cand)) { folder = cand; break; }
       if (!folder) folder = cand;   // fallback: any match
     }
+  }
+  if (!folder && serial) {
+    // nothing anywhere for this piano — build its whole photo set right now
+    // (Brigham 8/28): "<piano> <serial>"/ with Before, After and Tech inside,
+    // link written back to MAIN FOLDER so every later lookup is instant
+    try {
+      var sum2 = '';
+      try { sum2 = String(sh.getRange(row, 4).getValue() || '').trim(); } catch (eS) {}
+      folder = DriveApp.getFolderById(PHOTOS_ROOT_ID)
+        .createFolder(((sum2 ? sum2 + ' ' : '') + serial).slice(0, 90));
+      folder.createFolder('Before Photos');
+      folder.createFolder('After Photos');
+      var hdr2 = sh.getRange(2, 1, 1, sh.getLastColumn()).getValues()[0];
+      for (var h2 = 0; h2 < hdr2.length; h2++) {
+        if (String(hdr2[h2] || '').trim().toUpperCase() === 'MAIN FOLDER') {
+          try { sh.getRange(row, h2 + 1).setValue(folder.getUrl()); } catch (eW) {}
+          break;
+        }
+      }
+    } catch (eC) { folder = null; }
   }
   if (!folder) return null;
   var subs = folder.getFolders();
