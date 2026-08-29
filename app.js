@@ -9205,6 +9205,62 @@ async function tbFetchSupabase() {
     notes: c.notes || '', snooze: c.snooze || '',
   })), cols};
 }
+/* live board updates: Supabase realtime over a plain websocket (no lib).
+   Any insert/update on tb_cards from another device re-fetches (~150ms)
+   and re-renders — unless the user is mid-drag or has a modal open. If
+   the socket is down, a 45s poll covers it while the board is visible. */
+const tbRT = {ws: null, timer: null, ref: 0, backoff: 2000};
+function tbVisible() {
+  const el = document.getElementById('tboardBody');
+  return !!(el && el.offsetParent !== null);
+}
+function tbUiBusy() {
+  return document.body.classList.contains('kdragging')
+    || [...document.querySelectorAll('.blpmodal')].some(m => !m.hidden);
+}
+let tbRefreshT = null;
+function tbLiveRefresh() {
+  clearTimeout(tbRefreshT);
+  tbRefreshT = setTimeout(async () => {
+    if (tbUiBusy()) { tbLiveRefresh(); return; }
+    await tbFetch();
+    if (tbVisible()) renderTaskBoard();
+  }, 400);
+}
+function tbRealtime() {
+  if (tbRT.ws || !('WebSocket' in window)) return;
+  try {
+    const ws = new WebSocket(SB_URL.replace('https', 'wss')
+      + '/realtime/v1/websocket?apikey=' + SB_KEY + '&vsn=1.0.0');
+    tbRT.ws = ws;
+    ws.onopen = () => {
+      tbRT.backoff = 2000;
+      ws.send(JSON.stringify({topic: 'realtime:tbcards', event: 'phx_join', ref: String(++tbRT.ref),
+        payload: {config: {postgres_changes: [{event: '*', schema: 'public', table: 'tb_cards'},
+                                              {event: '*', schema: 'public', table: 'tb_cols'}]}}}));
+      clearInterval(tbRT.timer);
+      tbRT.timer = setInterval(() => {
+        if (ws.readyState === 1) ws.send(JSON.stringify({topic: 'phoenix', event: 'heartbeat', ref: String(++tbRT.ref), payload: {}}));
+      }, 25000);
+    };
+    ws.onmessage = ev => {
+      try {
+        const m = JSON.parse(ev.data);
+        if (m.event === 'postgres_changes') tbLiveRefresh();
+      } catch (e) { /* ignore */ }
+    };
+    ws.onclose = ws.onerror = () => {
+      clearInterval(tbRT.timer);
+      if (tbRT.ws === ws) tbRT.ws = null;
+      setTimeout(tbRealtime, tbRT.backoff = Math.min(tbRT.backoff * 2, 60000));
+    };
+  } catch (e) { tbRT.ws = null; }
+}
+// poll fallback: only when the socket is down and the board is on screen
+setInterval(() => {
+  if (!tbRT.ws && tbVisible() && !document.hidden && !tbUiBusy()) tbLiveRefresh();
+}, 45000);
+
 async function tbFetch() {
   TB.loading = true;
   try {
@@ -9286,6 +9342,7 @@ function tbDueChip(due, col) {
 function renderTaskBoard() {
   const el = $('#tboardBody');
   if (!el) return;
+  tbRealtime();   // live cross-device updates while the board is in use
   const me = tbMe();
   if (!me) { el.innerHTML = '<div class="empty">Sign in with Google (☰ menu) to see your board.</div>'; return; }
   if (!TB.person) TB.person = me;
