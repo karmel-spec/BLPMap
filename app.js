@@ -2953,6 +2953,7 @@ function openSuggestBox() {
       return;
     }
     const pin = wa.pin;
+    let shotFailed = false;
     msg.className = 'sgmsg'; msg.textContent = shotFile ? 'Uploading screenshot…' : 'Sending…';
     const body = {pin, action: 'suggest', type, text,
       context: 'view:' + (S.view || 'map') + (openSerial ? ' · piano #' + openSerial : ''),
@@ -2962,22 +2963,32 @@ function openSuggestBox() {
         // upload through the sales-app service account — the bridge's own
         // Drive token has no Drive scope in the anonymous web app, which
         // silently ate every screenshot the team attached (fixed 8/25)
-        const dataUrl = await downscalePhoto(shotFile, 1600, 0.85);
+        // an undecodable image (HEIC on desktop, corrupt file) must not
+        // sink the whole request — file it without the picture instead
+        const dataUrl = await downscalePhoto(shotFile, 1600, 0.85).catch(() => null);
+        if (!dataUrl) { shotFailed = true; }
+        else {
         const up = await fetch('https://blpsalesapp.netlify.app/.netlify/functions/request-shot', {
           method: 'POST', headers: {'content-type': 'application/json'},
-          body: JSON.stringify({key: pin, id: Date.now().toString(36),
+          // team key, not the user's pin: Google-signed-in users have no
+          // pin, and an empty key made this endpoint reject every
+          // screenshot (found 8/29) — same pattern as the card uploads
+          body: JSON.stringify({key: 'pianoman', id: Date.now().toString(36),
             photo: dataUrl.split(',')[1], photoType: 'image/jpeg',
-            photoName: shotFile.name.replace(/[^\w.-]+/g, '_').slice(0, 40)})});
+            photoName: (shotFile.name || 'screenshot.png').replace(/[^\w.-]+/g, '_').slice(0, 40)})});
         const uj = await up.json().catch(() => ({}));
         if (uj.url) body.screenshotUrl = uj.url;
-        else msg.textContent = 'Screenshot upload failed — sending the request without it…';
+        else shotFailed = true;
+        }
       }
       const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
         headers: {'content-type': 'text/plain;charset=utf-8'}, body: JSON.stringify(body)});
       const j = await r.json();
       if (!j.ok) throw new Error(j.error || 'failed');
       msg.className = 'sgmsg ok';
-      msg.textContent = '✓ Filed as ' + j.id + ' — thank you! You\u2019ll see it move to Live here when it ships.';
+      msg.textContent = '✓ Filed as ' + j.id + (shotFailed
+        ? ' — but the screenshot upload failed, so it went in without the picture.'
+        : ' — thank you! You\u2019ll see it move to Live here when it ships.');
       ov.querySelector('.sgtext').value = ''; clearShot();
       loadMyRequests(ov);
     } catch (e) { msg.className = 'sgmsg err'; msg.textContent = '✗ ' + e.message; }
@@ -7543,7 +7554,9 @@ const TQ_DEFS = [
    pool: () => {
      const rows = S.data.pianos.filter(p => {
        if (!p.active || !p.serial) return false;
-       if (!/for sale/i.test(p.status || '')) return false;
+       // "currently for sale" = phase For Sale — the status tags also say
+       // "For Sale" on shop-work and restoration-candidate pianos (8/29)
+       if ((p.phase || '') !== 'For Sale') return false;
        const loc = (p.location || '').trim();
        if (!loc || /rent|attic|sold|deliver|storage|shop/i.test(loc)) return false;
        return !tuningInfo(p).next;
