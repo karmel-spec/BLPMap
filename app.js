@@ -8132,7 +8132,7 @@ const REPORT_DEFS = () => [
    html: tasksTable},
   {id: 'taskqueues', sec: 'shop', icon: '🎯', title: 'TASK QUEUES', count: (() => {
      try { return taskQueueLists().reduce((s, q) => s + q.list.length, 0); } catch (e) { return null; } })(),
-   desc: 'Six ordered to-do queues — key service, plates to Curtis Harper, refinishing on deck, plating + buffing, decals, bass strings. Each shows who’s NEXT and everyone behind them in shop-queue order. Click any row to jump to the piano.',
+   desc: 'Seven ordered to-do queues — key service, plates to Curtis Harper, refinishing on deck, plating + buffing, decals, bass strings, and the showroom tuning queue for Korban (most-overdue first, from the tuning calendars). Each shows who’s NEXT and everyone behind them. Click any row to jump to the piano.',
    html: taskQueuesTable},
   {id: 'stalled', sec: 'shop', icon: '🐢', title: 'SITTING TOO LONG', count: (() => {
      try { return stalledPianos().length; } catch (e) { return null; } })(),
