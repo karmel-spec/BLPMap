@@ -9151,6 +9151,21 @@ function renderTaskBoard() {
     el.innerHTML = '<div class="empty">Loading your board…</div>';
     return;
   }
+  // the face strip needs the roster — if sign-in resolved AFTER the first
+  // board fetch (or the roster call failed), pick it up now and repaint
+  // instead of silently showing a stripped-down strip (Brigham 8/29)
+  if (tbAdmin() && TB.faces == null && !TB.facesLoading) {
+    TB.facesLoading = true;
+    fetch(TEAM_ROSTER_API + '?key=' + encodeURIComponent('pianoman'))
+      .then(r => r.json())
+      .then(j2 => {
+        TB.faces = ((j2.tabs && j2.tabs['Current Team']) || []).slice(1)
+          .map(row => (String(row[0] || '').trim() + ' ' + String(row[1] || '').trim()).trim())
+          .filter(Boolean);
+      })
+      .catch(() => { TB.faces = null; })   // stays null → retried on next render
+      .then(() => { TB.facesLoading = false; if (TB.faces) renderTaskBoard(); });
+  }
   // full-name matching (two Brighams taught us first-name matching lies)
   const sameOwner = (a, b) => tbNorm(a) === tbNorm(b);
   const people = tbAdmin() ? tbPeople() : [me];
