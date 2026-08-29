@@ -727,7 +727,14 @@ function todaysMoves() {
 function tuningInfo(p) {
   const t = S.data.tunings;
   if (!t || !p.serial || p.serial.length < 5) return {};
-  const hit = list => list.filter(r => r[2].includes(p.serial));
+  // match case-insensitively, and fall back to the digit run alone —
+  // calendar titles write serials like "g118620" or drop the letter prefix
+  const sn = p.serial.toUpperCase();
+  const dig = p.serial.replace(/\D/g, '');
+  const hit = list => list.filter(r => {
+    const t = r[2].toUpperCase();
+    return t.includes(sn) || (dig.length >= 5 && t.includes(dig));
+  });
   const up = hit(t.upcoming || [])[0];
   const hist = hit(t.past || []);
   return {next: up ? {date: up[0], time: up[1]} : null,
@@ -7546,7 +7553,7 @@ const TQ_DEFS = [
        if (ti.last) return 100000 - daysSince(ti.last);
        const ent = (p.entered || '').slice(0, 10);
        const here = /^\d{4}-/.test(ent) ? daysSince(ent) : 9999;
-       return here >= 180 ? here - 9999 : 200000 - here;
+       return here >= 180 ? -here : 200000 - here;
      };
      return rows.sort((x, y) => rank(x) - rank(y));
    },
