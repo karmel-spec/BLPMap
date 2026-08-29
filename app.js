@@ -5169,6 +5169,7 @@ function openCabAssignModal(tok, unit) {
     ov.hidden = true;
     openCabUnitModal(unit);
   };
+  attachSerialSuggest(ov.querySelector('.casn'));
   ov.querySelector('.casn').focus();
 }
 
@@ -5433,6 +5434,51 @@ function serialDatalist() {
     .join('');
 }
 
+/* datalists never show suggestions on iOS / installed-app browsers, so
+   every serial input also gets this tap-friendly dropdown: matches by
+   serial or piano name as you type, tap a row to fill it in. */
+function attachSerialSuggest(inp, onPick) {
+  if (!inp || inp._snsug) return;
+  inp._snsug = 1;
+  inp.setAttribute('autocomplete', 'off');
+  const box = document.createElement('div');
+  box.className = 'snsuggest';
+  box.hidden = true;
+  // anchor the dropdown to the input's parent
+  if (getComputedStyle(inp.parentNode).position === 'static') inp.parentNode.style.position = 'relative';
+  inp.parentNode.insertBefore(box, inp.nextSibling);
+  const hide = () => { box.hidden = true; };
+  const show = () => {
+    const q = inp.value.trim().toLowerCase();
+    if (q.length < 2) { hide(); return; }
+    const pool = S.data.pianos.filter(p => p.active && p.serial);
+    const starts = [], within = [];
+    for (const p of pool) {
+      const sn = p.serial.toLowerCase();
+      if (sn.startsWith(q)) starts.push(p);
+      else if (sn.includes(q) || pianoName(p).toLowerCase().includes(q)) within.push(p);
+      if (starts.length >= 8) break;
+    }
+    const hits = starts.concat(within).slice(0, 8);
+    if (!hits.length) { hide(); return; }
+    box.innerHTML = hits.map(p =>
+      `<div class="snrow" data-sn="${esc(p.serial)}"><b>${esc(p.serial)}</b> — ${esc(pianoName(p))}${p.location ? ' <span>· ' + esc(p.location) + '</span>' : ''}</div>`).join('');
+    box.hidden = false;
+    box.querySelectorAll('.snrow').forEach(r => {
+      // pointerdown so the pick lands before the input's blur hides the box
+      r.onpointerdown = e => {
+        e.preventDefault();
+        inp.value = r.dataset.sn;
+        hide();
+        if (onPick) onPick(r.dataset.sn);
+      };
+    });
+  };
+  inp.addEventListener('input', show);
+  inp.addEventListener('focus', show);
+  inp.addEventListener('blur', () => setTimeout(hide, 150));
+}
+
 /* the ＋ on an empty spot: type a serial, the piano is found in the Piano
    Log and moved to this spot (existing occupants get bumped to the attic).
    Unknown serials fall back to the full add-a-piano form. */
@@ -5449,6 +5495,7 @@ function openAssignModal(slotId) {
   const go = () => submitAssign(slotId, ov);
   ov.querySelector('.asgo').onclick = go;
   const inp = ov.querySelector('.asserial');
+  attachSerialSuggest(inp);
   inp.onkeydown = e => { if (e.key === 'Enter') go(); };
   inp.focus();
 }
@@ -5563,6 +5610,7 @@ function openAddModal(slotId, prefillSerial) {
   };
   serialDatalist();
   ov.querySelector('.adgo').onclick = () => submitAdd(slotId, ov);
+  attachSerialSuggest(ov.querySelector('.adserial'));
   ov.querySelector('.adserial').focus();
 }
 async function submitAdd(slotId, ov) {
@@ -5694,6 +5742,7 @@ function reqIdent(p, ov) {
   if (p) out.row = p.row;
   else {
     const g = ov.querySelector('.gpiano');
+    attachSerialSuggest(g);
     if (g && g.value.trim()) out.pianoText = g.value.trim();
   }
   return out;
@@ -9131,18 +9180,44 @@ function tbPeople() {
   });
   return [...set.values()].sort((a, b) => a.localeCompare(b));
 }
+/* speed step 5: the board lives in Supabase (sub-200ms reads, instant
+ * writes via the taskboard-write proxy which mirrors to the sheet+bridge
+ * so notifications and reports keep working). Read order: Supabase →
+ * fast Netlify sheet read (step 4) → Apps Script bridge. */
+const SB_URL = 'https://ismacawxfvvllfinibbf.supabase.co';
+const SB_KEY = 'sb_publishable_MamcjSX0CHTdYlpKDWSkmQ_-nbuQ1z-';   // publishable: safe in browser, read-only via RLS
+async function tbFetchSupabase() {
+  const h = {apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY};
+  const [cr, kr] = await Promise.all([
+    fetch(SB_URL + '/rest/v1/tb_cards?select=*', {headers: h}),
+    fetch(SB_URL + '/rest/v1/tb_cols?select=*', {headers: h}),
+  ]);
+  if (!cr.ok || !kr.ok) throw new Error('supabase read failed');
+  const cards = await cr.json();
+  if (!cards.length) throw new Error('supabase empty (not migrated yet)');
+  const cols = {};
+  (await kr.json()).forEach(r => { cols[String(r.owner).toLowerCase()] = r.cols || []; });
+  return {rows: cards.map(c => ({
+    id: c.id, owner: c.owner || '', col: c.col || 'todo', text: c.text || '',
+    serial: c.serial || '', due: c.due || '', from: c.from_who || '',
+    created: c.created || '', done: c.done_at || '',
+    order: c.ord == null ? null : Number(c.ord),
+    notes: c.notes || '', snooze: c.snooze || '',
+  })), cols};
+}
 async function tbFetch() {
   TB.loading = true;
   try {
-    // fast path (speed step 4): Sheets via Netlify service account,
-    // ~0.5s vs the bridge's 3-6s; bridge stays as the fallback
     let j = null;
-    try {
-      const rf = await fetch('https://blpsalesapp.netlify.app/.netlify/functions/storemap-taskboard?key='
-        + encodeURIComponent('pianoman'));
-      if (rf.ok) j = await rf.json();
-      if (j && j.error) j = null;
-    } catch (e2) { j = null; }
+    try { j = await tbFetchSupabase(); } catch (e0) { j = null; }
+    if (!j) {
+      try {
+        const rf = await fetch('https://blpsalesapp.netlify.app/.netlify/functions/storemap-taskboard?key='
+          + encodeURIComponent('pianoman'));
+        if (rf.ok) j = await rf.json();
+        if (j && j.error) j = null;
+      } catch (e2) { j = null; }
+    }
     if (!j) {
       const r = await fetch(BRIDGE_URL + '?fn=taskboard', {redirect: 'follow'});
       j = await r.json();
@@ -9168,6 +9243,18 @@ async function tbFetch() {
 async function tbSend(body) {
   const wa = writeAuth();
   if (!wa.ok) { alert('Sign in with Google (☰ menu) first — cards are saved under your name.'); return null; }
+  // fast write (step 5): Supabase-first proxy — instant save, and it
+  // forwards the same op to the bridge in the background (sheet mirror,
+  // notifications, activity log). 503 = not configured yet → bridge.
+  try {
+    const pr = await fetch('https://blpsalesapp.netlify.app/.netlify/functions/taskboard-write', {
+      method: 'POST', headers: {'content-type': 'application/json'},
+      body: JSON.stringify({pin: wa.pin, key: wa.pin, ...body, ...authFields()})});
+    if (pr.ok) {
+      const pj = await pr.json();
+      if (pj && pj.ok) return pj;
+    }
+  } catch (e0) { /* fall through to the bridge */ }
   // the Apps Script bridge occasionally answers with an HTML error page
   // (over-capacity blip) — retry a couple of times before bothering anyone
   let lastErr = '';
@@ -9310,6 +9397,7 @@ function renderTaskBoard() {
         <span class="kc-pmsg phmsg">optional</span></div>
       <button class="ccfmyes kc-go" style="width:100%;margin-top:12px">Add card</button>`);
     const txtIn = ov2.querySelector('.kc-text');
+    attachSerialSuggest(ov2.querySelector('.kc-serial'));
     let photoFile = null, videoFile = null;
     const pmsg = () => {
       const parts = [];
@@ -9763,6 +9851,7 @@ function openCardModal(c, canEdit) {
     txt.onblur = () => { clearTimeout(t); if (txt.value.trim() !== c.text) save({text: txt.value.trim()}); };
     ov.querySelector('.cm-due').onchange = ev2 => save({due: ev2.target.value});
     ov.querySelector('.cm-serial').onchange = ev2 => save({serial: ev2.target.value.trim()});
+    if (canEdit) attachSerialSuggest(ov.querySelector('.cm-serial'));
     ov.querySelectorAll('[data-sz]').forEach(b => b.onclick = () => {
       const d = +b.dataset.sz;
       const until = d ? new Date(Date.now() + d * 86400000).toISOString().slice(0, 10) : '';
