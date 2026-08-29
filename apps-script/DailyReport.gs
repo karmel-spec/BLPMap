@@ -3584,6 +3584,39 @@ function smStandup_(pianos, R) {
 // dayOffset: 0 = classic same-morning send (brief describes "today");
 // 1 = sent the evening before, ~7PM, so the brief describes "tomorrow" —
 // the day of the standup it's actually prepping the team for.
+function smTuningQueue_(pianos) {
+  var t = tunings_();
+  var lastBy = t.lastBySerial || {};
+  var upTitles = (t.upcoming || []).map(function (r) { return String(r[2]).toUpperCase(); }).join(' | ');
+  var now = Date.now();
+  function daysSince(iso) { return Math.floor((now - new Date(iso + 'T12:00').getTime()) / 86400000); }
+  var out = [];
+  for (var i = 0; i < pianos.length; i++) {
+    var p = pianos[i];
+    if ((p.phase || '') !== 'For Sale' || !p.serial) continue;
+    var loc = String(p.location || '').trim();
+    if (!loc || /rent|attic|sold|deliver|storage|shop/i.test(loc)) continue;
+    var sn = String(p.serial).toUpperCase();
+    var dig = sn.replace(/\D/g, '');
+    if (upTitles.indexOf(sn) !== -1 || (dig.length >= 5 && upTitles.indexOf(dig) !== -1)) continue;
+    var last = (dig.length >= 5 && lastBy[dig]) || null;
+    var rank, note;
+    if (last) {
+      var d = daysSince(last);
+      rank = 100000 - d;
+      note = 'last tuned ' + last + ' \u00b7 ' + d + 'd ago';
+    } else {
+      var ent = String(p.entered || '').slice(0, 10);
+      var here = /^\d{4}-/.test(ent) ? daysSince(ent) : 9999;
+      rank = here >= 180 ? -here : 200000 - here;
+      note = 'no tuning on record' + (/^\d{4}-/.test(ent) ? ' \u00b7 entered ' + ent : '');
+    }
+    out.push({p: p, rank: rank, note: note});
+  }
+  out.sort(function (a, b) { return a.rank - b.rank; });
+  return out.slice(0, 10);
+}
+
 function buildShopManagerReport_(dayOffset) {
   dayOffset = dayOffset || 0;
   var refDate = new Date(Date.now() + dayOffset * 86400000);
@@ -3609,6 +3642,11 @@ function buildShopManagerReport_(dayOffset) {
   });
 
   R.blocked = smBlockedByTasks_(pianos, defs);
+
+  // showroom tuning queue — same ranking as the Store Map's Task Queues
+  // card (for-sale floor pianos, most-overdue first; scheduled ones drop
+  // off). Top 10 goes in the brief so Korban's mornings fill themselves.
+  try { R.tuningQueue = smTuningQueue_(pianos); } catch (eTQ) { R.tuningQueue = []; }
 
   // hours clocked yesterday (Work Clock) — adoption nudge + real numbers
   R.clocked = []; R.clockedTotal = 0;
@@ -4001,6 +4039,12 @@ function shopManagerHtml_(R) {
       return '<b>' + esc_(x.when) + '</b> · ' + esc_(x.tech) + ' · ' + esc_(x.title)
         + ' ' + pill(esc_(x.flag), '#fdf3ec', '#9a5b13');
     }));
+  }
+  if (R.tuningQueue && R.tuningQueue.length) {
+    sec('🎵', 'Showroom tuning queue \u2014 Korban\u2019s next ' + R.tuningQueue.length, R.tuningQueue.length,
+      'For-sale floor pianos, most-overdue first, from the tuning calendars \u2014 pianos with a tuning '
+      + 'already on the calendar drop off on their own. Full queue: Store Map \u2192 Reports \u2192 \ud83c\udfaf Task Queues.');
+    ul(R.tuningQueue.map(function (x) { return ref(x.p) + ' \u2014 ' + esc_(x.note); }));
   }
   if (R.suggestions && R.suggestions.length) {
     var SICON = {bug: '🐛', edit: '✏️', idea: '💡'};
