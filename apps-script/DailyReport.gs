@@ -809,6 +809,11 @@ function doPost(e) {
       try { return json_(briefDocOnly_(Number(req.day) || 0)); }   // day: 0=today, 3=Monday from Friday
       catch (e2) { return json_({error: String(e2).slice(0, 300)}); }
     }
+    if (req.action === 'docreplace') {
+      var dr = docReplace_(req);
+      if (dr.ok) logAct_(who, 'Doc updated in place', dr.name, 'https://docs.google.com/document/d/' + dr.id);
+      return json_(dr);
+    }
     if (req.action === 'sendbrief') {
       var sb = sendShopManagerReportTo_(SHOPMGR_TO);
       logAct_(who, 'Shop brief sent manually', 'briefing', sb.doc || '');
@@ -4235,6 +4240,27 @@ function smTocHtml_(TOC, color, bg, border) {
 /* Every briefing is also saved as a Google Doc (Drive REST convert) in a
  * "BLP Shop Briefs" folder, link-shared, and logged to the report sheet's
  * "Brief Log" tab — the Store Map's Daily Briefs report lists those links. */
+/* rewrite an existing Google Doc's content in place (same URL) — used by
+ * Claude/console tooling to refresh generated docs like the Korban tuning
+ * recommendations without changing the link people already have. */
+function docReplace_(req) {
+  var id = String(req.docId || '').trim();
+  if (!/^[A-Za-z0-9_-]{20,}$/.test(id)) return {error: 'bad doc id'};
+  var res = UrlFetchApp.fetch('https://www.googleapis.com/upload/drive/v3/files/'
+      + id + '?uploadType=media&fields=id,name', {
+    method: 'patch',
+    contentType: 'text/html; charset=UTF-8',
+    payload: String(req.html || ''),
+    headers: {Authorization: 'Bearer ' + ScriptApp.getOAuthToken()},
+    muteHttpExceptions: true,
+  });
+  if (res.getResponseCode() >= 300) {
+    return {error: 'drive ' + res.getResponseCode() + ' ' + res.getContentText().slice(0, 140)};
+  }
+  var f = JSON.parse(res.getContentText());
+  return {ok: true, id: f.id, name: f.name};
+}
+
 function briefDoc_(subject, html, kind) {
   var it = DriveApp.getFoldersByName('BLP Shop Briefs');
   var folder = it.hasNext() ? it.next() : DriveApp.createFolder('BLP Shop Briefs');
