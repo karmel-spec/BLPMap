@@ -80,6 +80,7 @@
     <div class="navitem" data-view="sched" id="navSched" hidden><span class="ic">📅</span>Scheduling</div>
     <div class="navitem" data-view="team" id="navTeam" hidden><span class="ic">👥</span>Team</div>
     <div class="navitem" data-view="admdash" id="navAdmDash" hidden><span class="ic">🛡</span>Admin</div>
+    <div class="navitem" data-view="manager" id="navManager" hidden><span class="ic">📊</span>Manager</div>
     <div class="crew">
       <b>Synced</b><span id="synced">loading…</span>
     </div>
@@ -271,6 +272,16 @@
     </div>
   </div>
 
+  <div class="view panelview" id="view-manager" hidden>
+    <div class="panel">
+      <h2 class="ph">📊 MANAGER CONSOLE</h2>
+      <p class="pd">Brigham, Karmel &amp; Mark only — the shop scorecard: productivity index,
+        quality, bonus translation and the career-ladder gates, live from the Work Clock,
+        QC Log and payroll punches.</p>
+      <div id="managerBody"></div>
+    </div>
+  </div>
+
   <div class="view panelview" id="view-admdash" hidden>
     <div class="panel">
       <h2 class="ph">🛡 ADMIN DASHBOARD</h2>
@@ -281,7 +292,7 @@
   </div>
 </div>
 
-<script src="app.js?v=269"></script>
+<script src="app.js?v=270"></script>
 <script src="sched.js?v=6"></script>
 </body>
 </html>

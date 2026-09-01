@@ -6534,6 +6534,8 @@ function isOwner() { return OWNER_EMAILS.includes(userEmail()); }
 function isAdminUser() { return ADMIN_EMAILS.includes(userEmail()); }
 function isPayrollAdmin() { return PAYROLL_ADMIN_EMAILS.includes(userEmail()); }
 function isTimelogAdmin() { return TIMELOG_ADMIN_EMAILS.includes(userEmail()); }
+// 📊 Manager console — the owners and the Lead Manager only (Brigham 9/1)
+function isManagerConsole() { return isOwner() || userEmail() === 'markhales.blp@gmail.com'; }
 // only BLP accounts may sign in — a personal Gmail gets bounced back to
 // Google's account chooser instead of silently half-working
 function blpAccount(email) {
@@ -6615,6 +6617,9 @@ function renderAuth() {
   if (nt) nt.hidden = !isTeamAdmin();
   const na = $('#navAdmDash');
   if (na) na.hidden = !isTeamAdmin();
+  // 📊 Manager console — Brigham, Karmel & Mark only
+  const nm = $('#navManager');
+  if (nm) nm.hidden = !isManagerConsole();
   // top-bar identity chip — who's signed in, always visible
   const tw = $('#topWho');
   if (tw && !tw.dataset.wired) {
@@ -7785,6 +7790,7 @@ async function loadPayroll() {
     S.payRows = (await r.json()).rows || [];
   } catch (e) { S.payRows = []; }
   if (!S.tlRows) loadTimeLog(); else renderReport();
+  if (S.view === 'manager') renderManager();
 }
 async function loadTimeLog() {
   try {
@@ -7792,6 +7798,7 @@ async function loadTimeLog() {
     S.tlRows = (await r.json()).rows || [];
   } catch (e) { S.tlRows = []; }
   renderReport();
+  if (S.view === 'manager') renderManager();
 }
 function denverDay(iso) {   // yyyy-mm-dd in Denver for a session start
   return new Date(iso).toLocaleDateString('en-CA', {timeZone: 'America/Denver'});
@@ -8194,6 +8201,7 @@ async function loadScoreLog() {
     S.slRows = (await r.json()).rows || [];
   } catch (e) { S.slRows = []; }
   renderReport();
+  if (S.view === 'manager') renderManager();
 }
 async function loadQcLog() {
   try {
@@ -8201,6 +8209,7 @@ async function loadQcLog() {
     S.qcRows = (await r.json()).rows || [];
   } catch (e) { S.qcRows = []; }
   renderReport();
+  if (S.view === 'manager') renderManager();
 }
 function scorecardTable() {
   if (!S.tlRows || !S.payRows || !S.qcRows || !S.slRows) return '<div class="empty">Crunching the clock, QC, payroll and snapshot ledgers…</div>';
@@ -8396,11 +8405,6 @@ const REPORT_DEFS = () => [
      try { return taskQueueLists().reduce((s, q) => s + q.list.length, 0); } catch (e) { return null; } })(),
    desc: 'Seven ordered to-do queues — key service, plates to Curtis Harper, refinishing on deck, plating + buffing, decals, bass strings, and the showroom tuning queue for Korban (most-overdue first, from the tuning calendars). Each shows who’s NEXT and everyone behind them. Click any row to jump to the piano.',
    html: taskQueuesTable},
-  // visible to the owners and the Lead Manager only (Brigham 9/1) — this is
-  // Mark's pay dashboard, not a general manager report
-  {id: 'scorecard', sec: 'shop', show: () => isOwner() || userEmail() === 'markhales.blp@gmail.com', icon: '📊', title: 'MANAGER SCORECARD', count: null,
-   desc: 'The shop\u2019s monthly performance-pay dashboard: clock coverage, productivity vs phase standards, mini-QC first-pass rate, rework, training investment and stalled pianos \u2014 translated straight into the manager bonus formula. Rolling 30 days.',
-   html: scorecardTable},
   {id: 'stalled', sec: 'shop', icon: '🐢', title: 'SITTING TOO LONG', count: (() => {
      try { return stalledPianos().length; } catch (e) { return null; } })(),
    desc: 'Custom Shopwork pianos in the building more than twice the typical span for their current phase — the 🐢 list that used to live inside the daily brief. Click a row to jump to the piano.',
@@ -8515,12 +8519,6 @@ function renderReport() {
     if (S.openReport === 'jobcost' && !S.tlRows) loadTimeLog();
     if (S.openReport === 'queue' && !S.tlRows) loadTimeLog();   // ASSIGNED TO column
     if (S.openReport === 'appupdates' && !S.auRows) loadAppUpdates();
-    if (S.openReport === 'scorecard') {
-      if (!S.tlRows) loadTimeLog();
-      if (!S.payRows) loadPayroll();
-      if (!S.qcRows) loadQcLog();
-      if (!S.slRows) loadScoreLog();
-    }
     if (S.openReport === 'clockadjust') {
       if (!S.fixRows) loadClockFixes();
       if (!S.payRows) loadPayroll();
@@ -10609,7 +10607,7 @@ function renderAdmDash() {
 
 /* ---------- views / nav / drawers ---------- */
 function showView(v) {
-  ['map', 'report', 'board', 'cal', 'media', 'shopmap', 'archive', 'dash', 'whiteboard', 'training', 'trainingdoc', 'sched', 'team', 'admdash', 'updates', 'tboard'].forEach(x => $('#view-' + x).hidden = x !== v);
+  ['map', 'report', 'board', 'cal', 'media', 'shopmap', 'archive', 'dash', 'whiteboard', 'training', 'trainingdoc', 'sched', 'team', 'admdash', 'updates', 'tboard', 'manager'].forEach(x => $('#view-' + x).hidden = x !== v);
   if (v === 'archive') renderArchive();
   document.querySelectorAll('.navitem[data-view]').forEach(el =>
     el.classList.toggle('on', el.dataset.view === v));
@@ -10621,6 +10619,18 @@ function showView(v) {
   if (v === 'admdash') renderAdmDash();
   if (v === 'updates') renderUpdatesFeed();
   if (v === 'tboard') renderTaskBoard();
+  if (v === 'manager') renderManager();
+}
+/* 📊 Manager console — the scorecard as its own menu tab */
+function renderManager() {
+  const el = $('#managerBody');
+  if (!el) return;
+  if (!isManagerConsole()) { el.innerHTML = '<div class="empty">Owners and the Lead Manager only.</div>'; return; }
+  if (!S.tlRows) loadTimeLog();
+  if (!S.payRows) loadPayroll();
+  if (!S.qcRows) loadQcLog();
+  if (!S.slRows) loadScoreLog();
+  el.innerHTML = scorecardTable();
 }
 /* 🚀 App Updates — the user-facing changelog. Same "App Updates" sheet the
  * 📣 admin report logs into; everyone can read what's new. */
@@ -10652,6 +10662,7 @@ async function renderUpdatesFeed() {
 function switchView(v) {
   if (v === 'sched' && !isTimelogAdmin()) v = 'map';   // managers & owners only
   if ((v === 'team' || v === 'admdash') && !isTeamAdmin()) v = 'map';   // admin + managers + owners
+  if (v === 'manager' && !isManagerConsole()) v = 'map';   // Brigham, Karmel & Mark only
   S.view = v; showView(v); closeNav();
   // a leftover page scroll (from panning the map) can slide a view's top —
   // and its ✕ — up underneath the sticky header, where iOS bounce keeps it

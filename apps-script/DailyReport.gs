@@ -2672,6 +2672,13 @@ function clockFixRequest_(req, who) {
   var sh = clockFixSheet_();
   sh.appendRow([new Date(), String(who || ''), req.clock === 'pay' ? 'Day clock' : 'Piano clock',
                 String(req.serial || ''), note.slice(0, 400), 'open']);
+  // routed by role (Brigham 9/1): shop side → Mark, admins → Melissa
+  try {
+    var whoName = String(who || '').replace(/\s*[(<].*$/, '').trim();
+    notifyTeam_([roleSide_(whoName) === 'admin' ? 'Melissa' : 'Mark Hales'],
+      '🛠 Clock fix request — ' + whoName + ': ' + note.slice(0, 120)
+      + ' (approve in Store Map → Reports → 🛠 Time Clock Adjustments)');
+  } catch (eN) { /* text best-effort */ }
   return {ok: true};
 }
 function resolveClockFix_(req, who) {
@@ -2682,6 +2689,19 @@ function resolveClockFix_(req, who) {
   var sh = clockFixSheet_();
   var row = Number(req.row);
   if (!(row >= 2) || row > sh.getLastRow()) return {error: 'bad row'};
+  // lane check (Brigham 9/1): Mark resolves shop-side requests, Melissa the
+  // admins'; the owners resolve either lane
+  var em = String((g && g.email) || '').toLowerCase();
+  if (em !== 'brigham@brighamlarsonpianos.com' && em !== 'karmel@brighamlarsonpianos.com') {
+    var reqName = String(sh.getRange(row, 2).getValue() || '').replace(/\s*[(<].*$/, '').trim();
+    var side2 = roleSide_(reqName);
+    if (em === 'melissa@brighamlarsonpianos.com' && side2 !== 'admin') {
+      return {error: reqName + ' is on the shop side — Mark resolves this one'};
+    }
+    if (em !== 'melissa@brighamlarsonpianos.com' && side2 === 'admin') {
+      return {error: reqName + ' is on the admin side — Melissa resolves this one'};
+    }
+  }
   sh.getRange(row, 6).setValue('resolved by ' + ((g.name || g.email)) + ' ' +
     Utilities.formatDate(new Date(), 'America/Denver', 'M/d'));
   return {ok: true};
@@ -5395,10 +5415,34 @@ function timeOffAdd_(req, who) {
         msg + '\n\nFiled from the Store Map by ' + who
         + '.\nAll requests: Store Map → Reports → 🏖 Time Off (or the report sheet\u2019s Time Off tab).');
     } catch (e) { /* email best-effort */ }
-    notifyTeam_(['Mark Hales'], '🏖 ' + msg);
+    // routed by role (Brigham 9/1): shop side → Mark, admins → Melissa
+    notifyTeam_([roleSide_(tech) === 'admin' ? 'Melissa' : 'Mark Hales'], '🏖 ' + msg);
   }
   return {ok: true, tech: tech, start: start, end: end};
 }
+/* which approval lane a team member belongs to (Brigham 9/1):
+ * Position on the Current Team sheet — /admin/ → Melissa's lane,
+ * everyone else (rebuilders, refinishers, techs, tuners, interns,
+ * movers) → Mark's lane. Owners can act on either lane. */
+function roleSide_(name) {
+  try {
+    var ts = SpreadsheetApp.openById('1j1FP78rRj1jrl2z-_vIg95kN3GuG8TI4dpOheSnIoPc')
+      .getSheetByName('Current Team');
+    var tv = ts.getRange(2, 1, Math.max(1, ts.getLastRow() - 1), 4).getValues();
+    var n = String(name || '').toLowerCase().trim();
+    var nf = n.split(/\s+/)[0], nl = n.split(/\s+/).slice(-1)[0];
+    for (var i = 0; i < tv.length; i++) {
+      var f = String(tv[i][0] || '').trim().toLowerCase();
+      var l = String(tv[i][1] || '').trim().toLowerCase();
+      if (!f) continue;
+      if (n === (f + ' ' + l).trim() || n === f || (nf === f && nl === l)) {
+        return /admin/i.test(String(tv[i][3] || '')) ? 'admin' : 'shop';
+      }
+    }
+  } catch (e) { /* roster unreadable — default to shop lane */ }
+  return 'shop';
+}
+
 /* approve / deny a time-off request (Brigham 9/1): Mark (lead manager),
  * Melissa and the owners. Writes the decision into the status column and
  * texts the requester. */
@@ -5408,6 +5452,8 @@ function timeOffStatus_(req, who) {
   var ALLOW = ['brigham@brighamlarsonpianos.com', 'karmel@brighamlarsonpianos.com',
                'markhales.blp@gmail.com', 'melissa@brighamlarsonpianos.com'];
   if (ALLOW.indexOf(email) < 0) return {error: 'only Mark, Melissa or the owners can approve time off'};
+  var isOwnerAcct = email.indexOf('@brighamlarsonpianos.com') > 0
+    && (email.indexOf('brigham@') === 0 || email.indexOf('karmel@') === 0);
   var row = Number(req.row) || 0;
   var status = req.status === 'approved' ? 'approved' : req.status === 'denied' ? 'denied' : '';
   if (!status) return {error: 'status must be approved or denied'};
@@ -5418,6 +5464,17 @@ function timeOffStatus_(req, who) {
   var d = function (x) { return (x instanceof Date)
     ? Utilities.formatDate(x, 'America/Denver', 'yyyy-MM-dd') : String(x || ''); };
   var tech = String(v[1]), span = d(v[2]) + (d(v[3]) && d(v[3]) !== d(v[2]) ? ' → ' + d(v[3]) : '');
+  // lane check (Brigham 9/1): Mark approves shop-side requests, Melissa
+  // approves the admins'; the owners can approve either lane
+  if (!isOwnerAcct) {
+    var side = roleSide_(tech);
+    if (email === 'markhales.blp@gmail.com' && side !== 'shop') {
+      return {error: tech + ' is on the admin side — Melissa approves this one'};
+    }
+    if (email === 'melissa@brighamlarsonpianos.com' && side !== 'admin') {
+      return {error: tech + ' is on the shop side — Mark approves this one'};
+    }
+  }
   var first = String(who || '').split(' ')[0] || 'a manager';
   var stamp = status + ' by ' + first + ' ' + Utilities.formatDate(new Date(), 'America/Denver', 'M/d');
   sh.getRange(row, 7).setValue(stamp);
