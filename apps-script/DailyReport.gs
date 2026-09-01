@@ -1421,7 +1421,11 @@ var PHASE_VALUES = ['New Arrival - Admin', 'Assessment', 'CAP',
   'Chip Tuning', 'DHRT', '1st Tuning', 'Refinishing', 'QC & Assembly',
   '2nd Tuning', 'Exit Prep - Admin', 'Delivered',
   'In Queue', 'Paused', 'For Sale',
-  'Waiting on Brigham', 'Waiting on Curtis Harper', 'Waiting on Customer', 'Waiting on OTHER'];
+  'Waiting on Brigham', 'Waiting on Curtis Harper', 'Waiting on Customer', 'Waiting on OTHER',
+  // track-sheet steps outside the master 14 (refurbishing/repair tracks) —
+  // the app's normTrackPhase canonicalizes the Sequence-sheet wording to
+  // these (082726hales17: "unknown phase" saving Key Servicing)
+  'Key Service', 'Refurb Checklist', 'Repair Work', 'Add-ons'];
 
 // July 2026 phase rework: how the old phase names translate to the new
 // 14-phase pipeline. Used once by the 'migratephases' action to update
@@ -2816,7 +2820,7 @@ function addRequest_(req) {
   return {ok: true, id: id, screenshot: shot};
 }
 function setRequestStatus_(req) {
-  var STATUSES = ['Requested', 'In progress', 'Live', 'Tested', 'Archived'];
+  var STATUSES = ['Requested', 'In progress', 'Texted for info', 'Live', 'Tested', 'Resolved', 'Archived'];
   if (STATUSES.indexOf(String(req.status)) < 0) return {error: 'bad status'};
   var sh = requestsSheet_();
   var vals = sh.getDataRange().getValues();
