@@ -8239,7 +8239,7 @@ function scorecardTable() {
   const money = `<div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:14px">
     ${kpi('Bonus estimate', bonusLo == null ? '—' : '$' + bonusLo.toFixed(2) + '–' + (bonusLo + 1.2).toFixed(2) + '/hr', 'productivity × quality + management', '#2f7d4f')}
     ${kpi('Month value', bonusLo == null ? '—' : '$' + Math.round(bonusLo * 173) + '–' + Math.round((bonusLo + 1.2) * 173), 'on a 173-hour month over base')}
-    ${kpi('Effective rate', bonusLo == null ? '—' : '$' + (23 + bonusLo).toFixed(2) + '–' + (23 + bonusLo + 1.2).toFixed(2), '$23 base + this month\u2019s bonus', '#2f7d4f')}
+    ${kpi('Effective rate', bonusLo == null ? '—' : '$' + (18 + bonusLo).toFixed(2) + '–' + (18 + bonusLo + 1.2).toFixed(2), '$18 base (\u2192$19 at 85% baseline) + bonus', '#2f7d4f')}
   </div>`;
   return hero + money + `<div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:14px">
     ${kpi('Clock coverage', pct(coverage), 'work-clock ÷ payroll · gate ≥85%', coverage != null && coverage < 85 ? '#9e2020' : '#2f7d4f')}
