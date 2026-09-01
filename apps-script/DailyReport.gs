@@ -4273,7 +4273,13 @@ function scorecardSnapshot_() {
   }
   var today = Utilities.formatDate(new Date(), 'America/Denver', 'yyyy-MM-dd');
   var last = sh.getLastRow();
-  if (last >= 2 && String(sh.getRange(last, 1).getValue()) === today) return {ok: true, dup: true};
+  // Sheets parses the date cell into a Date — normalize before comparing,
+  // or every run of the morning trigger would append a duplicate row
+  if (last >= 2) {
+    var lv = sh.getRange(last, 1).getValue();
+    var lday = (lv instanceof Date) ? Utilities.formatDate(lv, 'America/Denver', 'yyyy-MM-dd') : String(lv).slice(0, 10);
+    if (lday === today) return {ok: true, dup: true};
+  }
   var data = JSON.parse(UrlFetchApp.fetch(APP_URL + '/api/data?scope=active').getContentText());
   var pianos = (data.pianos || []).filter(function (p) { return p.active !== false; });
   var stalled = 0, wOver = 0, wMiss = 0, wTot = 0;
@@ -4298,7 +4304,9 @@ function scoreLogRows_() {
   if (!sh || sh.getLastRow() < 2) return {ok: true, rows: []};
   var vals = sh.getRange(Math.max(2, sh.getLastRow() - 90), 1, Math.min(90, sh.getLastRow() - 1), 5).getValues();
   return {ok: true, rows: vals.map(function (v) {
-    return {date: String(v[0]).slice(0, 10), stalled: Number(v[1]) || 0, wOver: Number(v[2]) || 0,
+    var d0 = v[0];
+    var ds = (d0 instanceof Date) ? Utilities.formatDate(d0, 'America/Denver', 'yyyy-MM-dd') : String(d0).slice(0, 10);
+    return {date: ds, stalled: Number(v[1]) || 0, wOver: Number(v[2]) || 0,
             wMiss: Number(v[3]) || 0, wTot: Number(v[4]) || 0};
   })};
 }
