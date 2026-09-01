@@ -8362,8 +8362,7 @@ function scorecardTable() {
     <tr><td>Management (15%) — app-computed: stalled trend, check-back hygiene, throughput cadence, coverage<br><span style="font-size:11px;color:#8a847b">${mSub}</span></td><td>${mgmtScore == null ? '—' : Math.round(mgmtScore * 100) + '%'}</td><td><b>${mgmtBonus == null ? '—' : '$' + mgmtBonus.toFixed(2)}</b></td></tr></table>
     <div style="margin-top:8px;font-size:13px">Estimated bonus: <b>${bonusAll == null ? '— (needs more data)' : '$' + bonusAll.toFixed(2) + '/hr'}</b>
       &nbsp;→ on a 173-hour month that's <b>${bonusAll == null ? '—' : '$' + Math.round(bonusAll * 173)}</b> over base.</div>
-    <div style="margin-top:6px;font-size:12px;color:#6b5030">Standards are provisional (calendar-derived, expert midpoints) — they recalibrate as Work Clock history grows. Months 1–2 are baseline-collection; the translation goes live after calibration.</div>
-    <div style="margin-top:4px;font-size:12px;color:#6b5030">Self-funding check (2025 P&amp;L): the shop supports ~$1.566M of production-dependent value (restoration + refinishing + used-inventory prep) on ~19,400 internal tech hours — each sustained index point ≈ $15.7k/yr, and the whole $17→$28 ladder costs just $1.42 per shop-hour managed.</div>
+
   </div>`;
 }
 
