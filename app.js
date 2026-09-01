@@ -8299,7 +8299,9 @@ const REPORT_DEFS = () => [
      try { return taskQueueLists().reduce((s, q) => s + q.list.length, 0); } catch (e) { return null; } })(),
    desc: 'Seven ordered to-do queues — key service, plates to Curtis Harper, refinishing on deck, plating + buffing, decals, bass strings, and the showroom tuning queue for Korban (most-overdue first, from the tuning calendars). Each shows who’s NEXT and everyone behind them. Click any row to jump to the piano.',
    html: taskQueuesTable},
-  {id: 'scorecard', sec: 'shop', show: () => isOwner() || isTimelogAdmin(), icon: '📊', title: 'MANAGER SCORECARD', count: null,
+  // visible to the owners and the Lead Manager only (Brigham 9/1) — this is
+  // Mark's pay dashboard, not a general manager report
+  {id: 'scorecard', sec: 'shop', show: () => isOwner() || userEmail() === 'markhales.blp@gmail.com', icon: '📊', title: 'MANAGER SCORECARD', count: null,
    desc: 'The shop\u2019s monthly performance-pay dashboard: clock coverage, productivity vs phase standards, mini-QC first-pass rate, rework, training investment and stalled pianos \u2014 translated straight into the manager bonus formula. Rolling 30 days.',
    html: scorecardTable},
   {id: 'stalled', sec: 'shop', icon: '🐢', title: 'SITTING TOO LONG', count: (() => {
