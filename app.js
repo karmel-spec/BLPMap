@@ -8239,7 +8239,7 @@ function scorecardTable() {
   const money = `<div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:14px">
     ${kpi('Bonus estimate', bonusLo == null ? '—' : '$' + bonusLo.toFixed(2) + '–' + (bonusLo + 1.2).toFixed(2) + '/hr', 'productivity × quality + management', '#2f7d4f')}
     ${kpi('Month value', bonusLo == null ? '—' : '$' + Math.round(bonusLo * 173) + '–' + Math.round((bonusLo + 1.2) * 173), 'on a 173-hour month over base')}
-    ${kpi('Effective rate', bonusLo == null ? '—' : '$' + (22 + bonusLo).toFixed(2) + '–' + (22 + bonusLo + 1.2).toFixed(2), '$22 base + this month\u2019s bonus', '#2f7d4f')}
+    ${kpi('Effective rate', bonusLo == null ? '—' : '$' + (23 + bonusLo).toFixed(2) + '–' + (23 + bonusLo + 1.2).toFixed(2), '$23 base + this month\u2019s bonus', '#2f7d4f')}
   </div>`;
   return hero + money + `<div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:14px">
     ${kpi('Clock coverage', pct(coverage), 'work-clock ÷ payroll · gate ≥85%', coverage != null && coverage < 85 ? '#9e2020' : '#2f7d4f')}
@@ -8257,7 +8257,7 @@ function scorecardTable() {
     <div style="margin-top:8px;font-size:13px">Estimated bonus: <b>${prodBonus == null || qualBonus == null ? '— (needs more data)' : '$' + (prodBonus + qualBonus).toFixed(2) + '–$' + (prodBonus + qualBonus + 1.2).toFixed(2) + '/hr'}</b>
       &nbsp;→ on a 173-hour month that's <b>${prodBonus == null || qualBonus == null ? '—' : '$' + Math.round((prodBonus + qualBonus) * 173) + '–$' + Math.round((prodBonus + qualBonus + 1.2) * 173)}</b> over base.</div>
     <div style="margin-top:6px;font-size:12px;color:#6b5030">Standards are provisional (calendar-derived, expert midpoints) — they recalibrate as Work Clock history grows. Months 1–2 are baseline-collection; the translation goes live after calibration.</div>
-    <div style="margin-top:4px;font-size:12px;color:#6b5030">Self-funding check (2025 P&amp;L): production ran ~$1.066M on ~22,400 rebuilding hours, so each sustained index point ≈ $10.7k/yr of throughput — the full $22→$28 ladder (~$27.5k loaded) funds itself at roughly +5–7 points held.</div>
+    <div style="margin-top:4px;font-size:12px;color:#6b5030">Self-funding check (2025 P&amp;L): the shop supports ~$1.566M of production-dependent value (restoration + refinishing + used-inventory prep) on ~19,400 internal tech hours — each sustained index point ≈ $15.7k/yr, and the whole $17→$28 ladder costs just $1.42 per shop-hour managed.</div>
   </div>`;
 }
 
