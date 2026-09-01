@@ -2569,6 +2569,17 @@ function renderMap() {
     if (clutter(w)) continue;
     s += `<line x1="${w.x1}" y1="${w.y1}" x2="${w.x2}" y2="${w.y2}" class="wall"/>`;
   }
+  // plate rack slats (1p-18p): which piano's plate sits on each slat
+  const PLATES = new Map();
+  for (const px of S.data.pianos) {
+    if (!px.active) continue;
+    for (const tok of cabTokens(px)) {
+      if (/^\d+p$/.test(tok)) {
+        if (!PLATES.has(tok)) PLATES.set(tok, []);
+        PLATES.get(tok).push(px);
+      }
+    }
+  }
   for (const sl of f.slots) {
     const ps = S.bySlot.get(sl.id.toLowerCase()) || [];
     const hit = q && (sl.id.toLowerCase() === q || ps.some(p => matches(p, q)));
@@ -2615,6 +2626,13 @@ function renderMap() {
       const numW = fs * 0.62 * sl.id.length + 8;
       s += `<text x="${sl.x + 6}" y="${sl.y + sl.h / 2 + fs * 0.36}" class="snum"
             font-size="${fs}">${esc(sl.id)}</text>`;
+      const plates = /^\d+p$/.test(sl.id) ? (PLATES.get(sl.id) || []) : [];
+      if (plates.length) {
+        const pt = '⚙ ' + plates.map(px => px.serial || '?').join(' · ');
+        const pfs2 = Math.max(7, Math.min(sl.h * 0.5, ((sl.w - numW - 8) * 1.7) / Math.max(pt.length, 4)));
+        s += `<text x="${sl.x + numW + (sl.w - numW) / 2}" y="${sl.y + sl.h / 2 + pfs2 * 0.36}"
+              text-anchor="middle" class="phnum" font-size="${pfs2}">${esc(pt)}</text>`;
+      }
       if (n) {
         const availW = sl.w - numW - 10;
         const pad = thin ? 3 : 8;
@@ -5663,6 +5681,34 @@ function attachSerialSuggest(inp, onPick) {
   inp.addEventListener('blur', () => setTimeout(hide, 150));
 }
 
+/* ＋ on a plate rack slat (1p-18p): the plate is assigned by the piano's
+   serial — the piano itself stays wherever it is on the floor */
+function openPlateAssignModal(slotId) {
+  serialDatalist();
+  const ov = modalShell('platemodal', `
+    <span class="x">\u2715</span>
+    <h3>⚙️ Put a plate at ${esc(slotId)}</h3>
+    <label>Which piano's plate? (serial)</label>
+    <input class="plsn" maxlength="20" placeholder="type the serial…">
+    <button class="tmgo plgo">Store the plate at ${esc(slotId)}</button>
+    <div class="tmmsg"></div>`);
+  attachSerialSuggest(ov.querySelector('.plsn'));
+  ov.querySelector('.plgo').onclick = async () => {
+    const msg = ov.querySelector('.tmmsg');
+    const sn = ov.querySelector('.plsn').value.trim().split(' — ')[0].trim();
+    if (!sn) { msg.className = 'tmmsg err'; msg.textContent = 'Type a serial number first.'; return; }
+    const p = S.data.pianos.find(x => x.active && (x.serial || '').toLowerCase() === sn.toLowerCase());
+    if (!p) { msg.className = 'tmmsg err'; msg.textContent = 'No active piano with that serial.'; return; }
+    const list = cabTokens(p);
+    if (!list.includes(slotId)) list.push(slotId);
+    msg.className = 'tmmsg'; msg.textContent = 'Saving\u2026';
+    await saveCabinetry(p, list, {querySelector: () => null});
+    ov.hidden = true;
+    renderMap();
+  };
+  ov.querySelector('.plsn').focus();
+}
+
 /* the ＋ on an empty spot: type a serial, the piano is found in the Piano
    Log and moved to this spot (existing occupants get bumped to the attic).
    Unknown serials fall back to the full add-a-piano form. */
@@ -7068,6 +7114,27 @@ function openSlotPop(id) {
       `<div class="row" style="color:#9e2020;font-weight:700">Multiple pianos on one spot — see Reports.</div>`;
     pop.onclick = ev => {
       if (ev.target.closest('.x')) { pop.hidden = true; popPinned = false; } };
+  } else if (/^\d+p$/.test(id)) {
+    // plate rack slat (stairs conversion, 9/1): the piano keeps its floor
+    // spot — its PLATE lives here, tracked as a cabinetry token
+    const holders = S.data.pianos.filter(x => x.active && cabTokens(x).includes(id));
+    pop.innerHTML = `<span class="x">✕</span>
+      <span class="tag">PLATE SPOT ${esc(id)}</span>
+      ${holders.length ? `<h3>⚙️ Plate stored here</h3>` + holders.map(x =>
+          `<div class="row">• <b>${esc(x.summary || x.serial)}</b>${x.location ? ' — piano at spot ' + esc(x.location) : ''}
+             <i class="platedel" data-row="${x.row}" style="cursor:pointer;color:#9e2020">✕ remove</i></div>`).join('')
+        : `<h3>Empty</h3><div class="row">No plate yet assigned here.</div>`}
+      <button class="tagbtn addhere">＋ Put a plate here</button>`;
+    pop.onclick = ev => {
+      if (ev.target.closest('.x')) { pop.hidden = true; popPinned = false; return; }
+      const del = ev.target.closest('.platedel');
+      if (del) {
+        const px = S.data.pianos.find(x => x.row === +del.dataset.row);
+        if (px) saveCabinetry(px, cabTokens(px).filter(t => t !== id), {querySelector: () => null})
+          .then(() => { pop.hidden = true; renderMap(); });
+        return;
+      }
+      if (ev.target.closest('.addhere')) { pop.hidden = true; openPlateAssignModal(id); } };
   } else {
     pop.innerHTML = `<span class="x">✕</span>
       <span class="tag">SPOT ${esc(id)}</span><h3>Empty</h3>
