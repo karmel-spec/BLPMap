@@ -8237,6 +8237,7 @@ function scorecardTable() {
     <div style="margin-top:8px;font-size:13px">Estimated bonus: <b>${prodBonus == null || qualBonus == null ? '— (needs more data)' : '$' + (prodBonus + qualBonus).toFixed(2) + '–$' + (prodBonus + qualBonus + 1.2).toFixed(2) + '/hr'}</b>
       &nbsp;→ on a 173-hour month that's <b>${prodBonus == null || qualBonus == null ? '—' : '$' + Math.round((prodBonus + qualBonus) * 173) + '–$' + Math.round((prodBonus + qualBonus + 1.2) * 173)}</b> over base.</div>
     <div style="margin-top:6px;font-size:12px;color:#6b5030">Standards are provisional (calendar-derived, expert midpoints) — they recalibrate as Work Clock history grows. Months 1–2 are baseline-collection; the translation goes live after calibration.</div>
+    <div style="margin-top:4px;font-size:12px;color:#6b5030">Self-funding check (2025 P&amp;L): production ran ~$1.066M on ~22,400 rebuilding hours, so each sustained index point ≈ $10.7k/yr of throughput — the full $22→$28 ladder (~$27.5k loaded) funds itself at roughly +5–7 points held.</div>
   </div>`;
 }
 
