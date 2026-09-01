@@ -7987,12 +7987,27 @@ function toLocalInput(iso) {
 async function adjustPost(body) {
   const {pin, ok} = writeAuth();
   if (!ok) return {error: 'Sign in first.'};
-  try {
-    const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
-      headers: {'content-type': 'text/plain;charset=utf-8'},
-      body: JSON.stringify({pin, ...authFields(), ...body})});
-    return await r.json();
-  } catch (e) { return {error: 'offline — try again'}; }
+  // Google's Apps Script serving occasionally misroutes a POST and answers
+  // with the generic service ping ({ok:true, service:…}) WITHOUT running
+  // the action — that reads as success and the change silently vanishes
+  // (found 9/1: time-clock adjustments "saving" but not saved). Detect the
+  // imposter and retry; if it persists, say so instead of pretending.
+  for (let a = 0; a < 3; a++) {
+    try {
+      const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+        headers: {'content-type': 'text/plain;charset=utf-8'},
+        body: JSON.stringify({pin, ...authFields(), ...body})});
+      const j = await r.json();
+      if (j && j.service && !j.error) {   // ping imposter — action never ran
+        await new Promise(res => setTimeout(res, 1200 * (a + 1)));
+        continue;
+      }
+      return j;
+    } catch (e) {
+      await new Promise(res => setTimeout(res, 1200 * (a + 1)));
+    }
+  }
+  return {error: 'the Google bridge hiccuped and the change did NOT save — try again in a minute'};
 }
 function adjRow(clock, r, label, sub) {
   const ed = S.adjEdit && S.adjEdit.clock === clock && S.adjEdit.row === r.row;
