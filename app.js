@@ -8088,6 +8088,9 @@ function openArchived(p) {
   if (body) { popPinned = true; openPop(p.row, body, true); }
 }
 
+function canApproveTimeOff() {
+  return isOwner() || ['markhales.blp@gmail.com', 'melissa@brighamlarsonpianos.com'].includes(userEmail());
+}
 function timeOffTable() {
   if (!TO.rows) { loadTimeOff(); return '<div class="empty">Loading time off…</div>'; }
   const f = S.toF || (S.toF = {who: '', from: '', to: ''});
@@ -8103,13 +8106,25 @@ function timeOffTable() {
       <label class="rfd">from <input type="date" class="rptf" data-scope="to" data-f="from" value="${esc(f.from || '')}"></label>
       <label class="rfd">to <input type="date" class="rptf" data-scope="to" data-f="to" value="${esc(f.to || '')}"></label>
     </div>
-    <table><tr><th>TEAM MEMBER</th><th>DATES</th><th>TIMES</th><th>NOTES</th><th>REQUESTED</th></tr>
-    ${rows.map(r => `<tr${r.end >= today ? ' style="font-weight:600"' : ''}>
+    <table><tr><th>TEAM MEMBER</th><th>DATES</th><th>TIMES</th><th>NOTES</th><th>REQUESTED</th><th>STATUS</th></tr>
+    ${rows.map(r => {
+      const st = (r.status || 'requested');
+      const chip = /^approved/i.test(st)
+        ? `<span style="background:#eaf5ec;color:#2f7d4f;border-radius:5px;padding:2px 8px;font-size:11px;font-weight:700">✓ ${esc(st)}</span>`
+        : /^denied/i.test(st)
+          ? `<span style="background:#fdecec;color:#9e2020;border-radius:5px;padding:2px 8px;font-size:11px;font-weight:700">✗ ${esc(st)}</span>`
+          : canApproveTimeOff()
+            ? `<button class="tobtn" data-row="${r.row}" data-st="approved" style="color:#2f7d4f">✓ Approve</button>
+               <button class="tobtn" data-row="${r.row}" data-st="denied" style="color:#9e2020">✗ Deny</button>`
+            : '<span style="color:#8a929a;font-size:11px">requested</span>';
+      return `<tr${r.end >= today ? ' style="font-weight:600"' : ''}>
       <td>${esc(r.who)}</td>
       <td style="white-space:nowrap">${esc(r.start)}${r.end !== r.start ? ' → ' + esc(r.end) : ''}${r.end >= today ? ' <span style="color:#2e7d4f;font-size:10px">UPCOMING</span>' : ''}</td>
       <td>${esc(r.times || 'all day')}</td><td>${esc(r.note || '')}</td>
-      <td style="white-space:nowrap;color:#8a929a">${esc((r.at || '').slice(0, 10))}</td></tr>`).join('')
-     || '<tr><td colspan="5" class="empty">No time-off requests yet.</td></tr>'}</table>`;
+      <td style="white-space:nowrap;color:#8a929a">${esc((r.at || '').slice(0, 10))}</td>
+      <td style="white-space:nowrap">${chip}</td></tr>`;
+    }).join('')
+     || '<tr><td colspan="6" class="empty">No time-off requests yet.</td></tr>'}</table>`;
 }
 function myTimeOffLines() {
   if (!TO.rows) { if (Date.now() - TO.at > 60000) loadTimeOff(); return '<div class="dline dim">loading…</div>'; }
@@ -8406,7 +8421,7 @@ const REPORT_DEFS = () => [
   {id: 'timeoffrep', sec: 'admin', icon: '🏖', title: 'TIME OFF', count: (() => {
      try { const t = new Date().toLocaleDateString('en-CA');
        return TO.rows ? TO.rows.filter(r => r.end >= t).length : null; } catch (e) { return null; } })(),
-   desc: 'Every time-off request from the Request menu — filter by team member and date range. Upcoming time off counts on the badge; each person also sees their own on their dashboard.',
+   desc: 'Every time-off request from the Request menu — filter by team member and date range. Mark, Melissa and the owners approve or deny right here; the requester gets a text with the decision. Upcoming time off counts on the badge; each person also sees their own on their dashboard.',
    html: timeOffTable},
   {id: 'shopwork', sec: 'admin', icon: '📍', title: 'SHOP WORK MAP — DELIVERY / ORIGIN', count: null,
    desc: 'Every piano in the Custom Shopwork queue, pinned by where it’s headed for delivery or where it came from. Click a pin (or a row) to open that piano.',
@@ -8538,6 +8553,12 @@ function renderReport() {
     msg.textContent = '✓ texted ' + j.updates + ' updates to ' + j.sent + ' people';
     S.auRows = null; loadAppUpdates();
   };
+  body.querySelectorAll('.tobtn').forEach(b => b.onclick = async () => {
+    b.disabled = true; b.textContent = '…';
+    const j = await adjustPost({action: 'timeoffstatus', row: +b.dataset.row, status: b.dataset.st});
+    if (j.error) { alert(j.error); b.disabled = false; return; }
+    TO.rows = null; loadTimeOff();
+  });
   body.querySelectorAll('.cfxres').forEach(b => b.onclick = async () => {
     b.disabled = true;
     const j = await adjustPost({action: 'resolveclockfix', row: +b.dataset.row});

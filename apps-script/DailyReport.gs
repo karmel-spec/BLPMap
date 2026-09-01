@@ -934,6 +934,11 @@ function doPost(e) {
       if (shu.ok) logAct_(who, 'App updates texted', shu.audience, shu.updates + ' updates to ' + shu.sent + ' people');
       return json_(shu);
     }
+    if (req.action === 'timeoffstatus') {
+      var tos = timeOffStatus_(req, who);
+      if (tos.ok) logAct_(who, 'Time off ' + (String(tos.status).indexOf('approved') === 0 ? 'APPROVED ✅' : 'DENIED ❌'), tos.tech, tos.span);
+      return json_(tos);
+    }
     if (req.action === 'timeoff') {
       var toa = timeOffAdd_(req, who);
       if (toa.ok) logAct_(who, 'Time off requested', toa.tech,
@@ -5393,6 +5398,35 @@ function timeOffAdd_(req, who) {
     notifyTeam_(['Mark Hales'], '🏖 ' + msg);
   }
   return {ok: true, tech: tech, start: start, end: end};
+}
+/* approve / deny a time-off request (Brigham 9/1): Mark (lead manager),
+ * Melissa and the owners. Writes the decision into the status column and
+ * texts the requester. */
+function timeOffStatus_(req, who) {
+  var m = /<([^>]+)>/.exec(String(who || ''));
+  var email = m ? m[1].toLowerCase() : '';
+  var ALLOW = ['brigham@brighamlarsonpianos.com', 'karmel@brighamlarsonpianos.com',
+               'markhales.blp@gmail.com', 'melissa@brighamlarsonpianos.com'];
+  if (ALLOW.indexOf(email) < 0) return {error: 'only Mark, Melissa or the owners can approve time off'};
+  var row = Number(req.row) || 0;
+  var status = req.status === 'approved' ? 'approved' : req.status === 'denied' ? 'denied' : '';
+  if (!status) return {error: 'status must be approved or denied'};
+  var sh = timeOffSheet_();
+  if (row < 2 || row > sh.getLastRow()) return {error: 'no such request'};
+  var v = sh.getRange(row, 1, 1, 7).getValues()[0];
+  if (!v[1]) return {error: 'no such request'};
+  var d = function (x) { return (x instanceof Date)
+    ? Utilities.formatDate(x, 'America/Denver', 'yyyy-MM-dd') : String(x || ''); };
+  var tech = String(v[1]), span = d(v[2]) + (d(v[3]) && d(v[3]) !== d(v[2]) ? ' → ' + d(v[3]) : '');
+  var first = String(who || '').split(' ')[0] || 'a manager';
+  var stamp = status + ' by ' + first + ' ' + Utilities.formatDate(new Date(), 'America/Denver', 'M/d');
+  sh.getRange(row, 7).setValue(stamp);
+  try {
+    notifyTeam_([tech], (status === 'approved' ? '✅ Time off APPROVED' : '❌ Time off DENIED')
+      + ' — ' + span + (v[4] ? ' (' + v[4] + ')' : '') + ' (' + first + '). '
+      + (status === 'approved' ? 'Enjoy!' : 'Talk to ' + first + ' if you have questions.'));
+  } catch (eN) { /* text best-effort */ }
+  return {ok: true, tech: tech, span: span, status: stamp};
 }
 function timeOffRows_() {
   var sh = timeOffSheet_();
