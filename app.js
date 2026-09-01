@@ -4688,6 +4688,11 @@ function wirePop(p) {
 /* Phase-advance gate: photo required + optional routed notes, then the
  * advance goes through setPhase with {gated:true}. */
 function openPhaseGateModal(p, phase, was, pop) {
+  // photo is optional when finishing phases with nothing photo-worthy
+  // (Mark, 083126hales18) — the mini-QC tap still records, so these
+  // phases keep counting in the scorecard's productivity index
+  const photoOptional = /^(assessment|chip tuning|1st tuning|2nd tuning|qc & assembly)$/i
+    .test((was || '').trim());
   const old = document.querySelector('.dsheetov'); if (old) old.remove();
   const sel = pop && pop.querySelector('.phsel');
   const ov = document.createElement('div');
@@ -4700,7 +4705,7 @@ function openPhaseGateModal(p, phase, was, pop) {
     <div class="rfbar">
       <label class="csvbtn" style="cursor:pointer">📷 Take / attach the photo
         <input type="file" accept="image/*" capture="environment" hidden class="pg-file"></label>
-      <span class="pg-shot phmsg">required before advancing</span></div>
+      <span class="pg-shot phmsg">${photoOptional ? 'optional for ' + esc(was) : 'required before advancing'}</span></div>
     <div class="rfbar pg-qc" style="gap:14px;align-items:center">
       <b style="font-size:13px">Mini-QC on the ${esc(was)} work:</b>
       <label style="cursor:pointer"><input type="radio" name="pgqc" value="pass"> ✅ Passes</label>
@@ -4714,7 +4719,7 @@ function openPhaseGateModal(p, phase, was, pop) {
         <option value="brigham">🗒 send the note to Brigham</option>
       </select></div>
     <div class="rfbar">
-      <button class="csvbtn pg-go" disabled>Advance to ${esc(phase)} →</button>
+      <button class="csvbtn pg-go" ${photoOptional ? '' : 'disabled'}>Advance to ${esc(phase)} →</button>
       <button class="csvbtn pg-cancel" style="background:none;border:1px solid #cfc9bf;color:inherit">Cancel</button>
       <span class="pg-msg phmsg"></span></div>
   </div>`;
