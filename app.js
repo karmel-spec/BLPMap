@@ -870,6 +870,24 @@ function mapLink(p) {
 }
 /* ---------- share (↗) — text a piano or report to a teammate ---------- */
 let phonesCache = null;
+// Tech Phones through the glitchy bridge (9/1): a ping-imposter answer has
+// no `phones` array — retry instead of caching an empty team list, and
+// never cache a failure (082926larson03: tboard texting "not working").
+async function fetchPhones() {
+  const wa = writeAuth();
+  if (!wa.ok) return null;
+  for (let a = 0; a < 3; a++) {
+    try {
+      const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+        headers: {'content-type': 'text/plain;charset=utf-8'},
+        body: JSON.stringify({pin: wa.pin, action: 'phones', ...authFields()})});
+      const j = await r.json();
+      if (j && Array.isArray(j.phones) && j.phones.length) { phonesCache = j.phones; return phonesCache; }
+    } catch (e) { /* retry */ }
+    await new Promise(res => setTimeout(res, 900 * (a + 1)));
+  }
+  return null;
+}
 function shareSheet(title, url) {
   const text = title + ' — ' + url;
   const old = document.querySelector('.shov');
@@ -932,12 +950,10 @@ function shareSheet(title, url) {
       : 'sign in first to text teammates directly'} — Share / Copy above still work</i>`;
     return;
   }
-  fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
-    headers: {'content-type': 'text/plain;charset=utf-8'},
-    body: JSON.stringify({pin: wa.pin, action: 'phones', ...authFields()})})
-    .then(r => r.json())
-    .then(j => { phonesCache = j.phones || []; renderPh(); })
-    .catch(() => { list.innerHTML = '<i>couldn’t load the team list — use Share / Copy above</i>'; });
+  fetchPhones().then(ph => {
+    if (ph) renderPh();
+    else list.innerHTML = '<i>couldn’t load the team list — use Share / Copy above</i>';
+  });
 }
 function sharePiano(p) {
   const name = [p.year, p.make, p.model].filter(Boolean).join(' ') || p.summary || 'Piano';
@@ -10321,12 +10337,10 @@ function openCardTextModal(c) {
   if (phonesCache) { paint(); msgIn.focus(); return; }
   const wa = writeAuth();
   if (!wa.ok) { list.innerHTML = '<i>sign in first to load the team list</i>'; return; }
-  fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
-    headers: {'content-type': 'text/plain;charset=utf-8'},
-    body: JSON.stringify({pin: wa.pin, action: 'phones', ...authFields()})})
-    .then(r => r.json())
-    .then(j => { phonesCache = j.phones || []; paint(); })
-    .catch(() => { list.innerHTML = '<i>couldn’t load the team list — try again in a moment</i>'; });
+  fetchPhones().then(ph => {
+    if (ph) paint();
+    else list.innerHTML = '<i>couldn’t load the team list — try again in a moment</i>';
+  });
   msgIn.focus();
 }
 function openCardModal(c, canEdit) {
