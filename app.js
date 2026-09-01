@@ -8220,9 +8220,29 @@ function scorecardTable() {
     <div style="font-size:26px;font-weight:800;color:${tone || '#2b2f33'}">${val}</div>
     <div style="font-size:11.5px;color:#8a847b">${sub}</div></div>`;
   const pct = v => v == null ? '—' : v + '%';
-  return `<div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:14px">
+  // Design A + the Control Room hero (Brigham 9/1): the index leads,
+  // drawn on an 80→110 scale with the 90 baseline and 105 target marked
+  const heroPos = v => Math.max(0, Math.min(100, (v - 80) / 30 * 100));
+  const hero = `<div style="display:flex;gap:26px;align-items:center;flex-wrap:wrap;background:#fff;border:1px solid #dfe3e8;border-radius:12px;padding:18px 22px;margin-bottom:12px">
+    <div><div style="font-size:52px;font-weight:800;line-height:1;color:${prodIdx == null ? '#8a847b' : prodIdx >= 105 ? '#2f7d4f' : prodIdx >= 95 ? '#9a5b13' : '#9e2020'}">${prodIdx == null ? '—' : prodIdx}<span style="font-size:20px;color:#8a847b">${prodIdx == null ? '' : '%'}</span></div>
+      <div style="font-size:11px;letter-spacing:1.4px;text-transform:uppercase;color:#8a847b;margin-top:4px">Productivity index</div></div>
+    <div style="flex:1;min-width:230px">
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:#8a847b;margin-bottom:6px"><span>baseline 90</span><span>target 105</span></div>
+      <div style="height:14px;background:#efece6;border-radius:7px;position:relative;overflow:visible">
+        ${prodIdx == null ? '' : `<div style="position:absolute;inset:0 auto 0 0;width:${heroPos(prodIdx)}%;background:linear-gradient(90deg,#c9a227,#9e2020);border-radius:7px"></div>`}
+        <div style="position:absolute;top:-3px;bottom:-3px;width:2px;background:#2b2f33;left:${heroPos(105)}%"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:#8a847b;margin-top:6px">
+        <span>earned ${earned ? earned.toFixed(0) + 'h std' : '—'}</span><span>actual ${actual ? actual.toFixed(0) + 'h clocked' : '—'} · ${phasesDone} QC-passed phases</span></div>
+    </div></div>`;
+  const bonusLo = (prodBonus == null || qualBonus == null) ? null : prodBonus + qualBonus;
+  const money = `<div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:14px">
+    ${kpi('Bonus estimate', bonusLo == null ? '—' : '$' + bonusLo.toFixed(2) + '–' + (bonusLo + 1.2).toFixed(2) + '/hr', 'productivity × quality + management', '#2f7d4f')}
+    ${kpi('Month value', bonusLo == null ? '—' : '$' + Math.round(bonusLo * 173) + '–' + Math.round((bonusLo + 1.2) * 173), 'on a 173-hour month over base')}
+    ${kpi('Effective rate', bonusLo == null ? '—' : '$' + (22 + bonusLo).toFixed(2) + '–' + (22 + bonusLo + 1.2).toFixed(2), '$22 base + this month\u2019s bonus', '#2f7d4f')}
+  </div>`;
+  return hero + money + `<div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:14px">
     ${kpi('Clock coverage', pct(coverage), 'work-clock ÷ payroll · gate ≥85%', coverage != null && coverage < 85 ? '#9e2020' : '#2f7d4f')}
-    ${kpi('Productivity index', pct(prodIdx), phasesDone + ' QC-passed phases vs standards', prodIdx != null && prodIdx >= 100 ? '#2f7d4f' : undefined)}
     ${kpi('Mini-QC first pass', pct(firstPass), qc.length + ' phase advances · 30d', firstPass != null && firstPass >= 95 ? '#2f7d4f' : undefined)}
     ${kpi('Rework', reworkH.toFixed(1) + 'h', workH ? (100 * reworkH / workH).toFixed(1) + '% of ' + workH.toFixed(0) + 'h piano work' : '', reworkH / Math.max(workH, 1) > .05 ? '#9e2020' : '#2f7d4f')}
     ${kpi('Training invested', trainH.toFixed(1) + 'h', 'trainer+trainee punches · neutral in index')}
