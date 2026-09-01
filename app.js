@@ -3145,9 +3145,18 @@ async function punch(action, p, phase, source, endAt) {
   if (p) { body.serial = p.serial; body.row = p.row; body.phase = phase || ''; }
   if (endAt) body.endAt = endAt;
   try {
-    const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
-      headers: {'content-type': 'text/plain;charset=utf-8'}, body: JSON.stringify(body)});
-    const j = await r.json();
+    let j = null;
+    // Google occasionally misroutes a POST and answers the generic service
+    // ping without running the action — the punch would silently vanish
+    // from payroll (found 9/1). Retry through the glitch.
+    for (let a = 0; a < 3; a++) {
+      const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+        headers: {'content-type': 'text/plain;charset=utf-8'}, body: JSON.stringify(body)});
+      j = await r.json();
+      if (!(j && j.service && !j.error)) break;
+      await new Promise(res => setTimeout(res, 1200 * (a + 1)));
+    }
+    if (j && j.service && !j.error) return {error: 'the Google bridge hiccuped — the punch did NOT record; try again in a minute'};
     if (j.ok) {
       CLOCK.open = action === 'clockin'
         ? (j.open || {tech: clockName(), serial: p.serial, phase, start: new Date().toISOString()})
