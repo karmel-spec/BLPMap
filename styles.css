@@ -1796,3 +1796,6 @@ tr.adjediting td{background:#fdf8ee}
 .snrow:hover,.snrow:active{background:rgba(122,186,255,.16)}
 .snrow b{color:var(--acc,#7ab8ff)}
 .snrow span{opacity:.6;font-size:12px}
+
+/* small-print serials under map spots (083126larson09) */
+.serialsm{fill:#6f6a63;opacity:.8;pointer-events:none;font-family:Helvetica,Arial,sans-serif}

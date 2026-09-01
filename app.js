@@ -1749,6 +1749,17 @@ function priceText(p, cx, cy, sc) {
           font-size="${fs}">${esc(t)}</text>`;
 }
 
+// small-print serial under every occupied spot (Brigham request
+// 083126larson09) — saves clicking into spots while hunting a piano
+function serialText(p, cx, cy, sc) {
+  const t = String(p.serial || '').trim();
+  if (!t) return '';
+  const below = priceLabel(p) ? 19.5 : 14;
+  const fs = Math.max(4.6, Math.min(6.2 * sc, (30 * sc) / Math.max(t.length * 0.58, 3)));
+  return `<text x="${cx}" y="${cy + below * sc}" text-anchor="middle" class="serialsm"
+          font-size="${fs}">${esc(t)}</text>`;
+}
+
 /* ---------- printable tags ---------- */
 // hand the piano to the BLP Price Tag Maker, prefilled via its URL params
 function priceTagUrl(p) {
@@ -2558,7 +2569,7 @@ function renderMap() {
           const hl = S.focusRow === p.row || (q && matches(p, q));
           s += `<g class="piano ${finClass(p)} ${soldClass(p)} ${st} own-${ownerClass(p)} ${q && !matches(p, q) ? 'dim' : ''} ${hl ? 'hl' : ''}"
                 data-slot="${esc(sl.id)}" data-row="${p.row}">
-                <g transform="rotate(90 ${cx} ${cy})">${glyph(p.type, cx, cy, sc)}</g>${phaseText(p, cx, cy, sc)}${mediaBadge(p, cx, cy, sc)}${priceText(p, cx, cy, sc)}${finBadge(p, cx, cy, sc)}${soldBadge(p, cx, cy, sc)}${tempBadge(p, cx, cy, sc)}${ghostBadge(p, cx, cy, sc)}</g>`;
+                <g transform="rotate(90 ${cx} ${cy})">${glyph(p.type, cx, cy, sc)}</g>${phaseText(p, cx, cy, sc)}${mediaBadge(p, cx, cy, sc)}${priceText(p, cx, cy, sc)}${finBadge(p, cx, cy, sc)}${soldBadge(p, cx, cy, sc)}${tempBadge(p, cx, cy, sc)}${ghostBadge(p, cx, cy, sc)}${serialText(p, cx, cy, sc)}</g>`;
         });
       } else {
         const pfs = Math.max(10, Math.min(20, sl.w * 0.4));
@@ -2589,7 +2600,7 @@ function renderMap() {
           const cy = sl.y + sl.h / 2;
           const hl = S.focusRow === p.row || (q && matches(p, q));
           s += `<g class="piano ${finClass(p)} ${soldClass(p)} ${st} own-${ownerClass(p)} ${q && !matches(p, q) ? 'dim' : ''} ${hl ? 'hl' : ''}"
-                data-slot="${esc(sl.id)}" data-row="${p.row}">${glyph(p.type, cx, cy, sc)}${phaseText(p, cx, cy, sc)}${mediaBadge(p, cx, cy, sc)}${priceText(p, cx, cy, sc)}${finBadge(p, cx, cy, sc)}${soldBadge(p, cx, cy, sc)}${tempBadge(p, cx, cy, sc)}${ghostBadge(p, cx, cy, sc)}</g>`;
+                data-slot="${esc(sl.id)}" data-row="${p.row}">${glyph(p.type, cx, cy, sc)}${phaseText(p, cx, cy, sc)}${mediaBadge(p, cx, cy, sc)}${priceText(p, cx, cy, sc)}${finBadge(p, cx, cy, sc)}${soldBadge(p, cx, cy, sc)}${tempBadge(p, cx, cy, sc)}${ghostBadge(p, cx, cy, sc)}${serialText(p, cx, cy, sc)}</g>`;
         });
       } else if (!thin) {
         const pfs = Math.max(9, Math.min(20, sl.h * 0.45));
@@ -3769,7 +3780,7 @@ function popHTML(p) {
             <option value="Rework">🔁 Rework — fixing earlier work</option>
           </select></div>
         <input class="clkother" placeholder="what are you doing on this piano?" maxlength="60" hidden>
-        <input class="clktrainee" list="teamNames" placeholder="training with whom? (name)" maxlength="40" hidden>
+        <input class="clktrainee" placeholder="training with whom? (name)" maxlength="40" autocomplete="off" hidden>
         <button class="clkbtn clkin off">▶ ${mine ? 'Switch here' : 'Clock in'}</button>
         <div class="clkmsg phmsg"></div>`);
     })() : ''}
@@ -4390,13 +4401,9 @@ function wirePop(p) {
   (() => {   // Work Clock wiring: phase is mandatory, "Other" allows write-in
     const sel = pop.querySelector('.clkphase');
     const oth = pop.querySelector('.clkother');
+    // no datalist here: iOS dismisses the keyboard after every keystroke on
+    // datalist-backed inputs (Myrrhanda, 9/1) — a plain input types fine
     const trn = pop.querySelector('.clktrainee');
-    if (trn && !document.getElementById('teamNames')) {
-      const dl = document.createElement('datalist'); dl.id = 'teamNames';
-      dl.innerHTML = Object.keys(TB_HEADSHOTS || {}).map(n =>
-        `<option value="${esc(n.split(' ').map(w => w.replace(/^./, c => c.toUpperCase())).join(' '))}">`).join('');
-      document.body.appendChild(dl);
-    }
     const inBtn = pop.querySelector('.clkin');
     const outBtn = pop.querySelector('.clkout');
     const cmsg = pop.querySelector('.clkmsg');
@@ -8916,13 +8923,10 @@ function renderBoard() {
  * records → PR watch. Per-tech numbers come from the bridge (techdash). */
 const SHOP_APP = 'https://blpshop.netlify.app/';
 function dashFrame(hash, title) {
-  const old = document.querySelector('.dfov'); if (old) old.remove();
-  const ov = document.createElement('div');
-  ov.className = 'dfov';
-  ov.innerHTML = `<div class="dfbar"><button class="dfback">‹ Dashboard</button><b>${esc(title)}</b></div>
-    <iframe class="dframe" src="${SHOP_APP}${hash}" title="${esc(title)}"></iframe>`;
-  document.body.appendChild(ov);
-  ov.querySelector('.dfback').onclick = () => ov.remove();
+  // the shop app needs its own sign-in, and Google refuses to run OAuth
+  // inside an iframe (Mark hit its 403 page, 9/1) — iOS also hides the
+  // iframe's saved login. A real tab is the only reliable container.
+  window.open(SHOP_APP + hash, '_blank', 'noopener');
 }
 async function loadTechDash(name) {
   if (S.dashData && S.dashData.forName === name && Date.now() - S.dashData.at < 300000) return S.dashData;
