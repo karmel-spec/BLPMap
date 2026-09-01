@@ -5014,7 +5014,10 @@ function taskCard_(req, who) {
   if (op === 'add') {
     var text = String(req.text || '').trim().slice(0, 2000);
     if (!text) return {error: 'write the card first'};
-    var id = 'tc' + Date.now().toString(36) + Math.floor(Math.random() * 1e4);
+    // the Supabase write proxy mirrors adds here and passes the id it
+    // already assigned — honoring it keeps sheet and Supabase in step
+    var id = /^tc[a-z0-9]{6,20}$/.test(String(req.forceId || '')) ? String(req.forceId)
+      : 'tc' + Date.now().toString(36) + Math.floor(Math.random() * 1e4);
     var ord = Number(req.order);
     if (!isFinite(ord)) ord = 0;
     sh.appendRow([id, String(req.owner || name).slice(0, 40), 'todo', text,
