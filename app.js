@@ -8341,11 +8341,12 @@ function scorecardTable() {
         chip('coverage ≥85% (now ' + pct(coverage) + ')', coverage == null ? null : coverage >= 85),
         'hold-tracking began Sep 1')}
       ${rung('$25', 'Shop Manager', 'all five held for 3 consecutive months', g25, '')}
-      ${rung('$28', 'Production Manager', 'held for 2 consecutive quarters', g28, 'grey gates need baseline history first')}
-      ${rung('$30+', 'Operations Leader', 'annual — hours, production & quality only',
+      ${isOwner() ? `
+      ${rung('$28', 'Production Manager 📝 DRAFT', 'held for 2 consecutive quarters — owners only until finalized', g28, 'draft — not yet shown to Mark')}
+      ${rung('$30+', 'Operations Leader 📝 DRAFT', 'annual — hours, production & quality only',
         chip('index ≥110 held 1yr', null) + chip('earned hrs +2,000/yr', null)
         + chip('rework ≤2% + final QC ≥98%', null) + chip('vacation test', null),
-        'gates go live after the baseline year')}
+        'draft — not yet shown to Mark')}` : ''}
     </div></div>`;
   return hero + money + ladder + `<div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:14px">
     ${kpi('Clock coverage', pct(coverage), 'work-clock ÷ payroll · gate ≥85%', coverage != null && coverage < 85 ? '#9e2020' : '#2f7d4f')}
