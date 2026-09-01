@@ -191,6 +191,15 @@ function doGet(e) {
     try { return json_({ok: true, who: whereIs_()}); }
     catch (err) { return json_({error: String(err), who: {}}); }
   }
+  // daily shop-state snapshots + trigger for the Management-15% trends
+  if (e && e.parameter && e.parameter.fn === 'scorelog') {
+    try { return json_(scoreLogRows_()); }
+    catch (err) { return json_({error: String(err), rows: []}); }
+  }
+  if (e && e.parameter && e.parameter.fn === 'scoresnap') {
+    try { return json_(scorecardSnapshot_()); }
+    catch (err) { return json_({error: String(err)}); }
+  }
   // mini-QC records (phase-advance pass/fix) for the Manager Scorecard
   if (e && e.parameter && e.parameter.fn === 'qclog') {
     try { return json_(qcLogRows_(Number(e.parameter.days) || 120)); }
@@ -4250,6 +4259,50 @@ function smTocHtml_(TOC, color, bg, border) {
 /* Every briefing is also saved as a Google Doc (Drive REST convert) in a
  * "BLP Shop Briefs" folder, link-shared, and logged to the report sheet's
  * "Brief Log" tab — the Store Map's Daily Briefs report lists those links. */
+/* daily scorecard snapshot (Brigham 9/1): the Management 15% of the
+ * manager bonus is computed from TRENDS, so the shop's daily state is
+ * appended to a 'Scorecard Log' tab each morning — stalled count and
+ * waiting-piano check-back hygiene. No human scoring anywhere. */
+function scorecardSnapshot_() {
+  var ss = SpreadsheetApp.openById('11RoeVRETag5rZYX6_tEH-rf6x8JL0JeZU0P5AT0WI-I');
+  var sh = ss.getSheetByName('Scorecard Log');
+  if (!sh) {
+    sh = ss.insertSheet('Scorecard Log', ss.getSheets().length);
+    sh.getRange(1, 1, 1, 5).setValues([['Date', 'Stalled', 'Waiting overdue', 'Waiting missing CB', 'Waiting total']]);
+    sh.setFrozenRows(1);
+  }
+  var today = Utilities.formatDate(new Date(), 'America/Denver', 'yyyy-MM-dd');
+  var last = sh.getLastRow();
+  if (last >= 2 && String(sh.getRange(last, 1).getValue()) === today) return {ok: true, dup: true};
+  var data = JSON.parse(UrlFetchApp.fetch(APP_URL + '/api/data?scope=active').getContentText());
+  var pianos = (data.pianos || []).filter(function (p) { return p.active !== false; });
+  var stalled = 0, wOver = 0, wMiss = 0, wTot = 0;
+  pianos.forEach(function (p) {
+    if (smIsShopwork_(p) && smIsWorkPhase_(p.phase)) {
+      var lim = SM_PHASE_DAYS[p.phase], age = smDaysSince_(p.entered);
+      if (lim && age !== null && age > lim * 2) stalled++;
+    }
+    if (/^waiting/i.test(String(p.phase || ''))) {
+      wTot++;
+      var cb = String(p.checkBack || '').trim();
+      if (!cb || isNaN(new Date(cb).getTime())) wMiss++;
+      else if (new Date(cb).getTime() < Date.now() - 86400000) wOver++;
+    }
+  });
+  sh.appendRow([today, stalled, wOver, wMiss, wTot]);
+  return {ok: true, date: today, stalled: stalled, waitingOverdue: wOver, waitingMissing: wMiss, waitingTotal: wTot};
+}
+function scoreLogRows_() {
+  var ss = SpreadsheetApp.openById('11RoeVRETag5rZYX6_tEH-rf6x8JL0JeZU0P5AT0WI-I');
+  var sh = ss.getSheetByName('Scorecard Log');
+  if (!sh || sh.getLastRow() < 2) return {ok: true, rows: []};
+  var vals = sh.getRange(Math.max(2, sh.getLastRow() - 90), 1, Math.min(90, sh.getLastRow() - 1), 5).getValues();
+  return {ok: true, rows: vals.map(function (v) {
+    return {date: String(v[0]).slice(0, 10), stalled: Number(v[1]) || 0, wOver: Number(v[2]) || 0,
+            wMiss: Number(v[3]) || 0, wTot: Number(v[4]) || 0};
+  })};
+}
+
 /* mini-QC at phase advancement (Brigham 8/31): every forward phase move
  * records pass / needs-fixes — first-pass rate feeds the manager
  * performance-pay scorecard. Rows live on a 'QC Log' tab. */
@@ -4698,6 +4751,7 @@ function setupShopManagerBriefing() {
 var SHOP_TEXT_NAMES = ['Mark', 'Matthew', 'Jacob', 'Brigham', 'Karmel'];
 var ADMIN_TEXT_NAMES = ['Melissa', 'Brigham', 'Karmel'];
 function morningBriefs() {
+  try { scorecardSnapshot_(); } catch (eSnap) { /* trends resume tomorrow */ }
   var dow = Number(Utilities.formatDate(new Date(), 'America/Denver', 'u'));
   if (dow > 5 && !isManualRun_()) return;          // Mon–Fri only
   var r = sendShopManagerReportTo_(SHOPMGR_TO, null, 0);   // today's shop + admin emails

@@ -8173,6 +8173,13 @@ const SC_STD = {'New Arrival - Admin': 3, 'Assessment': 3, 'CAP': 40,
   'Chip Tuning': 2, 'DHRT': 48, 'Refinishing': 62, 'QC & Assembly': 17,
   '1st Tuning': 2, '2nd Tuning': 2, 'Key service': 22, 'Full key set': 22,
   'Refurb checklist': 48, 'Exit Prep - Admin': 3};
+async function loadScoreLog() {
+  try {
+    const r = await fetch(BRIDGE_URL + '?fn=scorelog', {redirect: 'follow'});
+    S.slRows = (await r.json()).rows || [];
+  } catch (e) { S.slRows = []; }
+  renderReport();
+}
 async function loadQcLog() {
   try {
     const r = await fetch(BRIDGE_URL + '?fn=qclog', {redirect: 'follow'});
@@ -8181,7 +8188,7 @@ async function loadQcLog() {
   renderReport();
 }
 function scorecardTable() {
-  if (!S.tlRows || !S.payRows || !S.qcRows) return '<div class="empty">Crunching the clock, QC and payroll ledgers…</div>';
+  if (!S.tlRows || !S.payRows || !S.qcRows || !S.slRows) return '<div class="empty">Crunching the clock, QC, payroll and snapshot ledgers…</div>';
   const cut = Date.now() - 30 * 86400000;
   const inWin = iso => iso && new Date(iso).getTime() >= cut;
   const tl = S.tlRows.filter(r => inWin(r.start) && !/test/i.test(r.phase) && !/FAKE/.test(r.serial || ''));
@@ -8209,6 +8216,40 @@ function scorecardTable() {
   });
   const prodIdx = actual ? Math.round(100 * earned / actual) : null;
   const stalled = (() => { try { return stalledPianos().length; } catch (e) { return null; } })();
+  /* Management 15% — fully app-governed, no human scoring (Brigham 9/1):
+   * M1 stalled-piano trend (7d avg vs prior 21d, from daily snapshots)
+   * M2 check-back hygiene (overdue/missing check-backs on Waiting pianos)
+   * M3 throughput cadence (QC-passed advances: this week vs 30d weekly avg)
+   * M4 clock coverage level (the 85% deliverable, scored continuously)  */
+  const clamp01 = v => Math.max(0, Math.min(1, v));
+  const snaps = (S.slRows || []).slice().sort((x, y) => x.date < y.date ? -1 : 1);
+  let m1 = null, m1txt = 'collecting baseline (' + snaps.length + '/8 days)';
+  if (snaps.length >= 8) {
+    const rec = snaps.slice(-7), prior = snaps.slice(0, -7).slice(-21);
+    const avg = a2 => a2.reduce((x, y) => x + y.stalled, 0) / a2.length;
+    const chg = prior.length ? (avg(rec) - avg(prior)) / Math.max(avg(prior), 1) : 0;
+    m1 = clamp01(.6 - chg * 4);   // −10% trend → 100 · flat → 60 → +15% → 0
+    m1txt = 'stalled ' + avg(rec).toFixed(0) + ' avg vs ' + avg(prior).toFixed(0) + ' prior';
+  }
+  const waiting = S.data.pianos.filter(p => p.active && /^waiting/i.test(p.phase || ''));
+  const wBad = waiting.filter(p => {
+    const cb = (p.checkBack || '').trim();
+    return !cb || isNaN(new Date(cb).getTime()) || new Date(cb).getTime() < Date.now() - 86400000;
+  }).length;
+  const m2 = waiting.length ? clamp01(1 - (wBad / waiting.length) * 2) : 1;
+  const wk = Date.now() - 7 * 86400000;
+  const passRec = qc.filter(r => r.result === 'pass');
+  const thisWk = passRec.filter(r => new Date(r.when).getTime() >= wk).length;
+  const wkAvg = passRec.length / (30 / 7);
+  const m3 = passRec.length >= 4 ? clamp01(thisWk / Math.max(wkAvg, 1) * .6) : null;
+  const m4 = coverage == null ? null : clamp01(coverage >= 85 ? 1 : (coverage - 50) / 35);
+  const mParts = [m1, m2, m3, m4].filter(v => v != null);
+  const mgmtScore = mParts.length ? mParts.reduce((x, y) => x + y, 0) / mParts.length : null;
+  const mgmtBonus = mgmtScore == null ? null : 1.2 * mgmtScore;
+  const mSub = 'M1 trend: ' + (m1 == null ? m1txt : Math.round(m1 * 100) + '% (' + m1txt + ')')
+    + ' · M2 check-backs: ' + Math.round(m2 * 100) + '% (' + wBad + '/' + waiting.length + ' overdue/missing)'
+    + ' · M3 cadence: ' + (m3 == null ? 'needs QC history' : Math.round(m3 * 100) + '% (' + thisWk + ' passes this wk)')
+    + ' · M4 coverage: ' + (m4 == null ? '—' : Math.round(m4 * 100) + '%');
   // ---- bonus translation (base $22, pool $0-8/hr) ----
   const prodScore = prodIdx == null ? null : prodIdx >= 105 ? 1 : prodIdx >= 100 ? .75 : prodIdx >= 95 ? .5 : prodIdx >= 90 ? .25 : 0;
   const qMult = firstPass == null ? null : firstPass >= 98 ? 1 : firstPass >= 95 ? .9 : firstPass >= 90 ? .75 : .5;
@@ -8235,11 +8276,11 @@ function scorecardTable() {
       <div style="display:flex;justify-content:space-between;font-size:11px;color:#8a847b;margin-top:6px">
         <span>earned ${earned ? earned.toFixed(0) + 'h std' : '—'}</span><span>actual ${actual ? actual.toFixed(0) + 'h clocked' : '—'} · ${phasesDone} QC-passed phases</span></div>
     </div></div>`;
-  const bonusLo = (prodBonus == null || qualBonus == null) ? null : prodBonus + qualBonus;
+  const bonusAll = (prodBonus == null || qualBonus == null || mgmtBonus == null) ? null : prodBonus + qualBonus + mgmtBonus;
   const money = `<div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:14px">
-    ${kpi('Bonus estimate', bonusLo == null ? '—' : '$' + bonusLo.toFixed(2) + '–' + (bonusLo + 1.2).toFixed(2) + '/hr', 'productivity × quality + management', '#2f7d4f')}
-    ${kpi('Month value', bonusLo == null ? '—' : '$' + Math.round(bonusLo * 173) + '–' + Math.round((bonusLo + 1.2) * 173), 'on a 173-hour month over base')}
-    ${kpi('Effective rate', bonusLo == null ? '—' : '$' + (18 + bonusLo).toFixed(2) + '–' + (18 + bonusLo + 1.2).toFixed(2), '$18 base (\u2192$19 at 85% baseline) + bonus', '#2f7d4f')}
+    ${kpi('Bonus estimate', bonusAll == null ? '—' : '$' + bonusAll.toFixed(2) + '/hr', 'productivity × quality + management, all app-computed', '#2f7d4f')}
+    ${kpi('Month value', bonusAll == null ? '—' : '$' + Math.round(bonusAll * 173), 'on a 173-hour month over base')}
+    ${kpi('Effective rate', bonusAll == null ? '—' : '$' + (18 + bonusAll).toFixed(2), '$18 base (\u2192$19 at 85% baseline) + bonus', '#2f7d4f')}
   </div>`;
   return hero + money + `<div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:14px">
     ${kpi('Clock coverage', pct(coverage), 'work-clock ÷ payroll · gate ≥85%', coverage != null && coverage < 85 ? '#9e2020' : '#2f7d4f')}
@@ -8253,9 +8294,9 @@ function scorecardTable() {
     <table style="margin-top:8px"><tr><th style="text-align:left">Component</th><th>Result</th><th>$/hr</th></tr>
     <tr><td>Productivity (50%) — index ${pct(prodIdx)} × quality multiplier ${qMult == null ? '—' : qMult}</td><td>${prodScore == null ? '—' : Math.round(prodScore * 100) + '%'}</td><td><b>${prodBonus == null ? '—' : '$' + prodBonus.toFixed(2)}</b></td></tr>
     <tr><td>Quality (35%) — mini-QC first pass ${pct(firstPass)}</td><td></td><td><b>${qualBonus == null ? '—' : '$' + qualBonus.toFixed(2)}</b></td></tr>
-    <tr><td>Management (15%) — set at review (stalled count, briefs, follow-through)</td><td></td><td>$0–1.20</td></tr></table>
-    <div style="margin-top:8px;font-size:13px">Estimated bonus: <b>${prodBonus == null || qualBonus == null ? '— (needs more data)' : '$' + (prodBonus + qualBonus).toFixed(2) + '–$' + (prodBonus + qualBonus + 1.2).toFixed(2) + '/hr'}</b>
-      &nbsp;→ on a 173-hour month that's <b>${prodBonus == null || qualBonus == null ? '—' : '$' + Math.round((prodBonus + qualBonus) * 173) + '–$' + Math.round((prodBonus + qualBonus + 1.2) * 173)}</b> over base.</div>
+    <tr><td>Management (15%) — app-computed: stalled trend, check-back hygiene, throughput cadence, coverage<br><span style="font-size:11px;color:#8a847b">${mSub}</span></td><td>${mgmtScore == null ? '—' : Math.round(mgmtScore * 100) + '%'}</td><td><b>${mgmtBonus == null ? '—' : '$' + mgmtBonus.toFixed(2)}</b></td></tr></table>
+    <div style="margin-top:8px;font-size:13px">Estimated bonus: <b>${bonusAll == null ? '— (needs more data)' : '$' + bonusAll.toFixed(2) + '/hr'}</b>
+      &nbsp;→ on a 173-hour month that's <b>${bonusAll == null ? '—' : '$' + Math.round(bonusAll * 173)}</b> over base.</div>
     <div style="margin-top:6px;font-size:12px;color:#6b5030">Standards are provisional (calendar-derived, expert midpoints) — they recalibrate as Work Clock history grows. Months 1–2 are baseline-collection; the translation goes live after calibration.</div>
     <div style="margin-top:4px;font-size:12px;color:#6b5030">Self-funding check (2025 P&amp;L): the shop supports ~$1.566M of production-dependent value (restoration + refinishing + used-inventory prep) on ~19,400 internal tech hours — each sustained index point ≈ $15.7k/yr, and the whole $17→$28 ladder costs just $1.42 per shop-hour managed.</div>
   </div>`;
@@ -8422,6 +8463,7 @@ function renderReport() {
       if (!S.tlRows) loadTimeLog();
       if (!S.payRows) loadPayroll();
       if (!S.qcRows) loadQcLog();
+      if (!S.slRows) loadScoreLog();
     }
     if (S.openReport === 'clockadjust') {
       if (!S.fixRows) loadClockFixes();
