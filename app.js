@@ -311,6 +311,11 @@ function normTrackPhase(s) {
   if (t.includes('new arrival')) return 'New Arrival - Admin';
   if (t.includes('assessment')) return 'Assessment';
   if (t.startsWith('add-ons')) return 'Add-ons';
+  // track-sheet steps outside the master 14 — canonical names the bridge
+  // also accepts (082726hales17: "unknown phase" saving Key Servicing)
+  if (t.includes('key servic')) return 'Key Service';
+  if (t.includes('refurb')) return 'Refurb Checklist';
+  if (t.includes('repair')) return 'Repair Work';
   if (t.includes('chip tuning')) return 'Chip Tuning';
   if (t.includes('string')) return 'Restringing';
   if (t.includes('cap')) return 'CAP';
@@ -1371,7 +1376,7 @@ function keytopPhotoGate(p, o) {
     <div class="dssub">${o.sub}</div>
     <div class="rfbar">
       <label class="csvbtn" style="cursor:pointer">📷 Take the keytop photo
-        <input type="file" accept="image/*" capture="environment" hidden class="pg-file"></label>
+        <input type="file" accept="image/*" hidden class="pg-file"></label>
       <span class="pg-shot phmsg">photo required</span></div>
     <div class="rfbar">
       <button class="csvbtn pg-go" disabled>${o.goLabel}</button>
@@ -1482,7 +1487,7 @@ function openShotWizard(p, kind) {
         ${live ? '<button class="swcambtn">📷 use the phone camera app</button> · ' : ''}
         <button class="swlib">🖼 photo library</button>
       </div>
-      <input type="file" class="swcam" accept="image/*" capture="environment" hidden>
+      <input type="file" class="swcam" accept="image/*" hidden>
       <input type="file" class="swfile" accept="image/*" hidden>
       <div class="swnav">
         <button class="swprev" ${W.idx === 0 ? 'disabled' : ''}>‹ back</button>
@@ -1958,6 +1963,7 @@ function shopTagInner(d) {
       <div class="id"><img src="${logo}" alt="Brigham Larson Pianos">
         <div class="nm"><h1>${esc(d.h1)}</h1><div class="sub">${esc(d.sub || '\u2014')}</div></div></div>
       <div class="rows">
+        <div class="rw"><span class="lb">Serial #</span><b>${esc(d.serial)}</b></div>
         <div class="rw"><span class="lb">Owner</span><b>${esc(d.owner)}</b></div>
         <div class="rw"><span class="lb">Arrived</span><b>${esc(d.arrived)}</b></div>
         <div class="divider"><em>SCOPE OF WORK</em></div>
@@ -2211,6 +2217,7 @@ function printShopTag(p) {
     .rail [contenteditable]:hover, .rail [contenteditable]:focus
       { background: rgba(255,255,255,.15); outline: none; }
     @page { size: letter; margin: 0.22in; }
+    .sheet.s2 { display: none; }
     @media print {
       body { background: #fff; }
       .bar { display: none; }
@@ -2220,14 +2227,19 @@ function printShopTag(p) {
       .tag { box-shadow: none; margin: .3in auto; }
       .cut { display: flex; }
       .copy2 { display: flex; }
+      /* double-sided (Lisa 8/31): a second identical page so a duplex
+         print puts the tag on BOTH faces of each cut half */
+      body.duplex .sheet.s2 { display: block; page-break-before: always; }
     }
-  </style></head><body>
+  </style></head><body class="duplex">
     <div class="bar"><b>Shop tag</b> — click any field to edit, tap 1·2·3 to set the refinishing level
-      <button onclick="doPrint()">🖨 Print — 2 per page</button><button class="xclose" onclick="window.close()" title="close this preview">✕ Close</button></div>
+      <label style="display:flex;align-items:center;gap:5px;font-weight:400"><input type="checkbox" id="dup" checked onchange="document.body.classList.toggle('duplex',this.checked);document.querySelector('.bar button').textContent=this.checked?'🖨 Print double-sided':'🖨 Print — 2 per page'"> double-sided <small style="color:#9aa">(pick “two-sided” in the print dialog)</small></label>
+      <button onclick="doPrint()">🖨 Print double-sided</button><button class="xclose" onclick="window.close()" title="close this preview">✕ Close</button></div>
     <div class="sheet">${tag}<div class="cut">✂ cut</div>${tag.replace('class="tag"', 'class="tag copy2"')}</div>
+    <div class="sheet s2">${tag.replace('class="tag"', 'class="tag copy2"')}<div class="cut">✂ cut</div>${tag.replace('class="tag"', 'class="tag copy2"')}</div>
     <script>
-      const t1 = document.querySelectorAll('.tag')[0], t2 = document.querySelectorAll('.tag')[1];
-      const sync = () => { t2.innerHTML = t1.innerHTML; };
+      const t1 = document.querySelectorAll('.tag')[0];
+      const sync = () => { document.querySelectorAll('.tag').forEach(t => { if (t !== t1) t.innerHTML = t1.innerHTML; }); };
       // wait for every image (both QR copies + logos) to be fully decoded
       // before printing — otherwise the re-created copy prints as a blank box
       async function doPrint() {
@@ -2238,7 +2250,7 @@ function printShopTag(p) {
           im.decode ? im.decode().catch(() => {})
                     : (im.complete ? Promise.resolve()
                                    : new Promise(r => { im.onload = im.onerror = r; }))));
-        if (b) b.textContent = '🖨 Print — 2 per page';
+        if (b) b.textContent = document.getElementById('dup').checked ? '🖨 Print double-sided' : '🖨 Print — 2 per page';
         print();
       }
       window.onbeforeprint = sync;
@@ -2953,7 +2965,9 @@ function openSuggestBox() {
   };
   prev.querySelector('.sgprevx').onclick = clearShot;
   const msg = ov.querySelector('.sgmsg');
-  ov.querySelector('.sgsend').onclick = async () => {
+  ov.querySelector('.sgsend').onclick = async ev => {
+    const sendBtn = ev.currentTarget;
+    if (sendBtn.disabled) return;   // power-clicks file duplicates (Karmel 8/27)
     const text = ov.querySelector('.sgtext').value.trim();
     if (!text) { msg.className = 'sgmsg err'; msg.textContent = 'Write a sentence first.'; return; }
     const wa = writeAuth();
@@ -2969,6 +2983,9 @@ function openSuggestBox() {
     }
     const pin = wa.pin;
     let shotFailed = '';   // '' = fine, otherwise the why + what-to-do text
+    sendBtn.disabled = true;
+    const sendWas = sendBtn.textContent;
+    sendBtn.textContent = 'Sending…';
     msg.className = 'sgmsg'; msg.textContent = shotFile ? 'Uploading screenshot…' : 'Sending…';
     const body = {pin, action: 'suggest', type, text,
       context: 'view:' + (S.view || 'map') + (openSerial ? ' · piano #' + openSerial : ''),
@@ -3001,10 +3018,18 @@ function openSuggestBox() {
         else shotFailed = 'the upload service didn\u2019t accept it (probably a momentary hiccup) \u2014 wait a minute and attach the picture to a follow-up suggestion';
         }
       }
-      const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
-        headers: {'content-type': 'text/plain;charset=utf-8'}, body: JSON.stringify(body)});
-      const j = await r.json();
-      if (!j.ok) throw new Error(j.error || 'failed');
+      // Google sometimes answers the generic service ping without running
+      // the action (9/1) — j.ok without an id means nothing was filed. Retry.
+      let j = null;
+      for (let a = 0; a < 3; a++) {
+        const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+          headers: {'content-type': 'text/plain;charset=utf-8'}, body: JSON.stringify(body)});
+        j = await r.json().catch(() => null);
+        if (j && j.ok && j.id) break;
+        if (j && j.error) break;                    // real rejection — don't retry
+        await new Promise(res => setTimeout(res, 1000 * (a + 1)));
+      }
+      if (!j || !j.ok || !j.id) throw new Error((j && j.error) || 'the Google bridge hiccuped — try again in a few seconds');
       msg.className = 'sgmsg ok';
       msg.textContent = '✓ Filed as ' + j.id + (shotFailed
         ? ' — but it went in WITHOUT the picture: ' + shotFailed + '.'
@@ -3012,6 +3037,7 @@ function openSuggestBox() {
       ov.querySelector('.sgtext').value = ''; clearShot();
       loadMyRequests(ov);
     } catch (e) { msg.className = 'sgmsg err'; msg.textContent = '✗ ' + e.message; }
+    sendBtn.disabled = false; sendBtn.textContent = sendWas;
   };
   loadMyRequests(ov);
 }
@@ -3026,7 +3052,7 @@ async function loadMyRequests(ov) {
     const ICONS = {bug: '🐛', edit: '✏️', idea: '💡'};
     box.innerHTML = mine.map(x => `<div class="sgreq">
       <span class="sgst s${esc(x.status.replace(/\s/g, ''))}">${esc(x.status)}</span>
-      <span class="sgtxt">${ICONS[x.type] || '💡'} ${esc(x.text.slice(0, 70))}</span>
+      <span class="sgtxt">${ICONS[x.type] || '💡'} ${esc(x.text.slice(0, 220))}${x.text.length > 220 ? '…' : ''}</span>
       ${x.status === 'Live' ? `<button class="sgok" data-id="${esc(x.id)}">✅ It works</button>` : ''}
     </div>`).join('');
     box.querySelectorAll('.sgok').forEach(b => b.onclick = async () => {
@@ -3647,7 +3673,7 @@ function popHTML(p) {
   const tuner = '';   // tuning now lives in the Request menu
   const photo = p.serial
     ? `<button class="photobtn">📸 Add progress photo</button>
-       <input type="file" class="photoin" accept="image/*" capture="environment" hidden>
+       <input type="file" class="photoin" accept="image/*" hidden>
        <div class="photomsg"></div>`
     : '';
   const effPh = effectivePhase(p);
@@ -3773,11 +3799,12 @@ function popHTML(p) {
           <select class="clkphase">
             <option value="">— select the work —</option>
             <option value="__other__">✏️ Other — write it in…</option>
-            ${opts.map(ph => `<option value="${esc(ph)}">${esc(ph)}</option>`).join('')}
-            <option value="Admin / Misc">Admin / Misc</option>
-            <option value="Moving">Moving</option>
+            <option value="Admin / Misc">📋 Admin / Misc</option>
+            <option value="Moving">🚚 Moving</option>
             <option value="Training">🎓 Training (trainer AND trainee both clock this)</option>
             <option value="Rework">🔁 Rework — fixing earlier work</option>
+            <option value="" disabled>— shop phases —</option>
+            ${opts.map(ph => `<option value="${esc(ph)}">${esc(ph)}</option>`).join('')}
           </select></div>
         <input class="clkother" placeholder="what are you doing on this piano?" maxlength="60" hidden>
         <input class="clktrainee" placeholder="training with whom? (name)" maxlength="40" autocomplete="off" hidden>
@@ -3801,7 +3828,7 @@ function popHTML(p) {
         <button class="mvgo bnshot" title="photo of the bench → Tech folder">📸</button>
         <button class="mvgo benchtag" title="printable bench tag">🖨</button>
       </div><div class="bnmsg phmsg"></div>
-      <input type="file" class="bnfile" accept="image/*" capture="environment" hidden>` : ''}
+      <input type="file" class="bnfile" accept="image/*" hidden>` : ''}
     ${p.serial ? `<button class="lhbtn">🕘 Location history</button><div class="lhout"></div>` : ''}`)}
 
     ${(body => p.serial ? secWrap('shop', '🔨 Shop Progress', body) : body)(`
@@ -4704,7 +4731,7 @@ function openPhaseGateModal(p, phase, was, pop) {
       piano's owner receives</b>.</div>
     <div class="rfbar">
       <label class="csvbtn" style="cursor:pointer">📷 Take / attach the photo
-        <input type="file" accept="image/*" capture="environment" hidden class="pg-file"></label>
+        <input type="file" accept="image/*" hidden class="pg-file"></label>
       <span class="pg-shot phmsg">${photoOptional ? 'optional for ' + esc(was) : 'required before advancing'}</span></div>
     <div class="rfbar pg-qc" style="gap:14px;align-items:center">
       <b style="font-size:13px">Mini-QC on the ${esc(was)} work:</b>
@@ -9330,6 +9357,8 @@ function renderWhiteboard() {
   const y = window.scrollY;
   v.innerHTML = `
     <div class="wbtop">
+      <span class="wbjump">${WB_COLS.map(([c]) =>
+        `<button class="wbctl wbjumpbtn" data-c="${esc(c)}">＋ ${esc(c)}</button>`).join('')}</span>
       <button class="wbctl wbToggleDone">${WB.showArrived ? 'Hide arrived items' : 'Show arrived items'}</button>
       <button class="wbctl wbRefresh">Refresh</button>
     </div>
@@ -9338,6 +9367,14 @@ function renderWhiteboard() {
   window.scrollTo(0, y);
   v.querySelector('.wbRefresh').onclick = () => { WB.err = null; wbFetch(true); };
   v.querySelector('.wbToggleDone').onclick = () => { WB.showArrived = !WB.showArrived; renderWhiteboard(); };
+  // mobile (Karmel 8/27): columns stack, so jump straight to a column's
+  // add-input instead of scrolling past the whole board
+  v.querySelectorAll('.wbjumpbtn').forEach(b => b.onclick = () => {
+    const inp = v.querySelector(`.wbadd input[data-col="${b.dataset.c}"]`);
+    if (!inp) return;
+    inp.closest('.wbcol').scrollIntoView({behavior: 'smooth', block: 'start'});
+    setTimeout(() => inp.focus(), 350);
+  });
   if (WB.rows) wbWire(v);
   if (!WB.rows && !WB.loading && !WB.err) wbFetch();
 }
@@ -9789,7 +9826,23 @@ function renderTaskBoard() {
   const isSnoozed = r => r.snooze && r.snooze > today && r.col !== 'done';
   const allMine = TB.rows.filter(r => sameOwner(r.owner, TB.person) && r.col !== 'archived');
   const snoozedN = allMine.filter(isSnoozed).length;
-  const mine = allMine.filter(r => TB.showSnoozed || !isSnoozed(r));
+  // "unresponded" (Brigham 8/29): the newest note is someone else's — or the
+  // card came from someone else and has no notes yet. Notes lines look like
+  // "M/D First: text", newest first.
+  const ownerFirst = tbNorm(TB.person).split(' ')[0];
+  const noteAuthor = r => {
+    const m = /^\d{1,2}\/\d{1,2}\s+(\S+):/.exec(String(r.notes || '').split('\n')[0] || '');
+    return m ? m[1].toLowerCase() : '';
+  };
+  const isUnresp = r => r.col !== 'done' && !isSnoozed(r)
+    && ((noteAuthor(r) && noteAuthor(r) !== ownerFirst)
+        || (!String(r.notes || '').trim() && r.from && tbNorm(r.from).split(' ')[0] !== ownerFirst));
+  const unrespN = allMine.filter(isUnresp).length;
+  let mine = allMine.filter(r => TB.showSnoozed || !isSnoozed(r));
+  if (TB.unresp) mine = mine.filter(isUnresp);
+  const tq = String(TB.q || '').trim().toLowerCase();
+  if (tq) mine = mine.filter(r =>
+    (r.text + ' ' + r.serial + ' ' + (r.notes || '') + ' ' + (r.from || '')).toLowerCase().includes(tq));
   const canEdit = sameOwner(TB.person, me) || tbAdmin();
   const boardCols = (TB.cols[tbNorm(TB.person)] || TB_COLS.map(([k, l]) => [k, l]))
     .map(c => Array.isArray(c) ? c : [c.key, c.label]);
@@ -9827,6 +9880,8 @@ function renderTaskBoard() {
       <b>${esc(TB.person.split(/\s+/)[0])}'s Board</b>
       <span>${allMine.filter(r => r.col !== 'done' && !isSnoozed(r)).length} open · ${snoozedN} snoozed · ${allMine.length} total</span>
       ${snoozedN ? `<button class="ksnoozetog">💤 ${snoozedN} snoozed${TB.showSnoozed ? ' — hide' : ''}</button>` : ''}
+      ${unrespN ? `<button class="kunresp${TB.unresp ? ' on' : ''}" title="cards waiting on your reply — the newest note is someone else's">✉ ${unrespN} unresponded${TB.unresp ? ' — show all' : ''}</button>` : ''}
+      <input class="ksearch" type="search" placeholder="🔎 search cards" value="${esc(TB.q || '')}">
       ${canEdit ? '<button class="kadd">＋ Card</button><button class="kaddcol" title="add a column">＋ Column</button>' : ''}
       <button class="karchbtn" title="archived cards — search & restore">🗂</button></div>
     <div class="kan">${boardCols.map(([k, l]) => col(k, l)).join('')}</div>`;
@@ -9973,6 +10028,18 @@ function renderTaskBoard() {
   });
   const stog = el.querySelector('.ksnoozetog');
   if (stog) stog.onclick = () => { TB.showSnoozed = !TB.showSnoozed; renderTaskBoard(); };
+  const ku = el.querySelector('.kunresp');
+  if (ku) ku.onclick = () => { TB.unresp = !TB.unresp; renderTaskBoard(); };
+  const ks = el.querySelector('.ksearch');
+  if (ks) ks.oninput = () => {
+    clearTimeout(ks._t);
+    ks._t = setTimeout(() => {
+      TB.q = ks.value;
+      renderTaskBoard();
+      const again = el.querySelector('.ksearch');
+      if (again) { again.focus(); again.setSelectionRange(again.value.length, again.value.length); }
+    }, 300);
+  };
   // 🗂 archive: search everything ever done on this board, restore if needed
   el.querySelector('.karchbtn').onclick = () => {
     const arch = TB.rows.filter(r => sameOwner(r.owner, TB.person) && r.col === 'archived')
