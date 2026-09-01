@@ -3033,6 +3033,48 @@ setTimeout(() => {
   if (btn) btn.onclick = openSuggestBox;
   // 🔄 hard refresh — reload the whole app past every cache so the newest
   // features and data come down, from any screen (Brigham 8/28)
+  /* stale-build self-healing (9/1): three team devices ran week-old cached
+   * builds today and their task-board writes silently detoured through the
+   * slow Google path. The app now checks the server's version and shows a
+   * tap-to-update banner whenever it's behind — checked on load, every
+   * 15 min, and each time the app comes back to the foreground. */
+  const hardRefreshNow = async () => {
+    try {
+      if ('caches' in window) {
+        const ks = await caches.keys();
+        await Promise.all(ks.map(k => caches.delete(k)));
+      }
+    } catch (e) {}
+    const u = new URL(location.href);
+    u.searchParams.set('r', Date.now().toString(36));
+    location.replace(u.toString());
+  };
+  const runningVer = (() => {
+    const sc = document.querySelector('script[src*="app.js?v="]');
+    const m = sc && /v=(\d+)/.exec(sc.src);
+    return m ? +m[1] : 0;
+  })();
+  const checkAppVersion = async () => {
+    if (!runningVer || document.getElementById('updbanner')) return;
+    try {
+      const r = await fetch('/?vercheck=' + Date.now().toString(36), {cache: 'no-store'});
+      const m = /app\.js\?v=(\d+)/.exec(await r.text());
+      if (m && +m[1] > runningVer) {
+        const d = document.createElement('div');
+        d.id = 'updbanner';
+        d.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:18px;z-index:9999;'
+          + 'background:#9e2020;color:#fff;padding:11px 20px;border-radius:999px;font:700 14px Helvetica,Arial;'
+          + 'box-shadow:0 6px 24px rgba(0,0,0,.35);cursor:pointer;white-space:nowrap';
+        d.textContent = '🚀 App update ready — tap to refresh';
+        d.onclick = hardRefreshNow;
+        document.body.appendChild(d);
+      }
+    } catch (e) { /* offline — check again later */ }
+  };
+  setTimeout(checkAppVersion, 15000);
+  setInterval(checkAppVersion, 15 * 60 * 1000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) setTimeout(checkAppVersion, 1500); });
+
   const hrb = document.getElementById('hardRefreshBtn');
   if (hrb) hrb.onclick = async () => {
     hrb.textContent = '⏳';
