@@ -3714,6 +3714,7 @@ function popHTML(p) {
             ${opts.map(ph => `<option value="${esc(ph)}">${esc(ph)}</option>`).join('')}
             <option value="Admin / Misc">Admin / Misc</option>
             <option value="Moving">Moving</option>
+            <option value="Training">🎓 Training (trainer AND trainee both clock this)</option>
           </select></div>
         <input class="clkother" placeholder="what are you doing on this piano?" maxlength="60" hidden>
         <button class="clkbtn clkin off">▶ ${mine ? 'Switch here' : 'Clock in'}</button>
