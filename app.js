@@ -8282,7 +8282,47 @@ function scorecardTable() {
     ${kpi('Month value', bonusAll == null ? '—' : '$' + Math.round(bonusAll * 173), 'on a 173-hour month over base')}
     ${kpi('Effective rate', bonusAll == null ? '—' : '$' + (18 + bonusAll).toFixed(2), '$18 base (\u2192$19 at 85% baseline) + bonus', '#2f7d4f')}
   </div>`;
-  return hero + money + `<div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:14px">
+  /* ---- ladder progress strip (Brigham 9/1): each rung's gates as live
+   * chips — green when currently met, red when not, grey when the data
+   * isn't there yet. Hold-streaks accrue from the monthly archives that
+   * began with the Scorecard Log on 2026-08-31. ---- */
+  const reworkPct = workH ? 100 * reworkH / workH : 0;
+  const chip = (label, state) => `<span style="display:inline-block;margin:2px 4px 2px 0;padding:2px 8px;border-radius:5px;font-size:11px;font-weight:700;
+    background:${state == null ? '#efece6' : state ? '#eaf5ec' : '#fdecec'};
+    color:${state == null ? '#8a847b' : state ? '#2f7d4f' : '#9e2020'}">${state == null ? '· ' : state ? '✓ ' : '✗ '}${label}</span>`;
+  const rung = (pay, title, hold, chips, note) => `<div style="flex:1;min-width:220px;background:#fff;border:1px solid #dfe3e8;border-radius:10px;padding:11px 14px">
+    <div style="display:flex;justify-content:space-between;align-items:baseline"><b style="font-size:14px">${pay}</b>
+      <span style="font-size:10.5px;letter-spacing:1px;text-transform:uppercase;color:#8a847b">${title}</span></div>
+    <div style="font-size:10.5px;color:#8a847b;margin:2px 0 6px">${hold}</div>
+    <div>${chips}</div>${note ? `<div style="font-size:10.5px;color:#8a847b;margin-top:5px">${note}</div>` : ''}</div>`;
+  const g25 = [
+    chip('coverage ≥85%', coverage == null ? null : coverage >= 85),
+    chip('mgmt ≥80%', mgmtScore == null ? null : mgmtScore >= .8),
+    chip('first pass ≥95%', firstPass == null ? null : firstPass >= 95),
+    chip('stalled ≤25 (now ' + (stalled == null ? '—' : stalled) + ')', stalled == null ? null : stalled <= 25),
+    chip('index ≥ baseline', prodIdx == null ? null : prodIdx >= 95),
+  ].join('');
+  const g28 = [
+    chip('index ≥105', prodIdx == null ? null : prodIdx >= 105),
+    chip('first pass ≥97%', firstPass == null ? null : firstPass >= 97),
+    chip('rework ≤3%', workH ? reworkPct <= 3 : null),
+    chip('stalled ≤15', stalled == null ? null : stalled <= 15),
+    chip('earned hrs +10%', null),
+    chip('trainee converging', null),
+  ].join('');
+  const ladder = `<div style="border:1px solid #dfe3e8;border-radius:12px;background:#f4f1ec;padding:13px 16px;margin-bottom:14px">
+    <div style="font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:#6f6a63;margin-bottom:9px">🪜 Career ladder — live gate status</div>
+    <div style="display:flex;flex-wrap:wrap;gap:10px">
+      ${rung('$19', 'next raise', 'hold ≥85% coverage for 1 full month',
+        chip('coverage ≥85% (now ' + pct(coverage) + ')', coverage == null ? null : coverage >= 85),
+        'hold-tracking began Sep 1')}
+      ${rung('$25', 'Shop Manager', 'all five held for 3 consecutive months', g25, '')}
+      ${rung('$28', 'Production Manager', 'held for 2 consecutive quarters', g28, 'grey gates need baseline history first')}
+      ${rung('$30+', 'Operations Leader', 'annual — dollars, not just index',
+        chip('index ≥110 / hrs +15%', null) + chip('P&L +$100k/yr', null) + chip('vacation test', null),
+        'needs the QBO revenue mapping')}
+    </div></div>`;
+  return hero + money + ladder + `<div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:14px">
     ${kpi('Clock coverage', pct(coverage), 'work-clock ÷ payroll · gate ≥85%', coverage != null && coverage < 85 ? '#9e2020' : '#2f7d4f')}
     ${kpi('Mini-QC first pass', pct(firstPass), qc.length + ' phase advances · 30d', firstPass != null && firstPass >= 95 ? '#2f7d4f' : undefined)}
     ${kpi('Rework', reworkH.toFixed(1) + 'h', workH ? (100 * reworkH / workH).toFixed(1) + '% of ' + workH.toFixed(0) + 'h piano work' : '', reworkH / Math.max(workH, 1) > .05 ? '#9e2020' : '#2f7d4f')}
