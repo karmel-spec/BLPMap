@@ -3715,8 +3715,10 @@ function popHTML(p) {
             <option value="Admin / Misc">Admin / Misc</option>
             <option value="Moving">Moving</option>
             <option value="Training">🎓 Training (trainer AND trainee both clock this)</option>
+            <option value="Rework">🔁 Rework — fixing earlier work</option>
           </select></div>
         <input class="clkother" placeholder="what are you doing on this piano?" maxlength="60" hidden>
+        <input class="clktrainee" list="teamNames" placeholder="training with whom? (name)" maxlength="40" hidden>
         <button class="clkbtn clkin off">▶ ${mine ? 'Switch here' : 'Clock in'}</button>
         <div class="clkmsg phmsg"></div>`);
     })() : ''}
@@ -4337,17 +4339,31 @@ function wirePop(p) {
   (() => {   // Work Clock wiring: phase is mandatory, "Other" allows write-in
     const sel = pop.querySelector('.clkphase');
     const oth = pop.querySelector('.clkother');
+    const trn = pop.querySelector('.clktrainee');
+    if (trn && !document.getElementById('teamNames')) {
+      const dl = document.createElement('datalist'); dl.id = 'teamNames';
+      dl.innerHTML = Object.keys(TB_HEADSHOTS || {}).map(n =>
+        `<option value="${esc(n.split(' ').map(w => w.replace(/^./, c => c.toUpperCase())).join(' '))}">`).join('');
+      document.body.appendChild(dl);
+    }
     const inBtn = pop.querySelector('.clkin');
     const outBtn = pop.querySelector('.clkout');
     const cmsg = pop.querySelector('.clkmsg');
     const chosen = () => {
       if (!sel) return '';
       if (sel.value === '__other__') return (oth.value || '').trim();
+      // training punches record the partner so trainer-hours per intern
+      // can be measured for job costing (Brigham 8/31)
+      if (sel.value === 'Training') {
+        const w = trn ? trn.value.trim() : '';
+        return w ? 'Training: ' + w : 'Training';
+      }
       return sel.value;
     };
     const refresh = () => {
       if (!inBtn) return;
       if (oth) oth.hidden = sel.value !== '__other__';
+      if (trn) trn.hidden = sel.value !== 'Training';
       inBtn.classList.toggle('off', !chosen());
     };
     if (sel) { sel.onchange = () => { refresh(); if (sel.value === '__other__' && oth) oth.focus(); }; sel.onclick = ev => ev.stopPropagation(); }
@@ -4627,6 +4643,12 @@ function openPhaseGateModal(p, phase, was, pop) {
       <label class="csvbtn" style="cursor:pointer">📷 Take / attach the photo
         <input type="file" accept="image/*" capture="environment" hidden class="pg-file"></label>
       <span class="pg-shot phmsg">required before advancing</span></div>
+    <div class="rfbar pg-qc" style="gap:14px;align-items:center">
+      <b style="font-size:13px">Mini-QC on the ${esc(was)} work:</b>
+      <label style="cursor:pointer"><input type="radio" name="pgqc" value="pass"> ✅ Passes</label>
+      <label style="cursor:pointer"><input type="radio" name="pgqc" value="fix"> 🔧 Needs fixes</label>
+    </div>
+    <input class="pg-qcnote" placeholder="what needs fixing?" maxlength="200" hidden>
     <textarea class="pg-note" rows="3" placeholder="Notes about the ${esc(was)} work you just finished (optional) — anything the next tech, the managers or Brigham should know"></textarea>
     <div class="rfbar"><select class="pg-route">
         <option value="card">📌 put the note on the piano's data card (all team)</option>
@@ -4662,11 +4684,28 @@ function openPhaseGateModal(p, phase, was, pop) {
       go.disabled = false;
     } catch (e) { shotMsg.className = 'pg-shot phmsg err'; shotMsg.textContent = '✗ ' + e.message; }
   };
+  const qcNote = ov.querySelector('.pg-qcnote');
+  ov.querySelectorAll('input[name=pgqc]').forEach(r =>
+    r.onchange = () => { qcNote.hidden = r.value !== 'fix' || !r.checked; if (!qcNote.hidden) qcNote.focus(); });
   go.onclick = async () => {
+    const qcPick = ov.querySelector('input[name=pgqc]:checked');
+    if (!qcPick) {
+      ov.querySelector('.pg-msg').className = 'pg-msg phmsg err';
+      ov.querySelector('.pg-msg').textContent = 'Mark the mini-QC first — passes, or needs fixes.';
+      return;
+    }
     go.disabled = true; go.textContent = 'Advancing…';
     const note = ov.querySelector('.pg-note').value.trim();
     const route = ov.querySelector('.pg-route').value;
     const wa = writeAuth();
+    // mini-QC record → QC Log tab (first-pass rate feeds the manager scorecard)
+    if (wa.ok) {
+      fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+        headers: {'content-type': 'text/plain;charset=utf-8'},
+        body: JSON.stringify({pin: wa.pin, action: 'miniqc', serial: p.serial, row: p.row,
+          phase: was, result: qcPick.value, note: qcNote.value.trim().slice(0, 200),
+          ...authFields()})}).catch(() => {});
+    }
     if (note && wa.ok) {
       try {
         if (route === 'card') {
@@ -8122,6 +8161,85 @@ function appUpdatesTable() {
      || '<tr><td colspan="4" class="empty">No shares yet.</td></tr>'}</table>`;
 }
 
+/* =============== MANAGER SCORECARD (Brigham 8/31) ===============
+ * The monthly pay-for-performance dashboard: converts Work Clock +
+ * mini-QC + payroll data into the bonus formula agreed with Brigham —
+ * productivity 50% / quality 35% / management 15%, quality as a
+ * multiplier, and a clock-coverage gate so the index can't be gamed
+ * by under-punching. Standards come from the Aug 2026 job-costing
+ * analysis (expert midpoints; recalibrates as clock data grows). */
+const SC_STD = {'New Arrival - Admin': 3, 'Assessment': 3, 'CAP': 40,
+  'PRSB & Plate Refinishing': 40, 'Lacquer Soundboard': 12, 'Restringing': 40,
+  'Chip Tuning': 2, 'DHRT': 48, 'Refinishing': 62, 'QC & Assembly': 17,
+  '1st Tuning': 2, '2nd Tuning': 2, 'Key service': 22, 'Full key set': 22,
+  'Refurb checklist': 48, 'Exit Prep - Admin': 3};
+async function loadQcLog() {
+  try {
+    const r = await fetch(BRIDGE_URL + '?fn=qclog', {redirect: 'follow'});
+    S.qcRows = (await r.json()).rows || [];
+  } catch (e) { S.qcRows = []; }
+  renderReport();
+}
+function scorecardTable() {
+  if (!S.tlRows || !S.payRows || !S.qcRows) return '<div class="empty">Crunching the clock, QC and payroll ledgers…</div>';
+  const cut = Date.now() - 30 * 86400000;
+  const inWin = iso => iso && new Date(iso).getTime() >= cut;
+  const tl = S.tlRows.filter(r => inWin(r.start) && !/test/i.test(r.phase) && !/FAKE/.test(r.serial || ''));
+  const mins = rows => rows.reduce((a, r) => a + (r.minutes || 0), 0);
+  const pianoRows = tl.filter(r => !/^(Moving|Admin \/ Misc)/.test(r.phase));
+  const trainRows = tl.filter(r => /^Training/.test(r.phase));
+  const reworkRows = tl.filter(r => /^Rework|re-?do|fix(ing)? (earlier|previous)/i.test(r.phase));
+  const workH = mins(pianoRows) / 60, trainH = mins(trainRows) / 60, reworkH = mins(reworkRows) / 60;
+  const payMin = (S.payRows || []).filter(r => inWin(r.date || r.start)).reduce((a, r) => a + (r.minutes || 0), 0);
+  const coverage = payMin ? Math.min(100, Math.round(100 * mins(tl) / payMin)) : null;
+  // mini-QC first pass
+  const qc = (S.qcRows || []).filter(r => inWin(r.when));
+  const qcPass = qc.filter(r => r.result === 'pass').length;
+  const firstPass = qc.length ? Math.round(100 * qcPass / qc.length) : null;
+  // provisional productivity: phases that PASSED mini-QC in window earn standard hours
+  let earned = 0, actual = 0, phasesDone = 0;
+  const doneKeys = new Set(qc.filter(r => r.result === 'pass').map(r => (r.serial || '') + '|' + (r.phase || '')));
+  doneKeys.forEach(k => {
+    const [sn, ph] = k.split('|');
+    const std = SC_STD[ph];
+    if (!std) return;
+    const spent = mins((S.tlRows || []).filter(r => r.serial === sn && r.phase === ph)) / 60;
+    if (spent < 1) return;   // phase never clocked — no basis to score it
+    earned += std; actual += spent; phasesDone++;
+  });
+  const prodIdx = actual ? Math.round(100 * earned / actual) : null;
+  const stalled = (() => { try { return stalledPianos().length; } catch (e) { return null; } })();
+  // ---- bonus translation (base $22, pool $0-8/hr) ----
+  const prodScore = prodIdx == null ? null : prodIdx >= 105 ? 1 : prodIdx >= 100 ? .75 : prodIdx >= 95 ? .5 : prodIdx >= 90 ? .25 : 0;
+  const qMult = firstPass == null ? null : firstPass >= 98 ? 1 : firstPass >= 95 ? .9 : firstPass >= 90 ? .75 : .5;
+  const gated = coverage != null && coverage < 85;
+  const prodBonus = (prodScore == null || qMult == null || gated) ? null : 4 * prodScore * qMult;
+  const qualBonus = qMult == null ? null : 2.8 * (firstPass >= 98 ? 1 : firstPass >= 95 ? .7 : firstPass >= 90 ? .4 : 0);
+  const kpi = (label, val, sub, tone) => `<div style="border:1px solid #dfe3e8;border-radius:10px;padding:12px 16px;background:#fff;min-width:150px">
+    <div style="font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#8a847b">${label}</div>
+    <div style="font-size:26px;font-weight:800;color:${tone || '#2b2f33'}">${val}</div>
+    <div style="font-size:11.5px;color:#8a847b">${sub}</div></div>`;
+  const pct = v => v == null ? '—' : v + '%';
+  return `<div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:14px">
+    ${kpi('Clock coverage', pct(coverage), 'work-clock ÷ payroll · gate ≥85%', coverage != null && coverage < 85 ? '#9e2020' : '#2f7d4f')}
+    ${kpi('Productivity index', pct(prodIdx), phasesDone + ' QC-passed phases vs standards', prodIdx != null && prodIdx >= 100 ? '#2f7d4f' : undefined)}
+    ${kpi('Mini-QC first pass', pct(firstPass), qc.length + ' phase advances · 30d', firstPass != null && firstPass >= 95 ? '#2f7d4f' : undefined)}
+    ${kpi('Rework', reworkH.toFixed(1) + 'h', workH ? (100 * reworkH / workH).toFixed(1) + '% of ' + workH.toFixed(0) + 'h piano work' : '', reworkH / Math.max(workH, 1) > .05 ? '#9e2020' : '#2f7d4f')}
+    ${kpi('Training invested', trainH.toFixed(1) + 'h', 'trainer+trainee punches · neutral in index')}
+    ${kpi('Sitting too long', stalled == null ? '—' : stalled, 'pianos past 2× typical phase span', stalled > 5 ? '#9e2020' : undefined)}
+  </div>
+  <div style="border:1.5px solid #c9a227;border-radius:10px;padding:14px 18px;background:#fdf6e3">
+    <b>Bonus translation (last 30 days${gated ? ' — ⛔ COVERAGE GATE: below 85%, productivity bonus paused' : ''})</b>
+    <table style="margin-top:8px"><tr><th style="text-align:left">Component</th><th>Result</th><th>$/hr</th></tr>
+    <tr><td>Productivity (50%) — index ${pct(prodIdx)} × quality multiplier ${qMult == null ? '—' : qMult}</td><td>${prodScore == null ? '—' : Math.round(prodScore * 100) + '%'}</td><td><b>${prodBonus == null ? '—' : '$' + prodBonus.toFixed(2)}</b></td></tr>
+    <tr><td>Quality (35%) — mini-QC first pass ${pct(firstPass)}</td><td></td><td><b>${qualBonus == null ? '—' : '$' + qualBonus.toFixed(2)}</b></td></tr>
+    <tr><td>Management (15%) — set at review (stalled count, briefs, follow-through)</td><td></td><td>$0–1.20</td></tr></table>
+    <div style="margin-top:8px;font-size:13px">Estimated bonus: <b>${prodBonus == null || qualBonus == null ? '— (needs more data)' : '$' + (prodBonus + qualBonus).toFixed(2) + '–$' + (prodBonus + qualBonus + 1.2).toFixed(2) + '/hr'}</b>
+      &nbsp;→ on a 173-hour month that's <b>${prodBonus == null || qualBonus == null ? '—' : '$' + Math.round((prodBonus + qualBonus) * 173) + '–$' + Math.round((prodBonus + qualBonus + 1.2) * 173)}</b> over base.</div>
+    <div style="margin-top:6px;font-size:12px;color:#6b5030">Standards are provisional (calendar-derived, expert midpoints) — they recalibrate as Work Clock history grows. Months 1–2 are baseline-collection; the translation goes live after calibration.</div>
+  </div>`;
+}
+
 const REPORT_DEFS = () => [
   // ---- ADMIN REPORTS ----
   {id: 'adminbriefs', sec: 'admin', icon: '💼', title: 'ADMIN DAILY BRIEF', count: null,
@@ -8160,6 +8278,9 @@ const REPORT_DEFS = () => [
      try { return taskQueueLists().reduce((s, q) => s + q.list.length, 0); } catch (e) { return null; } })(),
    desc: 'Seven ordered to-do queues — key service, plates to Curtis Harper, refinishing on deck, plating + buffing, decals, bass strings, and the showroom tuning queue for Korban (most-overdue first, from the tuning calendars). Each shows who’s NEXT and everyone behind them. Click any row to jump to the piano.',
    html: taskQueuesTable},
+  {id: 'scorecard', sec: 'shop', show: () => isOwner() || isTimelogAdmin(), icon: '📊', title: 'MANAGER SCORECARD', count: null,
+   desc: 'The shop\u2019s monthly performance-pay dashboard: clock coverage, productivity vs phase standards, mini-QC first-pass rate, rework, training investment and stalled pianos \u2014 translated straight into the manager bonus formula. Rolling 30 days.',
+   html: scorecardTable},
   {id: 'stalled', sec: 'shop', icon: '🐢', title: 'SITTING TOO LONG', count: (() => {
      try { return stalledPianos().length; } catch (e) { return null; } })(),
    desc: 'Custom Shopwork pianos in the building more than twice the typical span for their current phase — the 🐢 list that used to live inside the daily brief. Click a row to jump to the piano.',
@@ -8274,6 +8395,11 @@ function renderReport() {
     if (S.openReport === 'jobcost' && !S.tlRows) loadTimeLog();
     if (S.openReport === 'queue' && !S.tlRows) loadTimeLog();   // ASSIGNED TO column
     if (S.openReport === 'appupdates' && !S.auRows) loadAppUpdates();
+    if (S.openReport === 'scorecard') {
+      if (!S.tlRows) loadTimeLog();
+      if (!S.payRows) loadPayroll();
+      if (!S.qcRows) loadQcLog();
+    }
     if (S.openReport === 'clockadjust') {
       if (!S.fixRows) loadClockFixes();
       if (!S.payRows) loadPayroll();

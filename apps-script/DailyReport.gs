@@ -191,6 +191,11 @@ function doGet(e) {
     try { return json_({ok: true, who: whereIs_()}); }
     catch (err) { return json_({error: String(err), who: {}}); }
   }
+  // mini-QC records (phase-advance pass/fix) for the Manager Scorecard
+  if (e && e.parameter && e.parameter.fn === 'qclog') {
+    try { return json_(qcLogRows_(Number(e.parameter.days) || 120)); }
+    catch (err) { return json_({error: String(err), rows: []}); }
+  }
   // Work clock history rows for the Job Costing report (?days=90)
   if (e && e.parameter && e.parameter.fn === 'timelog') {
     try { return json_(timeLogRows_(Number(e.parameter.days) || 90)); }
@@ -808,6 +813,11 @@ function doPost(e) {
     if (req.action === 'briefdoc') {
       try { return json_(briefDocOnly_(Number(req.day) || 0)); }   // day: 0=today, 3=Monday from Friday
       catch (e2) { return json_({error: String(e2).slice(0, 300)}); }
+    }
+    if (req.action === 'miniqc') {
+      var mq = miniQc_(req, who);
+      if (mq.ok) logAct_(who, 'Mini-QC ' + (mq.result === 'pass' ? 'PASS ✅' : 'NEEDS FIXES 🔧'), mq.serial, mq.phase + (req.note ? ' — ' + String(req.note).slice(0, 80) : ''));
+      return json_(mq);
     }
     if (req.action === 'docreplace') {
       var dr = docReplace_(req);
@@ -4240,6 +4250,45 @@ function smTocHtml_(TOC, color, bg, border) {
 /* Every briefing is also saved as a Google Doc (Drive REST convert) in a
  * "BLP Shop Briefs" folder, link-shared, and logged to the report sheet's
  * "Brief Log" tab — the Store Map's Daily Briefs report lists those links. */
+/* mini-QC at phase advancement (Brigham 8/31): every forward phase move
+ * records pass / needs-fixes — first-pass rate feeds the manager
+ * performance-pay scorecard. Rows live on a 'QC Log' tab. */
+function qcLogSheet_() {
+  var ss = SpreadsheetApp.openById('11RoeVRETag5rZYX6_tEH-rf6x8JL0JeZU0P5AT0WI-I');
+  var sh = ss.getSheetByName('QC Log');
+  if (!sh) {
+    sh = ss.insertSheet('QC Log', ss.getSheets().length);
+    sh.getRange(1, 1, 1, 6).setValues([['When', 'Serial', 'Phase completed', 'Result', 'Note', 'By']]);
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+function miniQc_(req, who) {
+  var serial = String(req.serial || '').trim();
+  var phase = String(req.phase || '').trim();
+  var result = req.result === 'pass' ? 'pass' : 'fix';
+  if (!serial || !phase) return {error: 'serial and phase required'};
+  qcLogSheet_().appendRow([new Date().toISOString(), serial, phase, result,
+    String(req.note || '').slice(0, 200), who || '']);
+  return {ok: true, serial: serial, phase: phase, result: result};
+}
+function qcLogRows_(days) {
+  var sh = qcLogSheet_();
+  var last = sh.getLastRow();
+  var out = [];
+  if (last >= 2) {
+    var vals = sh.getRange(2, 1, last - 1, 6).getValues();
+    var cutoff = Date.now() - Math.min(days || 120, 730) * 86400000;
+    for (var i = 0; i < vals.length && out.length < 4000; i++) {
+      var v = vals[i];
+      if (!v[0] || new Date(v[0]).getTime() < cutoff) continue;
+      out.push({when: String(v[0]), serial: String(v[1]), phase: String(v[2]),
+                result: String(v[3]), note: String(v[4] || ''), by: String(v[5] || '')});
+    }
+  }
+  return {ok: true, rows: out};
+}
+
 /* rewrite an existing Google Doc's content in place (same URL) — used by
  * Claude/console tooling to refresh generated docs like the Korban tuning
  * recommendations without changing the link people already have. */
