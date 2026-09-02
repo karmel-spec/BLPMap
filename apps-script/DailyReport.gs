@@ -2237,6 +2237,12 @@ function clockInLocked_(req) {
   var psh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
   var f = findPiano_(psh, req.serial, req.row);
   var startIso = new Date().toISOString();
+  // ❗ IMPORTANT-note acknowledgment (Karmel 8/29): the tech checked the box
+  // saying they read the note before this clock-in — keep a named record
+  if (req.ackNote) {
+    logAct_(tech, 'Acknowledged IMPORTANT note (' + String(req.phase || 'work') + ')',
+            String(req.serial), String(req.ackNote).slice(0, 200));
+  }
   sh.appendRow([tech, String(req.serial), (f && f.summary) || '', String(req.phase || ''),
                 startIso, '', '', String(req.source || 'card'), '']);
   return {ok: true, closed: closed,
@@ -5095,6 +5101,20 @@ function taskCard_(req, who) {
     var prev = String(sh.getRange(row, 11).getValue() || '').trim();
     sh.getRange(row, 11).setValue(prev ? line + '\n' + prev : line);
     tbNotify_(rowOwner, who, 'added a note — ' + txt.slice(0, 80), String(req.id), rowText);
+    // @mentions (Melissa 8/29): "@brigham" in a note pings that person
+    // directly — text for the owners, BLP email for everyone else. The
+    // card owner already got the plain note notification above.
+    var MENTION_FULL = {brigham: 'Brigham Larson', karmel: 'Karmel Larson'};
+    var mSeen = {};
+    var mOwnerFirst = String(rowOwner || '').trim().split(/\s+/)[0].toLowerCase();
+    var mm, mre = /@([a-z]+)/gi;
+    while ((mm = mre.exec(txt))) {
+      var mfn = mm[1].toLowerCase();
+      if (mSeen[mfn] || mfn === mOwnerFirst) continue;
+      mSeen[mfn] = 1;
+      tbNotify_(MENTION_FULL[mfn] || mfn, who,
+        'mentioned you in a note — ' + txt.slice(0, 120), String(req.id), rowText);
+    }
     return {ok: true, line: line};
   }
   if (op === 'snooze') {

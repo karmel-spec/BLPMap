@@ -3251,11 +3251,149 @@ async function maybeClockPhaseSync(p, ph) {
        phase dropdown — Cancel leaves it at ${esc(cur)}</small></div>`);
   if (ok) setPhase(p, ph, $('#pop'));
 }
-async function punch(action, p, phase, source, endAt) {
+/* 💼 LEADS on a piano card (Melissa 8/29): attach sales leads from the
+ * Leads Log to a showroom piano. The link is stored ON THE LEAD (a "Piano
+ * Serial" column in the Leads Log, via the storemap-leads bridge), so the
+ * sales app stays the owner of lead data. Owners + Melissa only (tbAdmin). */
+const LEADS_API = 'https://blpsalesapp.netlify.app/.netlify/functions/storemap-leads';
+const LD = {list: null, loading: false, at: 0};
+async function leadsFetch(force) {
+  if (LD.loading) return;
+  if (!force && LD.list && Date.now() - LD.at < 120000) return;
+  LD.loading = true;
+  try {
+    const r = await fetch(LEADS_API + '?key=' + encodeURIComponent('pianoman'));
+    const j = await r.json();
+    if (j && j.leads) { LD.list = j.leads; LD.at = Date.now(); }
+  } catch (e) { /* the row shows a retry hint */ }
+  LD.loading = false;
+}
+async function leadAttach(id, serial) {
+  const r = await fetch(LEADS_API, {method: 'POST',
+    headers: {'content-type': 'application/json'},
+    body: JSON.stringify({key: 'pianoman', id, serial, by: clockName()})});
+  const j = await r.json().catch(() => ({}));
+  if (!j.ok) throw new Error(j.error || 'failed');
+}
+function wireLeadsRow(pop, p) {
+  const box = pop.querySelector('.leadchips');
+  if (!box) return;
+  const msg = pop.querySelector('.leadmsg');
+  const paint = () => {
+    if (!LD.list) { box.innerHTML = '<i class="lite">couldn’t load leads — reopen the card to retry</i>'; return; }
+    const mine = LD.list.filter(l => l.serial && l.serial === p.serial);
+    box.innerHTML = mine.map(l =>
+      `<span class="cabchip leadchip" data-id="${esc(l.id)}" title="${esc([l.headline, l.status, l.rep && 'rep: ' + l.rep].filter(Boolean).join(' · '))}">💼 ${esc(l.name)}<i class="leaddel" data-id="${esc(l.id)}" title="detach from this piano">✕</i></span>`).join('')
+      + '<button class="cabadd leadadd">＋ lead</button>';
+    box.querySelectorAll('.leadchip').forEach(ch => ch.onclick = ev => {
+      ev.stopPropagation();
+      if (ev.target.closest('.leaddel')) return;
+      window.open('https://blpsalesapp.netlify.app/leads/' + encodeURIComponent(ch.dataset.id), '_blank', 'noopener');
+    });
+    box.querySelectorAll('.leaddel').forEach(x => x.onclick = async ev => {
+      ev.stopPropagation();
+      msg.className = 'leadmsg phmsg'; msg.textContent = 'Detaching…';
+      try {
+        await leadAttach(x.dataset.id, '');
+        const l = LD.list.find(v => v.id === x.dataset.id); if (l) l.serial = '';
+        msg.textContent = ''; paint();
+      } catch (e) { msg.className = 'leadmsg phmsg err'; msg.textContent = '✗ ' + e.message; }
+    });
+    box.querySelector('.leadadd').onclick = ev => { ev.stopPropagation(); openLeadModal(p, paint, msg); };
+  };
+  if (LD.list) paint();
+  else { box.innerHTML = '<i class="lite">loading…</i>'; leadsFetch().then(paint); }
+}
+function openLeadModal(p, done, msg) {
+  const ov = modalShell('leadmodal', `
+    <span class="x">✕</span>
+    <h3>💼 Attach a lead — ${esc((p.summary || p.make || 'piano').slice(0, 30))} #${esc(p.serial)}</h3>
+    <input class="lm-q" placeholder="search leads — name, headline, rep…">
+    <div class="arch-list lm-list"></div>`);
+  const list = ov.querySelector('.lm-list'), qIn = ov.querySelector('.lm-q');
+  const paint = () => {
+    const q = qIn.value.trim().toLowerCase();
+    const hits = (LD.list || []).filter(l => !l.serial || l.serial !== p.serial)
+      .filter(l => !q || (l.name + ' ' + l.headline + ' ' + l.rep + ' ' + l.status).toLowerCase().includes(q));
+    list.innerHTML = hits.slice(0, 40).map(l => `<div class="archrow" data-id="${esc(l.id)}">
+        <div><b>${esc(l.name)}</b>${l.serial ? ` <small>→ #${esc(l.serial)}</small>` : ''}
+          <small>${esc([l.headline, l.status, l.rep].filter(Boolean).join(' · ').slice(0, 90))}</small></div>
+        <button class="arch-restore lm-go" data-id="${esc(l.id)}">＋ Attach</button>
+      </div>`).join('')
+      + (hits.length > 40 ? '<div class="pwnone" style="display:block;padding:6px 0">…more — narrow the search</div>' : '')
+      || '<div class="pwnone" style="display:block;padding:8px 0">No leads match.</div>';
+    list.querySelectorAll('.lm-go').forEach(b => b.onclick = async ev => {
+      ev.stopPropagation();
+      b.disabled = true; b.textContent = '…';
+      try {
+        await leadAttach(b.dataset.id, p.serial);
+        const l = (LD.list || []).find(v => v.id === b.dataset.id); if (l) l.serial = p.serial;
+        ov.hidden = true; done();
+      } catch (e) {
+        b.disabled = false; b.textContent = '＋ Attach';
+        msg.className = 'leadmsg phmsg err'; msg.textContent = '✗ ' + e.message;
+      }
+    });
+  };
+  qIn.oninput = paint;
+  leadsFetch().then(paint);
+  paint();
+  qIn.focus();
+}
+
+/* ❗ IMPORTANT-note acknowledgment (Karmel 8/29): before clocking into work
+ * an important note concerns ("keep the ivory on the key sticks"), the tech
+ * checks a box saying they've read it — the acknowledgment is logged with
+ * their name in the ACTIVITY LOG. Keyword scopes decide which phases a note
+ * concerns; a note that matches no scope gates EVERY phase (safe default). */
+function impNoteScopes(note) {
+  const t = String(note || '').toLowerCase();
+  const scopes = [];
+  if (/ivor|keytop|key ?stick|key ?servic|keywork|\bkeys?\b/.test(t)) scopes.push(/key|dhrt/i);
+  if (/string|bass/.test(t)) scopes.push(/string|chip/i);
+  if (/refinish|lacquer|colou?r|sheen|decal|finish/.test(t)) scopes.push(/refinish|lacquer/i);
+  if (/plate|plating/.test(t)) scopes.push(/plate|prsb|plating/i);
+  if (/soundboard/.test(t)) scopes.push(/soundboard|lacquer|prsb/i);
+  if (/\btun(e|ing)?\b|pitch/.test(t)) scopes.push(/tuning/i);
+  if (/bench/.test(t)) scopes.push(/bench/i);
+  return scopes;
+}
+function impNoteGate(p, ph) {
+  const note = String(p.importantNote || '').trim();
+  if (!note) return Promise.resolve({ok: true});
+  const scopes = impNoteScopes(note);
+  if (scopes.length && !scopes.some(re => re.test(ph))) return Promise.resolve({ok: true});
+  return new Promise(resolve => {
+    document.querySelectorAll('.ccfm').forEach(el => el.remove());
+    const ov = document.createElement('div');
+    ov.className = 'tagview ccfm';
+    ov.innerHTML = `<div class="tvbox ccfmbox">
+      <div class="ccfmicon">❗</div>
+      <h3>Important note on this piano</h3>
+      <div class="ccfmlines"><div class="ccfmrow" style="border-color:#9e2020;background:#fdf3f3">
+        <b>${esc(note)}</b></div>
+      <label class="ccfmrow" style="display:flex;gap:9px;align-items:flex-start;cursor:pointer">
+        <input type="checkbox" class="impack" style="margin-top:3px;width:18px;height:18px">
+        <span>I've read this and will follow it while doing <b>${esc(ph)}</b></span></label></div>
+      <div class="ccfmbtns">
+        <button class="ccfmyes" disabled>✓ Acknowledge &amp; clock in</button>
+        <button class="ccfmno">Cancel</button>
+      </div></div>`;
+    document.body.appendChild(ov);
+    const yes = ov.querySelector('.ccfmyes');
+    ov.querySelector('.impack').onchange = ev => { yes.disabled = !ev.target.checked; };
+    const done = v => { ov.remove(); resolve(v); };
+    yes.onclick = ev => { ev.stopPropagation(); done({ok: true, note}); };
+    ov.querySelector('.ccfmno').onclick = ev => { ev.stopPropagation(); done({ok: false}); };
+    ov.onclick = ev => { ev.stopPropagation(); if (ev.target === ov) done({ok: false}); };
+  });
+}
+async function punch(action, p, phase, source, endAt, ackNote) {
   const {pin, ok} = writeAuth();
   if (!ok) return {error: 'Sign in first — hours are logged under your name.'};
   const body = {pin, action, source: source || 'card', ...authFields()};
   if (p) { body.serial = p.serial; body.row = p.row; body.phase = phase || ''; }
+  if (ackNote) body.ackNote = String(ackNote).slice(0, 200);
   if (endAt) body.endAt = endAt;
   try {
     let j = null;
@@ -3802,6 +3940,9 @@ function popHTML(p) {
     </div>
     <div class="row">Owner <b>${esc(ownerLine)}</b></div>
     <div class="row">Status <b>${esc(p.status || '—')}</b></div>
+    ${p.serial && tbAdmin() ? `<div class="row trkrow">💼 Leads
+      <span class="trkchips leadchips"><i class="lite">…</i></span></div>
+      <div class="leadmsg phmsg"></div>` : ''}
     ${effectivePhase(p) === 'For Sale'
       ? `<div class="row rowflex"><span>Price <b class="pricecard">${priceLabel(p) ? esc(priceLabel(p)) : '—'}</b></span>
            ${p.serial && isAdminUser() ? `<button class="predit">${p.price ? '✎ Edit price' : '＋ Add price'}</button>` : ''}</div>`
@@ -4387,6 +4528,7 @@ function wirePop(p) {
   if (me) me.onclick = ev => { ev.stopPropagation(); openMiscModal(p, pop); };
   const ca = pop.querySelector('.cabadd');
   if (ca) ca.onclick = ev => { ev.stopPropagation(); openCabModal(p, pop); };
+  wireLeadsRow(pop, p);
   pop.querySelectorAll('.cabdel').forEach(b => b.onclick = ev => {
     ev.stopPropagation();
     saveCabinetry(p, cabTokens(p).filter(t => t !== b.dataset.t), pop);
@@ -4522,8 +4664,11 @@ function wirePop(p) {
         `<div class="ccfmrow">\u25b6 Clock IN on <b>${pianoLabel(p)}</b>
            <small>phase: ${esc(ph)}</small></div>`);
       if (!okGo) { cmsg.className = 'clkmsg phmsg'; cmsg.textContent = ''; return; }
+      // \u2757 important-note acknowledgment when the note concerns this work
+      const ack = await impNoteGate(p, ph);
+      if (!ack.ok) { cmsg.className = 'clkmsg phmsg'; cmsg.textContent = ''; return; }
       cmsg.className = 'clkmsg phmsg'; cmsg.textContent = 'Clocking in\u2026';
-      const j = await punch('clockin', p, ph, S.scanArrived === p.serial ? 'scan' : 'card');
+      const j = await punch('clockin', p, ph, S.scanArrived === p.serial ? 'scan' : 'card', undefined, ack.note);
       if (j.error) { cmsg.className = 'clkmsg phmsg err'; cmsg.textContent = '\u2717 ' + j.error; return; }
       S.scanArrived = null;
       openPop(p.row, S.popAnchor, true);
