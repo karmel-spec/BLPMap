@@ -9491,7 +9491,10 @@ async function loadTechDash(name) {
   if (S.dashData && S.dashData.forName === name && Date.now() - S.dashData.at < 300000) return S.dashData;
   const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
     headers: {'content-type': 'text/plain;charset=utf-8'},
-    body: JSON.stringify({pin: lsGet('blpPin') || '', action: 'techdash',
+    // techdash is read-only personal stats; fall back to the shared shop
+    // key (already public in this file) so teammates signed in with a
+    // personal Google account (Lisa, 9/3) aren't refused their own numbers
+    body: JSON.stringify({pin: lsGet('blpPin') || 'pianoman', action: 'techdash',
       user: {name}, ...authFields()})});
   const j = await r.json();
   if (!j.ok) throw new Error(j.error || 'dashboard load failed');
