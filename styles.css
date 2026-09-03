@@ -1827,3 +1827,8 @@ button:disabled{opacity:.55;cursor:progress}
 .fchip.on{background:#9e2020;border-color:#9e2020;color:#fff}
 .kpistrip{display:none}
 #rptKpis .kpistrip{display:flex;position:static;overflow-x:auto;background:transparent;padding:0 0 10px}
+
+/* 📸 wizard: pick-a-before strip (folder photos without wizard tags) */
+.swpickrow{display:flex;gap:6px;overflow-x:auto;margin:6px 0;padding-bottom:4px}
+.swpick{width:64px;height:64px;object-fit:cover;border-radius:8px;border:2px solid #cfc9bf;cursor:pointer;flex:0 0 auto}
+.swpick:hover{border-color:#9e2020}
