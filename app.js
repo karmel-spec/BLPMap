@@ -9257,6 +9257,86 @@ async function loadTechDash(name) {
 function dashInitials(name) {
   return name.split(/\s+/).map(w => w[0] || '').join('').slice(0, 2).toUpperCase();
 }
+/* 🕘 personal clock history + 40-hour watch (Brigham 9/3): every team
+ * member can verify their own punches and see how close the week is to
+ * 40 h — overtime needs Brigham's approval AHEAD of time. */
+const MYCLOCK = {at: 0, forName: '', pay: null, tl: null};
+function myClockMatch(rowTech, myName) {
+  const AL = {guadalupe: 'lupita'};
+  const norm = x => String(x || '').trim().toLowerCase();
+  const first = x => { const f = norm(x).split(/\s+/)[0]; return AL[f] || f; };
+  return norm(rowTech) === norm(myName) || first(rowTech) === first(myName);
+}
+async function loadMyClock(name) {
+  if (MYCLOCK.pay && MYCLOCK.forName === name && Date.now() - MYCLOCK.at < 300000) return;
+  MYCLOCK.at = Date.now(); MYCLOCK.forName = name;
+  try {
+    const [pr, tr] = await Promise.all([
+      fetch(BRIDGE_URL + '?fn=payrollrows&days=16', {redirect: 'follow'}).then(r => r.json()),
+      fetch(BRIDGE_URL + '?fn=timelog&days=16', {redirect: 'follow'}).then(r => r.json()),
+    ]);
+    MYCLOCK.pay = (pr.rows || []).filter(r => myClockMatch(r.tech, name));
+    MYCLOCK.tl = (tl => tl.filter(r => myClockMatch(r.tech, name)))(tr.rows || []);
+  } catch (e) { MYCLOCK.pay = MYCLOCK.pay || []; MYCLOCK.tl = MYCLOCK.tl || []; }
+  if (S.view === 'dash') renderDash();
+}
+function myWeekCard() {
+  if (!MYCLOCK.pay) return `<div class="dbench"><h4>⏳ My week vs 40 hours</h4><div class="dline dim">loading your punches…</div></div>`;
+  const today = new Date().toLocaleDateString('en-CA', {timeZone: 'America/Denver'});
+  const monday = weekKey(today);
+  let mins = 0;
+  for (const r of MYCLOCK.pay) {
+    const day = denverDay(r.start);
+    if (day < monday) continue;
+    mins += r.end ? (r.minutes || 0) : Math.max(0, (Date.now() - new Date(r.start)) / 60000);
+  }
+  const h = mins / 60, left = 40 - h;
+  const pctBar = Math.min(100, h / 40 * 100);
+  const tone = h >= 40 ? '#9e2020' : h >= 34 ? '#9a5b13' : '#2f7d4f';
+  const msg = h >= 40
+    ? `<b style="color:#9e2020">You've hit ${h.toFixed(1)} h — anything more is overtime. Stop and check with Brigham.</b>`
+    : h >= 34
+      ? `<b style="color:#9a5b13">${left.toFixed(1)} h left before 40</b> — plan Friday so you don't go over. Overtime needs Brigham's OK <u>ahead of time</u>.`
+      : `<b>${h.toFixed(1)} h</b> this week · ${left.toFixed(1)} h until 40.`;
+  return `<div class="dbench db-forty">
+    <h4>⏳ My week vs 40 hours</h4>
+    <div style="height:12px;background:#efece6;border-radius:6px;overflow:hidden;margin:6px 0">
+      <div style="height:100%;width:${pctBar}%;background:${tone};border-radius:6px"></div></div>
+    <div class="dline">${msg}</div>
+    <div class="dline dim">Week runs Monday–Sunday, from your Payroll Clock punches (live punch included).</div>
+  </div>`;
+}
+function myClockHistory() {
+  if (!MYCLOCK.pay) return '';
+  const days = {};
+  for (const r of MYCLOCK.pay) {
+    const d = denverDay(r.start);
+    (days[d] = days[d] || {pay: [], tl: []}).pay.push(r);
+  }
+  for (const r of (MYCLOCK.tl || [])) {
+    const d = denverDay(r.start);
+    (days[d] = days[d] || {pay: [], tl: []}).tl.push(r);
+  }
+  const keys = Object.keys(days).sort().reverse().slice(0, 14);
+  if (!keys.length) return `<div class="dbench"><h4>🕘 My clock history</h4><div class="dline dim">No punches in the last two weeks.</div></div>`;
+  const dayLabel = d => new Date(d + 'T12:00').toLocaleDateString('en-US', {weekday: 'short', month: 'short', day: 'numeric'});
+  const rows = keys.map(d => {
+    const g = days[d];
+    const payMin = g.pay.reduce((a, r) => a + (r.end ? (r.minutes || 0) : Math.max(0, (Date.now() - new Date(r.start)) / 60000)), 0);
+    const punches = g.pay.map(r => `<span style="white-space:nowrap">${fmtT(r.start)} → ${r.end ? fmtT(r.end) : '<b style="color:#2f7d4f">on clock</b>'}${!r.end || (r.minutes || 0) > 1 ? '' : ' <b style="color:#9e2020">(0 min?)</b>'}</span>`).join(' · ');
+    const pianos = g.tl.map(r => `<div style="margin-left:14px;color:#6f6a63;font-size:11.5px">🎹 ${esc(r.phase || '')} — #${esc(r.serial || '')} · ${fmtHM(r.minutes || 0)}${r.end ? '' : ' <b style="color:#2f7d4f">open</b>'}</div>`).join('');
+    return `<div style="padding:6px 0;border-top:1px solid #f0ece5">
+      <div style="display:flex;gap:8px;align-items:baseline"><b style="min-width:86px">${dayLabel(d)}</b>
+        <span style="flex:1">${punches || '<span class="dim">no day punch</span>'}</span>
+        <b>${fmtHM(payMin)}</b></div>${pianos}</div>`;
+  }).join('');
+  return `<div class="dbench db-clockhist">
+    <h4>🕘 My clock history — last 2 weeks</h4>
+    <div class="dline dim">Day-clock punches with your piano sessions under each day. Spot something wrong?
+      <a class="tact cfixlink2" href="#">🛠 Request a time fix</a></div>
+    ${rows}
+  </div>`;
+}
 function renderDash() {
   const body = $('#dashBody');
   if (!body) return;
@@ -9320,6 +9400,7 @@ function renderDash() {
       </div>
     </div>
     ${payCard}
+    ${myWeekCard()}
     <div class="dbench db-timeoff">
       <h4>🏖 Time off</h4>
       ${myTimeOffLines()}
@@ -9331,6 +9412,7 @@ function renderDash() {
           : `<div class="dline">Not clocked in — open a piano's card and hit ▶ Clock in.</div>`}
       <div class="dline dim">Your queue for the week lives in <a class="dlink2" data-h="#myweek">📋 My Week ›</a></div>
     </div>
+    ${myClockHistory()}
     <div class="dlockers">
       <div class="dlocker" data-h="#myweek"><span class="ic">📋</span><b>My Week</b><span>work items · carries into Friday</span></div>
       <div class="dlocker" data-h="#report"><span class="ic">📝</span><b>Friday Report</b><span>report what got done</span></div>
@@ -9347,6 +9429,9 @@ function renderDash() {
     ${prWatch}
     <p class="dsoon">coming soon: report history · phase-time PRs as the Work Clock fills in</p>`;
 
+  loadMyClock(name);
+  const cfx2 = body.querySelector('.cfixlink2');
+  if (cfx2) cfx2.onclick = ev => { ev.preventDefault(); const l = body.querySelector('.cfixlink'); if (l) l.click(); };
   const cfx = body.querySelector('.cfixlink');
   if (cfx) cfx.onclick = e => { e.preventDefault(); clockFixModal(); };
   const pb = body.querySelector('.paybtn');
