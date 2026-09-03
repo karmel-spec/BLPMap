@@ -11319,6 +11319,41 @@ document.querySelectorAll('.feedgo').forEach(b => b.onclick = () => {
   switchView(b.dataset.view);
 });
 
+/* mobile header slimming (Brigham 9/3): on narrow screens the header keeps
+ * only search · 🚚 · ☰; the other live controls MOVE into the drawer's
+ * quick-tools strip (moving DOM nodes preserves their handlers), and move
+ * back when the window widens. */
+(() => {
+  const IDS = ['wbBtn', 'queueBtn', 'boardBtn', 'hardRefreshBtn', 'suggestBtn'];
+  const homes = new Map();   // node -> {parent, next}
+  const rememberedSel = ['.topreq', '.topwho'];
+  const nodes = () => IDS.map(id => document.getElementById(id))
+    .concat([...document.querySelectorAll('header.bar .topreq'), document.getElementById('topWho'),
+             document.getElementById('whoTopMenu')])
+    .concat([...(homes.size ? [...homes.keys()] : [])])
+    .filter((n, i, arr) => n && arr.indexOf(n) === i);
+  function applyHeaderLayout() {
+    const tools = document.getElementById('drawerTools');
+    if (!tools) return;
+    const mobile = window.innerWidth <= 760;
+    for (const n of nodes()) {
+      if (mobile) {
+        if (!homes.has(n)) homes.set(n, {parent: n.parentNode, next: n.nextSibling});
+        if (n.parentNode !== tools) tools.appendChild(n);
+      } else {
+        const home = homes.get(n);
+        if (home && n.parentNode === tools) {
+          if (home.next && home.next.parentNode === home.parent) home.parent.insertBefore(n, home.next);
+          else home.parent.appendChild(n);
+        }
+      }
+    }
+  }
+  applyHeaderLayout();
+  let hlT = null;
+  window.addEventListener('resize', () => { clearTimeout(hlT); hlT = setTimeout(applyHeaderLayout, 200); });
+})();
+
 $('#legendBtn').onclick = () => { const p = $('#legendPanel'); p.hidden = !p.hidden; };
 /* Legend items are clickable (Brigham 8/25): each opens the list of pianos in
  * that state, same predicates the map paints with; a row jumps to the piano. */
