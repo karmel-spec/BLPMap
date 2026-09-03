@@ -61,6 +61,33 @@ function phaseLabels(phase, p) {
 // the team PIN (asked once, remembered on this device).
 const BRIDGE_URL =
   'https://script.google.com/macros/s/AKfycbxY4BKnr_Tr0iCTc9itCWhNYLvgszmkI1IoYSkbBWpyAqRtWI-yaUkJQjcVdgG58KXt/exec';
+
+/* EVERY write to the Google bridge goes through this guard (Brigham 9/3:
+ * "ENSURE every change is SAVED"). Google's Apps Script serving has been
+ * intermittently answering POSTs with its generic ping ({ok:true,
+ * service:…}) WITHOUT running the action — which reads as success while
+ * the change silently vanishes (lost cards 8/31-9/1, lost clock
+ * adjustments, Lupita's lost phase change 9/3). This wrapper detects the
+ * imposter, retries with backoff, and if Google still won't execute,
+ * returns an honest error so no caller can ever report a fake save. */
+async function bridgeFetch(url, opts) {
+  for (let a = 0; a < 4; a++) {
+    let r;
+    try { r = await fetch(url, opts); }
+    catch (e) {
+      if (a === 3) throw e;
+      await new Promise(res => setTimeout(res, 1000 * (a + 1)));
+      continue;
+    }
+    let j = null;
+    try { j = await r.clone().json(); } catch (e) { return r; }   // non-JSON: caller's own retry/error path
+    if (!(j && j.service && !j.error)) return r;   // real action result
+    await new Promise(res => setTimeout(res, 1200 * (a + 1)));
+  }
+  return new Response(JSON.stringify({error:
+    'the Google bridge hiccuped and this change did NOT save — try again in a minute'}),
+    {status: 502, headers: {'content-type': 'application/json'}});
+}
 // "Sign in with Google" (identity for the activity log — who changed what).
 // Public web client in karmel@'s "BLP Store Map" Google Cloud project;
 // empty string hides the sign-in UI entirely.
@@ -878,7 +905,7 @@ async function fetchPhones() {
   if (!wa.ok) return null;
   for (let a = 0; a < 3; a++) {
     try {
-      const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+      const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
         headers: {'content-type': 'text/plain;charset=utf-8'},
         body: JSON.stringify({pin: wa.pin, action: 'phones', ...authFields()})});
       const j = await r.json();
@@ -1413,7 +1440,7 @@ function keytopPhotoGate(p, o) {
     shotMsg.className = 'pg-shot phmsg'; shotMsg.textContent = 'Uploading…';
     try {
       const dataUrl = await downscalePhoto(f, 2048, 0.85);
-      const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+      const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
         headers: {'content-type': 'text/plain;charset=utf-8'},
         body: JSON.stringify({pin: wa.pin, action: 'photo', kind: 'progress', serial: p.serial,
           row: p.row, stage: o.stage, mime: 'image/jpeg',
@@ -1562,7 +1589,7 @@ function openShotWizard(p, kind) {
     const snapBtn = ov.querySelector('.swsnap');
     if (snapBtn) snapBtn.disabled = true;
     try {
-      const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+      const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
         headers: {'content-type': 'text/plain;charset=utf-8'},
         body: JSON.stringify({pin: wa.pin, action: 'photo', kind, serial: p.serial, row: p.row,
           stage: shotStage(kind, W.idx, list[W.idx]), share: 1, mime: 'image/jpeg',
@@ -2144,7 +2171,7 @@ async function logTagPrint(p, kind, note) {
   const wa = writeAuth();
   if (!wa.ok) return;
   try {
-    await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+    await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
       headers: {'content-type': 'text/plain;charset=utf-8'},
       body: JSON.stringify({pin: wa.pin, action: 'tagprinted', kind,
         serial: p.serial, row: p.row, note: note || '', ...authFields()})});
@@ -2162,7 +2189,7 @@ addEventListener('message', async ev => {
   const wa = writeAuth();
   if (!wa.ok) return;
   try {
-    await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+    await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
       headers: {'content-type': 'text/plain;charset=utf-8'},
       body: JSON.stringify({pin: wa.pin, action: 'setbenchnote', serial: p.serial, row: p.row,
         value: m.benchNote, ...authFields()})});
@@ -3056,7 +3083,7 @@ function openSuggestBox() {
       // the action (9/1) — j.ok without an id means nothing was filed. Retry.
       let j = null;
       for (let a = 0; a < 3; a++) {
-        const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+        const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
           headers: {'content-type': 'text/plain;charset=utf-8'}, body: JSON.stringify(body)});
         j = await r.json().catch(() => null);
         if (j && j.ok && j.id) break;
@@ -3092,7 +3119,7 @@ async function loadMyRequests(ov) {
     box.querySelectorAll('.sgok').forEach(b => b.onclick = async () => {
       const {pin, ok} = writeAuth(); if (!ok) return;
       b.textContent = '…';
-      await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+      await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
         headers: {'content-type': 'text/plain;charset=utf-8'},
         body: JSON.stringify({pin, action: 'requeststatus', id: b.dataset.id, status: 'Tested', ...authFields()})});
       loadMyRequests(ov);
@@ -3401,7 +3428,7 @@ async function punch(action, p, phase, source, endAt, ackNote) {
     // ping without running the action — the punch would silently vanish
     // from payroll (found 9/1). Retry through the glitch.
     for (let a = 0; a < 3; a++) {
-      const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+      const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
         headers: {'content-type': 'text/plain;charset=utf-8'}, body: JSON.stringify(body)});
       j = await r.json();
       if (!(j && j.service && !j.error)) break;
@@ -3572,7 +3599,7 @@ async function dayPunch(action) {
   if (!ok) return {error: 'Sign in first — payroll hours are logged under your name.'};
   const geo = await punchGeo();
   try {
-    const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+    const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
       headers: {'content-type': 'text/plain;charset=utf-8'},
       body: JSON.stringify({pin, action, source: 'dash', geo, ...authFields()})});
     const j = await r.json();
@@ -3624,7 +3651,7 @@ function startTempPlace(p, floor) {
     btn.disabled = true; btn.textContent = 'Placing…';
     const locStr = 'Temp spot @' + (S.floor + 1) + 'F ' + Math.round(job.ghost.x) + ',' + Math.round(job.ghost.y);
     try {
-      const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+      const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
         headers: {'content-type': 'text/plain;charset=utf-8'},
         body: JSON.stringify({pin: wa.pin, action: 'move', serial: p.serial, row: p.row,
           newLocation: locStr, ...authFields()})});
@@ -3937,6 +3964,18 @@ function popHTML(p) {
       ? `<div class="impnote">❗ <b>IMPORTANT</b> <span class="imptxt">${esc(p.importantNote)}</span>
            <button class="impedit" title="edit / clear">✎</button><span class="impmsg"></span></div>`
       : `<div class="impadd"><button class="impedit">❗ Add IMPORTANT note</button><span class="impmsg"></span></div>`) : ''}
+    ${p.serial ? (() => {
+      // at-a-glance status strip (Brigham 9/3): current phase + wait note +
+      // check-back + freshest phase note, visible without scrolling
+      const waiting = /^waiting/i.test(effPh || '');
+      const lastNote = String(p.phaseNotes || '').trim().split('\n').filter(Boolean).pop() || '';
+      return `<div class="statstrip" style="background:${waiting ? '#fdf3ec' : '#f4f1ec'};border:1px solid ${waiting ? '#eecfae' : '#dfe3e8'};border-radius:8px;padding:7px 10px;margin:6px 0;font-size:12.5px;line-height:1.5">
+        <b style="color:${waiting ? '#9a5b13' : '#2b2f33'}">${waiting ? '⏳ ' : '🔧 '}${esc(effPh || (p.queuePos ? 'In Queue' : 'no phase'))}</b>
+        ${waiting && (p.waitNote || '').trim() ? ' — ' + esc(p.waitNote) : ''}
+        ${waiting && (p.checkBack || '').trim() ? ` · <b>check back ${esc(p.checkBack)}</b>` : ''}
+        ${!waiting && lastNote ? `<span style="color:#6f6a63"> — 📝 ${esc(lastNote.slice(0, 140))}</span>` : ''}
+      </div>`;
+    })() : ''}
     </div>
     <div class="row">Owner <b>${esc(ownerLine)}</b></div>
     <div class="row">Status <b>${esc(p.status || '—')}</b></div>
@@ -4187,7 +4226,7 @@ function wirePop(p) {
       if (!ok) { msg.textContent = 'Sign in first.'; return; }
       msg.textContent = 'Saving…';
       try {
-        const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+        const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
           headers: {'content-type': 'text/plain;charset=utf-8'},
           body: JSON.stringify({pin, action: 'setcolor', serial: p.serial, row: p.row,
             which: ci.classList.contains('colorfinal') ? 'final' : 'pick',
@@ -4209,7 +4248,7 @@ function wirePop(p) {
     if (!ok) { msg.textContent = 'Sign in first.'; return; }
     plsel.disabled = true; msg.textContent = 'Saving…';
     try {
-      const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+      const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
         headers: {'content-type': 'text/plain;charset=utf-8'},
         body: JSON.stringify({pin, action: 'setplatestatus', serial: p.serial, row: p.row,
           plateStatus: plsel.value, ...authFields()})});
@@ -4235,7 +4274,7 @@ function wirePop(p) {
       msg.textContent = 'saving…';
       ksel.disabled = true;
       try {
-        const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+        const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
           headers: {'content-type': 'text/plain;charset=utf-8'},
           body: JSON.stringify({pin, action: 'setkeystatus', serial: p.serial, row: p.row,
             value: val, ...authFields()})});
@@ -4282,7 +4321,7 @@ function wirePop(p) {
     try {
       const wa = writeAuth();
       if (!wa.ok) throw new Error('Sign in with Google (menu) first.');
-      const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+      const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
         headers: {'content-type': 'text/plain;charset=utf-8'},
         body: JSON.stringify({pin: wa.pin, action: 'settaskcell', which: key,
           serial: p.serial, row: p.row, value: val, ...authFields()})});
@@ -4319,7 +4358,7 @@ function wirePop(p) {
     if (!wa.ok) { msg.textContent = 'Sign in with Google (menu) first.'; return; }
     msg.textContent = 'saving…';
     try {
-      const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+      const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
         headers: {'content-type': 'text/plain;charset=utf-8'},
         body: JSON.stringify({pin: wa.pin, action: 'settaskcell', which: key,
           serial: p.serial, row: p.row, value: val, ...authFields()})});
@@ -4384,7 +4423,7 @@ function wirePop(p) {
     if (!approve && !confirm('Reject this temp entry?\n\nThe row is marked DUPLICATE (recoverable from Reports → Marked Duplicates).')) return;
     msg.textContent = approve ? ' approving…' : ' rejecting…';
     try {
-      const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+      const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
         headers: {'content-type': 'text/plain;charset=utf-8'},
         body: JSON.stringify({pin: wa.pin, action: 'tempresolve', serial: p.serial, row: p.row,
           approve: approve ? 1 : 0, ...authFields()})});
@@ -4414,7 +4453,7 @@ function wirePop(p) {
     const val = txt.trim().slice(0, 200);
     if (msg) msg.textContent = ' saving…';
     try {
-      const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+      const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
         headers: {'content-type': 'text/plain;charset=utf-8'},
         body: JSON.stringify({pin: wa.pin, action: 'setimportant', serial: p.serial, row: p.row,
           value: val, ...authFields()})});
@@ -4453,7 +4492,7 @@ function wirePop(p) {
     if (!wa.ok) { msg.textContent = wa.renewing ? 'Sign-in expired — retry in a moment.' : 'Sign in first.'; return; }
     msg.textContent = 'saving…';
     try {
-      const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+      const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
         headers: {'content-type': 'text/plain;charset=utf-8'},
         body: JSON.stringify({pin: wa.pin, action: 'pianonote', serial: p.serial, row: p.row,
           note, ...authFields()})});
@@ -4758,7 +4797,7 @@ function wirePop(p) {
     const {pin, ok} = writeAuth();
     if (!ok) return;
     try {
-      const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+      const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
         headers: {'content-type': 'text/plain;charset=utf-8'},
         body: JSON.stringify({pin, action: 'prequeueapprove', serial: p.serial, row: p.row, ...authFields()})});
       const j = await r.json();
@@ -4792,7 +4831,7 @@ function wirePop(p) {
         msg.className = 'mdmsg'; msg.textContent = `Uploading ${kind} photo ${done + 1}/${files.length}…`;
         try {
           const dataUrl = await downscalePhoto(f, 2048, 0.85);   // web/Shopify-ready JPEG
-          const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+          const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
             headers: {'content-type': 'text/plain;charset=utf-8'},
             body: JSON.stringify({pin: wa.pin, action: 'photo', kind, serial: p.serial, row: p.row,
               stage: kind === 'before' ? 'Before' : 'After', mime: 'image/jpeg',
@@ -4826,7 +4865,7 @@ function wirePop(p) {
       if (!wa.ok) { msg.textContent = wa.renewing ? 'Sign-in expired — retry in a moment.' : 'Sign in first.'; return; }
       msg.textContent = 'saving…';
       try {
-        const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+        const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
           headers: {'content-type': 'text/plain;charset=utf-8'},
           body: JSON.stringify({pin: wa.pin, action: 'setbench', serial: p.serial, row: p.row,
             value: val, ...authFields()})});
@@ -4858,7 +4897,7 @@ function wirePop(p) {
       msg.textContent = 'uploading bench photo…';
       try {
         const dataUrl = await downscalePhoto(f, 2048, 0.85);
-        const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+        const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
           headers: {'content-type': 'text/plain;charset=utf-8'},
           body: JSON.stringify({pin: wa.pin, action: 'photo', kind: 'tech', serial: p.serial,
             row: p.row, stage: 'Bench photo', mime: 'image/jpeg',
@@ -4942,7 +4981,7 @@ function openPhaseGateModal(p, phase, was, pop) {
     shotMsg.className = 'pg-shot phmsg'; shotMsg.textContent = 'Uploading…';
     try {
       const dataUrl = await downscalePhoto(f, 2048, 0.85);
-      const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+      const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
         headers: {'content-type': 'text/plain;charset=utf-8'},
         body: JSON.stringify({pin: wa.pin, action: 'photo', kind: 'progress', serial: p.serial,
           row: p.row, stage: was || 'progress', mime: 'image/jpeg',
@@ -4969,7 +5008,7 @@ function openPhaseGateModal(p, phase, was, pop) {
     const wa = writeAuth();
     // mini-QC record → QC Log tab (first-pass rate feeds the manager scorecard)
     if (wa.ok) {
-      fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+      bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
         headers: {'content-type': 'text/plain;charset=utf-8'},
         body: JSON.stringify({pin: wa.pin, action: 'miniqc', serial: p.serial, row: p.row,
           phase: was, result: qcPick.value, note: qcNote.value.trim().slice(0, 200),
@@ -4978,12 +5017,12 @@ function openPhaseGateModal(p, phase, was, pop) {
     if (note && wa.ok) {
       try {
         if (route === 'card') {
-          await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+          await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
             headers: {'content-type': 'text/plain;charset=utf-8'},
             body: JSON.stringify({pin: wa.pin, action: 'phasenote', serial: p.serial, row: p.row,
               phase: was, note, ...authFields()})});
         } else {
-          await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+          await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
             headers: {'content-type': 'text/plain;charset=utf-8'},
             body: JSON.stringify({pin: wa.pin, action: 'teamreq',
               kind: route === 'brigham' ? 'Phase note for Brigham' : 'Phase note for the managers',
@@ -5103,7 +5142,7 @@ async function setMedia(p, field, pop, skip) {
         try {
           const steps = ADMIN_STEPS.filter(s =>
             adminStepsOf(p).includes(s) || s === 'Before Photos').join(' | ');
-          const ra = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+          const ra = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
             headers: {'content-type': 'text/plain;charset=utf-8'},
             body: JSON.stringify({pin, serial: p.serial, action: 'setadminsteps',
               steps, row: p.row, ...authFields()})});
@@ -8312,7 +8351,7 @@ async function adjustPost(body) {
   // imposter and retry; if it persists, say so instead of pretending.
   for (let a = 0; a < 3; a++) {
     try {
-      const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+      const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
         headers: {'content-type': 'text/plain;charset=utf-8'},
         body: JSON.stringify({pin, ...authFields(), ...body})});
       const j = await r.json();
@@ -9190,7 +9229,7 @@ function dashFrame(hash, title) {
 }
 async function loadTechDash(name) {
   if (S.dashData && S.dashData.forName === name && Date.now() - S.dashData.at < 300000) return S.dashData;
-  const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+  const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
     headers: {'content-type': 'text/plain;charset=utf-8'},
     body: JSON.stringify({pin: lsGet('blpPin') || '', action: 'techdash',
       user: {name}, ...authFields()})});
@@ -9984,7 +10023,7 @@ async function tbSend(body) {
   let lastErr = '';
   for (let a = 0; a < 3; a++) {
     try {
-      const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+      const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
         headers: {'content-type': 'text/plain;charset=utf-8'},
         body: JSON.stringify({pin: wa.pin, action: 'taskcard', ...body, ...authFields()})});
       const txt = await r.text();
@@ -10197,7 +10236,7 @@ function renderTaskBoard() {
             rd.onerror = () => rej(new Error('read failed'));
             rd.readAsDataURL(videoFile);
           });
-          const r3 = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+          const r3 = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
             headers: {'content-type': 'text/plain;charset=utf-8'},
             body: JSON.stringify({pin: wa2.pin, action: 'cardmedia', cardId: j.id,
               mime: videoFile.type || 'video/mp4', data: b64, ...authFields()})});
@@ -10688,7 +10727,7 @@ function openCardModal(c, canEdit) {
           rd.onerror = () => rej(new Error('could not read the file'));
           rd.readAsDataURL(f);
         });
-        const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+        const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
           headers: {'content-type': 'text/plain;charset=utf-8'},
           body: JSON.stringify({pin: wa.pin, action: 'cardmedia', cardId: c.id,
             mime: f.type || 'video/mp4', data: b64, ...authFields()})});
@@ -10917,7 +10956,7 @@ function renderAdmDash() {
     if (!wa.ok) { alert('Sign in with Google first.'); return; }
     sel.disabled = true;
     try {
-      const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+      const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
         headers: {'content-type': 'text/plain;charset=utf-8'},
         body: JSON.stringify({pin: wa.pin, action: 'requeststatus', id: sel.dataset.id,
           status: sel.value, ...authFields()})});
