@@ -3544,7 +3544,7 @@ async function updateClPill() {
   const o = CLOCK.open;
   // a 🎓 Training punch stores just "Training" — the checklist phase is then
   // the PIANO's current phase (Hunter/CAP pilot, 9/3), and coach mode kicks in
-  let ph = o && (o.phase || '').replace(/^Training:?\s*/i, '');
+  let ph = o && (o.phase || '').replace(/^Training:?\s*/i, '').replace(/\s*[—-]\s*w\/.*$/i, '').trim();
   if (o && !ph && /^training/i.test(o.phase || '')) {
     const pp = S.data.pianos.find(x => x.serial === o.serial);
     ph = pp ? String(pp.phase || '').trim() : '';
@@ -4283,12 +4283,14 @@ function popHTML(p) {
             <option value="__other__">✏️ Other — write it in…</option>
             <option value="Admin / Misc">📋 Admin / Misc</option>
             <option value="Moving">🚚 Moving</option>
-            <option value="Training">🎓 Training (trainer AND trainee both clock this)</option>
             <option value="Rework">🔁 Rework — fixing earlier work</option>
             <option value="" disabled>— shop phases —</option>
             ${opts.map(ph => `<option value="${esc(ph)}">${esc(ph)}</option>`).join('')}
           </select></div>
         <input class="clkother" placeholder="what are you doing on this piano?" maxlength="60" hidden>
+        <label class="row clktrainrow" style="gap:8px;cursor:pointer;align-items:center">
+          <input type="checkbox" class="clktrain" style="width:17px;height:17px">
+          <span>🎓 Training clock-in <small class="lite">— trainer AND trainee both check this</small></span></label>
         <input class="clktrainee" placeholder="training with whom? (name)" maxlength="40" autocomplete="off" hidden>
         <button class="clkbtn clkin off">▶ ${mine ? 'Switch here' : 'Clock in'}</button>
         <div class="clkmsg phmsg"></div>`);
@@ -4917,24 +4919,29 @@ function wirePop(p) {
     const inBtn = pop.querySelector('.clkin');
     const outBtn = pop.querySelector('.clkout');
     const cmsg = pop.querySelector('.clkmsg');
+    const trainBox = pop.querySelector('.clktrain');
+    // training is a CHECKBOX on top of the phase now (Brigham 9/3: "Hunter
+    // needs to clock into his piano and select training AND cap") — the punch
+    // records "Training: <phase> — w/ <partner>" so training hours, coach-mode
+    // checklists and job costing all know the real phase being trained
     const chosen = () => {
       if (!sel) return '';
-      if (sel.value === '__other__') return (oth.value || '').trim();
-      // training punches record the partner so trainer-hours per intern
-      // can be measured for job costing (Brigham 8/31)
-      if (sel.value === 'Training') {
+      const base = sel.value === '__other__' ? (oth.value || '').trim() : sel.value;
+      if (!base) return '';
+      if (trainBox && trainBox.checked) {
         const w = trn ? trn.value.trim() : '';
-        return w ? 'Training: ' + w : 'Training';
+        return 'Training: ' + base + (w ? ' — w/ ' + w : '');
       }
-      return sel.value;
+      return base;
     };
     const refresh = () => {
       if (!inBtn) return;
       if (oth) oth.hidden = sel.value !== '__other__';
-      if (trn) trn.hidden = sel.value !== 'Training';
+      if (trn) trn.hidden = !(trainBox && trainBox.checked);
       inBtn.classList.toggle('off', !chosen());
     };
     if (sel) { sel.onchange = () => { refresh(); if (sel.value === '__other__' && oth) oth.focus(); }; sel.onclick = ev => ev.stopPropagation(); }
+    if (trainBox) { trainBox.onchange = refresh; trainBox.onclick = ev => ev.stopPropagation(); }
     if (oth) { oth.oninput = refresh; oth.onclick = ev => ev.stopPropagation(); }
     if (inBtn) inBtn.onclick = async ev => {
       ev.stopPropagation(); popPinned = true;
