@@ -3715,6 +3715,11 @@ async function openWorkChecklist(serial, phase) {
               src="https://www.youtube-nocookie.com/embed/${esc(v.id)}?start=${v.t}" allowfullscreen
               allow="accelerometer; encrypted-media; picture-in-picture"></iframe></div>`).join('')}
           ${it.detail ? `<div style="background:#fdf3ec;border-left:3px solid #c9a227;padding:8px 10px;border-radius:0 8px 8px 0;font-size:13px;color:#6b5030">⚠ ${esc(it.detail)}</div>` : ''}
+          ${/\b(pics?|pictures?|photograph|photos?)\b/i.test((it.handbook || it.text).replace(/<[^>]+>/g, ' '))
+            ? `<div style="margin-top:10px"><label class="csvbtn" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px">📷 Take the photo now
+                 <input type="file" accept="image/*" capture="environment" hidden class="clshotfile"></label>
+               <span class="clshotmsg phmsg" style="display:inline-block;margin-left:8px"></span>
+               <div style="font-size:11px;color:#8a847b;margin-top:3px">files straight into this piano's Tech photo folder</div></div>` : ''}
         </div>
         ${st.skips.has(it.i) ? `<div style="background:#fdf6e3;border-radius:8px;padding:8px 10px;font-size:12.5px;color:#9a5b13;margin-top:8px">⏭ This step is skipped — ${esc(st.skips.get(it.i))}</div>` : ''}
         <div style="display:flex;gap:8px;margin-top:12px">
@@ -3728,6 +3733,26 @@ async function openWorkChecklist(serial, phase) {
           : !st.done.has(it.i) && !st.skips.has(it.i)
             ? `<button class="clskipask" style="background:none;border:none;color:#9a5b13;font-size:12px;margin-top:8px;text-decoration:underline;cursor:pointer">⏭ Skip</button>` : ''}`;
       ov.querySelector('.dsx').onclick = close;
+      const shot = ov.querySelector('.clshotfile');
+      if (shot) shot.onchange = async ev2 => {
+        const f = ev2.target.files && ev2.target.files[0];
+        if (!f) return;
+        const sm = ov.querySelector('.clshotmsg');
+        const wa = writeAuth();
+        if (!wa.ok) { sm.className = 'clshotmsg phmsg err'; sm.textContent = 'Sign in first (☰ menu).'; return; }
+        sm.className = 'clshotmsg phmsg'; sm.textContent = 'Uploading…';
+        try {
+          const dataUrl = await downscalePhoto(f, 2048, 0.85);
+          const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+            headers: {'content-type': 'text/plain;charset=utf-8'},
+            body: JSON.stringify({pin: wa.pin, action: 'photo', serial, row: p.row,
+              stage: phase + ' — ' + it.text.slice(0, 40), mime: 'image/jpeg',
+              data: dataUrl.split(',')[1], ...authFields()})});
+          const j2 = await r.json();
+          if (!j2.saved) throw new Error(j2.error || 'upload failed');
+          sm.className = 'clshotmsg phmsg ok'; sm.textContent = '✓ filed to the Tech folder';
+        } catch (e2) { sm.className = 'clshotmsg phmsg err'; sm.textContent = '✗ ' + e2.message; }
+      };
       ov.querySelector('.clback').onclick = () => { if (idx > 0) { asking = false; idx--; render(); } };
       ov.querySelector('.cldone').onclick = () => {
         if (!st.done.has(it.i) && !st.skips.has(it.i)) save(it.i, true);
