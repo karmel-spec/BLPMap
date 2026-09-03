@@ -3491,6 +3491,15 @@ async function punch(action, p, phase, source, endAt, ackNote) {
  * request → text to Mark (30-min escalation to Mark+Karmel) → C-rail
  * inspection → pass advances the phase, fail creates a 🔁 Rework card. */
 const QC_PHASES = ['CAP'];   // pilot — add phases here as checklists are seeded
+// TRAINING MONTH (Brigham 9/3 → 10/3): EVERY real phase advance goes through
+// a Brigham-performed mini-QC (Karmel videos it for manager training). After
+// 10/3 the gate falls back to QC_PHASES. Waiting/queue/sale states never gate.
+const QC_ALL_UNTIL = new Date('2026-10-04T00:00:00-06:00').getTime();
+function qcGated(was) {
+  const w = String(was || '').trim();
+  if (!w || /^(waiting|in queue|paused|for sale|delivered)/i.test(w)) return false;
+  return QC_PHASES.includes(w) || Date.now() < QC_ALL_UNTIL;
+}
 const PHASEQC_URL = 'https://blpsalesapp.netlify.app/.netlify/functions/phase-qc';
 const CL = {cache: {}};   // (serial|phase) -> {items, checks:Set, request}
 async function clFetch(serial, phase, force) {
@@ -3615,7 +3624,9 @@ async function openQcRail(id) {
   if (!q) { alert('QC request not found.'); return; }
   const p = S.data.pianos.find(x => x.serial === q.serial) || {serial: q.serial};
   const st = await clFetch(q.serial, q.phase, true);
-  const items = clVariantItems(st.items, p, 'qc');
+  let items = clVariantItems(st.items, p, 'qc');
+  // phases without a seeded checklist still get inspected — one overall verdict
+  if (!items.length) items = [{section: 'Overall', text: q.phase + ' work meets BLP standard'}];
   const canJudge = isOwner() || isTimelogAdmin();
   const old = document.querySelector('.dsheetov'); if (old) old.remove();
   const ov = document.createElement('div');
@@ -5229,8 +5240,8 @@ function openPhaseGateModal(p, phase, was, pop) {
       go.disabled = false;
     } catch (e) { shotMsg.className = 'pg-shot phmsg err'; shotMsg.textContent = '✗ ' + e.message; }
   };
-  // pilot phases with a QC checklist: advancing requires a manager mini-QC
-  if (QC_PHASES.includes((was || '').trim())) {
+  // QC-gated phases: advancing requires an inspector's mini-QC
+  if (qcGated(was)) {
     const qcBlock = ov.querySelector('.pg-qc');
     if (qcBlock) {
       qcBlock.innerHTML = `<b style="font-size:13px">🔍 This phase needs a manager mini-QC before it advances.</b>
@@ -5246,7 +5257,7 @@ function openPhaseGateModal(p, phase, was, pop) {
         const pm = ov.querySelector('.pg-msg');
         if (j.ok) {
           pm.className = 'pg-msg phmsg ok';
-          pm.textContent = j.existing ? '✓ Already requested — Mark has the link.' : '✓ Requested — Mark just got a text with the inspection link. The phase advances when it passes.';
+          pm.textContent = j.existing ? '✓ Already requested — the inspector has the link.' : '✓ Requested — Brigham just got a text with the inspection link (Karmel copied). The phase advances when it passes.';
           setTimeout(close, 2600);
         } else { pm.className = 'pg-msg phmsg err'; pm.textContent = '✗ ' + (j.error || 'failed'); go.disabled = false; }
       };
