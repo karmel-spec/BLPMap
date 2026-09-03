@@ -1105,7 +1105,19 @@ function renderKpis() {
   act.forEach(p => own[ownerClass(p)]++);
   const mediaCount = act.filter(p => { const m = mediaNeeds(p); return m.photo || m.video; }).length;
   $('#movesBadge').textContent = tm;
-  $('#kpis').innerHTML = `
+  // header floor chips (Brigham 9/3) — the one floor selector
+  const f0 = $('#fchip0'), f1 = $('#fchip1');
+  if (f0) {
+    f0.classList.toggle('on', S.floor === 0);
+    f1.classList.toggle('on', S.floor === 1);
+    f0.title = placed(0) + ' pianos on the 1st floor';
+    f1.title = placed(1) + ' pianos on the 2nd floor';
+    f0.onclick = () => gotoFloor(0);
+    f1.onclick = () => gotoFloor(1);
+  }
+  // the stats strip moved from the second header row to the top of
+  // Reports (Brigham 9/3) — same numbers, same tap-through drill-ins
+  S.kpiHTML = `<div class="kpistrip">
     <div class="kpi click ${S.floor === 0 ? 'on' : ''}" id="kpiF1"><span class="n">${placed(0)}</span><span class="l">1ST FLOOR</span></div>
     <div class="kpi click ${S.floor === 1 ? 'on' : ''}" id="kpiF2"><span class="n">${placed(1)}</span><span class="l">2ND FLOOR</span></div>
     <div class="kpi"><span class="n">${total}</span><span class="l">TOTAL PIANOS</span></div>
@@ -1113,12 +1125,17 @@ function renderKpis() {
     <div class="kpi"><span class="n">${tm}</span><span class="l">MOVES TODAY</span></div>
     <div class="kpi click" id="kpiNew"><span class="n">${newWeek}</span><span class="l">NEW THIS WEEK →</span></div>
     <div class="kpi click" id="kpiMedia"><span class="n">${mediaCount} 📷</span><span class="l">MEDIA NEEDED →</span></div>
-    <div class="kpi red" id="kpiReport"><span class="n">${un} <small>+ ${du} dup</small></span><span class="l">UNPLACED / ERRORS →</span></div>`;
-  $('#kpiReport').onclick = () => switchView('report');
-  $('#kpiMedia').onclick = () => switchView('media');
-  $('#kpiF1').onclick = () => gotoFloor(0);
-  $('#kpiF2').onclick = () => gotoFloor(1);
-  $('#kpiNew').onclick = () => {
+    <div class="kpi red" id="kpiReport"><span class="n">${un} <small>+ ${du} dup</small></span><span class="l">UNPLACED / ERRORS →</span></div></div>`;
+  const rk = document.getElementById('rptKpis');
+  if (rk) { rk.innerHTML = S.kpiHTML; wireKpis(rk); }
+}
+function wireKpis(scope) {
+  const q = id => scope.querySelector('#' + id);
+  if (q('kpiReport')) q('kpiReport').onclick = () => switchView('report');
+  if (q('kpiMedia')) q('kpiMedia').onclick = () => switchView('media');
+  if (q('kpiF1')) q('kpiF1').onclick = () => gotoFloor(0);
+  if (q('kpiF2')) q('kpiF2').onclick = () => gotoFloor(1);
+  if (q('kpiNew')) q('kpiNew').onclick = () => {
     const news = S.data.pianos.filter(p => p.active && p.isNew);
     if (!news.length) return;
     focusPiano(news[S.newIdx = ((S.newIdx || 0) + 1) % news.length]);
@@ -8891,8 +8908,11 @@ function renderReport() {
         <i class="secarrow">${secOpen(key) ? '▾' : '▸'}</i></div>
       <div class="rsecbody" ${secOpen(key) ? '' : 'hidden'}>${cards}</div>`;
     body.innerHTML =
-      (admin.length ? secHTML('admin', '🔑 Admin Reports', admin.map(rptCard).join('')) : '')
+      `<div id="rptKpis">${S.kpiHTML || ''}</div>`
+      + (admin.length ? secHTML('admin', '🔑 Admin Reports', admin.map(rptCard).join('')) : '')
       + secHTML('shop', '🔧 Shop Reports', shop.map(rptCard).join(''));
+    const rk0 = body.querySelector('#rptKpis');
+    if (rk0 && rk0.firstChild) wireKpis(rk0);
     body.querySelectorAll('.rptsechead').forEach(h => h.onclick = () => {
       lsSet('rptsec_' + h.dataset.rsec, secOpen(h.dataset.rsec) ? 'shut' : 'open');
       renderReport();
@@ -11324,7 +11344,7 @@ document.querySelectorAll('.feedgo').forEach(b => b.onclick = () => {
  * quick-tools strip (moving DOM nodes preserves their handlers), and move
  * back when the window widens. */
 (() => {
-  const IDS = ['wbBtn', 'queueBtn', 'boardBtn', 'hardRefreshBtn', 'suggestBtn'];
+  const IDS = ['wbBtn', 'queueBtn', 'boardBtn', 'hardRefreshBtn', 'suggestBtn', 'movesBtn'];
   const homes = new Map();   // node -> {parent, next}
   const rememberedSel = ['.topreq', '.topwho'];
   const nodes = () => IDS.map(id => document.getElementById(id))

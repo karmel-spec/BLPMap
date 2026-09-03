@@ -1818,3 +1818,12 @@ button:disabled{opacity:.55;cursor:progress}
 .drawertools:empty{display:none;border:none;margin:0;padding:0}
 .drawertools .iconbtn{font-size:15px;padding:6px 10px}
 .drawertools .topwho{display:inline-flex}
+
+
+/* header floor chips (Brigham 9/3): 1st/2nd toggles live in the top row;
+   the old KPI strip now lives at the top of Reports */
+.floorchips{display:inline-flex;gap:4px}
+.fchip{font:700 12.5px Helvetica,Arial;padding:7px 11px;border-radius:9px;border:1.5px solid #3a3a3e;background:#1c1c1e;color:#a8a8aa;cursor:pointer}
+.fchip.on{background:#9e2020;border-color:#9e2020;color:#fff}
+.kpistrip{display:none}
+#rptKpis .kpistrip{display:flex;position:static;overflow-x:auto;background:transparent;padding:0 0 10px}
