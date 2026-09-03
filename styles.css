@@ -39,6 +39,10 @@ body{background:#f7f8f9;color:#121212;display:flex;flex-direction:column;overflo
 .scrim{position:absolute;inset:0;background:rgba(10,10,12,.35);z-index:25;opacity:0;pointer-events:none;transition:opacity .18s}
 .scrim.show{opacity:1;pointer-events:auto}
 .navitem{padding:11px 14px;border-radius:8px;font-size:13.5px;color:#a8a8aa;display:flex;gap:11px;align-items:center;cursor:pointer;text-decoration:none}
+/* display:flex above beats the hidden attribute — without this, permission-
+   gated menu items (Manager, Scheduling, Team, Admin) showed for EVERYONE
+   and just did nothing on tap (Jacob, 9/3) */
+.navitem[hidden]{display:none!important}
 .navitem:hover{background:#1c1c1e;color:#e8e8e8}
 .navitem.on{background:#9e2020;color:#fff;font-weight:700}
 .navitem .ext{margin-left:auto;font-size:11px;color:#6f6f72}
