@@ -11252,11 +11252,14 @@ function openLegendList(key) {
       <b style="font-size:13px">${def.t}</b>
       <span style="color:#8a847b">${list.length} piano${list.length === 1 ? '' : 's'}</span>
       <span id="lgListX" style="margin-left:auto;cursor:pointer;padding:2px 8px">✕</span></div>
-    ${list.map(p => `<div class="lgrow" data-row="${p.row}" style="display:flex;gap:8px;padding:6px 4px;`
-        + `border-top:1px solid #f0ece5;cursor:pointer;align-items:baseline">
+    ${list.map(p => `<div class="lgrow" data-row="${p.row}" style="padding:6px 4px;border-top:1px solid #f0ece5;cursor:pointer">
+        <div style="display:flex;gap:8px;align-items:baseline">
         <b style="min-width:44px">${esc(String(p.location || '—'))}</b>
         <span style="flex:1">${esc(String(p.summary || '').slice(0, 44))}</span>
-        <span style="color:#8a847b">#${esc(String(p.serial || '—'))}</span></div>`).join('')
+        <span style="color:#8a847b">#${esc(String(p.serial || '—'))}</span></div>
+        ${/^waiting/i.test(p.phase || '') ? `<div style="color:#9a5b13;font-size:11.5px;margin:2px 0 0 44px">${
+          (p.waitNote || '').trim() ? '⏳ ' + esc(String(p.waitNote).slice(0, 110)) : '⏳ no reason recorded — open the card to add one'}${
+          (p.checkBack || '').trim() ? ' · check back ' + esc(p.checkBack) : ''}</div>` : ''}</div>`).join('')
       || '<div style="color:#8a847b;padding:8px 0">None right now. 🎉</div>'}`;
   panel.hidden = false;
   panel.querySelector('#lgListX').onclick = () => { panel.hidden = true; };
