@@ -1108,6 +1108,8 @@ function savePhoto_(req, who) {
   var tech;
   if (kind === 'before' || kind === 'after') {
     tech = mediaFolderFor_(sh, found.row, serial, kind);
+  } else if (kind === 'paperwork') {
+    tech = paperworkFolderFor_(sh, found.row, serial);
   } else {
     tech = techFolderFor_(sh, found.row, serial);
   }
@@ -1182,6 +1184,21 @@ function shotRows_(serial) {
     }
   } catch (eF) {}
   return {ok: true, rows: out.slice(-300)};
+}
+
+// The piano's "Paperwork" folder: sits beside Tech/Before/After under the
+// piano's main folder; created on first scan upload (Curtis, 9/3).
+function paperworkFolderFor_(sh, row, serial) {
+  var tech = techFolderFor_(sh, row, serial);
+  if (!tech) return null;
+  var parentIt = tech.getParents();
+  var parent = parentIt.hasNext() ? parentIt.next() : tech;
+  var it = parent.getFolders();
+  while (it.hasNext()) {
+    var f = it.next();
+    if (/paperwork/i.test(f.getName())) return f;
+  }
+  return parent.createFolder('Paperwork');
 }
 
 // READ-ONLY twin of mediaFolderFor_: resolve the piano's Before/After photo

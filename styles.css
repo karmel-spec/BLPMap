@@ -1832,3 +1832,6 @@ button:disabled{opacity:.55;cursor:progress}
 .swpickrow{display:flex;gap:6px;overflow-x:auto;margin:6px 0;padding-bottom:4px}
 .swpick{width:64px;height:64px;object-fit:cover;border-radius:8px;border:2px solid #cfc9bf;cursor:pointer;flex:0 0 auto}
 .swpick:hover{border-color:#9e2020}
+
+/* 📁 paperwork: photograph-a-sheet button */
+.pwshoot{font:600 11px/1.2 inherit;background:#2e7d4f;color:#fff;border-radius:8px;padding:5px 8px;cursor:pointer;margin-right:6px}

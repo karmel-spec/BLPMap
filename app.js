@@ -1503,7 +1503,7 @@ function openShotWizard(p, kind) {
   document.querySelectorAll('.shotwiz').forEach(el => el.remove());
   const list = SHOT_LISTS[p.type === 'grand' ? 'grand' : 'upright'];
   const listName = p.type === 'grand' ? 'GRAND' : 'UPRIGHT';
-  const W = {kind, idx: 0, done: {}, beforeIds: {}, busy: false, stream: null, noCam: false};
+  const W = {kind, idx: 0, done: {}, beforeIds: {}, beforeFolder: [], busy: false, stream: null, noCam: false};
   const ov = document.createElement('div');
   ov.className = 'tagview shotwiz';
   document.body.appendChild(ov);
@@ -1556,7 +1556,12 @@ function openShotWizard(p, kind) {
         <img class="swref" alt="" src="${refUrl}">
         <span>← ${refLabel}${live ? '<br>ghosted over your live camera — line it up' : ''}<br>${esc(s.h)}</span>
       </div>
-      ${kind === 'after' && !beforeId ? '<div class="swmatch swnone">No tagged BEFORE for this shot yet — match the sample and the Before folder.</div>' : ''}
+      ${kind === 'after' && !beforeId ? (W.beforeFolder.length
+        ? `<div class="swmatch">No tagged BEFORE for this shot — tap the matching photo from the piano's Before folder to ghost it:</div>
+           <div class="swpickrow">${W.beforeFolder.map(f =>
+             `<img class="swpick" data-id="${esc(f.id)}" loading="lazy" alt="" title="${esc(f.name)}"
+                   src="https://drive.google.com/thumbnail?id=${esc(f.id)}&sz=w160">`).join('')}</div>`
+        : '<div class="swmatch swnone">No tagged BEFORE for this shot yet — match the sample and the Before folder.</div>') : ''}
       <div class="swmsg"></div>
       <button class="swsnap">${live ? '⚪ CAPTURE' : '📷 TAKE THIS SHOT'}</button>
       <div class="swalt">
@@ -1652,6 +1657,10 @@ function openShotWizard(p, kind) {
   function wire() {
     const cam = ov.querySelector('.swcam'), lib = ov.querySelector('.swfile');
     ov.querySelector('.swx').onclick = close;
+    ov.querySelectorAll('.swpick').forEach(im => im.onclick = () => {
+      W.beforeIds[W.idx] = im.dataset.id;   // this shot now ghosts that photo
+      render(); attachCam();
+    });
     ov.querySelector('.swsnap').onclick = () => {
       if (!W.noCam) {
         const shot = captureFrame();
@@ -1674,6 +1683,10 @@ function openShotWizard(p, kind) {
   ov.innerHTML = `<div class="tvbox swbox"><div class="swhint" style="padding:30px;text-align:center">
     Loading the shot list…</div></div>`;
   Promise.all([fetchShots(p.serial), ensureCam()]).then(([rows]) => {
+    // photos the shop photographer put straight into the piano's Before
+    // folder (no wizard tags) — offered as tap-to-match references
+    W.beforeFolder = rows.filter(r => r.folder === 'before' && r.id)
+      .map(r => ({id: r.id, name: r.file || ''}));
     rows.forEach(row => {
       const ps = parseShotStage(row.stage || row.file);
       if (!ps) return;
@@ -1732,7 +1745,9 @@ function paperworkCard(p) {
       ${it ? `<span class="pwhave"><a class="dlink" href="${esc(it.url)}" target="_blank"
                 rel="noopener" title="${esc(it.name || '')}">open ↗</a>
               <button class="pwdel" data-k="${k}" title="remove link">✕</button></span>`
-           : `<button class="pwadd" data-k="${k}">＋ attach</button>`}
+           : `<span class="pwhave"><label class="pwshoot" title="photograph the sheet">📷 scan
+                <input type="file" accept="image/*" capture="environment" hidden class="pwshootfile" data-k="${k}" data-label="${esc(label.replace(/^\S+\s/, ''))}"></label>
+              <button class="pwadd" data-k="${k}">＋ link</button></span>`}
     </div>`;
   }).join('');
   return `<div class="pwbox">${rows}
@@ -5158,6 +5173,29 @@ function wirePop(p) {
   }
   const pws = pop.querySelector('.pwscan');
   if (pws) pws.onclick = ev => { ev.stopPropagation(); popPinned = true; scanPaperwork(p, pop); };
+  // 📷 photograph a paperwork sheet → piano's Paperwork Drive folder, then
+  // auto-attach the file link on the matching row (Curtis, 9/3)
+  pop.querySelectorAll('.pwshootfile').forEach(inp => inp.onchange = async ev => {
+    ev.stopPropagation(); popPinned = true;
+    const f = ev.target.files && ev.target.files[0];
+    if (!f) return;
+    const k = inp.dataset.k, label = inp.dataset.label || 'Paperwork';
+    const msg = pop.querySelector('.pwmsg');
+    const wa = writeAuth();
+    if (!wa.ok) { if (msg) { msg.className = 'pwmsg phmsg err'; msg.textContent = 'Sign in first.'; } return; }
+    if (msg) { msg.className = 'pwmsg phmsg'; msg.textContent = 'Uploading scan…'; }
+    try {
+      const dataUrl = await downscalePhoto(f, 2048, 0.85);
+      const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+        headers: {'content-type': 'text/plain;charset=utf-8'},
+        body: JSON.stringify({pin: wa.pin, action: 'photo', kind: 'paperwork',
+          serial: p.serial, row: p.row, stage: 'Paperwork ' + label,
+          mime: 'image/jpeg', data: dataUrl.split(',')[1], ...authFields()})});
+      const j = await r.json();
+      if (!j.saved) throw new Error(j.error || 'upload failed');
+      await setPaperwork(p, k, j.link, j.name, pop);
+    } catch (e) { if (msg) { msg.className = 'pwmsg phmsg err'; msg.textContent = '✗ ' + e.message; } }
+  });
   pop.querySelectorAll('.pwadd').forEach(b => {
     b.onclick = ev => {
       ev.stopPropagation(); popPinned = true;
