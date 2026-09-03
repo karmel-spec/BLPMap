@@ -70,7 +70,23 @@ const BRIDGE_URL =
  * adjustments, Lupita's lost phase change 9/3). This wrapper detects the
  * imposter, retries with backoff, and if Google still won't execute,
  * returns an honest error so no caller can ever report a fake save. */
+// ops that set absolute values are resend-safe — they ride the durable
+// relay (Netlify → Supabase queue → bridge), which survives any Google
+// outage and never fakes a save. Everything else keeps the ping guard.
+const RELAY_ACTIONS = /^(set[a-z]+|move|unmarkduplicate|tempresolve)$/;
+const RELAY_URL = 'https://blpsalesapp.netlify.app/.netlify/functions/pianolog-write';
 async function bridgeFetch(url, opts) {
+  // durable-relay branch: whitelisted piano-log writes
+  try {
+    const body = JSON.parse(opts && opts.body || '{}');
+    if (body.action && RELAY_ACTIONS.test(body.action)) {
+      const rr = await fetch(RELAY_URL, {method: 'POST',
+        headers: {'content-type': 'application/json'},
+        body: JSON.stringify({...body, relayKey: 'pianoman'})});
+      if (rr.ok || rr.status === 502) return rr;   // real result, queued-ack, or honest error
+      // relay itself unreachable/misconfigured — fall through to the bridge
+    }
+  } catch (e) { /* non-JSON body or relay down — use the bridge directly */ }
   for (let a = 0; a < 4; a++) {
     let r;
     try { r = await fetch(url, opts); }
