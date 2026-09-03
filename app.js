@@ -9307,7 +9307,8 @@ function myWeekCard() {
   </div>`;
 }
 function myClockHistory() {
-  if (!MYCLOCK.pay) return '';
+  if (!MYCLOCK.pay) return `<div class="dbench"><h4>🕘 My clock history — last 2 weeks</h4>
+    <div class="dline dim">loading your punches… (Google's sheets can take a moment)</div></div>`;
   const days = {};
   for (const r of MYCLOCK.pay) {
     const d = denverDay(r.start);
