@@ -1159,7 +1159,49 @@ function shotRows_(serial) {
               by: String(vals[i][4] || ''), file: String(vals[i][5] || ''),
               id: m ? m[1] : ''});
   }
+  // photos dropped straight into the piano's Drive folders (the shop
+  // photographer works outside the wizard — Melissa/7912, 9/3) count too:
+  // list them so AFTER shots can match hand-taken BEFOREs.
+  try {
+    var sh2 = pianoSheet_(ss);
+    var fp2 = findPiano_(sh2, s, '');
+    if (!fp2.error) {
+      var kinds2 = ['before', 'after'];
+      for (var k2 = 0; k2 < kinds2.length; k2++) {
+        var fold2 = mediaFolderRead_(sh2, fp2.row, s, kinds2[k2]);
+        if (!fold2) continue;
+        var fit2 = fold2.getFiles(), n2 = 0;
+        while (fit2.hasNext() && n2 < 40) {
+          var f3 = fit2.next();
+          if (String(f3.getMimeType()).indexOf('image/') !== 0) continue;
+          out.push({when: f3.getLastUpdated().toISOString(), stage: '', by: '',
+                    file: f3.getName(), id: f3.getId(), folder: kinds2[k2]});
+          n2++;
+        }
+      }
+    }
+  } catch (eF) {}
   return {ok: true, rows: out.slice(-300)};
+}
+
+// READ-ONLY twin of mediaFolderFor_: resolve the piano's Before/After photo
+// folder without ever creating one (listing must never mutate Drive).
+function mediaFolderRead_(sh, row, serial, kind) {
+  var col = kind === 'before' ? 14 : 16;   // 1-based: N=14, P=16
+  var cell = String(sh.getRange(row, col).getValue() || '');
+  var m = /folders\/([A-Za-z0-9_-]+)/.exec(cell);
+  if (m) { try { return DriveApp.getFolderById(m[1]); } catch (e) {} }
+  var tech = techFolderFor_(sh, row, serial);
+  if (!tech) return null;
+  var parentIt = tech.getParents();
+  var parent = parentIt.hasNext() ? parentIt.next() : tech;
+  var re = kind === 'before' ? /before/i : /after/i;
+  var it = parent.getFolders();
+  while (it.hasNext()) {
+    var f2 = it.next();
+    if (re.test(f2.getName())) return f2;
+  }
+  return null;
 }
 
 // Resolve the piano's "Tech" photos subfolder. Prefers the Main Folder link on
