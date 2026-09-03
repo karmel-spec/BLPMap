@@ -3511,7 +3511,7 @@ const PHASE_LONG = {
   'CAP': 'Cleaning & Action Prep',
   'PRSB & Plate Refinishing': 'Perimeter, Ribs, Soundboard & Bridges — plus plate refinishing',
   'PRSB': 'Perimeter, Ribs, Soundboard & Bridges',
-  'DHRT': 'Dampers, Hammers & Regulation',
+  'DHRT': 'Dampers, Hammers, Regulation & Trapwork',
   'QC & Assembly': 'Quality Control & Assembly',
 };
 function trainPhaseName(phase) {
@@ -3537,12 +3537,53 @@ async function clFetch(serial, phase, force) {
     const r = await fetch(`${PHASEQC_URL}?key=pianoman&serial=${encodeURIComponent(serial)}&phase=${encodeURIComponent(phase)}`);
     const j = await r.json();
     if (!j.ok) throw new Error(j.error || 'load failed');
+    if (j.glossary) CL.glossary = j.glossary;
     const done = new Set((j.checks || []).filter(c => !c.skipped).map(c => c.step));
     const skips = new Map((j.checks || []).filter(c => c.skipped).map(c => [c.step, c.note || '']));
     CL.cache[k] = {at: Date.now(), items: j.items || [], done, skips, request: j.request || null};
   } catch (e) { CL.cache[k] = CL.cache[k] || {at: 0, items: [], done: new Set(), skips: new Map(), request: null}; }
   return CL.cache[k];
 }
+/* 📖 tap-to-learn glossary (Brigham 9/3): terms from the Glossary sheet tab
+ * become links inside the TRAINING text; tapping pops the definition and,
+ * when the sheet has an image URL, a picture (like the escutcheon). */
+function glossLinkify(html) {
+  const gl = CL.glossary || [];
+  if (!gl.length) return html;
+  const terms = gl.map((g, gi) => ({...g, gi})).sort((a, b) => b.term.length - a.term.length);
+  // walk only TEXT segments so attributes/tags are never touched
+  return html.split(/(<[^>]+>)/).map(seg => {
+    if (seg.startsWith('<')) return seg;
+    let out = seg;
+    for (const t of terms) {
+      const re = new RegExp('\\b(' + t.term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + 's?)\\b', 'i');
+      if (re.test(out)) out = out.replace(re, `<a class="glterm" data-g="${t.gi}">$1</a>`);
+    }
+    return out;
+  }).join('');
+}
+function openGloss(gi) {
+  const g = (CL.glossary || [])[gi];
+  if (!g) return;
+  const old = document.getElementById('glpop'); if (old) old.remove();
+  const ov = document.createElement('div');
+  ov.id = 'glpop';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:340;background:rgba(20,22,25,.45);display:flex;align-items:center;justify-content:center;padding:20px';
+  ov.innerHTML = `<div style="background:#fff;border-radius:14px;max-width:420px;width:100%;max-height:80vh;overflow:auto;padding:16px;box-shadow:0 12px 40px rgba(0,0,0,.35)">
+    <button class="dsx">✕</button>
+    <h3 style="margin:0 0 6px;font-size:16px;text-transform:capitalize">📖 ${esc(g.term)}</h3>
+    ${g.img ? `<img src="${esc(g.img)}" alt="${esc(g.term)}" style="width:100%;border-radius:10px;margin:6px 0">` : ''}
+    <div style="font-size:14px;line-height:1.55">${esc(g.def)}</div>
+    <div style="font-size:11px;color:#8a847b;margin-top:10px">from the shop Glossary — ask a manager to add a photo or fix a definition</div>
+  </div>`;
+  document.body.appendChild(ov);
+  ov.querySelector('.dsx').onclick = () => ov.remove();
+  ov.onclick = ev => { if (ev.target === ov) ov.remove(); };
+}
+document.addEventListener('click', ev => {
+  const a = ev.target.closest && ev.target.closest('.glterm');
+  if (a) { ev.preventDefault(); ev.stopPropagation(); openGloss(+a.dataset.g); }
+}, true);
 function clVariantItems(items, p, kind) {
   const want = p && p.type === 'grand' ? 'grand' : 'upright';
   return items.filter(it => it.kind === kind && (it.variant === 'all' || it.variant === want));
@@ -3666,8 +3707,8 @@ async function openWorkChecklist(serial, phase) {
           <div style="font-size:11px;letter-spacing:1.5px;color:#9e2020;text-transform:uppercase">${esc(it.section)}</div>
           <div style="font-size:17px;line-height:1.35;margin:8px 0;font-weight:800;text-transform:uppercase">${esc(it.text)}</div>
           ${it.handbook
-            ? `<div class="clhb" style="font-size:14.5px;line-height:1.6">${it.handbook}</div>`
-            : `<div style="font-size:15px;line-height:1.5">${esc(it.text)}</div>`}
+            ? `<div class="clhb" style="font-size:14.5px;line-height:1.6">${glossLinkify(it.handbook)}</div>`
+            : `<div style="font-size:15px;line-height:1.5">${glossLinkify(esc(it.text))}</div>`}
           ${vids.map(v => `<div style="margin:10px 0">
             <div style="font-size:11px;letter-spacing:1px;color:#8a847b;text-transform:uppercase;margin-bottom:4px">▶ ${esc(v.title || 'watch')}</div>
             <iframe width="100%" height="200" style="border:0;border-radius:10px"

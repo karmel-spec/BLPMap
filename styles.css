@@ -1839,3 +1839,6 @@ button:disabled{opacity:.55;cursor:progress}
 /* 🎓 coach mode: verbatim handbook body */
 .clhb p{margin:0 0 10px}
 .clhb b{color:#2b2f33}
+
+/* 📖 glossary term links in training text */
+.glterm{color:#9e2020;text-decoration:underline dotted;text-underline-offset:2px;cursor:pointer;font-weight:600}
