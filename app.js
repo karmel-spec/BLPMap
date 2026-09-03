@@ -9534,8 +9534,15 @@ async function loadMyClock(name) {
   }
   if (S.view === 'dash') renderDash();
 }
+// per-person approved weekly hours (Brigham 9/3): Lisa 28, Ezzy 20;
+// everyone else (Melissa included) is on the standard 40.
+const WEEK_CAP = {lisa: 28, ezzy: 20};
+function myWeekCap(name) {
+  return WEEK_CAP[String(name || '').trim().split(/\s+/)[0].toLowerCase()] || 40;
+}
 function myWeekCard() {
-  if (!MYCLOCK.pay) return `<div class="dbench"><h4>⏳ My week vs 40 hours</h4><div class="dline dim">loading your punches…</div></div>`;
+  const cap = myWeekCap(MYCLOCK.forName || clockName());
+  if (!MYCLOCK.pay) return `<div class="dbench"><h4>⏳ My week vs ${cap} hours</h4><div class="dline dim">loading your punches…</div></div>`;
   const today = new Date().toLocaleDateString('en-CA', {timeZone: 'America/Denver'});
   const monday = weekKey(today);
   let mins = 0;
@@ -9544,16 +9551,16 @@ function myWeekCard() {
     if (day < monday) continue;
     mins += r.end ? (r.minutes || 0) : Math.max(0, (Date.now() - new Date(r.start)) / 60000);
   }
-  const h = mins / 60, left = 40 - h;
-  const pctBar = Math.min(100, h / 40 * 100);
-  const tone = h >= 40 ? '#9e2020' : h >= 34 ? '#9a5b13' : '#2f7d4f';
-  const msg = h >= 40
-    ? `<b style="color:#9e2020">You've hit ${h.toFixed(1)} h — anything more is overtime. Stop and check with Brigham.</b>`
-    : h >= 34
-      ? `<b style="color:#9a5b13">${left.toFixed(1)} h left before 40</b> — plan Friday so you don't go over. Overtime needs Brigham's OK <u>ahead of time</u>.`
-      : `<b>${h.toFixed(1)} h</b> this week · ${left.toFixed(1)} h until 40.`;
+  const h = mins / 60, left = cap - h;
+  const pctBar = Math.min(100, h / cap * 100);
+  const tone = h >= cap ? '#9e2020' : h >= cap - 6 ? '#9a5b13' : '#2f7d4f';
+  const msg = h >= cap
+    ? `<b style="color:#9e2020">You've hit ${h.toFixed(1)} h — your approved week is ${cap} h. Stop and check with Brigham.</b>`
+    : h >= cap - 6
+      ? `<b style="color:#9a5b13">${left.toFixed(1)} h left before ${cap}</b> — plan the rest of the week so you don't go over. Going past ${cap} h needs Brigham's OK <u>ahead of time</u>.`
+      : `<b>${h.toFixed(1)} h</b> this week · ${left.toFixed(1)} h until ${cap}.`;
   return `<div class="dbench db-forty">
-    <h4>⏳ My week vs 40 hours</h4>
+    <h4>⏳ My week vs ${cap} hours</h4>
     <div style="height:12px;background:#efece6;border-radius:6px;overflow:hidden;margin:6px 0">
       <div style="height:100%;width:${pctBar}%;background:${tone};border-radius:6px"></div></div>
     <div class="dline">${msg}</div>
