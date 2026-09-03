@@ -3505,6 +3505,19 @@ async function punch(action, p, phase, source, endAt, ackNote) {
  * request → text to Mark (30-min escalation to Mark+Karmel) → C-rail
  * inspection → pass advances the phase, fail creates a 🔁 Rework card. */
 const QC_PHASES = ['CAP'];   // pilot — add phases here as checklists are seeded
+// acronym school (Brigham 9/3): TRAINING mode spells acronyms out so newbies
+// learn them; trained techs see the acronyms alone everywhere else.
+const PHASE_LONG = {
+  'CAP': 'Cleaning & Action Prep',
+  'PRSB & Plate Refinishing': 'Perimeter, Ribs, Soundboard & Bridges — plus plate refinishing',
+  'PRSB': 'Perimeter, Ribs, Soundboard & Bridges',
+  'DHRT': 'Dampers, Hammers & Regulation',
+  'QC & Assembly': 'Quality Control & Assembly',
+};
+function trainPhaseName(phase) {
+  const long = PHASE_LONG[String(phase || '').trim()];
+  return esc(phase) + (long ? ` <span style="font-weight:600;font-size:.72em;color:#6f6a63">(${esc(long)})</span>` : '');
+}
 // TRAINING MONTH (Brigham 9/3 → 10/3): EVERY real phase advance goes through
 // a Brigham-performed mini-QC (Karmel videos it for manager training). After
 // 10/3 the gate falls back to QC_PHASES. Waiting/queue/sale states never gate.
@@ -3645,7 +3658,7 @@ async function openWorkChecklist(serial, phase) {
         .map(x => { const m = /^([\w-]+)@(\d+)\|?(.*)$/.exec(x); return m ? {id: m[1], t: +m[2], title: m[3]} : null; })
         .filter(Boolean);
       ov.innerHTML = `<div class="dsheet" style="min-height:70vh;max-height:88vh;overflow:auto;display:flex;flex-direction:column"><button class="dsx">✕</button>
-        <h3>🎓 ${esc(phase)} — ${esc(p.summary || '#' + serial)}</h3>
+        <h3>🎓 ${trainPhaseName(phase)} — ${esc(p.summary || '#' + serial)}</h3>
         <div class="dssub">Step ${idx + 1} of ${work.length} · training mode · from the Restoration Handbook, word for word</div>
         <div style="display:flex;gap:4px;margin:8px 0">${work.map((w, j) =>
           `<i style="height:5px;flex:1;border-radius:2px;background:${st.done.has(w.i) ? '#2f7d4f' : st.skips.has(w.i) ? '#c9a227' : j === idx ? '#c9a227' : '#e4dfd5'}"></i>`).join('')}</div>
