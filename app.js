@@ -3672,7 +3672,7 @@ async function openWorkChecklist(serial, phase) {
               style="flex:1;font:500 12.5px/1.3 inherit;padding:7px 9px;border:1.5px solid #c9a227;border-radius:8px">
             <button class="clskipgo csvbtn" style="background:#c9a227">Skip it</button></div>`
           : !st.done.has(it.i) && !st.skips.has(it.i)
-            ? `<button class="clskipask" style="background:none;border:none;color:#9a5b13;font-size:12px;margin-top:8px;text-decoration:underline;cursor:pointer">⏭ can't do this step on this piano? skip with a reason</button>` : ''}`;
+            ? `<button class="clskipask" style="background:none;border:none;color:#9a5b13;font-size:12px;margin-top:8px;text-decoration:underline;cursor:pointer">⏭ Skip</button>` : ''}`;
       ov.querySelector('.dsx').onclick = close;
       ov.querySelector('.clback').onclick = () => { if (idx > 0) { asking = false; idx--; render(); } };
       ov.querySelector('.cldone').onclick = () => {
