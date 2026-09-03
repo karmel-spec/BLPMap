@@ -3524,18 +3524,20 @@ async function clFetch(serial, phase, force) {
     const r = await fetch(`${PHASEQC_URL}?key=pianoman&serial=${encodeURIComponent(serial)}&phase=${encodeURIComponent(phase)}`);
     const j = await r.json();
     if (!j.ok) throw new Error(j.error || 'load failed');
-    const done = new Set((j.checks || []).map(c => c.step));
-    CL.cache[k] = {at: Date.now(), items: j.items || [], done, request: j.request || null};
-  } catch (e) { CL.cache[k] = CL.cache[k] || {at: 0, items: [], done: new Set(), request: null}; }
+    const done = new Set((j.checks || []).filter(c => !c.skipped).map(c => c.step));
+    const skips = new Map((j.checks || []).filter(c => c.skipped).map(c => [c.step, c.note || '']));
+    CL.cache[k] = {at: Date.now(), items: j.items || [], done, skips, request: j.request || null};
+  } catch (e) { CL.cache[k] = CL.cache[k] || {at: 0, items: [], done: new Set(), skips: new Map(), request: null}; }
   return CL.cache[k];
 }
 function clVariantItems(items, p, kind) {
   const want = p && p.type === 'grand' ? 'grand' : 'upright';
   return items.filter(it => it.kind === kind && (it.variant === 'all' || it.variant === want));
 }
-async function clToggle(serial, phase, stepIdx, done) {
+async function clToggle(serial, phase, stepIdx, done, skipped, note) {
   fetch(PHASEQC_URL, {method: 'POST', headers: {'content-type': 'application/json'},
-    body: JSON.stringify({key: 'pianoman', op: 'check', serial, phase, step: stepIdx, done, by: clockName()})})
+    body: JSON.stringify({key: 'pianoman', op: 'check', serial, phase, step: stepIdx, done,
+      skipped: !!skipped, note: note || '', by: clockName()})})
     .catch(() => {});
 }
 // floating pill while clocked into a checklist phase
@@ -3553,7 +3555,7 @@ async function updateClPill() {
   if (!active) { if (pill) pill.hidden = true; return; }
   const st = await clFetch(o.serial, active);
   const work = clVariantItems(st.items, S.data.pianos.find(x => x.serial === o.serial) || {}, 'work');
-  const doneN = work.filter(it => st.done.has(it.i)).length;
+  const doneN = work.filter(it => st.done.has(it.i) || st.skips.has(it.i)).length;
   if (!pill) {
     pill = document.createElement('button');
     pill.id = 'clPill';
@@ -3577,52 +3579,102 @@ async function openWorkChecklist(serial, phase) {
   ov.className = 'dsheetov';
   document.body.appendChild(ov);
   const close = () => { ov.remove(); updateClPill(); };
-  const save = (idx, done) => { done ? st.done.add(idx) : st.done.delete(idx); clToggle(serial, phase, idx, done); };
+  const save = (idx, done) => { st.skips.delete(idx); done ? st.done.add(idx) : st.done.delete(idx); clToggle(serial, phase, idx, done); };
+  // a skipped step needs the WHY — it shows amber here and on the mini-QC rail
+  const saveSkip = (idx, note) => { st.done.delete(idx); st.skips.set(idx, note); clToggle(serial, phase, idx, true, true, note); };
+  let skipAsk = null;   // step index currently being asked for a skip reason
   if (!coach) {
-    // A · bench sheet — the whole list, tap to check
+    // A · bench sheet — the whole list, tap to check, ⏭ to skip with a reason
     const render = () => {
-      const doneN = work.filter(it => st.done.has(it.i)).length;
+      const doneN = work.filter(it => st.done.has(it.i) || st.skips.has(it.i)).length;
       ov.innerHTML = `<div class="dsheet" style="max-height:82vh;overflow:auto"><button class="dsx">✕</button>
         <h3>📋 ${esc(phase)} — ${esc(p.summary || '#' + serial)}</h3>
         <div class="dssub">${doneN}/${work.length} steps · shared with the whole team · from the Restoration Handbook</div>
         <div style="height:8px;background:#efece6;border-radius:4px;overflow:hidden;margin:6px 0 10px">
           <div style="height:100%;width:${work.length ? doneN / work.length * 100 : 0}%;background:linear-gradient(90deg,#c9a227,#2f7d4f)"></div></div>
-        ${work.map(it => `<div class="clstep" data-i="${it.i}" style="display:flex;gap:10px;padding:9px 2px;border-top:1px solid #f0ece5;cursor:pointer">
+        ${work.map(it => {
+          const isDone = st.done.has(it.i), isSkip = st.skips.has(it.i);
+          return `<div style="border-top:1px solid #f0ece5">
+          <div class="clstep" data-i="${it.i}" style="display:flex;gap:10px;padding:9px 2px;cursor:pointer">
           <div style="width:20px;height:20px;border-radius:6px;flex:0 0 auto;margin-top:1px;
-            ${st.done.has(it.i) ? 'background:#2f7d4f;color:#fff;text-align:center;font-weight:700' : 'border:2px solid #c9c2b6'}">${st.done.has(it.i) ? '✓' : ''}</div>
-          <div style="${st.done.has(it.i) ? 'color:#8a847b;text-decoration:line-through' : ''}">
+            ${isDone ? 'background:#2f7d4f;color:#fff;text-align:center;font-weight:700'
+              : isSkip ? 'background:#c9a227;color:#fff;text-align:center;font-weight:700'
+              : 'border:2px solid #c9c2b6'}">${isDone ? '✓' : isSkip ? '⏭' : ''}</div>
+          <div style="flex:1;${isDone ? 'color:#8a847b;text-decoration:line-through' : ''}">
             <span style="font-size:10px;letter-spacing:1px;color:#9e2020;text-transform:uppercase">${esc(it.section)}</span><br>
-            ${esc(it.text)}${it.detail ? `<div style="font-size:11.5px;color:#9a5b13;text-decoration:none">⚠ ${esc(it.detail)}</div>` : ''}</div></div>`).join('')}`;
+            ${esc(it.text)}${it.detail && !isDone && !isSkip ? `<div style="font-size:11.5px;color:#9a5b13">⚠ ${esc(it.detail)}</div>` : ''}
+            ${isSkip ? `<div style="font-size:11.5px;color:#9a5b13">⏭ skipped — ${esc(st.skips.get(it.i))} <u>undo</u></div>` : ''}</div>
+          ${!isDone && !isSkip ? `<button class="clskip" data-i="${it.i}" style="border:1px solid #cfc9bf;background:none;border-radius:8px;padding:3px 8px;color:#9a5b13;font-size:11px;flex:0 0 auto;height:26px">⏭ skip</button>` : ''}
+          </div>
+          ${skipAsk === it.i ? `<div style="display:flex;gap:6px;padding:0 2px 10px 30px">
+            <input class="clskipwhy" placeholder="why can't this step be done here?" maxlength="180"
+              style="flex:1;font:500 12.5px/1.3 inherit;padding:6px 8px;border:1.5px solid #c9a227;border-radius:8px">
+            <button class="clskipgo csvbtn" style="background:#c9a227">Skip</button></div>` : ''}
+          </div>`;
+        }).join('')}`;
       ov.querySelector('.dsx').onclick = close;
       ov.onclick = ev => { if (ev.target === ov) close(); };
       ov.querySelectorAll('.clstep').forEach(el => el.onclick = () => {
-        const i = +el.dataset.i; save(i, !st.done.has(i)); render();
+        const i = +el.dataset.i;
+        if (st.skips.has(i)) { save(i, false); skipAsk = null; render(); return; }   // undo skip
+        save(i, !st.done.has(i)); skipAsk = null; render();
       });
+      ov.querySelectorAll('.clskip').forEach(b => b.onclick = ev => {
+        ev.stopPropagation(); skipAsk = +b.dataset.i; render();
+        const inp = ov.querySelector('.clskipwhy'); if (inp) inp.focus();
+      });
+      const sgo = ov.querySelector('.clskipgo');
+      if (sgo) sgo.onclick = ev => {
+        ev.stopPropagation();
+        const inp = ov.querySelector('.clskipwhy');
+        const why = (inp.value || '').trim();
+        if (!why) { inp.style.borderColor = '#9e2020'; inp.focus(); return; }
+        saveSkip(skipAsk, why); skipAsk = null; render();
+      };
     };
     render();
   } else {
     // B · coach mode — one step at a time, details front and center
-    let idx = work.findIndex(it => !st.done.has(it.i)); if (idx < 0) idx = work.length - 1;
+    let idx = work.findIndex(it => !st.done.has(it.i) && !st.skips.has(it.i)); if (idx < 0) idx = work.length - 1;
+    let asking = false;   // skip-reason input showing?
     const render = () => {
       const it = work[idx];
       ov.innerHTML = `<div class="dsheet" style="min-height:70vh;display:flex;flex-direction:column"><button class="dsx">✕</button>
         <h3>🎓 ${esc(phase)} — ${esc(p.summary || '#' + serial)}</h3>
         <div class="dssub">Step ${idx + 1} of ${work.length} · training mode</div>
         <div style="display:flex;gap:4px;margin:8px 0">${work.map((w, j) =>
-          `<i style="height:5px;flex:1;border-radius:2px;background:${st.done.has(w.i) ? '#2f7d4f' : j === idx ? '#c9a227' : '#e4dfd5'}"></i>`).join('')}</div>
+          `<i style="height:5px;flex:1;border-radius:2px;background:${st.done.has(w.i) ? '#2f7d4f' : st.skips.has(w.i) ? '#c9a227' : j === idx ? '#c9a227' : '#e4dfd5'}"></i>`).join('')}</div>
         <div style="flex:1">
           <div style="font-size:11px;letter-spacing:1.5px;color:#9e2020;text-transform:uppercase">${esc(it.section)}</div>
           <div style="font-size:17px;line-height:1.5;margin:8px 0">${esc(it.text)}</div>
           ${it.detail ? `<div style="background:#fdf3ec;border-left:3px solid #c9a227;padding:8px 10px;border-radius:0 8px 8px 0;font-size:13px;color:#6b5030">⚠ ${esc(it.detail)}</div>` : ''}
         </div>
+        ${st.skips.has(it.i) ? `<div style="background:#fdf6e3;border-radius:8px;padding:8px 10px;font-size:12.5px;color:#9a5b13;margin-top:8px">⏭ This step is skipped — ${esc(st.skips.get(it.i))}</div>` : ''}
         <div style="display:flex;gap:8px;margin-top:12px">
           <button class="csvbtn clback" style="background:none;border:1px solid #cfc9bf;color:inherit" ${idx === 0 ? 'disabled' : ''}>‹ Back</button>
-          <button class="csvbtn cldone" style="flex:1">${st.done.has(it.i) ? 'Next ›' : '✓ Done — next step'}</button>
-        </div>`;
+          <button class="csvbtn cldone" style="flex:1">${st.done.has(it.i) || st.skips.has(it.i) ? 'Next ›' : '✓ Done — next step'}</button>
+        </div>
+        ${asking ? `<div style="display:flex;gap:6px;margin-top:8px">
+            <input class="clskipwhy" placeholder="why can't this step be done here?" maxlength="180"
+              style="flex:1;font:500 12.5px/1.3 inherit;padding:7px 9px;border:1.5px solid #c9a227;border-radius:8px">
+            <button class="clskipgo csvbtn" style="background:#c9a227">Skip it</button></div>`
+          : !st.done.has(it.i) && !st.skips.has(it.i)
+            ? `<button class="clskipask" style="background:none;border:none;color:#9a5b13;font-size:12px;margin-top:8px;text-decoration:underline;cursor:pointer">⏭ can't do this step on this piano? skip with a reason</button>` : ''}`;
       ov.querySelector('.dsx').onclick = close;
-      ov.querySelector('.clback').onclick = () => { if (idx > 0) { idx--; render(); } };
+      ov.querySelector('.clback').onclick = () => { if (idx > 0) { asking = false; idx--; render(); } };
       ov.querySelector('.cldone').onclick = () => {
-        if (!st.done.has(it.i)) save(it.i, true);
+        if (!st.done.has(it.i) && !st.skips.has(it.i)) save(it.i, true);
+        asking = false;
+        if (idx < work.length - 1) { idx++; render(); } else close();
+      };
+      const ask = ov.querySelector('.clskipask');
+      if (ask) ask.onclick = () => { asking = true; render(); const i2 = ov.querySelector('.clskipwhy'); if (i2) i2.focus(); };
+      const sgo = ov.querySelector('.clskipgo');
+      if (sgo) sgo.onclick = () => {
+        const inp = ov.querySelector('.clskipwhy');
+        const why = (inp.value || '').trim();
+        if (!why) { inp.style.borderColor = '#9e2020'; inp.focus(); return; }
+        saveSkip(it.i, why); asking = false;
         if (idx < work.length - 1) { idx++; render(); } else close();
       };
     };
@@ -3644,6 +3696,8 @@ async function openQcRail(id) {
   if (!q) { alert('QC request not found.'); return; }
   const p = S.data.pianos.find(x => x.serial === q.serial) || {serial: q.serial};
   const st = await clFetch(q.serial, q.phase, true);
+  const workItems = clVariantItems(st.items, p, 'work');
+  const skippedWork = workItems.filter(it => st.skips.has(it.i));
   let items = clVariantItems(st.items, p, 'qc');
   // phases without a seeded checklist still get inspected — one overall verdict
   if (!items.length) items = [{section: 'Overall', text: q.phase + ' work meets BLP standard'}];
@@ -3664,6 +3718,10 @@ async function openQcRail(id) {
       <h3>🔍 Mini-QC — ${esc(q.phase)}</h3>
       <div class="dssub">${esc(q.piano || '#' + q.serial)} · requested by ${esc((q.requested_by || '').split(' ')[0])}
         ${settled ? ` · <b style="color:${live.status === 'passed' ? '#2f7d4f' : '#9e2020'}">${live.status.toUpperCase()}</b>` : ''}</div>
+      ${skippedWork.length ? `<div style="background:#fdf6e3;border-radius:10px;padding:8px 10px;margin:8px 0">
+        <b style="font-size:12px;color:#9a5b13">⏭ Skipped work steps — check the reasons hold up:</b>
+        ${skippedWork.map(it => `<div style="font-size:12px;margin-top:4px">• ${esc(it.text)}<br>
+          <span style="color:#9a5b13">↳ ${esc(st.skips.get(it.i))}</span></div>`).join('')}</div>` : ''}
       ${items.map(it => {
         const vd = v[it.text];
         return `<div style="padding:9px 2px;border-top:1px solid #f0ece5">
