@@ -3483,7 +3483,211 @@ async function punch(action, p, phase, source, endAt, ackNote) {
     return {error: 'the punch may not have recorded — give it a few seconds, the clock will re-sync'};
   }
 }
+/* ========= PHASE CHECKLISTS + MINI-QC (CAP pilot, Brigham 9/3) =========
+ * Steps live on the 'Phase Checklists' sheet tab; state is per piano+phase
+ * in Supabase via phase-qc (salesapp2). Coach mode (one step at a time,
+ * handbook detail inline) for Training clock-ins; bench sheet for trained
+ * techs. Advancing OUT of a checklist phase requires a manager mini-QC:
+ * request → text to Mark (30-min escalation to Mark+Karmel) → C-rail
+ * inspection → pass advances the phase, fail creates a 🔁 Rework card. */
+const QC_PHASES = ['CAP'];   // pilot — add phases here as checklists are seeded
+const PHASEQC_URL = 'https://blpsalesapp.netlify.app/.netlify/functions/phase-qc';
+const CL = {cache: {}};   // (serial|phase) -> {items, checks:Set, request}
+async function clFetch(serial, phase, force) {
+  const k = serial + '|' + phase;
+  const hit = CL.cache[k];
+  if (!force && hit && Date.now() - hit.at < 60000) return hit;
+  try {
+    const r = await fetch(`${PHASEQC_URL}?key=pianoman&serial=${encodeURIComponent(serial)}&phase=${encodeURIComponent(phase)}`);
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error || 'load failed');
+    const done = new Set((j.checks || []).map(c => c.step));
+    CL.cache[k] = {at: Date.now(), items: j.items || [], done, request: j.request || null};
+  } catch (e) { CL.cache[k] = CL.cache[k] || {at: 0, items: [], done: new Set(), request: null}; }
+  return CL.cache[k];
+}
+function clVariantItems(items, p, kind) {
+  const want = p && p.type === 'grand' ? 'grand' : 'upright';
+  return items.filter(it => it.kind === kind && (it.variant === 'all' || it.variant === want));
+}
+async function clToggle(serial, phase, stepIdx, done) {
+  fetch(PHASEQC_URL, {method: 'POST', headers: {'content-type': 'application/json'},
+    body: JSON.stringify({key: 'pianoman', op: 'check', serial, phase, step: stepIdx, done, by: clockName()})})
+    .catch(() => {});
+}
+// floating pill while clocked into a checklist phase
+async function updateClPill() {
+  let pill = document.getElementById('clPill');
+  const o = CLOCK.open;
+  const ph = o && (o.phase || '').replace(/^Training:?\s*/i, '');
+  const active = o && o.serial && o.serial !== 'MGMT' && QC_PHASES.includes(ph || o.phase) ? (ph || o.phase) : null;
+  if (!active) { if (pill) pill.hidden = true; return; }
+  const st = await clFetch(o.serial, active);
+  const work = clVariantItems(st.items, S.data.pianos.find(x => x.serial === o.serial) || {}, 'work');
+  const doneN = work.filter(it => st.done.has(it.i)).length;
+  if (!pill) {
+    pill = document.createElement('button');
+    pill.id = 'clPill';
+    pill.style.cssText = 'position:fixed;bottom:74px;left:12px;z-index:70;background:#9e2020;color:#fff;'
+      + 'border:none;border-radius:999px;padding:9px 14px;font:700 12.5px Helvetica,Arial;'
+      + 'box-shadow:0 6px 18px rgba(0,0,0,.3);cursor:pointer';
+    document.body.appendChild(pill);
+  }
+  pill.hidden = false;
+  pill.textContent = `📋 ${active} checklist · ${doneN}/${work.length}`;
+  pill.onclick = () => openWorkChecklist(o.serial, active);
+}
+async function openWorkChecklist(serial, phase) {
+  const p = S.data.pianos.find(x => x.serial === serial) || {serial};
+  const st = await clFetch(serial, phase, true);
+  const work = clVariantItems(st.items, p, 'work');
+  if (!work.length) { alert('No checklist steps found for ' + phase + ' yet.'); return; }
+  const coach = /^training/i.test((CLOCK.open && CLOCK.open.phase) || '');
+  const old = document.querySelector('.dsheetov'); if (old) old.remove();
+  const ov = document.createElement('div');
+  ov.className = 'dsheetov';
+  document.body.appendChild(ov);
+  const close = () => { ov.remove(); updateClPill(); };
+  const save = (idx, done) => { done ? st.done.add(idx) : st.done.delete(idx); clToggle(serial, phase, idx, done); };
+  if (!coach) {
+    // A · bench sheet — the whole list, tap to check
+    const render = () => {
+      const doneN = work.filter(it => st.done.has(it.i)).length;
+      ov.innerHTML = `<div class="dsheet" style="max-height:82vh;overflow:auto"><button class="dsx">✕</button>
+        <h3>📋 ${esc(phase)} — ${esc(p.summary || '#' + serial)}</h3>
+        <div class="dssub">${doneN}/${work.length} steps · shared with the whole team · from the Restoration Handbook</div>
+        <div style="height:8px;background:#efece6;border-radius:4px;overflow:hidden;margin:6px 0 10px">
+          <div style="height:100%;width:${work.length ? doneN / work.length * 100 : 0}%;background:linear-gradient(90deg,#c9a227,#2f7d4f)"></div></div>
+        ${work.map(it => `<div class="clstep" data-i="${it.i}" style="display:flex;gap:10px;padding:9px 2px;border-top:1px solid #f0ece5;cursor:pointer">
+          <div style="width:20px;height:20px;border-radius:6px;flex:0 0 auto;margin-top:1px;
+            ${st.done.has(it.i) ? 'background:#2f7d4f;color:#fff;text-align:center;font-weight:700' : 'border:2px solid #c9c2b6'}">${st.done.has(it.i) ? '✓' : ''}</div>
+          <div style="${st.done.has(it.i) ? 'color:#8a847b;text-decoration:line-through' : ''}">
+            <span style="font-size:10px;letter-spacing:1px;color:#9e2020;text-transform:uppercase">${esc(it.section)}</span><br>
+            ${esc(it.text)}${it.detail ? `<div style="font-size:11.5px;color:#9a5b13;text-decoration:none">⚠ ${esc(it.detail)}</div>` : ''}</div></div>`).join('')}`;
+      ov.querySelector('.dsx').onclick = close;
+      ov.onclick = ev => { if (ev.target === ov) close(); };
+      ov.querySelectorAll('.clstep').forEach(el => el.onclick = () => {
+        const i = +el.dataset.i; save(i, !st.done.has(i)); render();
+      });
+    };
+    render();
+  } else {
+    // B · coach mode — one step at a time, details front and center
+    let idx = work.findIndex(it => !st.done.has(it.i)); if (idx < 0) idx = work.length - 1;
+    const render = () => {
+      const it = work[idx];
+      ov.innerHTML = `<div class="dsheet" style="min-height:70vh;display:flex;flex-direction:column"><button class="dsx">✕</button>
+        <h3>🎓 ${esc(phase)} — ${esc(p.summary || '#' + serial)}</h3>
+        <div class="dssub">Step ${idx + 1} of ${work.length} · training mode</div>
+        <div style="display:flex;gap:4px;margin:8px 0">${work.map((w, j) =>
+          `<i style="height:5px;flex:1;border-radius:2px;background:${st.done.has(w.i) ? '#2f7d4f' : j === idx ? '#c9a227' : '#e4dfd5'}"></i>`).join('')}</div>
+        <div style="flex:1">
+          <div style="font-size:11px;letter-spacing:1.5px;color:#9e2020;text-transform:uppercase">${esc(it.section)}</div>
+          <div style="font-size:17px;line-height:1.5;margin:8px 0">${esc(it.text)}</div>
+          ${it.detail ? `<div style="background:#fdf3ec;border-left:3px solid #c9a227;padding:8px 10px;border-radius:0 8px 8px 0;font-size:13px;color:#6b5030">⚠ ${esc(it.detail)}</div>` : ''}
+        </div>
+        <div style="display:flex;gap:8px;margin-top:12px">
+          <button class="csvbtn clback" style="background:none;border:1px solid #cfc9bf;color:inherit" ${idx === 0 ? 'disabled' : ''}>‹ Back</button>
+          <button class="csvbtn cldone" style="flex:1">${st.done.has(it.i) ? 'Next ›' : '✓ Done — next step'}</button>
+        </div>`;
+      ov.querySelector('.dsx').onclick = close;
+      ov.querySelector('.clback').onclick = () => { if (idx > 0) { idx--; render(); } };
+      ov.querySelector('.cldone').onclick = () => {
+        if (!st.done.has(it.i)) save(it.i, true);
+        if (idx < work.length - 1) { idx++; render(); } else close();
+      };
+    };
+    render();
+  }
+}
+/* ---- mini-QC request + C-rail inspection ---- */
+async function requestMiniQc(p, nextPhase, was) {
+  const r = await fetch(PHASEQC_URL, {method: 'POST', headers: {'content-type': 'application/json'},
+    body: JSON.stringify({key: 'pianoman', op: 'request', serial: p.serial,
+      piano: p.summary || '', phase: was, next_phase: nextPhase, by: clockName()})});
+  return r.json();
+}
+async function openQcRail(id) {
+  const K = 'sb_publishable_MamcjSX0CHTdYlpKDWSkmQ_-nbuQ1z-';
+  const hq = {apikey: K, Authorization: 'Bearer ' + K};
+  const reqs = await (await fetch(`https://ismacawxfvvllfinibbf.supabase.co/rest/v1/qc_requests?id=eq.${+id}`, {headers: hq})).json();
+  const q = reqs[0];
+  if (!q) { alert('QC request not found.'); return; }
+  const p = S.data.pianos.find(x => x.serial === q.serial) || {serial: q.serial};
+  const st = await clFetch(q.serial, q.phase, true);
+  const items = clVariantItems(st.items, p, 'qc');
+  const canJudge = isOwner() || isTimelogAdmin();
+  const old = document.querySelector('.dsheetov'); if (old) old.remove();
+  const ov = document.createElement('div');
+  ov.className = 'dsheetov';
+  document.body.appendChild(ov);
+  let live = q;
+  let poll = null;
+  const close = () => { clearInterval(poll); ov.remove(); };
+  const render = () => {
+    const v = live.verdicts || {};
+    const all = items.length && items.every(it => v[it.text] && v[it.text].verdict === 'pass');
+    const anyFail = items.some(it => v[it.text] && v[it.text].verdict === 'fail');
+    const settled = live.status !== 'pending';
+    ov.innerHTML = `<div class="dsheet" style="max-height:86vh;overflow:auto"><button class="dsx">✕</button>
+      <h3>🔍 Mini-QC — ${esc(q.phase)}</h3>
+      <div class="dssub">${esc(q.piano || '#' + q.serial)} · requested by ${esc((q.requested_by || '').split(' ')[0])}
+        ${settled ? ` · <b style="color:${live.status === 'passed' ? '#2f7d4f' : '#9e2020'}">${live.status.toUpperCase()}</b>` : ''}</div>
+      ${items.map(it => {
+        const vd = v[it.text];
+        return `<div style="padding:9px 2px;border-top:1px solid #f0ece5">
+          <div style="display:flex;gap:8px;align-items:flex-start">
+            <div style="flex:1"><span style="font-size:10px;letter-spacing:1px;color:#8a847b;text-transform:uppercase">${esc(it.section)}</span><br>${esc(it.text)}</div>
+            ${canJudge && !settled ? `<button class="qcp" data-t="${esc(it.text)}" style="border:1.5px solid ${vd && vd.verdict === 'pass' ? '#2f7d4f' : '#cfc9bf'};background:${vd && vd.verdict === 'pass' ? '#eaf5ec' : '#fff'};border-radius:8px;padding:5px 9px;color:#2f7d4f;font-weight:700">✓</button>
+              <button class="qcf" data-t="${esc(it.text)}" style="border:1.5px solid ${vd && vd.verdict === 'fail' ? '#9e2020' : '#cfc9bf'};background:${vd && vd.verdict === 'fail' ? '#fdecec' : '#fff'};border-radius:8px;padding:5px 9px;color:#9e2020;font-weight:700">✗</button>`
+              : vd ? `<b style="color:${vd.verdict === 'pass' ? '#2f7d4f' : '#9e2020'}">${vd.verdict === 'pass' ? '✓' : '✗'}</b>` : '<span style="color:#c9c2b6">·</span>'}
+          </div>
+          ${vd && vd.note ? `<div style="font-size:11.5px;color:#9e2020;margin:3px 0 0 2px">↳ ${esc(vd.note)}</div>` : ''}</div>`;
+      }).join('')}
+      ${canJudge && !settled ? `<div style="display:flex;gap:8px;margin-top:14px">
+        <button class="csvbtn qcpass" ${all ? '' : 'disabled style="opacity:.45"'}>✅ Approve — advance to ${esc(q.next_phase)}</button>
+        <button class="csvbtn qcback" ${anyFail ? '' : 'disabled'} style="background:#9e2020;${anyFail ? '' : 'opacity:.45'}">🔁 Send back</button></div>` : ''}
+      ${!canJudge && !settled ? '<div class="dssub" style="margin-top:10px">Waiting on a manager — this updates live.</div>' : ''}`;
+    ov.querySelector('.dsx').onclick = close;
+    if (!canJudge || settled) return;
+    const sendVerdict = async (item, verdict) => {
+      let note = '';
+      if (verdict === 'fail') { note = prompt('What needs rework on: ' + item) || ''; if (!note.trim()) return; }
+      const r = await fetch(PHASEQC_URL, {method: 'POST', headers: {'content-type': 'application/json'},
+        body: JSON.stringify({key: 'pianoman', op: 'verdict', id: q.id, item, verdict, note, manager: clockName()})});
+      const j = await r.json();
+      if (j.verdicts) { live.verdicts = j.verdicts; render(); }
+    };
+    ov.querySelectorAll('.qcp').forEach(b => b.onclick = () => sendVerdict(b.dataset.t, 'pass'));
+    ov.querySelectorAll('.qcf').forEach(b => b.onclick = () => sendVerdict(b.dataset.t, 'fail'));
+    const fp = ov.querySelector('.qcpass'), fb = ov.querySelector('.qcback');
+    const finalize = async outcome => {
+      const r = await fetch(PHASEQC_URL, {method: 'POST', headers: {'content-type': 'application/json'},
+        body: JSON.stringify({key: 'pianoman', op: 'finalize', id: q.id, outcome, manager: clockName(), pin: writeAuth().pin || 'pianoman'})});
+      const j = await r.json();
+      if (j.ok) { live.status = j.status; render(); setTimeout(() => { close(); location.reload(); }, 1600); }
+    };
+    if (fp && all) fp.onclick = () => finalize('pass');
+    if (fb && anyFail) fb.onclick = () => finalize('rework');
+  };
+  render();
+  poll = setInterval(async () => {
+    if (live.status !== 'pending') return;
+    try {
+      const rr = await (await fetch(`https://ismacawxfvvllfinibbf.supabase.co/rest/v1/qc_requests?id=eq.${+id}`, {headers: hq})).json();
+      if (rr[0] && JSON.stringify(rr[0]) !== JSON.stringify(live)) { live = rr[0]; render(); }
+    } catch (e) {}
+  }, 8000);
+}
+function tryQcLink() {
+  const m = /[#&]qc=(\d+)/.exec(location.hash || '');
+  if (m) { location.hash = ''; setTimeout(() => openQcRail(+m[1]), 800); }
+}
+window.addEventListener('hashchange', tryQcLink);
+setTimeout(tryQcLink, 2500);
+
 function renderClockChip() {
+  try { updateClPill(); } catch (e) {}
   let chip = document.getElementById('clockchip');
   if (!chip) {
     const bar = document.querySelector('.bar');
@@ -5025,6 +5229,26 @@ function openPhaseGateModal(p, phase, was, pop) {
       go.disabled = false;
     } catch (e) { shotMsg.className = 'pg-shot phmsg err'; shotMsg.textContent = '✗ ' + e.message; }
   };
+  // pilot phases with a QC checklist: advancing requires a manager mini-QC
+  if (QC_PHASES.includes((was || '').trim())) {
+    const qcBlock = ov.querySelector('.pg-qc');
+    if (qcBlock) {
+      qcBlock.innerHTML = `<b style="font-size:13px">🔍 This phase needs a manager mini-QC before it advances.</b>`;
+      ov.querySelector('.pg-qcnote').remove();
+      go.textContent = '📨 Request Mini-QC (' + esc(was) + ' → ' + esc(phase) + ')';
+      go.onclick = async () => {
+        go.disabled = true; go.textContent = 'Requesting…';
+        const j = await requestMiniQc(p, phase, was);
+        const pm = ov.querySelector('.pg-msg');
+        if (j.ok) {
+          pm.className = 'pg-msg phmsg ok';
+          pm.textContent = j.existing ? '✓ Already requested — Mark has the link.' : '✓ Requested — Mark just got a text with the inspection link. The phase advances when it passes.';
+          setTimeout(close, 2600);
+        } else { pm.className = 'pg-msg phmsg err'; pm.textContent = '✗ ' + (j.error || 'failed'); go.disabled = false; }
+      };
+      return;   // note routing + old advance flow don't apply on QC phases
+    }
+  }
   const qcNote = ov.querySelector('.pg-qcnote');
   ov.querySelectorAll('input[name=pgqc]').forEach(r =>
     r.onchange = () => { qcNote.hidden = r.value !== 'fix' || !r.checked; if (!qcNote.hidden) qcNote.focus(); });
@@ -9291,13 +9515,23 @@ async function loadMyClock(name) {
   if (MYCLOCK.pay && MYCLOCK.forName === name && Date.now() - MYCLOCK.at < 300000) return;
   MYCLOCK.at = Date.now(); MYCLOCK.forName = name;
   try {
-    const [pr, tr] = await Promise.all([
-      fetch(BRIDGE_URL + '?fn=payrollrows&days=16', {redirect: 'follow'}).then(r => r.json()),
-      fetch(BRIDGE_URL + '?fn=timelog&days=16', {redirect: 'follow'}).then(r => r.json()),
-    ]);
-    MYCLOCK.pay = (pr.rows || []).filter(r => myClockMatch(r.tech, name));
-    MYCLOCK.tl = (tl => tl.filter(r => myClockMatch(r.tech, name)))(tr.rows || []);
-  } catch (e) { MYCLOCK.pay = MYCLOCK.pay || []; MYCLOCK.tl = MYCLOCK.tl || []; }
+    // fast path: service-account sheet read (~0.5s) — Google's Apps Script
+    // can take 30s+ when it's moody, and punch verification can't wait
+    const fr = await fetch('https://blpsalesapp.netlify.app/.netlify/functions/clock-history?key=pianoman&days=16');
+    const fj = await fr.json();
+    if (!fj.ok) throw new Error(fj.error || 'fast feed down');
+    MYCLOCK.pay = (fj.pay || []).filter(r => myClockMatch(r.tech, name));
+    MYCLOCK.tl = (fj.tl || []).filter(r => myClockMatch(r.tech, name));
+  } catch (e0) {
+    try {
+      const [pr, tr] = await Promise.all([
+        fetch(BRIDGE_URL + '?fn=payrollrows&days=16', {redirect: 'follow'}).then(r => r.json()),
+        fetch(BRIDGE_URL + '?fn=timelog&days=16', {redirect: 'follow'}).then(r => r.json()),
+      ]);
+      MYCLOCK.pay = (pr.rows || []).filter(r => myClockMatch(r.tech, name));
+      MYCLOCK.tl = (tr.rows || []).filter(r => myClockMatch(r.tech, name));
+    } catch (e) { MYCLOCK.pay = MYCLOCK.pay || []; MYCLOCK.tl = MYCLOCK.tl || []; }
+  }
   if (S.view === 'dash') renderDash();
 }
 function myWeekCard() {
