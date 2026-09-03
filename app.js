@@ -2049,10 +2049,9 @@ function shopTagInner(d) {
     + encodeURIComponent(d.qr || '');
   const lvBox = n => `<i class="${d.lvl === String(n) ? 'on' : ''}">${n}</i>`;
   return `<div class="tag">
-    <div class="rail"><span>SERIAL # ${esc(d.serial)}</span></div>
     <div class="main">
       <div class="id"><img src="${logo}" alt="Brigham Larson Pianos">
-        <div class="nm"><h1>${esc(d.h1)}</h1><div class="sub">${esc(d.sub || '\u2014')}</div></div></div>
+        <div class="nm"><h1>${esc(d.h1)} &nbsp;·&nbsp; #${esc(d.serial)}</h1><div class="sub">${esc(d.sub || '\u2014')}</div></div></div>
       <div class="rows">
         <div class="rw"><span class="lb">Serial #</span><b>${esc(d.serial)}</b></div>
         <div class="rw"><span class="lb">Owner</span><b>${esc(d.owner)}</b></div>
@@ -4242,7 +4241,7 @@ function popHTML(p) {
     </div>
     <div class="row">Owner <b>${esc(ownerLine)}</b></div>
     <div class="row">Status <b>${esc(p.status || '—')}</b></div>
-    ${p.serial && tbAdmin() ? `<div class="row trkrow">💼 Leads
+    ${p.serial && tbAdmin() && effectivePhase(p) === 'For Sale' ? `<div class="row trkrow">💼 Leads
       <span class="trkchips leadchips"><i class="lite">…</i></span></div>
       <div class="leadmsg phmsg"></div>` : ''}
     ${effectivePhase(p) === 'For Sale'
