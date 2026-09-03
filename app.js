@@ -633,7 +633,42 @@ const PHASE_TO_AREA = {
   '2nd Tuning': 'tuning', 'Refinishing': 'refinishing', 'QC & Assembly': 'QC and assembly',
   'Key service': 'keys', 'Refurb checklist': 'refurbishing', 'Repair work': 'repairs',
 };
+// team-wide recent Time Log (fast feed) so cards can show who actually has
+// the piano — assigned/working beats the generic specialist list (Brigham 9/3)
+const TEAMTL = {at: 0, last: null, loading: false};
+function loadTeamTl(p) {
+  if (TEAMTL.loading || (TEAMTL.last && Date.now() - TEAMTL.at < 300000)) return;
+  TEAMTL.loading = true;
+  fetch('https://blpsalesapp.netlify.app/.netlify/functions/clock-history?key=pianoman&days=14')
+    .then(r => r.json()).then(j => {
+      const m = new Map();
+      (j.tl || []).forEach(r => {
+        const k = String(r.serial || '');
+        if (!k) return;
+        const prev = m.get(k);
+        if (!prev || new Date(r.start) > new Date(prev.start)) m.set(k, r);
+      });
+      TEAMTL.last = m; TEAMTL.at = Date.now(); TEAMTL.loading = false;
+      // repaint the open card so the line upgrades from Go-to to the real name
+      if (p && !$('#pop').hidden) openPop(p.row, S.popAnchor, true);
+    }).catch(() => { TEAMTL.loading = false; });
+}
 function gotoLine(p, effPh) {
+  // 1 · someone is clocked in on this piano RIGHT NOW
+  const live = (CLOCK.all || []).find(o => o.serial === p.serial);
+  if (live) {
+    const first = (live.tech || '').split(/\s+/)[0] || live.tech;
+    return `<div class="gotoline" style="color:#2f7d4f"><b>● On it now: ${esc(first)}</b> — ${esc(live.phase || 'working')}</div>`;
+  }
+  // 2 · the most recent tech in the Time Log has it (assigned in practice)
+  if (!TEAMTL.last) loadTeamTl(p);
+  const last = TEAMTL.last && TEAMTL.last.get(String(p.serial));
+  if (last) {
+    const first = (last.tech || '').split(/\s+/)[0] || last.tech;
+    const when = new Date(last.start).toLocaleDateString('en-US', {weekday: 'short', month: 'short', day: 'numeric'});
+    return `<div class="gotoline"><b>Working it: ${esc(first)}</b> · last ${esc(when)}${last.phase ? ' · ' + esc(last.phase.slice(0, 26)) : ''}</div>`;
+  }
+  // 3 · nobody yet — fall back to the specialist go-to list
   if (!TRACKDEFS || !effPh) return '';
   let area = PHASE_TO_AREA[effPh];
   if (effPh === 'DHRT') area = p.type === 'grand' ? 'DHRT for grands' : 'DHRT for uprights';
