@@ -9671,7 +9671,11 @@ function teamBoardHTML() {
     if (!there) groups[s.group].push({full: s.full, pos: s.pos});
   });
   const norm = s => String(s || '').trim().toLowerCase();
-  const firstOf = s => norm(s).split(/\s+/)[0];
+  // nicknames: the roster's Current Team tab uses legal names, but punches
+  // carry the Google profile name — Guadalupe clocks in as Lupita (9/3).
+  // Canonicalize first names on BOTH sides of every match.
+  const ALIAS = {guadalupe: 'lupita'};
+  const firstOf = s => { const f = norm(s).split(/\s+/)[0]; return ALIAS[f] || f; };
   const openFor = full => (TEAM.clock.open || []).find(o =>
     norm(o.tech) === norm(full) || firstOf(o.tech) === firstOf(full));
   const payFor = full => {
@@ -9684,11 +9688,9 @@ function teamBoardHTML() {
   // whereis: {st: off|part|field, why, until} keyed by lowercase first name —
   // tile priority mirrors the Shop App: 🎹 piano → 🕔 day-only → 🏖/🚗/🌗
   // away → and only then a genuine "not clocked in" (Brigham's V71 notes)
-  // nicknames: the schedule/punches use these, the roster uses full names
-  const ALIAS = {guadalupe: 'lupita'};
   const whereFor = full => {
     const f = firstOf(full);
-    const w = TEAM.where[f] || TEAM.where[full.toLowerCase()] || TEAM.where[ALIAS[f]] || null;
+    const w = TEAM.where[f] || TEAM.where[full.toLowerCase()] || null;
     return w && typeof w === 'object' ? w : (w ? {st: 'off', why: String(w)} : null);
   };
   const tile = m => {
