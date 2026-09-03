@@ -5233,8 +5233,12 @@ function openPhaseGateModal(p, phase, was, pop) {
   if (QC_PHASES.includes((was || '').trim())) {
     const qcBlock = ov.querySelector('.pg-qc');
     if (qcBlock) {
-      qcBlock.innerHTML = `<b style="font-size:13px">🔍 This phase needs a manager mini-QC before it advances.</b>`;
+      qcBlock.innerHTML = `<b style="font-size:13px">🔍 This phase needs a manager mini-QC before it advances.</b>
+        <span style="font-size:12px;color:#6f6a63">A manager gets a text with the inspection link — 100% pass moves the piano to ${esc(phase)}; anything less comes back as a 🔁 Rework card.</span>`;
       ov.querySelector('.pg-qcnote').remove();
+      const noteEl = ov.querySelector('.pg-note'), routeEl = ov.querySelector('.pg-route');
+      if (noteEl) noteEl.remove();
+      if (routeEl) routeEl.closest('.rfbar').remove();
       go.textContent = '📨 Request Mini-QC (' + esc(was) + ' → ' + esc(phase) + ')';
       go.onclick = async () => {
         go.disabled = true; go.textContent = 'Requesting…';
