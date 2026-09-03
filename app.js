@@ -3639,14 +3639,27 @@ async function openWorkChecklist(serial, phase) {
     let asking = false;   // skip-reason input showing?
     const render = () => {
       const it = work[idx];
-      ov.innerHTML = `<div class="dsheet" style="min-height:70vh;display:flex;flex-direction:column"><button class="dsx">✕</button>
+      // training shows Brigham's handbook wording VERBATIM (col G), with the
+      // short label as a header on top — never a paraphrase (Brigham 9/3)
+      const vids = String(it.video || '').split(';;').map(x => x.trim()).filter(Boolean)
+        .map(x => { const m = /^([\w-]+)@(\d+)\|?(.*)$/.exec(x); return m ? {id: m[1], t: +m[2], title: m[3]} : null; })
+        .filter(Boolean);
+      ov.innerHTML = `<div class="dsheet" style="min-height:70vh;max-height:88vh;overflow:auto;display:flex;flex-direction:column"><button class="dsx">✕</button>
         <h3>🎓 ${esc(phase)} — ${esc(p.summary || '#' + serial)}</h3>
-        <div class="dssub">Step ${idx + 1} of ${work.length} · training mode</div>
+        <div class="dssub">Step ${idx + 1} of ${work.length} · training mode · from the Restoration Handbook, word for word</div>
         <div style="display:flex;gap:4px;margin:8px 0">${work.map((w, j) =>
           `<i style="height:5px;flex:1;border-radius:2px;background:${st.done.has(w.i) ? '#2f7d4f' : st.skips.has(w.i) ? '#c9a227' : j === idx ? '#c9a227' : '#e4dfd5'}"></i>`).join('')}</div>
         <div style="flex:1">
           <div style="font-size:11px;letter-spacing:1.5px;color:#9e2020;text-transform:uppercase">${esc(it.section)}</div>
-          <div style="font-size:17px;line-height:1.5;margin:8px 0">${esc(it.text)}</div>
+          <div style="font-size:17px;line-height:1.35;margin:8px 0;font-weight:800;text-transform:uppercase">${esc(it.text)}</div>
+          ${it.handbook
+            ? `<div class="clhb" style="font-size:14.5px;line-height:1.6">${it.handbook}</div>`
+            : `<div style="font-size:15px;line-height:1.5">${esc(it.text)}</div>`}
+          ${vids.map(v => `<div style="margin:10px 0">
+            <div style="font-size:11px;letter-spacing:1px;color:#8a847b;text-transform:uppercase;margin-bottom:4px">▶ ${esc(v.title || 'watch')}</div>
+            <iframe width="100%" height="200" style="border:0;border-radius:10px"
+              src="https://www.youtube-nocookie.com/embed/${esc(v.id)}?start=${v.t}" allowfullscreen
+              allow="accelerometer; encrypted-media; picture-in-picture"></iframe></div>`).join('')}
           ${it.detail ? `<div style="background:#fdf3ec;border-left:3px solid #c9a227;padding:8px 10px;border-radius:0 8px 8px 0;font-size:13px;color:#6b5030">⚠ ${esc(it.detail)}</div>` : ''}
         </div>
         ${st.skips.has(it.i) ? `<div style="background:#fdf6e3;border-radius:8px;padding:8px 10px;font-size:12.5px;color:#9a5b13;margin-top:8px">⏭ This step is skipped — ${esc(st.skips.get(it.i))}</div>` : ''}

@@ -1835,3 +1835,7 @@ button:disabled{opacity:.55;cursor:progress}
 
 /* 📁 paperwork: photograph-a-sheet button */
 .pwshoot{font:600 11px/1.2 inherit;background:#2e7d4f;color:#fff;border-radius:8px;padding:5px 8px;cursor:pointer;margin-right:6px}
+
+/* 🎓 coach mode: verbatim handbook body */
+.clhb p{margin:0 0 10px}
+.clhb b{color:#2b2f33}
