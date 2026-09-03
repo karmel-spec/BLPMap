@@ -11217,7 +11217,24 @@ const LEGEND_LISTS = {
   larson:   {t: '🩵 Larson Family',  f: p => /conference room|larson home/i.test(p.location || '') && !isPrivateFinancing(p)},
   soldpend: {t: '🏅 Sold / completed — awaiting delivery', f: p => soldPending(p)},
   preq:     {t: '🚫 Pre-Queue — deposit pending, do NOT start', f: p => preQueue(p)},
+  // ownership + every shop phase/state (Brigham 9/3): the whole legend taps
+  blp:      {t: '⚪ BLP owned',          f: p => ownerClass(p) === 'blp'},
+  client:   {t: '⚫ Client / consigned', f: p => ownerClass(p) !== 'blp'},
+  q:        {t: 'Q-# In Queue',          f: p => effectivePhase(p) === 'In Queue' || (!effectivePhase(p) && !!p.queuePos)},
+  paused:   {t: 'P · Paused',            f: p => effectivePhase(p) === 'Paused'},
+  wb:       {t: 'WB · Waiting on Brigham',        f: p => effectivePhase(p) === 'Waiting on Brigham'},
+  wc:       {t: 'WC · Waiting on Curtis Harper',  f: p => effectivePhase(p) === 'Waiting on Curtis Harper'},
+  wcu:      {t: 'WCu · Waiting on Customer',      f: p => effectivePhase(p) === 'Waiting on Customer'},
+  wo:       {t: 'WO · Waiting on OTHER',          f: p => effectivePhase(p) === 'Waiting on OTHER'},
 };
+// the 13 working phases share one pattern — key ph0..ph12
+[['1N', 'New Arrival - Admin'], ['2A', 'Assessment'], ['3C', 'CAP'],
+ ['4P', 'PRSB & Plate Refinishing'], ['5L', 'Lacquer Soundboard'], ['6R', 'Restringing'],
+ ['7C', 'Chip Tuning'], ['8D', 'DHRT'], ['9T', '1st Tuning'], ['10R', 'Refinishing'],
+ ['11QC', 'QC & Assembly'], ['12T', '2nd Tuning'], ['13E', 'Exit Prep - Admin']]
+  .forEach(([code, name], i) => {
+    LEGEND_LISTS['ph' + i] = {t: code + ' · ' + name, f: p => effectivePhase(p) === name};
+  });
 function openLegendList(key) {
   const def = LEGEND_LISTS[key]; if (!def) return;
   const list = ((S.data && S.data.pianos) || []).filter(p => p.active && def.f(p))
