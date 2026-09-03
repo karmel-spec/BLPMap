@@ -3604,7 +3604,7 @@ async function openWorkChecklist(serial, phase) {
             <span style="font-size:10px;letter-spacing:1px;color:#9e2020;text-transform:uppercase">${esc(it.section)}</span><br>
             ${esc(it.text)}${it.detail && !isDone && !isSkip ? `<div style="font-size:11.5px;color:#9a5b13">⚠ ${esc(it.detail)}</div>` : ''}
             ${isSkip ? `<div style="font-size:11.5px;color:#9a5b13">⏭ skipped — ${esc(st.skips.get(it.i))} <u>undo</u></div>` : ''}</div>
-          ${!isDone && !isSkip ? `<button class="clskip" data-i="${it.i}" style="border:1px solid #cfc9bf;background:none;border-radius:8px;padding:3px 8px;color:#9a5b13;font-size:11px;flex:0 0 auto;height:26px">⏭ skip</button>` : ''}
+          ${!isDone && !isSkip ? `<button class="clskip" data-i="${it.i}" style="border:1px solid #cfc9bf;background:none;border-radius:8px;padding:3px 8px;color:#9a5b13;font-size:11px;flex:0 0 auto;height:26px">Skip</button>` : ''}
           </div>
           ${skipAsk === it.i ? `<div style="display:flex;gap:6px;padding:0 2px 10px 30px">
             <input class="clskipwhy" placeholder="why can't this step be done here?" maxlength="180"
