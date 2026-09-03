@@ -3542,7 +3542,13 @@ async function clToggle(serial, phase, stepIdx, done) {
 async function updateClPill() {
   let pill = document.getElementById('clPill');
   const o = CLOCK.open;
-  const ph = o && (o.phase || '').replace(/^Training:?\s*/i, '');
+  // a 🎓 Training punch stores just "Training" — the checklist phase is then
+  // the PIANO's current phase (Hunter/CAP pilot, 9/3), and coach mode kicks in
+  let ph = o && (o.phase || '').replace(/^Training:?\s*/i, '');
+  if (o && !ph && /^training/i.test(o.phase || '')) {
+    const pp = S.data.pianos.find(x => x.serial === o.serial);
+    ph = pp ? String(pp.phase || '').trim() : '';
+  }
   const active = o && o.serial && o.serial !== 'MGMT' && QC_PHASES.includes(ph || o.phase) ? (ph || o.phase) : null;
   if (!active) { if (pill) pill.hidden = true; return; }
   const st = await clFetch(o.serial, active);
