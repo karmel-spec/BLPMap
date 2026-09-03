@@ -8605,7 +8605,7 @@ function scorecardTable() {
   const inWin = iso => iso && new Date(iso).getTime() >= cut;
   const tl = S.tlRows.filter(r => inWin(r.start) && !/test/i.test(r.phase) && !/FAKE/.test(r.serial || ''));
   const mins = rows => rows.reduce((a, r) => a + (r.minutes || 0), 0);
-  const pianoRows = tl.filter(r => !/^(Moving|Admin \/ Misc)/.test(r.phase));
+  const pianoRows = tl.filter(r => !/^(Moving|Admin \/ Misc|Management)/.test(r.phase) && r.serial !== 'MGMT');
   const trainRows = tl.filter(r => /^Training/.test(r.phase));
   const reworkRows = tl.filter(r => /^Rework|re-?do|fix(ing)? (earlier|previous)/i.test(r.phase));
   const workH = mins(pianoRows) / 60, trainH = mins(trainRows) / 60, reworkH = mins(reworkRows) / 60;
@@ -9400,6 +9400,24 @@ function renderDash() {
       </div>
     </div>
     ${payCard}
+    ${isTimelogAdmin() ? (() => {
+      // 🧑‍💼 management time (Brigham 9/3): managers clock time that isn't
+      // attached to a piano, and toggle piano ↔ management in one tap.
+      // Rides the normal Work Clock under the pseudo-serial MGMT.
+      const onMgmt = o && o.serial === 'MGMT';
+      return `<div class="dbench db-mgmt">
+        <h4>🧑‍💼 Management time</h4>
+        ${onMgmt ? `<div class="dline now"><b>On management time</b> since ${fmtT(o.start)} —
+              <span class="cctime" data-start="${esc(o.start)}">${clockElapsed(o.start)}</span></div>
+            <button class="paybtn mgmtoff">■ End management time</button>
+            <div class="dline dim">Opening a piano card and clocking in there switches you back to piano time automatically.</div>`
+          : o ? `<div class="dline">You're on <b>#${esc(o.serial)}</b> — one tap moves you to management time and closes the piano session.</div>
+            <button class="paybtn mgmton">🧑‍💼 Switch to management time</button>`
+          : `<button class="paybtn mgmton">▶ Clock into management time</button>
+            <div class="dline dim">For meetings, planning, scheduling — anything not attached to one piano.</div>`}
+        <div class="mgmtmsg phmsg"></div>
+      </div>`;
+    })() : ''}
     ${myWeekCard()}
     <div class="dbench db-timeoff">
       <h4>🏖 Time off</h4>
@@ -9430,6 +9448,21 @@ function renderDash() {
     <p class="dsoon">coming soon: report history · phase-time PRs as the Work Clock fills in</p>`;
 
   loadMyClock(name);
+  const mOn = body.querySelector('.mgmton'), mOff = body.querySelector('.mgmtoff');
+  if (mOn) mOn.onclick = async () => {
+    mOn.disabled = true; mOn.textContent = 'Clocking in…';
+    const j = await punch('clockin', {serial: 'MGMT', row: ''}, 'Management', 'dash');
+    const mm = body.querySelector('.mgmtmsg');
+    if (j.error) { if (mm) { mm.className = 'mgmtmsg phmsg err'; mm.textContent = j.error; } mOn.disabled = false; mOn.textContent = '🧑‍💼 Management time'; }
+    else renderDash();
+  };
+  if (mOff) mOff.onclick = async () => {
+    mOff.disabled = true; mOff.textContent = 'Clocking out…';
+    const j = await punch('clockout', null, '', 'dash');
+    const mm = body.querySelector('.mgmtmsg');
+    if (j.error) { if (mm) { mm.className = 'mgmtmsg phmsg err'; mm.textContent = j.error; } mOff.disabled = false; mOff.textContent = '■ End management time'; }
+    else renderDash();
+  };
   const cfx2 = body.querySelector('.cfixlink2');
   if (cfx2) cfx2.onclick = ev => { ev.preventDefault(); const l = body.querySelector('.cfixlink'); if (l) l.click(); };
   const cfx = body.querySelector('.cfixlink');
