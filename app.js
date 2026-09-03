@@ -9539,6 +9539,13 @@ async function loadMyClock(name) {
       MYCLOCK.tl = (tr.rows || []).filter(r => myClockMatch(r.tech, name));
     } catch (e) { MYCLOCK.pay = MYCLOCK.pay || []; MYCLOCK.tl = MYCLOCK.tl || []; }
   }
+  // payroll day-clock officially began 9/1/2026 — trial punches before
+  // that never show on dashboards (piano Time Log keeps full history)
+  const PAY_EPOCH = new Date('2026-09-01T00:00:00-06:00').getTime();
+  MYCLOCK.pay = (MYCLOCK.pay || []).filter(r => {
+    const t = new Date(r.start).getTime();
+    return !isNaN(t) && t >= PAY_EPOCH;
+  });
   if (S.view === 'dash') renderDash();
 }
 // per-person approved weekly hours (Brigham 9/3): Lisa 28, Ezzy 20;
