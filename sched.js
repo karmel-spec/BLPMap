@@ -225,6 +225,12 @@ const I18N = {
   aud_sub:["Does each technician's latest weekly report line up with the piano data cards? Serials from every report are checked against the card's live CURRENT PHASE — mismatches usually mean the card wasn't updated. It's keyword-based, so read the line before texting anyone.","¿Coincide el último reporte semanal de cada técnico con las tarjetas de datos? Los seriales de cada reporte se comparan con la FASE ACTUAL de la tarjeta — las diferencias suelen significar que la tarjeta no se actualizó. Es por palabras clave: lee la línea antes de escribirle a alguien."],
   aud_clean:["No conflicts found between this tech's report and the cards.","Sin conflictos entre el reporte de este técnico y las tarjetas."],
   aud_noreport:["No weekly report for this week.","Sin reporte semanal esta semana."],
+  /* specialties */
+  lad_title:["Skill Ladder","Escalera de habilidades"],
+  lad_sub:["Each specialty's ranked ladder — the scheduler reads straight down: if #1 isn't available, go to #2. Change a level with the selector, reorder with ▲▼, add someone with ＋. Greyed rows aren't scheduled today. The ⏱/✅/⚡ line is live evidence from the work clock and mini-QC log — it informs your rankings but never changes them by itself.","La escalera de cada especialidad en orden — el programador lee hacia abajo: si el #1 no está disponible, sigue el #2. Cambia el nivel con el selector, reordena con ▲▼, agrega con ＋. Las filas grises no trabajan hoy. La línea ⏱/✅/⚡ es evidencia en vivo del reloj y los mini-QC — informa tu criterio pero nunca cambia niveles sola."],
+  mat_title:["Versatility Matrix","Matriz de versatilidad"],
+  mat_sub:["Everyone × every specialty. Tap a cell to raise a level (cycles back to — after 🏆). Tap a column header for that skill's ranked ladder with today's availability. The small number in a cell is the live ⚡ performance index: work-clock hours vs the phase standard × mini-QC first-pass rate.","Todos × cada especialidad. Toca una celda para subir el nivel (vuelve a — después de 🏆). Toca el encabezado de columna para ver la escalera de esa habilidad con la disponibilidad de hoy. El número pequeño es el índice ⚡ en vivo: horas de reloj vs. estándar × tasa de mini-QC aprobados."],
+  spec_legend:["Levels: 🎓 Trainee (never alone) · ✅ Trained · 💪 Competent · 🛡 Reliable · ⭐ Expert · 🏆 Best in Shop (one per skill). ⚡ index: 100 ≈ standard hours with clean mini-QCs; higher is faster + cleaner.","Niveles: 🎓 Aprendiz (nunca solo) · ✅ Entrenado · 💪 Competente · 🛡 Confiable · ⭐ Experto · 🏆 Mejor del taller (uno por habilidad). Índice ⚡: 100 ≈ horas estándar con mini-QCs limpios; más alto = más rápido y limpio."],
 };
 const t = (k, ...args) => {
   let s = (I18N[k] || [k,k])[LANG === "es" ? 1 : 0];
@@ -1254,10 +1260,267 @@ function renderAudit(){
     </div>`;
 }
 
+/* ================= 🪜 SPECIALTIES — Skill Ladder + Versatility Matrix =====
+ * Store: "Specialties" tab on the report sheet (Skill|Tech|Level|Rank|Note),
+ * served by bridge fn=specialties, edited via action specset (managers/
+ * owners). Seeded 9/4 from Brigham's tech-specialties notes + report history
+ * + work-clock history. Levels 0-6; rank = ladder order within a skill.
+ * ⚡ performance = live work-clock hours vs phase standard × mini-QC
+ * first-pass rate — shown as evidence, never auto-changes a level. */
+const SPEC_LVLS=[
+  {label:"—",       pill:"",                     cls:""},
+  {label:"Trainee", pill:"🎓 TRAINEE",           cls:"spl1"},
+  {label:"Trained", pill:"✅ TRAINED",           cls:"spl2"},
+  {label:"Competent",pill:"💪 COMPETENT",        cls:"spl3"},
+  {label:"Reliable",pill:"🛡 RELIABLE",          cls:"spl4"},
+  {label:"Expert",  pill:"⭐ EXPERT",            cls:"spl5"},
+  {label:"Best in Shop",pill:"🏆 BEST IN SHOP",  cls:"spl6"},
+];
+const SPEC_CELL=["—","🎓","✅","💪","🛡","⭐","🏆"];
+const SPEC_STDH={CAP:40,PRSB:40,"lacquer soundboard":12,restringing:40,"chip tuning":2,
+  tuning:2,"DHRT for uprights":48,"DHRT for grands":48,refurbishing:48,repairs:8,
+  "QC and assembly":17,keys:22,refinishing:62};
+const SPEC_PH2SK={"CAP":"CAP","PRSB & Plate Refinishing":"PRSB","PRSBa - Pre-Plate":"PRSB",
+  "PRSBb - Plate In":"PRSB","Lacquer Soundboard":"lacquer soundboard","Restringing":"restringing",
+  "Chip Tuning":"chip tuning","1st Tuning":"tuning","2nd Tuning":"tuning","DHRT":"DHRT for uprights",
+  "Refinishing":"refinishing","QC & Assembly":"QC and assembly","Key Service":"keys",
+  "Refurb checklist":"refurbishing","Repair Work":"repairs"};
+let SPEC=null, SPEC_LOADING=false, SPERF=null, SPERF_LOADING=false;
+function needSpec(){
+  if(SPEC||SPEC_LOADING) return !!SPEC;
+  SPEC_LOADING=true;
+  fetch(CONFIG.STOREMAP_BRIDGE+"?fn=specialties",{redirect:"follow"}).then(r=>r.json()).then(j=>{
+    if(j&&j.ok) SPEC=j;
+    schedRerender();
+  }).catch(()=>{}).then(()=>{SPEC_LOADING=false;});
+  return false;
+}
+function needSpecPerf(){
+  if(SPERF||SPERF_LOADING) return !!SPERF;
+  SPERF_LOADING=true;
+  const K="sb_publishable_MamcjSX0CHTdYlpKDWSkmQ_-nbuQ1z-";
+  Promise.all([
+    fetch(CONFIG.STOREMAP_BRIDGE+"?fn=timelog&days=180",{redirect:"follow"}).then(r=>r.json()).catch(()=>null),
+    fetch("https://ismacawxfvvllfinibbf.supabase.co/rest/v1/qc_requests?select=by,phase,status&limit=1000",
+      {headers:{apikey:K,Authorization:"Bearer "+K}}).then(r=>r.json()).catch(()=>[]),
+  ]).then(([tl,qc])=>{
+    const agg={};   // "first|skill" -> {min, pianos:Set, pass, rework}
+    const get=(f,sk)=>{ const k=f+"|"+sk; return agg[k]||(agg[k]={min:0,pianos:new Set(),pass:0,rework:0}); };
+    (((tl||{}).rows)||[]).forEach(r=>{
+      const sk=SPEC_PH2SK[String(r.phase||"").trim()]; if(!sk) return;
+      const f=String(r.tech||"").split(/\s+/)[0].toLowerCase();
+      if(!f||f==="claude") return;
+      const a=get(f,sk); a.min+=r.minutes||0; if(r.serial) a.pianos.add(r.serial);
+    });
+    (Array.isArray(qc)?qc:[]).forEach(q=>{
+      const sk=SPEC_PH2SK[String(q.phase||"").trim()]; if(!sk) return;
+      const f=String(q.by||"").split(/\s+/)[0].toLowerCase(); if(!f) return;
+      if(q.status==="passed") get(f,sk).pass++;
+      else if(q.status==="rework") get(f,sk).rework++;
+    });
+    SPERF=agg;
+    schedRerender();
+  }).catch(()=>{ SPERF={}; }).then(()=>{SPERF_LOADING=false;});
+  return false;
+}
+function specPerf(tech,skill){
+  if(!SPERF) return null;
+  const a=SPERF[String(tech||"").split(/\s+/)[0].toLowerCase()+"|"+skill];
+  if(!a||(!a.min&&!a.pass&&!a.rework)) return null;
+  const n=a.pianos.size||0, std=SPEC_STDH[skill]||0;
+  const avg=n?a.min/60/n:0;
+  const qcN=a.pass+a.rework;
+  const qual=qcN?(a.pass/qcN):null;
+  let score=null;
+  if(avg&&std){ const eff=Math.min(1.5,std/avg); score=Math.round(100*(qual==null?0.85:(a.pass+1)/(qcN+2))*eff); }
+  const bits=[];
+  if(avg) bits.push("⏱ "+(avg<10?avg.toFixed(1):Math.round(avg))+"h/piano"+(std?" · std "+std+"h":"")+" · "+n+" piano"+(n===1?"":"s"));
+  if(qcN) bits.push("✅ "+a.pass+"/"+qcN+" mini-QC first-pass");
+  if(score!=null) bits.push("⚡ "+score);
+  return {text:bits.join(" · "), score};
+}
+function specLadder(skill){
+  return SPEC.rows.filter(r=>r.skill===skill&&r.level>0)
+    .sort((a,b)=>a.rank-b.rank||b.level-a.level||a.tech.localeCompare(b.tech));
+}
+function specOffToday(tech){
+  const v=window.TEAM&&TEAM.sched;
+  if(!v||!v.length) return false;
+  const dowIdx={Mon:2,Tue:3,Wed:4,Thu:5,Fri:6,Sat:7}[new Date().toLocaleDateString("en-US",{weekday:"short",timeZone:"America/Denver"})];
+  if(!dowIdx) return false;
+  const f=String(tech).split(/\s+/)[0].toLowerCase();
+  const row=v.find(r=>String(r[0]||"").split(/\s+/)[0].toLowerCase()===f);
+  return row?!String(row[dowIdx-1]||"").trim():false;
+}
+async function specWrite(body,msgEl){
+  const auth=(window.writeAuth?writeAuth():{pin:"",ok:true});
+  if(msgEl) msgEl.textContent="…";
+  try{
+    const r=await fetch(CONFIG.STOREMAP_BRIDGE,{method:"POST",redirect:"follow",
+      headers:{"content-type":"text/plain;charset=utf-8"},
+      body:JSON.stringify({pin:auth.pin,action:"specset",...body,...(window.authFields?authFields():{})})});
+    const j=await r.json();
+    if(j.error) throw new Error(j.error);
+    if(!j.ok) throw new Error("bridge is busy — try again in a minute");
+    if(msgEl){ msgEl.textContent="✓"; msgEl.style.color="#2c7a3f"; }
+    return true;
+  }catch(e){ if(msgEl){ msgEl.textContent="✗ "+(e.message||e); msgEl.style.color="#9e2020"; } return false; }
+}
+function specLvlSelect(r){
+  return `<select class="splvl" data-skill="${esc(r.skill)}" data-tech="${esc(r.tech)}"
+    style="font:700 11px/1 inherit;border:1px solid #cfc9bf;border-radius:8px;padding:3px 4px;background:#fff">
+    ${SPEC_LVLS.map((L,n)=>`<option value="${n}" ${r.level===n?"selected":""}>${n===0?"— remove":L.pill||L.label}</option>`).join("")}
+  </select>`;
+}
+function specCSS(){
+  return `<style>
+    .splpill{font-size:10px;font-weight:800;letter-spacing:.4px;padding:2.5px 8px;border-radius:999px;white-space:nowrap}
+    .spl1{background:#eee9df;color:#8a847b;border:1px dashed #c9c2b6}.spl2{background:#f0e2b6;color:#6b5030}
+    .spl3{background:#c9a227;color:#fff}.spl4{background:#7fc48f;color:#1c3a26}
+    .spl5{background:#2f7d4f;color:#fff}.spl6{background:#2b2f33;color:#ffd76e}
+    .sprow{display:flex;align-items:center;gap:8px;border:1px solid #eee9df;border-radius:10px;padding:6px 9px;margin:6px 0;background:#fdfcfa;flex-wrap:wrap}
+    .sprow.spoff{opacity:.42}
+    .sprk{width:20px;height:20px;border-radius:50%;background:#2b2f33;color:#fff;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+    .spud button{border:1px solid #ddd6c9;background:#fff;border-radius:6px;width:22px;height:20px;font-size:10px;cursor:pointer;padding:0}
+    .spperf{flex-basis:100%;font-size:10.5px;color:#6f6a63;margin-top:-2px;padding-left:28px}
+    .spmtable{border-collapse:collapse;background:#fff;font-size:12px}
+    .spmtable th,.spmtable td{border:1px solid #eee9df;padding:5px 6px;text-align:center}
+    .spmtable th{background:#2b2f33;color:#fff;font-size:10px;letter-spacing:.4px;cursor:pointer;max-width:74px}
+    .spmtable td.spname{text-align:left;font-weight:700;background:#fdfcfa;white-space:nowrap;position:sticky;left:0}
+    .spmcell{cursor:pointer;font-size:14px}
+    .spmc1{background:#f4f1ec}.spmc2{background:#faf0d4}.spmc3{background:#f3d97a}
+    .spmc4{background:#a9d9b4}.spmc5{background:#2f7d4f}.spmc6{background:#2b2f33}
+  </style>`;
+}
+function renderLadder(){
+  const ready=needSpec(); needSpecPerf();
+  if(window.TEAM&&!TEAM.sched&&!TEAM.loading&&window.teamFetchAll) try{teamFetchAll();}catch(e){}
+  const host=$("#sview-ladder"); if(!host) return;
+  if(!ready){ host.innerHTML=`<div class="row1"><div><h2 class="page">🪜 ${t("lad_title")}</h2></div></div><div style="color:var(--mut2);padding:20px 0">Loading specialties…</div>`; return; }
+  host.innerHTML=specCSS()+`
+    <div class="row1"><div><h2 class="page">🪜 ${t("lad_title")}</h2><div class="sub">${t("lad_sub")}</div></div></div>
+    <div class="lanes">${SPEC.skills.map(sk=>{
+      const lad=specLadder(sk);
+      return `<div class="lane" data-skill="${esc(sk)}"><h4>${esc(sk)} <span class="n num">${lad.length}</span></h4>
+        ${lad.map((r,i)=>{
+          const off=specOffToday(r.tech);
+          const pf=specPerf(r.tech,sk);
+          return `<div class="sprow ${off?"spoff":""}" data-tech="${esc(r.tech)}">
+            <span class="sprk">${i+1}</span><b style="flex:1">${esc(r.tech)}</b>
+            ${off?`<span style="font-size:10px;color:#9e2020">off today</span>`:""}
+            <span class="splpill ${SPEC_LVLS[r.level].cls}" title="${esc(r.note||"")}">${SPEC_LVLS[r.level].pill}</span>
+            ${specLvlSelect(r)}
+            <span class="spud"><button class="spup" title="move up">▲</button><button class="spdn" title="move down">▼</button></span>
+            ${pf?`<span class="spperf">${esc(pf.text)}</span>`:""}
+          </div>`;
+        }).join("")||`<div style="color:var(--mut2);font-size:12px;padding:6px 0">nobody ranked yet</div>`}
+        <div style="display:flex;gap:6px;margin-top:8px;align-items:center">
+          <input class="spadd" placeholder="add a tech…" style="flex:1;font:500 12px/1.3 inherit;padding:5px 8px;border:1px solid #ddd6c9;border-radius:8px">
+          <button class="spaddgo" style="border:1px solid #cfc9bf;background:none;border-radius:8px;padding:4px 9px;font-size:11.5px">＋</button>
+          <span class="spmsg" style="font-size:11px"></span></div>
+      </div>`;
+    }).join("")}</div>
+    <div class="sub" style="margin-top:12px">${t("spec_legend")}</div>`;
+  wireSpec(host,renderLadder);
+}
+function wireSpec(host,rerender){
+  host.querySelectorAll(".splvl").forEach(sel=>sel.onchange=async()=>{
+    const lane=sel.closest("[data-skill]")||sel.closest("th")||sel;
+    const skill=sel.dataset.skill, tech=sel.dataset.tech, lvl=+sel.value;
+    const msg=(sel.closest(".sprow,.lane,.spmpop")||host).querySelector(".spmsg");
+    if(await specWrite({skill,tech,level:lvl},msg)){
+      const row=SPEC.rows.find(r=>r.skill===skill&&r.tech===tech);
+      if(row) row.level=lvl; else SPEC.rows.push({skill,tech,level:lvl,rank:999,note:""});
+      setTimeout(rerender,500);
+    }
+  });
+  host.querySelectorAll(".spup,.spdn").forEach(b=>b.onclick=async()=>{
+    const lane=b.closest("[data-skill]"); const skill=lane.dataset.skill;
+    const tech=b.closest(".sprow").dataset.tech;
+    const lad=specLadder(skill).map(r=>r.tech);
+    const i=lad.indexOf(tech); const j=b.classList.contains("spup")?i-1:i+1;
+    if(j<0||j>=lad.length) return;
+    [lad[i],lad[j]]=[lad[j],lad[i]];
+    const msg=lane.querySelector(".spmsg");
+    if(await specWrite({skill,order:lad},msg)){
+      lad.forEach((tn,ix)=>{ const row=SPEC.rows.find(r=>r.skill===skill&&r.tech===tn); if(row) row.rank=ix+1; });
+      rerender();
+    }
+  });
+  host.querySelectorAll(".spaddgo").forEach(b=>b.onclick=async()=>{
+    const lane=b.closest("[data-skill]"); const skill=lane.dataset.skill;
+    const inp=lane.querySelector(".spadd"); const tech=(inp.value||"").trim();
+    if(!tech){ inp.focus(); return; }
+    const msg=lane.querySelector(".spmsg");
+    if(await specWrite({skill,tech,level:1,note:"added in app"},msg)){
+      SPEC.rows.push({skill,tech,level:1,rank:999,note:"added in app"});
+      rerender();
+    }
+  });
+}
+function renderMatrix(){
+  const ready=needSpec(); needSpecPerf();
+  const host=$("#sview-matrix"); if(!host) return;
+  if(!ready){ host.innerHTML=`<div class="row1"><div><h2 class="page">🔢 ${t("mat_title")}</h2></div></div><div style="color:var(--mut2);padding:20px 0">Loading specialties…</div>`; return; }
+  const techs=[...new Set(SPEC.rows.filter(r=>r.level>0).map(r=>r.tech))];
+  const lvlOf={}; SPEC.rows.forEach(r=>{ lvlOf[r.tech+"|"+r.skill]=r.level; });
+  techs.sort((a,b)=>{
+    const vs=tn=>SPEC.rows.filter(r=>r.tech===tn).reduce((s,r)=>s+r.level,0);
+    return vs(b)-vs(a)||a.localeCompare(b);
+  });
+  host.innerHTML=specCSS()+`
+    <div class="row1"><div><h2 class="page">🔢 ${t("mat_title")}</h2><div class="sub">${t("mat_sub")}</div></div></div>
+    <div style="overflow-x:auto"><table class="spmtable">
+      <tr><th style="cursor:default"></th>${SPEC.skills.map(sk=>`<th class="spmhead" data-skill="${esc(sk)}">${esc(sk)} ▾</th>`).join("")}<th style="cursor:default">Σ</th></tr>
+      ${techs.map(tn=>{
+        const tot=SPEC.rows.filter(r=>r.tech===tn).reduce((s,r)=>s+r.level,0);
+        return `<tr><td class="spname">${esc(tn)}</td>
+          ${SPEC.skills.map(sk=>{
+            const lv=lvlOf[tn+"|"+sk]||0;
+            const pf=lv?specPerf(tn,sk):null;
+            return `<td class="spmcell ${lv?"spmc"+lv:""}" data-skill="${esc(sk)}" data-tech="${esc(tn)}"
+              title="${esc(tn+" · "+sk+" — "+SPEC_LVLS[lv].label+(pf?"\n"+pf.text:"")+"\n(tap to raise the level, long-press logic: cycles 0→6)")}">${SPEC_CELL[lv]}${pf&&pf.score!=null?`<div style="font-size:8.5px;opacity:.85">${pf.score}</div>`:""}</td>`;
+          }).join("")}
+          <td class="num" style="font-weight:800;background:#f4f1ec">${tot}</td></tr>`;
+      }).join("")}
+    </table></div>
+    <div class="spmpop" id="spmpop" style="display:none;margin-top:14px;background:#fff;border:2px solid #2b2f33;border-radius:12px;padding:12px;max-width:460px"></div>
+    <div class="sub" style="margin-top:10px">${t("spec_legend")} <span class="spmsg" style="font-size:11px"></span></div>`;
+  host.querySelectorAll(".spmcell").forEach(td=>td.onclick=async()=>{
+    const skill=td.dataset.skill, tech=td.dataset.tech;
+    const cur=(SPEC.rows.find(r=>r.skill===skill&&r.tech===tech)||{level:0}).level;
+    const lvl=(cur+1)%7;
+    const msg=host.querySelector(".spmsg");
+    if(await specWrite({skill,tech,level:lvl},msg)){
+      const row=SPEC.rows.find(r=>r.skill===skill&&r.tech===tech);
+      if(row) row.level=lvl; else SPEC.rows.push({skill,tech,level:lvl,rank:999,note:""});
+      renderMatrix();
+    }
+  });
+  host.querySelectorAll(".spmhead").forEach(th=>th.onclick=()=>{
+    const sk=th.dataset.skill;
+    const pop=host.querySelector("#spmpop");
+    const lad=specLadder(sk);
+    pop.style.display="block";
+    pop.innerHTML=`<h3 style="margin:0 0 6px">${esc(sk)} — ranked ladder</h3>
+      ${lad.map((r,i)=>{
+        const off=specOffToday(r.tech); const pf=specPerf(r.tech,sk);
+        return `<div style="display:flex;gap:8px;align-items:center;padding:5px 0;border-top:1px solid #f0ece5;${off?"opacity:.45":""}">
+          <span class="sprk">${i+1}</span><b style="flex:1">${esc(r.tech)}</b>
+          ${off?`<span style="font-size:10px;color:#9e2020">off today</span>`:""}
+          <span class="splpill ${SPEC_LVLS[r.level].cls}">${SPEC_LVLS[r.level].pill}</span>
+          ${pf?`<span style="font-size:10px;color:#6f6a63">${esc(pf.text)}</span>`:""}</div>`;
+      }).join("")||"nobody ranked"}
+      <div style="font-size:11px;color:#8a847b;margin-top:8px">reorder the ladder on the 🪜 Skill Ladder tab</div>`;
+    pop.scrollIntoView({block:"nearest"});
+  });
+}
+
 /* ---- Store Map integration ---- */
-const S_TABS = ["dash","review","planner","schedule","sequence","pipeline","walk","audit"];
+const S_TABS = ["dash","review","planner","schedule","sequence","pipeline","walk","audit","ladder","matrix"];
 const RENDERERS = {dash:renderDash, review:renderReview, planner:renderPlanner,
-  sequence:renderSequence, pipeline:renderPipeline, walk:renderWalk, audit:renderAudit};
+  sequence:renderSequence, pipeline:renderPipeline, walk:renderWalk, audit:renderAudit,
+  ladder:renderLadder, matrix:renderMatrix};
 let ACTIVE_S = null, BOOTED = false, BOOTING = false;
 function schedRerender(){
   if(ACTIVE_S && RENDERERS[ACTIVE_S]) RENDERERS[ACTIVE_S]();

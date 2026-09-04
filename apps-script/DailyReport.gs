@@ -210,6 +210,10 @@ function doGet(e) {
     try { return json_(timeLogRows_(Number(e.parameter.days) || 90)); }
     catch (err) { return json_({error: String(err), rows: []}); }
   }
+  if (e && e.parameter && e.parameter.fn === 'specialties') {
+    try { return json_(specialtiesRows_()); }
+    catch (err) { return json_({error: String(err), rows: []}); }
+  }
   if (e && e.parameter && e.parameter.fn === 'appupdates') {
     try { return json_(appUpdatesRows_()); }
     catch (err) { return json_({error: String(err), rows: []}); }
@@ -940,6 +944,22 @@ function doPost(e) {
       }
       try { return json_(saleSweep_(who)); }
       catch (eSW) { return json_({error: String(eSW).slice(0, 200)}); }
+    }
+    if (req.action === 'specset') {
+      // 🪜 Specialties ladder/matrix edits (Brigham 9/4): level changes and
+      // ladder re-ranks. Managers/owners only.
+      if (!timelogAdmin_(req._g) && !payrollAdmin_(req._g)) {
+        return json_({error: 'Managers and owners only.'});
+      }
+      try { return json_(specSet_(req, who)); }
+      catch (eSP) { return json_({error: String(eSP).slice(0, 200)}); }
+    }
+    if (req.action === 'specseed') {
+      if (!settingsAdmin_(req._g) && req.pin !== 'pianoman' && req.pin !== TEAM_PIN) {
+        return json_({error: 'not allowed'});
+      }
+      try { return json_(specSeed_(req, who)); }
+      catch (eSS) { return json_({error: String(eSS).slice(0, 200)}); }
     }
     if (req.action === 'clstepmedia') {
       // 🎬 per-step training media (Brigham 9/4): attach a training video
@@ -1769,6 +1789,88 @@ function setTrack_(req) {
           previous: prev, track: val};
 }
 
+/* 🪜 Specialties store — "Specialties" tab on the report sheet, one row per
+ * skill×tech: Skill | Tech | Level 0-6 | Rank | Note | Updated | By.
+ * Levels: 0 n/a · 1 Trainee · 2 Trained · 3 Competent · 4 Reliable ·
+ * 5 Expert · 6 Best in Shop (one per skill). Rank = ladder order. */
+function specSheet_() {
+  var ss = SpreadsheetApp.openById('11RoeVRETag5rZYX6_tEH-rf6x8JL0JeZU0P5AT0WI-I');
+  var sh = ss.getSheetByName('Specialties');
+  if (!sh) {
+    sh = ss.insertSheet('Specialties', ss.getSheets().length);
+    sh.getRange(1, 1, 1, 7).setValues([['Skill', 'Tech', 'Level', 'Rank', 'Note', 'Updated', 'By']]);
+  }
+  return sh;
+}
+function specialtiesRows_() {
+  var v = specSheet_().getDataRange().getValues();
+  var rows = [], skills = [];
+  for (var i = 1; i < v.length; i++) {
+    var sk = String(v[i][0] || '').trim();
+    if (!sk) continue;
+    if (skills.indexOf(sk) < 0) skills.push(sk);
+    rows.push({skill: sk, tech: String(v[i][1] || '').trim(), level: Number(v[i][2]) || 0,
+      rank: Number(v[i][3]) || 0, note: String(v[i][4] || ''), updated: String(v[i][5] || '')});
+  }
+  return {ok: true, skills: skills, rows: rows};
+}
+function specSet_(req, who) {
+  var sh = specSheet_();
+  var v = sh.getDataRange().getValues();
+  var skill = String(req.skill || '').trim();
+  if (!skill) throw new Error('skill required');
+  var today = Utilities.formatDate(new Date(), 'America/Denver', 'M/d/yy');
+  if (req.order && req.order.length) {   // whole-ladder re-rank in one write
+    var want = {};
+    for (var o = 0; o < req.order.length; o++) want[String(req.order[o]).trim().toLowerCase()] = o + 1;
+    var nSet = 0;
+    for (var r2 = 1; r2 < v.length; r2++) {
+      if (String(v[r2][0] || '').trim() !== skill) continue;
+      var t = String(v[r2][1] || '').trim().toLowerCase();
+      if (want[t] != null) {
+        sh.getRange(r2 + 1, 4).setValue(want[t]);
+        sh.getRange(r2 + 1, 6, 1, 2).setValues([[today, who]]);
+        nSet++;
+      }
+    }
+    logAct_(who, 'Specialties', skill, 'ladder reordered (' + nSet + ' techs)');
+    return {ok: true, ranked: nSet};
+  }
+  var tech = String(req.tech || '').trim();
+  if (!tech) throw new Error('tech required');
+  var lvl = parseInt(req.level, 10);
+  if (isNaN(lvl) || lvl < 0 || lvl > 6) throw new Error('level must be 0-6');
+  var rowN = -1, maxRank = 0;
+  for (var r = 1; r < v.length; r++) {
+    if (String(v[r][0] || '').trim() !== skill) continue;
+    maxRank = Math.max(maxRank, Number(v[r][3]) || 0);
+    if (String(v[r][1] || '').trim().toLowerCase() === tech.toLowerCase()) rowN = r + 1;
+  }
+  if (rowN < 0) {
+    sh.appendRow([skill, tech, lvl, maxRank + 1, String(req.note || '').slice(0, 140), today, who]);
+  } else {
+    sh.getRange(rowN, 3).setValue(lvl);
+    if (req.note != null) sh.getRange(rowN, 5).setValue(String(req.note).slice(0, 140));
+    sh.getRange(rowN, 6, 1, 2).setValues([[today, who]]);
+  }
+  logAct_(who, 'Specialties', tech, skill + ' → level ' + lvl);
+  return {ok: true};
+}
+function specSeed_(req, who) {
+  var rows = req.rows || [];
+  if (!rows.length || rows.length > 600) throw new Error('rows 1-600 required');
+  var sh = specSheet_();
+  sh.clearContents();
+  var out = [['Skill', 'Tech', 'Level', 'Rank', 'Note', 'Updated', 'By']];
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i];
+    out.push([String(r[0] || ''), String(r[1] || ''), Number(r[2]) || 0, Number(r[3]) || 0,
+      String(r[4] || '').slice(0, 140), String(r[5] || ''), String(r[6] || '')]);
+  }
+  sh.getRange(1, 1, out.length, 7).setValues(out);
+  logAct_(who, 'Specialties', '', 'seeded ' + rows.length + ' rows');
+  return {ok: true, rows: rows.length};
+}
 // 🎬 attach training media to a Phase Checklists step. Video entries live in
 // col H ('ytid@sec|Title' or 'drive:FILEID|Title', ';;'-joined); photos in
 // col I ('FILEID|Caption', ';;'-joined). Uploaded files land in the

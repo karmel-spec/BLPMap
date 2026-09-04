@@ -4640,12 +4640,19 @@ function popHTML(p) {
     ${tracker}
     ${keysRow}
     ${colors}
+    ${(() => {
+      // 📜 contract text shows IN FULL on the card (Brigham 9/4) — the
+      // textarea below only edits the shop's own added instructions
+      const scLines = String(p.scopeNotes || '').split('\n');
+      const ctr = scLines.filter(l => l.trim().startsWith('📜'));
+      return ctr.length ? `<div class="ctrfull" style="background:#fbf7ee;border:1px solid #e2d7bb;border-left:4px solid #9e2020;border-radius:0 10px 10px 0;padding:9px 11px;margin:4px 0 8px;font-size:13px;line-height:1.55;white-space:pre-wrap;word-break:break-word">${ctr.map(esc).join('\n')}</div>` : '';
+    })()}
     <div class="row" style="align-items:flex-start">Special<br>instructions
       <span style="flex:1;min-width:0;margin-left:8px">
         <textarea class="scopenote" rows="2" maxlength="500"
-          placeholder="anything the whole job must honor — client requests, must-keeps, cautions">${esc(p.scopeNotes || '')}</textarea>
+          placeholder="anything the whole job must honor — client requests, must-keeps, cautions">${esc(String(p.scopeNotes || '').split('\n').filter(l => !l.trim().startsWith('📜')).join('\n').trim())}</textarea>
         <div class="scopemsg phmsg"></div>
-        <div class="lite" style="font-size:11px">saves here AND into 📝 Notes below</div>
+        <div class="lite" style="font-size:11px">saves here AND into 📝 Notes below${String(p.scopeNotes || '').includes('📜') ? ' · the 📜 contract text above stays put' : ''}</div>
       </span></div>
     ${isPayrollAdmin() || isOwner() ? `<div class="row"><button class="ctrbtn">📜 Owner contract & selections</button></div>
       <div class="ctrout"></div>` : ''}`) : '';
@@ -5691,9 +5698,14 @@ function wirePop(p) {
     // note into the general 📝 Notes (Brigham 9/4)
     const scIn = pop.querySelector('.scopenote');
     if (scIn) {
-      let scTimer = null, scLast = (p.scopeNotes || '').trim();
+      // the textarea edits only the NON-contract lines; 📜 lines are pinned
+      // above and re-joined on save so the sheet cell keeps the contract
+      const scCtr = String(p.scopeNotes || '').split('\n').filter(l => l.trim().startsWith('📜'));
+      const scJoin = txt => scCtr.concat(txt ? [txt] : []).join('\n');
+      let scTimer = null, scLast = scJoin(String(p.scopeNotes || '').split('\n')
+        .filter(l => !l.trim().startsWith('📜')).join('\n').trim());
       const scSave = async () => {
-        const val = scIn.value.trim();
+        const val = scJoin(scIn.value.trim());
         if (val === scLast) return;
         const wa = writeAuth();
         const sm = pop.querySelector('.scopemsg');
@@ -11946,6 +11958,7 @@ const SCHED_TABS = [
   ['dash', '📊 Dashboard'], ['review', '📝 Weekly Review'], ['planner', '🧮 Planner'],
   ['schedule', '📆 Schedule'], ['sequence', '🔢 Sequence'],
   ['pipeline', '🚰 Pipeline'], ['walk', '🚶 Walk-the-Shop'], ['audit', '🧪 Card Audit'],
+  ['ladder', '🪜 Skill Ladder'], ['matrix', '🔢 Versatility Matrix'],
 ];
 const SCHED = {tab: 'planner'};
 function renderSched() {
