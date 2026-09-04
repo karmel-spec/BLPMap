@@ -640,6 +640,34 @@ async function postTask(p, pop, fields) {
   return false;
 }
 
+/* 🔑 Keytop Queue popup (Brigham 9/4): every piano with an open keytop
+ * status, queue order first — tap a row to jump to its card. */
+function openKeytopQ() {
+  const rows = S.data.pianos.filter(x => x.active && (x.keytopStatus || '').trim()
+    && !/^done/i.test(x.keytopStatus));
+  const qn = st => { const m = /#\s*(\d+)/.exec(st || ''); return m ? +m[1] : 999; };
+  rows.sort((a2, b2) => qn(a2.keytopStatus) - qn(b2.keytopStatus)
+    || String(a2.keytopStatus).localeCompare(String(b2.keytopStatus)));
+  const old = document.querySelector('.dsheetov'); if (old) old.remove();
+  const ov = document.createElement('div');
+  ov.className = 'dsheetov';
+  ov.innerHTML = `<div class="dsheet" style="max-height:80vh;overflow:auto"><button class="dsx">✕</button>
+    <h3>🔑 Keytop Queue</h3>
+    <div class="dssub">${rows.length} piano${rows.length === 1 ? '' : 's'} with open keytop work · tap one to open its card</div>
+    ${rows.map(x => `<div class="kqrow" data-row="${x.row}" style="display:flex;gap:10px;align-items:center;padding:8px 2px;border-top:1px solid #f0ece5;cursor:pointer">
+      <b style="min-width:88px;color:#9e2020">${esc(x.keytopStatus)}</b>
+      <span style="flex:1">${esc(x.summary || '')} <span class="lite">#${esc(x.serial)}</span></span>
+      <span class="lite">${esc(x.location || '')}</span></div>`).join('')
+      || '<div class="empty">Nothing in the keytop queue 🎉</div>'}`;
+  document.body.appendChild(ov);
+  ov.querySelector('.dsx').onclick = () => ov.remove();
+  ov.onclick = ev => { if (ev.target === ov) ov.remove(); };
+  ov.querySelectorAll('.kqrow').forEach(r2 => r2.onclick = () => {
+    ov.remove();
+    const p2 = S.data.pianos.find(x => x.row === +r2.dataset.row);
+    if (p2) { switchView('map'); focusPiano(p2); openPop(p2.row, S.popAnchor, true); }
+  });
+}
 /* ---- tech specialties: who to assign for the current phase ---- */
 const PHASE_TO_AREA = {
   'CAP': 'CAP', 'PRSB & Plate Refinishing': 'PRSB', 'Lacquer Soundboard': 'lacquer soundboard',
@@ -2997,6 +3025,18 @@ function renderMap() {
       <text x="${x}" y="${y - 30}" text-anchor="middle" class="templbl" font-size="9">TEMP</text>
       ${glyph(p.type, x, y + 3, 1.05)}${phaseText(p, x, y + 3, 1.05)}${ghostBadge(p, x, y + 3, 1.05)}</g>`;
   });
+  // 🔑 Keytop Queue box by the Key Top Corner (Brigham 9/4) — tap for the
+  // live keytop queue (Evaluate / In Key Queue #n / In Progress)
+  if (S.floor === 0) {
+    const kq = S.data.pianos.filter(x => x.active && (x.keytopStatus || '').trim()
+      && !/^done/i.test(x.keytopStatus)).length;
+    s += `<g class="kqbtn" style="cursor:pointer">
+      <rect x="1530" y="893" width="278" height="188" rx="10" class="kqrect"/>
+      <text x="1669" y="965" text-anchor="middle" class="kqtxt" font-size="34">🔑</text>
+      <text x="1669" y="1006" text-anchor="middle" class="kqtxt" font-size="22" font-weight="800">Keytop Q</text>
+      <text x="1669" y="1036" text-anchor="middle" class="kqtxt kqcount" font-size="16">${kq} in queue ›</text>
+    </g>`;
+  }
   S.drawW = drawW; S.drawH = drawH;
 
   const svg = $('#plan');
@@ -3062,6 +3102,8 @@ function renderMap() {
   }
   svg.querySelectorAll('.cabunitbox, .cabunitnum, .cabcntc, .cabcnt2').forEach(el =>
     el.addEventListener('click', ev => { ev.stopPropagation(); openCabUnitModal(el.dataset.unit); }));
+  const kqb = svg.querySelector('.kqbtn');
+  if (kqb) kqb.addEventListener('click', ev => { ev.stopPropagation(); openKeytopQ(); });
   sizePlan();
   // cards open on CLICK only (082726hales16) — hover-open made panning the
   // map spray cards everywhere; hover now just shows the cursor affordance
