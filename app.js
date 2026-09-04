@@ -8182,15 +8182,7 @@ function renderAuth() {
         if (confirm('Sign out ' + (u.name || 'this user') + '?\n\nThe sign-in screen comes back so the next person can log in as themselves.')) signOut();
       };
       m.hidden = false;
-      const r = tw.getBoundingClientRect();   // pin under the chip, clamped in the viewport
-      const menuW = Math.max(190, m.offsetWidth || 0);
-      const right = Math.min(
-        Math.max(8, window.innerWidth - r.right),
-        Math.max(8, window.innerWidth - menuW - 8));
-      m.style.position = 'fixed';
-      m.style.top = (r.bottom + 6) + 'px';
-      m.style.right = right + 'px';
-      m.style.left = 'auto';
+      placeTopMenu(tw, m);   // pin under the chip (inline when in the drawer)
     };
     document.addEventListener('click', e => {
       if (!e.target.closest('#topWho') && !e.target.closest('#whoTopMenu')) {
@@ -13032,17 +13024,7 @@ if (appsTopBtn) {
   appsTopBtn.onclick = () => {
     const m = $('#appsTopMenu');
     m.hidden = !m.hidden;
-    if (!m.hidden) {
-      const r = appsTopBtn.getBoundingClientRect();
-      const menuW = Math.max(190, m.offsetWidth || 0);
-      const right = Math.min(
-        Math.max(8, window.innerWidth - r.right),
-        Math.max(8, window.innerWidth - menuW - 8));
-      m.style.position = 'fixed';
-      m.style.top = (r.bottom + 6) + 'px';
-      m.style.right = right + 'px';
-      m.style.left = 'auto';
-    }
+    if (!m.hidden) placeTopMenu(appsTopBtn, m);
   };
   document.addEventListener('click', e => {
     if (!e.target.closest('#appsTopBtn') && !e.target.closest('#appsTopMenu')) {
@@ -13051,26 +13033,39 @@ if (appsTopBtn) {
   });
 }
 
+/* Top-bar dropdown placement. On mobile these buttons live inside the ☰
+ * drawer, whose CSS transform makes position:fixed behave like absolute-in-
+ * the-drawer — the menu ran off the drawer's left edge and got clipped
+ * (Mark 090426hales31). Inside the drawer the menu now flows INLINE under
+ * its button instead. */
+function placeTopMenu(btn, m) {
+  if (btn.closest('.side')) {
+    m.style.position = 'static';
+    m.style.width = '100%';
+    m.style.boxSizing = 'border-box';
+    m.style.top = m.style.right = m.style.left = 'auto';
+    m.style.margin = '6px 0';
+    return;
+  }
+  const r = btn.getBoundingClientRect();
+  const menuW = Math.max(190, m.offsetWidth || 0);
+  const right = Math.min(
+    Math.max(8, window.innerWidth - r.right),
+    Math.max(8, window.innerWidth - menuW - 8));
+  m.style.position = 'fixed';
+  m.style.width = '';
+  m.style.margin = '';
+  m.style.top = (r.bottom + 6) + 'px';
+  m.style.right = right + 'px';
+  m.style.left = 'auto';
+}
 // top-bar 📨 Request menu — general requests, no piano required
 const topReqBtn = $('#reqTopBtn');
 if (topReqBtn) {
   topReqBtn.onclick = () => {
     const m = $('#reqTopMenu');
     m.hidden = !m.hidden;
-    if (!m.hidden) {
-      // pin under the button but clamp inside the viewport — on small
-      // screens the button can sit far left, and a right-anchored 190px
-      // menu would otherwise run off the left edge
-      const r = topReqBtn.getBoundingClientRect();
-      const menuW = Math.max(190, m.offsetWidth || 0);
-      const right = Math.min(
-        Math.max(8, window.innerWidth - r.right),
-        Math.max(8, window.innerWidth - menuW - 8));
-      m.style.position = 'fixed';
-      m.style.top = (r.bottom + 6) + 'px';
-      m.style.right = right + 'px';
-      m.style.left = 'auto';
-    }
+    if (!m.hidden) placeTopMenu(topReqBtn, m);
   };
   document.addEventListener('click', e => {
     if (!e.target.closest('#reqTopBtn') && !e.target.closest('#reqTopMenu')) {
