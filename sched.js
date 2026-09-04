@@ -1085,8 +1085,8 @@ const PHASES=[
   {id:"ASSESS",   ph:"Assessment",               en:"Assessment",         es:"Evaluación",          code:"", hb:["Tear-down Sheet (§16)","Upright Teardown: Cleaning & Prep","Grand Teardown: Cleaning & Prep","Storing Cabinetry (§14)"]},
   {id:"CAP",      ph:"CAP",                      en:"CAP",                es:"CAP",                 code:"Cleaning · Action Prep", hb:["Cleaning and Prep","Action Prep","Reshape Hammers","Hammer Prep & Hanging","Keys (§13)"]},
   {id:"PRSBA",    ph:"PRSBa - Pre-Plate",        en:"PRSBa · Pre-Plate",  es:"PRSBa · sin placa",   code:"Perimeter · Ribs · Soundboard · Bridge — mini-QC before the plate", hb:["Find Proper Downbearing: Targets","How to Chisel a Bridge"]},
-  {id:"PRSBB",    ph:"PRSBb - Plate In",         en:"PRSBb · Plate In",   es:"PRSBb · placa puesta",code:"Plate back in — finish out", hb:[]},
   {id:"LACQUER",  ph:"Lacquer Soundboard",       en:"Lacquer Soundboard", es:"Laca de tabla",       code:"", hb:[]},
+  {id:"PRSBB",    ph:"PRSBb - Plate In",         en:"PRSBb · Plate In",   es:"PRSBb · placa puesta",code:"Plate back in — finish out", hb:[]},
   {id:"RESTRING", ph:"Restringing",              en:"Restringing",        es:"Encordado",           code:"", hb:["Restringing (§12)","Removing Tuning Pins"]},
   {id:"CHIPTUNE", ph:"Chip Tuning",              en:"Chip Tuning",        es:"Afinación de asiento",code:"", hb:[]},
   {id:"DHRT",     ph:"DHRT",                     en:"DHRT",               es:"DHRT",                code:"Dampers · Hammers · Regulation · Trapwork", hb:["Upright Regulation","Grand Piano Regulation Theory","Key Leveling","Tricks for Let Off Regulation","Aligning Backchecks","Damper Lift","Damper Spoon Regulation","Spring Strength, Drop, and Dip"]},
@@ -1181,8 +1181,8 @@ const AUD_STEMS=[
   ["Tuning",/tun(e|ed|ing)/],
   ["Exit Prep - Admin",/exit prep/],
 ];
-const PH_ORDER=["New Arrival - Admin","Assessment","CAP","PRSBa - Pre-Plate","PRSBb - Plate In",
-  "Lacquer Soundboard","Restringing","Chip Tuning","DHRT","1st Tuning","Refinishing",
+const PH_ORDER=["New Arrival - Admin","Assessment","CAP","PRSBa - Pre-Plate","Lacquer Soundboard","PRSBb - Plate In",
+  "Restringing","Chip Tuning","DHRT","1st Tuning","Refinishing",
   "QC & Assembly","2nd Tuning","Exit Prep - Admin"];
 const AUD_FAMILY=ph=>{
   const s=String(ph||"");

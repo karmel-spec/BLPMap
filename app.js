@@ -16,18 +16,21 @@ const BRIGHAM_API = 'https://blpsalesapp.netlify.app/.netlify/functions/brigham-
 // 9/4: PRSB split in two — the mini-QC must inspect PRSB work BEFORE the
 // plate goes back in (once installed it hides the work and rework is off
 // the table). 4a = up to plate-ready; 4b = plate back in, finish out.
+// Lacquer Soundboard sits BETWEEN the PRSB halves (Brigham 9/4): the
+// soundboard gets lacquered while the plate is still out.
 const PHASES = ['New Arrival - Admin', 'Assessment', 'CAP',
-  'PRSBa - Pre-Plate', 'PRSBb - Plate In', 'Lacquer Soundboard', 'Restringing',
+  'PRSBa - Pre-Plate', 'Lacquer Soundboard', 'PRSBb - Plate In', 'Restringing',
   'Chip Tuning', 'DHRT', '1st Tuning', 'Refinishing', 'QC & Assembly',
   '2nd Tuning', 'Exit Prep - Admin', 'Delivered'];
 // keep the team's phase NUMBERS stable (training doc says DHRT is 8):
 // the two PRSB halves are 4a and 4b, everything after keeps its old number
 const PHASE_NUMS = (() => {
-  const m = {}; let n = 0;
+  const m = {}; let n = 0, prsbN = 0;
   PHASES.forEach(ph => {
-    if (ph === 'PRSBb - Plate In') { m[ph] = n + 'b'; return; }
+    if (ph === 'PRSBb - Plate In') { m[ph] = prsbN + 'b'; return; }
     n += 1;
-    m[ph] = ph === 'PRSBa - Pre-Plate' ? n + 'a' : String(n);
+    if (ph === 'PRSBa - Pre-Plate') { prsbN = n; m[ph] = n + 'a'; }
+    else m[ph] = String(n);
   });
   return m;
 })();
@@ -431,9 +434,13 @@ function pianoPhases(p) {
       anchor += 1;
     }
   }
-  // track sheets say "PRSB" (→ PRSBa); the plate-in half always follows it
+  // track sheets say "PRSB" (→ PRSBa); the plate-in half follows it, AFTER
+  // Lacquer Soundboard when the track lacquers (plate stays out for lacquer)
   const ai = seq.indexOf('PRSBa - Pre-Plate');
-  if (ai >= 0 && !seq.includes('PRSBb - Plate In')) seq.splice(ai + 1, 0, 'PRSBb - Plate In');
+  if (ai >= 0 && !seq.includes('PRSBb - Plate In')) {
+    const at = seq[ai + 1] === 'Lacquer Soundboard' ? ai + 2 : ai + 1;
+    seq.splice(at, 0, 'PRSBb - Plate In');
+  }
   return seq;
 }
 function phaseOptions(p, effPh) {
@@ -12735,7 +12742,7 @@ const LEGEND_LISTS = {
 };
 // the 13 working phases share one pattern — key ph0..ph12
 [['1N', 'New Arrival - Admin'], ['2A', 'Assessment'], ['3C', 'CAP'],
- ['4aP', 'PRSBa - Pre-Plate'], ['4bP', 'PRSBb - Plate In'], ['5L', 'Lacquer Soundboard'], ['6R', 'Restringing'],
+ ['4aP', 'PRSBa - Pre-Plate'], ['5L', 'Lacquer Soundboard'], ['4bP', 'PRSBb - Plate In'], ['6R', 'Restringing'],
  ['7C', 'Chip Tuning'], ['8D', 'DHRT'], ['9T', '1st Tuning'], ['10R', 'Refinishing'],
  ['11QC', 'QC & Assembly'], ['12T', '2nd Tuning'], ['13E', 'Exit Prep - Admin']]
   .forEach(([code, name], i) => {
