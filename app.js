@@ -3696,7 +3696,7 @@ async function punchVerify(action, p, phase, fallbackMsg) {
  * techs. Advancing OUT of a checklist phase requires a manager mini-QC:
  * request → text to Mark (30-min escalation to Mark+Karmel) → C-rail
  * inspection → pass advances the phase, fail creates a 🔁 Rework card. */
-const QC_PHASES = ['CAP', 'PRSBa - Pre-Plate'];   // pilot — add phases here as checklists are seeded; PRSBa MUST stay (plate hides the work after)
+const QC_PHASES = ['CAP', 'PRSBa - Pre-Plate', 'QC & Assembly'];   // PRSBa MUST stay (plate hides the work after); QC & Assembly = mini-QC of the QC (Brigham 9/4)
 // acronym school (Brigham 9/3): TRAINING mode spells acronyms out so newbies
 // learn them; trained techs see the acronyms alone everywhere else.
 const PHASE_LONG = {
@@ -3733,8 +3733,9 @@ async function clFetch(serial, phase, force) {
     if (j.glossary) CL.glossary = j.glossary;
     const done = new Set((j.checks || []).filter(c => !c.skipped).map(c => c.step));
     const skips = new Map((j.checks || []).filter(c => c.skipped).map(c => [c.step, c.note || '']));
-    CL.cache[k] = {at: Date.now(), items: j.items || [], done, skips, request: j.request || null};
-  } catch (e) { CL.cache[k] = CL.cache[k] || {at: 0, items: [], done: new Set(), skips: new Map(), request: null}; }
+    const notes = new Map((j.checks || []).filter(c => !c.skipped && (c.note || '').trim()).map(c => [c.step, c.note]));
+    CL.cache[k] = {at: Date.now(), items: j.items || [], done, skips, notes, request: j.request || null};
+  } catch (e) { CL.cache[k] = CL.cache[k] || {at: 0, items: [], done: new Set(), skips: new Map(), notes: new Map(), request: null}; }
   return CL.cache[k];
 }
 /* 📖 tap-to-learn glossary (Brigham 9/3): terms from the Glossary sheet tab
@@ -3871,10 +3872,26 @@ async function openWorkChecklist(serial, phase) {
   ov.className = 'dsheetov';
   document.body.appendChild(ov);
   const close = () => { ov.remove(); updateClPill(); };
-  const save = (idx, done) => { st.skips.delete(idx); done ? st.done.add(idx) : st.done.delete(idx); clToggle(serial, phase, idx, done); };
+  st.notes = st.notes || new Map();
+  const pendNotes = new Map();   // notes typed before the item is checked — ride along with the check
+  const save = (idx, done) => {
+    st.skips.delete(idx);
+    done ? st.done.add(idx) : st.done.delete(idx);
+    const note = pendNotes.get(idx) || st.notes.get(idx) || '';
+    if (done && pendNotes.has(idx)) { st.notes.set(idx, pendNotes.get(idx)); pendNotes.delete(idx); }
+    if (!done) st.notes.delete(idx);
+    clToggle(serial, phase, idx, done, false, done ? note : '');
+  };
+  // 📝 a note on any checklist item (Brigham 9/4, QC digitization) — saves
+  // with the check; typed before checking, it rides along when checked
+  const saveNote = (idx, note) => {
+    if (st.done.has(idx)) { st.notes.set(idx, note); clToggle(serial, phase, idx, true, false, note); }
+    else pendNotes.set(idx, note);
+  };
   // a skipped step needs the WHY — it shows amber here and on the mini-QC rail
   const saveSkip = (idx, note) => { st.done.delete(idx); st.skips.set(idx, note); clToggle(serial, phase, idx, true, true, note); };
   let skipAsk = null;   // step index currently being asked for a skip reason
+  let noteAsk = null;   // step index with the 📝 note input open
   let mediaEdit = null; // step index with the 🎬 training-media editor open
   const canMedia = isOwner() || isTimelogAdmin();
   if (!coach) {
@@ -3898,10 +3915,16 @@ async function openWorkChecklist(serial, phase) {
             <span style="font-size:10px;letter-spacing:1px;color:#9e2020;text-transform:uppercase">${esc(it.section)}</span><br>
             ${esc(it.text)}${it.detail && !isDone && !isSkip ? `<div style="font-size:11.5px;color:#9a5b13">⚠ ${esc(it.detail)}</div>` : ''}
             ${!isDone && !isSkip ? clMediaRow(it) : ''}
+            ${(st.notes.get(it.i) || pendNotes.get(it.i)) ? `<div style="font-size:11.5px;color:#274b6d">📝 ${esc(st.notes.get(it.i) || pendNotes.get(it.i))}${pendNotes.has(it.i) ? ' <i style="color:#8a847b">(saves with the check)</i>' : ''}</div>` : ''}
             ${isSkip ? `<div style="font-size:11.5px;color:#9a5b13">⏭ skipped — ${esc(st.skips.get(it.i))} <u>undo</u></div>` : ''}</div>
+          <button class="clnote" data-i="${it.i}" title="add a note on this item" style="border:1px solid #cfdcec;background:none;border-radius:8px;padding:3px 7px;color:#3a6ea5;font-size:12px;flex:0 0 auto;height:26px">📝</button>
           ${canMedia ? `<button class="clmed" data-i="${it.i}" title="attach a training video / photo to this step" style="border:1px solid #cfdcec;background:none;border-radius:8px;padding:3px 7px;color:#3a6ea5;font-size:12px;flex:0 0 auto;height:26px">🎬</button>` : ''}
           ${!isDone && !isSkip ? `<button class="clskip" data-i="${it.i}" style="border:1px solid #cfc9bf;background:none;border-radius:8px;padding:3px 8px;color:#9a5b13;font-size:11px;flex:0 0 auto;height:26px">Skip</button>` : ''}
           </div>
+          ${noteAsk === it.i ? `<div style="display:flex;gap:6px;padding:0 2px 10px 30px">
+            <input class="clnotewhy" value="${esc(st.notes.get(it.i) || pendNotes.get(it.i) || '')}" placeholder="note on this item — saves with the checklist" maxlength="200"
+              style="flex:1;font:500 12.5px/1.3 inherit;padding:6px 8px;border:1.5px solid #3a6ea5;border-radius:8px">
+            <button class="clnotego csvbtn" style="background:#3a6ea5">Save</button></div>` : ''}
           ${skipAsk === it.i ? `<div style="display:flex;gap:6px;padding:0 2px 10px 30px">
             <input class="clskipwhy" placeholder="why can't this step be done here?" maxlength="180"
               style="flex:1;font:500 12.5px/1.3 inherit;padding:6px 8px;border:1.5px solid #c9a227;border-radius:8px">
@@ -3937,6 +3960,21 @@ async function openWorkChecklist(serial, phase) {
         mediaEdit = mediaEdit === +b.dataset.i ? null : +b.dataset.i;
         render();
       });
+      ov.querySelectorAll('.clnote').forEach(b => b.onclick = ev => {
+        ev.stopPropagation();
+        noteAsk = noteAsk === +b.dataset.i ? null : +b.dataset.i;
+        render();
+        const inp = ov.querySelector('.clnotewhy'); if (inp) inp.focus();
+      });
+      const ngo = ov.querySelector('.clnotego');
+      if (ngo) ngo.onclick = ev => {
+        ev.stopPropagation();
+        const inp = ov.querySelector('.clnotewhy');
+        saveNote(noteAsk, (inp.value || '').trim());
+        noteAsk = null; render();
+      };
+      const nin = ov.querySelector('.clnotewhy');
+      if (nin) { nin.onclick = ev => ev.stopPropagation(); nin.onkeydown = ev => { if (ev.key === 'Enter') ngo.click(); }; }
       const mbox = ov.querySelector('.clmedbox');
       if (mbox) {
         mbox.onclick = ev => ev.stopPropagation();
@@ -4117,6 +4155,10 @@ async function openQcRail(id) {
         <b style="font-size:12px;color:#9a5b13">⏭ Skipped work steps — check the reasons hold up:</b>
         ${skippedWork.map(it => `<div style="font-size:12px;margin-top:4px">• ${esc(it.text)}<br>
           <span style="color:#9a5b13">↳ ${esc(st.skips.get(it.i))}</span></div>`).join('')}</div>` : ''}
+      ${(st.notes && st.notes.size) ? `<div style="background:#f2f6fb;border-radius:10px;padding:8px 10px;margin:8px 0">
+        <b style="font-size:12px;color:#274b6d">📝 The tech's notes on checklist items:</b>
+        ${workItems.filter(it => st.notes.has(it.i)).map(it => `<div style="font-size:12px;margin-top:4px">• ${esc(it.text.slice(0, 90))}<br>
+          <span style="color:#274b6d">↳ ${esc(st.notes.get(it.i))}</span></div>`).join('')}</div>` : ''}
       ${items.map(it => {
         const vd = v[it.text];
         return `<div style="padding:9px 2px;border-top:1px solid #f0ece5">
