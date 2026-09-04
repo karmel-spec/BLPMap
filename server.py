@@ -141,6 +141,8 @@ def parse_pianos(raw):
                           if h.strip().upper() == 'BENCH LOCATION'), -1)
     plate_hw_idx = next((i for i, h in enumerate(hdr)
                          if h.strip().upper() == 'PLATE HW LOCATION'), -1)
+    plate_temp_idx = next((i for i, h in enumerate(hdr)
+                           if h.strip().upper() == 'PLATE TEMP SPOT'), -1)
     scope_notes_idx = next((i for i, h in enumerate(hdr)
                             if h.strip().upper() == 'SCOPE NOTES'), -1)
     keytop_idx = next((i for i, h in enumerate(hdr)
@@ -244,6 +246,7 @@ def parse_pianos(raw):
             'bench': col(19)[:60], 'plan': col(23)[:220],
             'benchLoc': (col(bench_loc_idx) if bench_loc_idx >= 0 else '')[:80],
             'plateHw': (col(plate_hw_idx) if plate_hw_idx >= 0 else '')[:80],
+            'plateTemp': (col(plate_temp_idx) if plate_temp_idx >= 0 else '')[:90],
             'scopeNotes': (col(scope_notes_idx) if scope_notes_idx >= 0 else '')[:500],
             'keytopStatus': (col(keytop_idx) if keytop_idx >= 0 else '')[:40],
             'importantNote': (col(imp_note_idx) if imp_note_idx >= 0 else '')[:200],

@@ -4881,6 +4881,7 @@ function popHTML(p) {
         <button data-req="price">💲 Price Change</button>
         <button data-req="priority">⚡ Priority Scheduling</button>
         <button data-req="brigham">🗒 Brigham Task</button>
+        <button data-req="platetemp">⚙️ Temp plate spot</button>
         ${(isAdminUser() || userRole()) ? `<button data-req="tempspot">📍 Temp map spot</button>` : ''}
         <button data-req="dup" class="reqdanger">🗑 Mark as Duplicate</button>
       </div>` : ''}
@@ -4937,6 +4938,8 @@ function popHTML(p) {
     ${p.serial ? `<div class="row rowflex"><span>🔩 Plate hardware</span>
       <input class="platehwin" maxlength="60" placeholder="bin / shelf / with plate…" value="${esc(p.plateHw || '')}" style="max-width:170px">
       <span class="platehwmsg phmsg"></span></div>` : ''}
+    ${p.serial && (p.plateTemp || '').trim() ? `<div class="row rowflex"><span>⚙️ Plate temp spot</span>
+      <b style="font-size:12.5px">${esc(p.plateTemp)}</b></div>` : ''}
     ${p.serial ? `<div class="row rowflex"><span>🪑 Bench</span><b class="benchloc">${esc(p.benchLoc || '—')}</b></div>
     <div class="movebox benchbox">
         <input class="bnin" placeholder="bench location — spot #, shelf…" maxlength="40"
@@ -5501,6 +5504,7 @@ function wirePop(p) {
     else if (kind === 'touchup') openGenericModal(p, 'Touch Up');
     else if (kind === 'priority') openGenericModal(p, 'Priority Scheduling');
     else if (kind === 'brigham') openBrighamModal(p);
+    else if (kind === 'platetemp') openPlateTempModal(p);
     else if (kind === 'dup') openDuplicateModal(p);
   });
   if (pop.querySelector('.taskbox')) loadTasks(p, pop);
@@ -6972,6 +6976,64 @@ function openPlateAssignModal(slotId) {
 /* the ＋ on an empty spot: type a serial, the piano is found in the Piano
    Log and moved to this spot (existing occupants get bumped to the attic).
    Unknown serials fall back to the full add-a-piano form. */
+/* ⚙️ Temp plate spot (Brigham 9/4): oversized plates that don't fit the
+ * storage slats live in a written-in spot; the same popup marks the plate's
+ * condition BEFORE or AFTER refinishing (rides PLATE STATUS). */
+function openPlateTempModal(p) {
+  popPinned = false; $('#pop').hidden = true;
+  const ov = modalShell('platetempmodal', `
+    <span class="x">✕</span>
+    <h3>⚙️ Temp Plate Spot</h3>
+    <p class="pd">For plates too big for the storage slats — write in where this plate is living and its refinishing condition.</p>
+    <label>Serial number</label>
+    <input class="ptserial" maxlength="20" list="serialList" placeholder="type the piano's serial #" value="${esc(p ? p.serial || '' : '')}">
+    <label>Where is the plate?</label>
+    <input class="ptloc" maxlength="80" placeholder="e.g. leaning behind the buffing room, under bench row 3…">
+    <label>Plate condition</label>
+    <div style="display:flex;gap:8px;margin:4px 0 10px">
+      <button class="trk ptcond" data-v="Plate storage — BEFORE">BEFORE refinishing</button>
+      <button class="trk ptcond" data-v="Plate storage — AFTER">AFTER ✨ refinished</button>
+    </div>
+    <button class="tmgo ptgo">Save the temp plate spot</button>
+    <div class="tmmsg"></div>`);
+  serialDatalist();
+  const sIn = ov.querySelector('.ptserial');
+  attachSerialSuggest(sIn);
+  let cond = '';
+  ov.querySelectorAll('.ptcond').forEach(b => b.onclick = () => {
+    cond = b.dataset.v;
+    ov.querySelectorAll('.ptcond').forEach(x => x.classList.toggle('on', x === b));
+  });
+  ov.querySelector('.ptgo').onclick = async () => {
+    const msg = ov.querySelector('.tmmsg');
+    const serial = sIn.value.trim().split(' ')[0];
+    const loc = ov.querySelector('.ptloc').value.trim();
+    if (!serial) { msg.textContent = 'Which piano? Type the serial #.'; sIn.focus(); return; }
+    if (!loc) { msg.textContent = 'Write in where the plate is.'; ov.querySelector('.ptloc').focus(); return; }
+    const wa = writeAuth();
+    if (!wa.ok) { msg.textContent = 'Sign in with Google (☰ menu) first.'; return; }
+    msg.textContent = 'Saving…';
+    try {
+      const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+        headers: {'content-type': 'text/plain;charset=utf-8'},
+        body: JSON.stringify({pin: wa.pin, action: 'setplatetemp', serial,
+          value: loc + (cond ? (cond.includes('AFTER') ? ' · AFTER refinishing' : ' · BEFORE refinishing') : ''),
+          ...authFields()})});
+      const j = await r.json();
+      if (!j.ok) throw new Error(j.error || 'save failed');
+      if (cond) {
+        await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+          headers: {'content-type': 'text/plain;charset=utf-8'},
+          body: JSON.stringify({pin: wa.pin, action: 'setplatestatus', serial,
+            plateStatus: cond, ...authFields()})});
+      }
+      const px = S.data.pianos.find(x => x.serial === serial || String(x.serial || '').replace(/\D/g, '') === serial.replace(/\D/g, ''));
+      if (px) { px.plateTemp = loc; if (cond) px.plateStatus = cond; }
+      msg.textContent = `✓ Saved — ${j.summary || serial}'s plate spot is on the card.`;
+      setTimeout(() => ov.remove(), 1800);
+    } catch (e) { msg.textContent = '✗ ' + e.message; }
+  };
+}
 function openAssignModal(slotId) {
   popPinned = false; $('#pop').hidden = true;
   const ov = modalShell('assignmodal', `
@@ -12990,6 +13052,7 @@ if (topReqBtn) {
     else if (kind === 'priority') openGenericModal(null, 'Priority Scheduling');
     else if (kind === 'brigham') openBrighamModal(null);
     else if (kind === 'tempspot') tempSpotModal();
+    else if (kind === 'platetemp') openPlateTempModal(null);
     else if (kind === 'timeoff') timeOffModal();
     else if (kind === 'trainreq') trainReqModal();
     else if (kind === 'addpiano') openAddModal(null);

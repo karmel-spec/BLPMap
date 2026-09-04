@@ -115,6 +115,8 @@ function parsePianos(text) {
     ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'BENCH LOCATION') : -1;
   const plateHwIdx = rows[1]
     ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'PLATE HW LOCATION') : -1;
+  const plateTempIdx = rows[1]
+    ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'PLATE TEMP SPOT') : -1;
   const scopeNotesIdx = rows[1]
     ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'SCOPE NOTES') : -1;
   const keytopIdx = rows[1]
@@ -200,6 +202,7 @@ function parsePianos(text) {
       bench: col(19).slice(0, 60), plan: col(23).slice(0, 220),
       benchLoc: benchLocIdx >= 0 ? col(benchLocIdx).slice(0, 80) : '',
       plateHw: plateHwIdx >= 0 ? col(plateHwIdx).slice(0, 80) : '',
+      plateTemp: plateTempIdx >= 0 ? col(plateTempIdx).slice(0, 90) : '',
       scopeNotes: scopeNotesIdx >= 0 ? col(scopeNotesIdx).slice(0, 500) : '',
       keytopStatus: keytopIdx >= 0 ? col(keytopIdx).slice(0, 40) : '',
       importantNote: impNoteIdx >= 0 ? col(impNoteIdx).slice(0, 200) : '',
