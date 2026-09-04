@@ -1814,7 +1814,7 @@ var CAL_SKILL_STEMS = [
 ];
 function calSkillHist_() {
   var cache = CacheService.getScriptCache();
-  var hit = cache.get('calskillhist1');
+  var hit = cache.get('calskillhist2');
   if (hit) return JSON.parse(hit);
   var map = techCalMap_();
   var since = new Date('2024-01-01');
@@ -1828,7 +1828,11 @@ function calSkillHist_() {
     try { evs = cal.getEvents(since, now); } catch (e2) { continue; }
     for (var i = 0; i < evs.length; i++) {
       var title = String(evs[i].getTitle() || '');
-      var sns = title.match(/\d{4,8}/g) || [];
+      // piano YEARS (1905 Steinway…) are not serials — a year-only title
+      // still counts as one job via the serial-less path
+      var sns = (title.match(/\d{4,8}/g) || []).filter(function (t) {
+        var n = +t; return !(n >= 1850 && n <= 2035);
+      });
       for (var s = 0; s < CAL_SKILL_STEMS.length; s++) {
         if (!CAL_SKILL_STEMS[s][1].test(title)) continue;
         var key = first + '|' + CAL_SKILL_STEMS[s][0];
@@ -1843,7 +1847,7 @@ function calSkillHist_() {
   for (var k in out) {
     res.techs[k] = {serials: Object.keys(out[k].serials), extra: out[k].extra};
   }
-  try { cache.put('calskillhist1', JSON.stringify(res), 21600); } catch (e3) {}
+  try { cache.put('calskillhist2', JSON.stringify(res), 21600); } catch (e3) {}
   return res;
 }
 /* 🪜 Specialties store — "Specialties" tab on the report sheet, one row per

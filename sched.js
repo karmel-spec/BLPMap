@@ -1342,7 +1342,8 @@ function needSpecPerf(){
     (REPORTS.entries||[]).forEach(e=>{
       const f=String(e.tech||"").split(/\s+/)[0].toLowerCase(); if(!f) return;
       String(e.text||"").split(/\n/).forEach(line=>{
-        const sns=line.match(/\d{4,8}/g); if(!sns) return;
+        const sns=(line.match(/\d{4,8}/g)||[]).filter(t=>{const n=+t; return !(n>=1850&&n<=2035);});
+        if(!sns.length) return;
         for(const [sk,re] of SPEC_JOB_STEMS){
           if(re.test(line)){ const a=get(f,sk); sns.forEach(s=>a.allSns.add(s)); break; }
         }
