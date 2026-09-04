@@ -6018,6 +6018,7 @@ function contractSync_() {
   }
   var colorCol = pCol('COLOR FIRST PICK'), scopeCol = pCol('SCOPE NOTES'), trackCol = pCol('TRACK');
   if (scopeCol < 0) { scopeCol = sh.getLastColumn() + 1; sh.getRange(2, scopeCol).setValue('SCOPE NOTES'); }
+  if (colorCol < 0) { colorCol = sh.getLastColumn() + 1; sh.getRange(2, colorCol).setValue('COLOR FIRST PICK'); }
   var stamp = Utilities.formatDate(new Date(), 'America/Denver', 'M/d/yy');
   var synced = [], skipped = 0;
   for (var r = 1; r < v.length; r++) {
@@ -6052,13 +6053,17 @@ function contractSync_() {
     if (senti && !/^n\/?a$/i.test(senti)) parts.push('⚠ Sentimental: ' + senti.slice(0, 110));
     if (/^yes/i.test(tune)) parts.push('+ tuning before delivery');
     if (oNotes) parts.push('Owner: ' + oNotes.slice(0, 150));
-    var block = '📜 Contract ' + String(v[r][0] || '').split(' ')[0] + ' (' + S9(3) + ') — ' + parts.join(' · ');
+    var when0 = v[r][0];
+    var whenStr = (when0 instanceof Date)
+      ? Utilities.formatDate(when0, 'America/Denver', 'M/d/yy')
+      : String(when0 || '').split(' ')[0];
+    var block = '📜 Contract ' + whenStr + ' (' + S9(3) + ') — ' + parts.join(' · ');
     var prevScope = String(sh.getRange(f.row, scopeCol).getValue() || '').trim();
     if (prevScope.indexOf('📜 Contract') < 0) {
       sh.getRange(f.row, scopeCol).setValue((block + (prevScope ? '\n' + prevScope : '')).slice(0, 500));
+      addPianoNote_(sh, f.row, 'Contract sync', block.slice(0, 280));
+      logAct_('Contract sync', 'Scope of Work from contract', f.summary || digits, parts.join(' · ').slice(0, 150));
     }
-    addPianoNote_(sh, f.row, 'Contract sync', block.slice(0, 280));
-    logAct_('Contract sync', 'Scope of Work from contract', f.summary || digits, parts.join(' · ').slice(0, 150));
     cs.getRange(r + 1, mCol).setValue('✓ ' + stamp);
     synced.push({serial: digits, piano: f.summary});
     if (synced.length >= 12) break;   // stay well inside the execution limit
