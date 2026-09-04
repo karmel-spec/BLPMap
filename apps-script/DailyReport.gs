@@ -930,6 +930,22 @@ function doPost(e) {
       PERM_MEMO = null;
       return json_({ok: true});
     }
+    if (req.action === 'phoneset') {
+      if (!settingsAdmin_(req._g)) return json_({error: 'Settings are for owners, Melissa and Mark only.'});
+      var pName = String(req.name || '').trim(), pNum = String(req.phone || '').trim();
+      if (!pName) return json_({error: 'name required'});
+      var pSh = SpreadsheetApp.openById('11RoeVRETag5rZYX6_tEH-rf6x8JL0JeZU0P5AT0WI-I').getSheetByName('Tech Phones');
+      var pVals = pSh.getDataRange().getValues();
+      var pRow = -1;
+      for (var pi = 1; pi < pVals.length; pi++) {
+        if (String(pVals[pi][0] || '').trim().toLowerCase() === pName.toLowerCase()) { pRow = pi + 1; break; }
+      }
+      if (pRow < 0) pRow = pVals.length + 1;
+      pSh.getRange(pRow, 1).setValue(pName);
+      pSh.getRange(pRow, 2).setValue(pNum);
+      logAct_(who, 'Phone ' + (pNum ? 'set' : 'cleared'), pName, pNum);
+      return json_({ok: true});
+    }
     if (req.action === 'techdash') {
       return json_(techDash_(String((req.user && req.user.name) || req.name || '')));
     }
