@@ -4477,7 +4477,9 @@ function popHTML(p) {
           placeholder="anything the whole job must honor — client requests, must-keeps, cautions">${esc(p.scopeNotes || '')}</textarea>
         <div class="scopemsg phmsg"></div>
         <div class="lite" style="font-size:11px">saves here AND into 📝 Notes below</div>
-      </span></div>`) : '';
+      </span></div>
+    ${isPayrollAdmin() || isOwner() ? `<div class="row"><button class="ctrbtn">📜 Owner contract & selections</button></div>
+      <div class="ctrout"></div>` : ''}`) : '';
   // opt-IN: blank asks, Yes shows the history button, No shows nothing at all
   const crVal = (p.clientReports || '').trim().toLowerCase();
   let crAsk = '';
@@ -4497,7 +4499,11 @@ function popHTML(p) {
       <div class="pbarlbl">${next ? `next payment milestone at ${next}%` : 'all payment milestones reached'}${+p.payMilestone ? ` · last emailed at ${esc(p.payMilestone)}%` : ''}</div>`;
   })() : '';
   const asDone = adminStepsOf(p);
+  const contractBlock = p.serial && (isPayrollAdmin() || isOwner())
+    ? `<div class="row"><button class="ctrbtn">📜 Owner contract & selections</button></div><div class="ctrout"></div>`
+    : '';
   const admin = p.serial ? secWrap('admin', '🔐 Admin', `
+    ${contractBlock}
     ${crVal === 'yes' ? `<div class="tagbtns histbtns"><button class="tagbtn creports">🤝 Client Reports History</button></div>` : ''}
     ${crAsk}
     <div class="row rowflex payrow"><span>Payment plan</span>
@@ -5465,6 +5471,46 @@ function wirePop(p) {
       phw.onkeydown = ev => { if (ev.key === 'Enter') { ev.preventDefault(); clearTimeout(phwTimer); phwSave(); } };
       phw.onclick = ev => ev.stopPropagation();
     }
+    // 📜 owner contract & selections (owners + lead admin) — lazy-loaded
+    pop.querySelectorAll('.ctrbtn').forEach(cb => cb.onclick = async ev => {
+      ev.stopPropagation(); popPinned = true;
+      const out = cb.closest('.row').nextElementSibling;
+      cb.disabled = true; cb.textContent = 'Loading…';
+      try {
+        const wa = writeAuth();
+        if (!wa.ok) throw new Error('Sign in with Google first.');
+        const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+          headers: {'content-type': 'text/plain;charset=utf-8'},
+          body: JSON.stringify({pin: wa.pin, action: 'contracts', serial: p.serial,
+            owner: p.owner || '', ...authFields()})});
+        const j = await r.json();
+        if (j.error) throw new Error(j.error);
+        const sl2 = j.selections;
+        const line = (label, v) => v && String(v).trim()
+          ? `<div class="row" style="font-size:12px"><span style="min-width:96px">${label}</span><b>${esc(String(v).slice(0, 140))}</b></div>` : '';
+        out.innerHTML = (sl2 ? `<div class="ctrbox">
+            <div class="lite" style="font-size:11px">form reply ${esc(sl2.when)} — ${esc(sl2.name)} · ${esc(sl2.piano)} ${sl2.serial ? '#' + esc(sl2.serial) : ''}</div>
+            ${line('Refinishing', sl2.refinish)}
+            ${line('Internal work', sl2.internal)}
+            ${line('Color choice', sl2.color)}
+            ${line('Hardware', sl2.hardware)}
+            ${line('Decal', sl2.decal)}
+            ${line('Bench', sl2.bench)}
+            ${line('Bench details', sl2.benchDesc)}
+            ${line('Sentimental', sl2.sentimental)}
+            ${line('Tuning add-on', sl2.tuningAddon)}
+            ${line('Pay plan', sl2.payPlan)}
+            ${line('Owner notes', sl2.notes)}
+            ${(sl2.docs || []).map(d => `<a class="dlink" style="margin-right:10px" target="_blank" rel="noopener" href="${esc(d[0])}">${esc(d[1])} ↗</a>`).join('')}
+          </div>` : '<div class="lite">No form reply matched this piano (by serial or owner name).</div>')
+          + ((j.files || []).length ? `<div class="lite" style="font-size:11px;margin-top:5px">Signed contracts folder:</div>
+             ${j.files.map(f2 => `<div style="font-size:12px">📎 <a class="dlink" target="_blank" rel="noopener" href="${esc(f2.url)}">${esc(f2.name)}</a></div>`).join('')}` : '');
+        cb.remove();
+      } catch (e) {
+        out.innerHTML = `<div class="phmsg err">✗ ${esc(e.message)}</div>`;
+        cb.disabled = false; cb.textContent = '📜 Owner contract & selections';
+      }
+    });
     // 🧾 scope special instructions — autosave; the bridge also copies the
     // note into the general 📝 Notes (Brigham 9/4)
     const scIn = pop.querySelector('.scopenote');

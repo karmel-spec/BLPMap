@@ -1886,3 +1886,8 @@ button.cfxres:hover{border-color:#2e7d4f;color:#2e7d4f}
 
 /* 🧾 scope of work */
 .scopenote{width:100%;font:500 12.5px/1.4 inherit;border:1px solid #d7d2c7;border-radius:8px;padding:7px 9px;box-sizing:border-box;resize:vertical}
+
+/* 📜 owner contract & selections */
+.ctrbtn{font:600 12px/1.2 inherit;border:1px solid #cfc9bf;background:#fff;border-radius:8px;padding:7px 10px;cursor:pointer}
+.ctrbtn:hover{border-color:#9e2020;color:#9e2020}
+.ctrbox{background:#faf8f4;border-radius:10px;padding:8px 10px;margin:4px 0}
