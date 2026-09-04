@@ -1020,6 +1020,9 @@ async function recApprove(row){
         ...(window.authFields?authFields():{})})});
     const j=await r.json();
     if(j.error) throw new Error(j.error);
+    // the bridge serves its ping response to POSTs for a minute after a
+    // deploy — {ok:true, service:…} with no cell means nothing was written
+    if(!j.cell) throw new Error("bridge is busy — try again in a minute");
     msg.textContent=t("rec_added"); msg.style.color="#2c7a3f";
     // optimistic: put it in the lane locally so the board matches the sheet
     const f=tech.split(/\s+/)[0].toLowerCase();
