@@ -665,6 +665,68 @@ async function postTask(p, pop, fields) {
   return false;
 }
 
+/* 🎨 Refinishing Queue (Brigham 9/4): the refinishing sheet in priority
+ * order — a map box by the Refinishing/Sanding shops pops the quick list of
+ * what's next for the refinishing crew. Sheet is the same one the Shop
+ * Manager's pipeline reads (row order = priority). */
+const REFQ = {rows: null, at: 0, loading: false};
+function needRefQ() {
+  if (REFQ.loading || (REFQ.rows && Date.now() - REFQ.at < 300000)) return !!REFQ.rows;
+  REFQ.loading = true;
+  fetch('https://docs.google.com/spreadsheets/d/1bfF4pmuGv7TefVlDG4lo_04gRjiX9QYerK4o9qih6kc/gviz/tq?tqx=out:csv&headers=0&gid=0',
+    {signal: AbortSignal.timeout(20000)})
+    .then(r => r.text()).then(txt => {
+      const out = [];
+      txt.split(/\r?\n/).forEach(ln => {
+        const cells = []; let cur = '', inQ = false;
+        for (let i = 0; i < ln.length; i++) {
+          const ch = ln[i];
+          if (inQ) { if (ch === '"') { if (ln[i + 1] === '"') { cur += '"'; i++; } else inQ = false; } else cur += ch; }
+          else if (ch === '"') inQ = true;
+          else if (ch === ',') { cells.push(cur); cur = ''; }
+          else cur += ch;
+        }
+        cells.push(cur);
+        const brand = (cells[1] || '').trim(), serial = (cells[2] || '').trim();
+        if (!brand || !serial || /^brand$/i.test(brand)) return;
+        out.push({pri: out.length + 1, brand, serial,
+          loc: (cells[3] || '').trim(), lvl: (cells[4] || '').trim(), req: (cells[5] || '').trim()});
+      });
+      REFQ.rows = out; REFQ.at = Date.now();
+      renderMap();
+    }).catch(() => {}).then(() => { REFQ.loading = false; });
+  return false;
+}
+function openRefinishQ() {
+  const rows = REFQ.rows || [];
+  const old = document.querySelector('.dsheetov'); if (old) old.remove();
+  const ov = document.createElement('div');
+  ov.className = 'dsheetov';
+  ov.innerHTML = `<div class="dsheet" style="max-height:80vh;overflow:auto"><button class="dsx">✕</button>
+    <h3>🎨 Refinishing Queue</h3>
+    <div class="dssub">${rows.length} piano${rows.length === 1 ? '' : 's'} in priority order from the refinishing sheet · tap one to open its card</div>
+    ${rows.map(x => {
+      const p = S.data.pianos.find(pp => pp.active && String(pp.serial || '').replace(/\D/g, '') === x.serial.replace(/\D/g, ''));
+      return `<div class="kqrow" ${p ? `data-row="${p.row}"` : ''} style="display:flex;gap:10px;align-items:center;padding:8px 2px;border-top:1px solid #f0ece5;${p ? 'cursor:pointer' : 'opacity:.75'}">
+      <b style="min-width:34px;color:#9e2020">#${x.pri}</b>
+      <span style="flex:1">${esc(x.brand)} <span class="lite">#${esc(x.serial)}</span>
+        ${x.req ? `<div class="lite" style="font-size:11px">${esc(x.req.slice(0, 70))}</div>` : ''}</span>
+      ${x.lvl ? `<span class="lite" style="font-weight:700">L${esc(x.lvl)}</span>` : ''}
+      <span class="lite">${esc(x.loc || (p ? p.location || '' : ''))}</span></div>`;
+    }).join('') || '<div class="pwnone" style="display:block;padding:8px 0">The refinishing sheet is empty — nothing queued.</div>'}
+  </div>`;
+  document.body.appendChild(ov);
+  ov.querySelector('.dsx').onclick = () => ov.remove();
+  ov.onclick = ev => {
+    if (ev.target === ov) { ov.remove(); return; }
+    const row = ev.target.closest('.kqrow[data-row]');
+    if (row) {
+      ov.remove();
+      const p = S.data.pianos.find(x => x.row === +row.dataset.row);
+      if (p) { switchView('map'); focusPiano(p); openPop(p.row, S.popAnchor, true); }
+    }
+  };
+}
 /* 🔑 Keytop Queue popup (Brigham 9/4): every piano with an open keytop
  * status, queue order first — tap a row to jump to its card. */
 function openKeytopQ() {
@@ -3059,6 +3121,17 @@ function renderMap() {
       <text x="${kx + kw / 2}" y="${ky + 31}" text-anchor="middle" class="kqtxt" font-size="20">🔑 <tspan font-weight="800" font-size="15">Keytop Q</tspan></text>
       <text x="${kx + kw / 2}" y="${ky + 58}" text-anchor="middle" class="kqtxt kqcount" font-size="13">${kq} in queue ›</text>
     </g>`;
+    // 🎨 Refinishing Queue box in the open floor left of the Sanding Shop
+    // (Brigham 9/4) — tap for the priority list from the refinishing sheet
+    const rqReady = needRefQ();
+    const sz9 = (f.labels || []).find(z => /sanding shop/i.test(z.text || ''));
+    const rw9 = 170, rh9 = 78;
+    const rx9 = sz9 ? sz9.x - rw9 - 90 : 1150, ry9 = sz9 ? sz9.y + 10 : 130;
+    s += `<g class="rqbtn" style="cursor:pointer">
+      <rect x="${rx9}" y="${ry9}" width="${rw9}" height="${rh9}" rx="8" class="kqrect"/>
+      <text x="${rx9 + rw9 / 2}" y="${ry9 + 31}" text-anchor="middle" class="kqtxt" font-size="20">🎨 <tspan font-weight="800" font-size="15">Refinish Q</tspan></text>
+      <text x="${rx9 + rw9 / 2}" y="${ry9 + 58}" text-anchor="middle" class="kqtxt kqcount" font-size="13">${rqReady ? REFQ.rows.length + ' in queue ›' : 'loading…'}</text>
+    </g>`;
   }
   S.drawW = drawW; S.drawH = drawH;
 
@@ -3127,6 +3200,8 @@ function renderMap() {
     el.addEventListener('click', ev => { ev.stopPropagation(); openCabUnitModal(el.dataset.unit); }));
   const kqb = svg.querySelector('.kqbtn');
   if (kqb) kqb.addEventListener('click', ev => { ev.stopPropagation(); openKeytopQ(); });
+  const rqb = svg.querySelector('.rqbtn');
+  if (rqb) rqb.addEventListener('click', ev => { ev.stopPropagation(); openRefinishQ(); });
   sizePlan();
   // cards open on CLICK only (082726hales16) — hover-open made panning the
   // map spray cards everywhere; hover now just shows the cursor affordance
@@ -8366,11 +8441,23 @@ function openSlotPop(id) {
     // plate rack slat (stairs conversion, 9/1): the piano keeps its floor
     // spot — its PLATE lives here, tracked as a cabinetry token
     const holders = S.data.pianos.filter(x => x.active && cabTokens(x).includes(id));
+    // BEFORE/AFTER refinishing condition per stored plate (Brigham 9/4) —
+    // writes the existing PLATE STATUS storage values
+    const condBtns = x => {
+      const st9 = (x.plateStatus || '').trim();
+      const mk = (label, val) => `<button class="platecond" data-row="${x.row}" data-val="${esc(val)}"
+        style="border:1.5px solid ${st9 === val ? '#2f7d4f' : '#cfc9bf'};background:${st9 === val ? '#2f7d4f' : 'none'};
+        color:${st9 === val ? '#fff' : '#57524b'};border-radius:8px;padding:2px 8px;font-size:11px;font-weight:700">${label}</button>`;
+      return `<span style="display:inline-flex;gap:5px;margin-left:6px">
+        ${mk('BEFORE refinishing', 'Plate storage — BEFORE')}${mk('AFTER ✨', 'Plate storage — AFTER')}</span>`;
+    };
     pop.innerHTML = `<span class="x">✕</span>
       <span class="tag">PLATE SPOT ${esc(id)}</span>
       ${holders.length ? `<h3>⚙️ Plate stored here</h3>` + holders.map(x =>
-          `<div class="row">• <b>${esc(x.summary || x.serial)}</b>${x.location ? ' — piano at spot ' + esc(x.location) : ''}
-             <i class="platedel" data-row="${x.row}" style="cursor:pointer;color:#9e2020">✕ remove</i></div>`).join('')
+          `<div class="row" style="display:block">• <b>${esc(x.summary || x.serial)}</b>${x.location ? ' — piano at spot ' + esc(x.location) : ''}
+             <i class="platedel" data-row="${x.row}" style="cursor:pointer;color:#9e2020">✕ remove</i><br>
+             <span class="lite" style="font-size:11px">plate condition:</span>${condBtns(x)}
+             <span class="pcmsg phmsg" data-row="${x.row}" style="font-size:11px"></span></div>`).join('')
         : `<h3>Empty</h3><div class="row">No plate yet assigned here.</div>`}
       <button class="tagbtn addhere">＋ Put a plate here</button>`;
     pop.onclick = ev => {
@@ -8380,6 +8467,24 @@ function openSlotPop(id) {
         const px = S.data.pianos.find(x => x.row === +del.dataset.row);
         if (px) saveCabinetry(px, cabTokens(px).filter(t => t !== id), {querySelector: () => null})
           .then(() => { pop.hidden = true; renderMap(); });
+        return;
+      }
+      const pc = ev.target.closest('.platecond');
+      if (pc) {
+        const px = S.data.pianos.find(x => x.row === +pc.dataset.row);
+        const msg = pop.querySelector(`.pcmsg[data-row="${pc.dataset.row}"]`);
+        const wa = writeAuth();
+        if (!wa.ok) { if (msg) { msg.className = 'pcmsg phmsg err'; msg.textContent = 'sign in first'; } return; }
+        if (msg) msg.textContent = '…';
+        bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+          headers: {'content-type': 'text/plain;charset=utf-8'},
+          body: JSON.stringify({pin: wa.pin, action: 'setplatestatus', serial: px.serial, row: px.row,
+            plateStatus: pc.dataset.val, ...authFields()})})
+          .then(r => r.json()).then(j => {
+            if (j.error) throw new Error(j.error);
+            px.plateStatus = pc.dataset.val;
+            openSlotPop(id);   // repaint with the new selection
+          }).catch(e => { if (msg) { msg.className = 'pcmsg phmsg err'; msg.textContent = '✗ ' + e.message; } });
         return;
       }
       if (ev.target.closest('.addhere')) { pop.hidden = true; openPlateAssignModal(id); } };
