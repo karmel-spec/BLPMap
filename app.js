@@ -3030,11 +3030,14 @@ function renderMap() {
   if (S.floor === 0) {
     const kq = S.data.pianos.filter(x => x.active && (x.keytopStatus || '').trim()
       && !/^done/i.test(x.keytopStatus)).length;
+    // anchored just under the "Key Top Corner" zone label (Brigham 9/4)
+    const kz = (f.labels || []).find(z => /key top corner/i.test(z.text || ''));
+    const kx = kz ? kz.x - 10 : 1560, ky = kz ? kz.y + kz.h + 14 : 760;
+    const kw = kz ? kz.w + 20 : 140, kh = 78;
     s += `<g class="kqbtn" style="cursor:pointer">
-      <rect x="1530" y="893" width="278" height="188" rx="10" class="kqrect"/>
-      <text x="1669" y="965" text-anchor="middle" class="kqtxt" font-size="34">🔑</text>
-      <text x="1669" y="1006" text-anchor="middle" class="kqtxt" font-size="22" font-weight="800">Keytop Q</text>
-      <text x="1669" y="1036" text-anchor="middle" class="kqtxt kqcount" font-size="16">${kq} in queue ›</text>
+      <rect x="${kx}" y="${ky}" width="${kw}" height="${kh}" rx="8" class="kqrect"/>
+      <text x="${kx + kw / 2}" y="${ky + 31}" text-anchor="middle" class="kqtxt" font-size="20">🔑 <tspan font-weight="800" font-size="15">Keytop Q</tspan></text>
+      <text x="${kx + kw / 2}" y="${ky + 58}" text-anchor="middle" class="kqtxt kqcount" font-size="13">${kq} in queue ›</text>
     </g>`;
   }
   S.drawW = drawW; S.drawH = drawH;

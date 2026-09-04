@@ -930,6 +930,17 @@ function doPost(e) {
       PERM_MEMO = null;
       return json_({ok: true});
     }
+    if (req.action === 'salesweep') {
+      // 🏷 FOR-SALE normalization (Brigham 9/4): every for-sale piano gets
+      // keytops Done, plate In piano, decals+bass Installed, phase For Sale
+      // (waiting/sale-pending/sold/paused phases preserved) — one batched
+      // pass so nothing for-sale lingers in the concurrent task queues.
+      if (!settingsAdmin_(req._g) && req.pin !== 'pianoman' && req.pin !== TEAM_PIN) {
+        return json_({error: 'not allowed'});
+      }
+      try { return json_(saleSweep_(who)); }
+      catch (eSW) { return json_({error: String(eSW).slice(0, 200)}); }
+    }
     if (req.action === 'contractsync') {
       try { return json_(contractSync_()); }
       catch (eCS) { return json_({error: String(eCS).slice(0, 200)}); }
@@ -1733,6 +1744,63 @@ function setTrack_(req) {
           previous: prev, track: val};
 }
 
+function saleSweep_(who) {
+  var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+  var last = sh.getLastRow();
+  var owners = sh.getRange(1, 2, last, 1).getValues();
+  var serials = sh.getRange(1, 3, last, 1).getValues();
+  var soldRow = last + 1;
+  for (var i = 0; i < last; i++) {
+    if (String(owners[i][0] || '').trim().toUpperCase() === 'SOLD'
+        && !String(serials[i][0] || '').trim()) { soldRow = i + 1; break; }
+  }
+  var n = soldRow - 1;
+  var pCol = phaseCol_(sh);
+  var hdr = sh.getRange(2, 1, 1, sh.getLastColumn()).getValues()[0];
+  function hCol(name) {
+    for (var c = 0; c < hdr.length; c++) {
+      if (String(hdr[c] || '').trim().toUpperCase() === name) return c + 1;
+    }
+    return -1;
+  }
+  var kCol = hCol('KEYTOP STATUS'), plCol = hCol('PLATE STATUS');
+  var stat = sh.getRange(1, 19, n, 1).getValues();     // S = STATUS
+  var phases = sh.getRange(1, pCol, n, 1).getValues();
+  var keyt = kCol > 0 ? sh.getRange(1, kCol, n, 1).getValues() : null;
+  var plate = plCol > 0 ? sh.getRange(1, plCol, n, 1).getValues() : null;
+  var bass = sh.getRange(1, 39, n, 1).getValues();     // task cells (settaskcell cols)
+  var dec = sh.getRange(1, 40, n, 1).getValues();
+  var today = Utilities.formatDate(new Date(), 'America/Denver', 'M/d/yy');
+  var KEEP = /^(Waiting|Sale Pending|Sold|Paused)/i;
+  var counts = {pianos: 0, phase: 0, keys: 0, plate: 0, bass: 0, decals: 0};
+  for (var r = 2; r < n; r++) {   // data starts row 3 (index 2)
+    if (!String(serials[r][0] || '').trim() && !String(stat[r][0] || '').trim()) continue;
+    var ph = String(phases[r][0] || '').trim();
+    var st = String(stat[r][0] || '').toLowerCase();
+    var isSale = ph === 'For Sale' || ph === 'Sale Pending' || ph === 'Sold' || st.indexOf('for sale') >= 0;
+    if (!isSale) continue;
+    counts.pianos++;
+    if (ph !== 'For Sale' && !KEEP.test(ph)) { phases[r][0] = 'For Sale'; counts.phase++; }
+    if (keyt && !/^Done/i.test(String(keyt[r][0] || ''))) { keyt[r][0] = 'Done'; counts.keys++; }
+    if (plate) {
+      var pv = String(plate[r][0] || '').trim();
+      if (pv !== 'In piano' && pv !== 'Back in piano') { plate[r][0] = 'In piano'; counts.plate++; }
+    }
+    var bv = String(bass[r][0] || '');
+    if (bv.indexOf('Installed') < 0) { bass[r][0] = 'Installed ' + today + (bv.trim() ? ' · ' + bv.trim() : ''); counts.bass++; }
+    var dv = String(dec[r][0] || '');
+    if (dv.indexOf('Installed') < 0) { dec[r][0] = 'Installed ' + today + (dv.trim() ? ' · ' + dv.trim() : ''); counts.decals++; }
+  }
+  sh.getRange(1, pCol, n, 1).setValues(phases);
+  if (keyt) sh.getRange(1, kCol, n, 1).setValues(keyt);
+  if (plate) sh.getRange(1, plCol, n, 1).setValues(plate);
+  sh.getRange(1, 39, n, 1).setValues(bass);
+  sh.getRange(1, 40, n, 1).setValues(dec);
+  logAct_(who, 'For-sale sweep', counts.pianos + ' pianos',
+    'phase:' + counts.phase + ' keys:' + counts.keys + ' plate:' + counts.plate
+    + ' bass:' + counts.bass + ' decals:' + counts.decals);
+  return {ok: true, counts: counts};
+}
 function phaseCol_(sh) {
   var last = sh.getLastColumn();
   var hdr = sh.getRange(2, 1, 1, last).getValues()[0];
