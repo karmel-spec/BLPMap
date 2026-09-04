@@ -941,6 +941,16 @@ function doPost(e) {
       try { return json_(saleSweep_(who)); }
       catch (eSW) { return json_({error: String(eSW).slice(0, 200)}); }
     }
+    if (req.action === 'clstepmedia') {
+      // 🎬 per-step training media (Brigham 9/4): attach a training video
+      // (YouTube link OR uploaded file) and/or a photo to one Phase
+      // Checklists step. Managers/owners only.
+      if (!timelogAdmin_(req._g) && !payrollAdmin_(req._g)) {
+        return json_({error: 'Managers and owners only.'});
+      }
+      try { return json_(clStepMedia_(req, who)); }
+      catch (eCM) { return json_({error: String(eCM).slice(0, 200)}); }
+    }
     if (req.action === 'seqadd') {
       // 🧠 sequence recommendation approved (Brigham 9/4): append the job
       // to the tech's row on the scheduling sheet's Sequence tab. Managers
@@ -1759,6 +1769,66 @@ function setTrack_(req) {
           previous: prev, track: val};
 }
 
+// 🎬 attach training media to a Phase Checklists step. Video entries live in
+// col H ('ytid@sec|Title' or 'drive:FILEID|Title', ';;'-joined); photos in
+// col I ('FILEID|Caption', ';;'-joined). Uploaded files land in the
+// "Checklist Training Media" Drive folder, link-shared so <img>/<iframe>
+// render for the whole team.
+function clStepMedia_(req, who) {
+  var phase = String(req.phase || '').trim();
+  var step = parseInt(req.step, 10);
+  var kind = String(req.kind || '');
+  if (!phase || isNaN(step) || (kind !== 'photo' && kind !== 'video')) throw new Error('phase, step and kind required');
+  var sh = SpreadsheetApp.openById('11RoeVRETag5rZYX6_tEH-rf6x8JL0JeZU0P5AT0WI-I').getSheetByName('Phase Checklists');
+  if (!sh) throw new Error('Phase Checklists tab missing');
+  var last = sh.getLastRow();
+  var phases = sh.getRange(2, 1, last - 1, 1).getValues();
+  var rowN = -1, n = 0;
+  for (var i = 0; i < phases.length; i++) {
+    if (String(phases[i][0] || '').trim() === phase) {
+      if (n === step) { rowN = i + 2; break; }
+      n++;
+    }
+  }
+  if (rowN < 0) throw new Error('step ' + step + ' not found for ' + phase);
+  var title = String(req.title || '').slice(0, 60).replace(/[|;]/g, ' ');
+  var entry = '';
+  if (req.yt) {
+    var m = /(?:youtu\.be\/|v=|embed\/|shorts\/)([\w-]{11})/.exec(String(req.yt))
+         || /^([\w-]{11})$/.exec(String(req.yt).trim());
+    if (!m) throw new Error('could not read a YouTube id from that link');
+    entry = m[1] + '@0|' + (title || 'Training video');
+    kind = 'video';
+  } else if (req.data) {
+    var folderId = driveFolderIdByName_('Checklist Training Media');
+    var mime = String(req.mime || (kind === 'photo' ? 'image/jpeg' : 'video/mp4'));
+    var fname = phase.replace(/[^\w]+/g, '-') + '-step' + step + '-' + Date.now()
+      + (kind === 'photo' ? '.jpg' : '.mp4');
+    var boundary = 'blpclm' + Date.now();
+    var payload = Utilities.newBlob(
+      '--' + boundary + '\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n'
+      + JSON.stringify({name: fname, parents: [folderId]})
+      + '\r\n--' + boundary + '\r\nContent-Type: ' + mime
+      + '\r\nContent-Transfer-Encoding: base64\r\n\r\n'
+      + req.data + '\r\n--' + boundary + '--').getBytes();
+    var res = UrlFetchApp.fetch(
+      'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
+        method: 'post', contentType: 'multipart/related; boundary=' + boundary,
+        payload: payload, headers: {Authorization: 'Bearer ' + ScriptApp.getOAuthToken()}});
+    var f = JSON.parse(res.getContentText());
+    if (!f.id) throw new Error('Drive upload failed');
+    shareAnyoneWithLink_(f.id);
+    entry = (kind === 'video' ? 'drive:' : '') + f.id + '|' + (title || (kind === 'video' ? 'Training video' : 'Training photo'));
+  } else {
+    throw new Error('send a YouTube link (yt) or a file (data)');
+  }
+  var col = kind === 'video' ? 8 : 9;   // H video · I photo
+  var cur = String(sh.getRange(rowN, col).getValue() || '').trim();
+  sh.getRange(rowN, col).setValue(cur ? cur + ';;' + entry : entry);
+  logAct_(who, 'Checklist media', phase + ' step ' + (step + 1),
+    kind + (req.yt ? ' (YouTube)' : ' uploaded') + (title ? ' — ' + title : ''));
+  return {ok: true, row: rowN, kind: kind, entry: entry};
+}
 // 🧠 approved sequence recommendation → first empty cell of the tech's row
 // on the scheduling sheet's "Sequence" tab (gid 0). Tech matched by first
 // name in column B, case-insensitive.

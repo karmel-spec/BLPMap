@@ -3813,6 +3813,51 @@ async function updateClPill() {
   pill.textContent = `📋 ${active} checklist · ${doneN}/${work.length}`;
   pill.onclick = () => openWorkChecklist(o.serial, active);
 }
+/* 🎬 per-step training media (Brigham 9/4): photos live in checklist col I
+ * ('FILEID|Caption' ;;-joined), videos in col H ('ytid@sec|Title' or
+ * 'drive:FILEID|Title'). Managers/owners attach them from the bench sheet. */
+function clPhotos(it) {
+  return String(it.photo || '').split(';;').map(x => x.trim()).filter(Boolean)
+    .map(x => { const at = x.indexOf('|'); return at < 0 ? {id: x, cap: ''}
+      : {id: x.slice(0, at).trim(), cap: x.slice(at + 1).trim()}; });
+}
+function clVidLinks(it) {
+  return String(it.video || '').split(';;').map(x => x.trim()).filter(Boolean).map(x => {
+    const dm = /^drive:([\w-]+)\|?(.*)$/.exec(x);
+    if (dm) return {url: 'https://drive.google.com/file/d/' + dm[1] + '/preview', title: dm[2] || 'Training video'};
+    const m = /^([\w-]{6,})@(\d+)\|?(.*)$/.exec(x);
+    return m ? {url: 'https://youtu.be/' + m[1] + (+m[2] ? '?t=' + m[2] : ''), title: m[3] || 'Training video'} : null;
+  }).filter(Boolean);
+}
+function clMediaRow(it) {
+  const ph = clPhotos(it);
+  const vids = clVidLinks(it);
+  if (!ph.length && !vids.length) return '';
+  return `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px">
+    ${ph.map(x => `<a href="https://drive.google.com/file/d/${esc(x.id)}/view" target="_blank" rel="noopener">
+      <img src="https://drive.google.com/thumbnail?id=${esc(x.id)}&sz=w400" alt="${esc(x.cap)}" title="${esc(x.cap)}"
+        style="height:54px;border-radius:8px;border:1px solid #e4dfd5" loading="lazy"></a>`).join('')}
+    ${vids.map(v => `<a href="${esc(v.url)}" target="_blank" rel="noopener"
+      style="font-size:11.5px;color:#3a6ea5;text-decoration:none;border:1px solid #cfdcec;border-radius:8px;padding:3px 8px">▶ ${esc(v.title)}</a>`).join('')}
+  </div>`;
+}
+async function clSendStepMedia(phase, it, kind, opts, msgEl) {
+  const wa = writeAuth();
+  if (!wa.ok) { msgEl.textContent = 'Sign in first (☰ menu).'; return false; }
+  msgEl.textContent = 'Saving…';
+  try {
+    const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+      headers: {'content-type': 'text/plain;charset=utf-8'},
+      body: JSON.stringify({pin: wa.pin, action: 'clstepmedia', phase, step: it.i, kind, ...opts, ...authFields()})});
+    const j = await r.json();
+    if (j.error) throw new Error(j.error);
+    if (!j.entry) throw new Error('bridge is busy — try again in a minute');
+    if (j.kind === 'photo') it.photo = (it.photo ? it.photo + ';;' : '') + j.entry;
+    else it.video = (it.video ? it.video + ';;' : '') + j.entry;
+    msgEl.textContent = '✓ attached';
+    return true;
+  } catch (e) { msgEl.textContent = '✗ ' + (e.message || e); return false; }
+}
 async function openWorkChecklist(serial, phase) {
   const p = S.data.pianos.find(x => x.serial === serial) || {serial};
   const st = await clFetch(serial, phase, true);
@@ -3828,6 +3873,8 @@ async function openWorkChecklist(serial, phase) {
   // a skipped step needs the WHY — it shows amber here and on the mini-QC rail
   const saveSkip = (idx, note) => { st.done.delete(idx); st.skips.set(idx, note); clToggle(serial, phase, idx, true, true, note); };
   let skipAsk = null;   // step index currently being asked for a skip reason
+  let mediaEdit = null; // step index with the 🎬 training-media editor open
+  const canMedia = isOwner() || isTimelogAdmin();
   if (!coach) {
     // A · bench sheet — the whole list, tap to check, ⏭ to skip with a reason
     const render = () => {
@@ -3848,13 +3895,28 @@ async function openWorkChecklist(serial, phase) {
           <div style="flex:1;${isDone ? 'color:#8a847b;text-decoration:line-through' : ''}">
             <span style="font-size:10px;letter-spacing:1px;color:#9e2020;text-transform:uppercase">${esc(it.section)}</span><br>
             ${esc(it.text)}${it.detail && !isDone && !isSkip ? `<div style="font-size:11.5px;color:#9a5b13">⚠ ${esc(it.detail)}</div>` : ''}
+            ${!isDone && !isSkip ? clMediaRow(it) : ''}
             ${isSkip ? `<div style="font-size:11.5px;color:#9a5b13">⏭ skipped — ${esc(st.skips.get(it.i))} <u>undo</u></div>` : ''}</div>
+          ${canMedia ? `<button class="clmed" data-i="${it.i}" title="attach a training video / photo to this step" style="border:1px solid #cfdcec;background:none;border-radius:8px;padding:3px 7px;color:#3a6ea5;font-size:12px;flex:0 0 auto;height:26px">🎬</button>` : ''}
           ${!isDone && !isSkip ? `<button class="clskip" data-i="${it.i}" style="border:1px solid #cfc9bf;background:none;border-radius:8px;padding:3px 8px;color:#9a5b13;font-size:11px;flex:0 0 auto;height:26px">Skip</button>` : ''}
           </div>
           ${skipAsk === it.i ? `<div style="display:flex;gap:6px;padding:0 2px 10px 30px">
             <input class="clskipwhy" placeholder="why can't this step be done here?" maxlength="180"
               style="flex:1;font:500 12.5px/1.3 inherit;padding:6px 8px;border:1.5px solid #c9a227;border-radius:8px">
             <button class="clskipgo csvbtn" style="background:#c9a227">Skip</button></div>` : ''}
+          ${mediaEdit === it.i ? `<div class="clmedbox" style="background:#f2f6fb;border:1px solid #cfdcec;border-radius:10px;padding:9px;margin:0 2px 10px 30px;font-size:12.5px">
+            <b style="font-size:11px;letter-spacing:1px;color:#3a6ea5">🎬 TRAINING MEDIA FOR THIS STEP</b>
+            <div style="display:flex;gap:6px;margin-top:7px">
+              <input class="clmyt" placeholder="paste a YouTube link…" style="flex:1;font:500 12.5px/1.3 inherit;padding:6px 8px;border:1.5px solid #cfdcec;border-radius:8px">
+              <button class="clmytgo csvbtn" style="background:#3a6ea5">Add video</button></div>
+            <div style="display:flex;gap:8px;margin-top:8px;align-items:center;flex-wrap:wrap">
+              <label class="csvbtn" style="cursor:pointer;background:#2f7d4f">📷 Add photo
+                <input type="file" accept="image/*" hidden class="clmphoto"></label>
+              <label class="csvbtn" style="cursor:pointer;background:#5b4a8a">🎥 Upload video file
+                <input type="file" accept="video/*" hidden class="clmvideo"></label>
+              <span class="clmmsg phmsg"></span></div>
+            <div style="font-size:10.5px;color:#8a847b;margin-top:5px">YouTube links are best for video. Uploaded files go to the “Checklist Training Media” Drive folder — video files over ~30 MB won't fit, put those on YouTube.</div>
+          </div>` : ''}
           </div>`;
         }).join('')}`;
       ov.querySelector('.dsx').onclick = close;
@@ -3868,6 +3930,40 @@ async function openWorkChecklist(serial, phase) {
         ev.stopPropagation(); skipAsk = +b.dataset.i; render();
         const inp = ov.querySelector('.clskipwhy'); if (inp) inp.focus();
       });
+      ov.querySelectorAll('.clmed').forEach(b => b.onclick = ev => {
+        ev.stopPropagation();
+        mediaEdit = mediaEdit === +b.dataset.i ? null : +b.dataset.i;
+        render();
+      });
+      const mbox = ov.querySelector('.clmedbox');
+      if (mbox) {
+        mbox.onclick = ev => ev.stopPropagation();
+        const mit = work.find(w => w.i === mediaEdit);
+        const mmsg = mbox.querySelector('.clmmsg');
+        mbox.querySelector('.clmytgo').onclick = async () => {
+          const yt = (mbox.querySelector('.clmyt').value || '').trim();
+          if (!yt) { mbox.querySelector('.clmyt').focus(); return; }
+          if (await clSendStepMedia(phase, mit, 'video', {yt, title: ''}, mmsg)) setTimeout(render, 600);
+        };
+        mbox.querySelector('.clmphoto').onchange = async ev2 => {
+          const f = ev2.target.files && ev2.target.files[0]; if (!f) return;
+          mmsg.textContent = 'Preparing photo…';
+          const dataUrl = await downscalePhoto(f, 1600, 0.85);
+          if (await clSendStepMedia(phase, mit, 'photo',
+            {data: dataUrl.split(',')[1], mime: 'image/jpeg', title: ''}, mmsg)) setTimeout(render, 600);
+        };
+        mbox.querySelector('.clmvideo').onchange = ev2 => {
+          const f = ev2.target.files && ev2.target.files[0]; if (!f) return;
+          if (f.size > 30 * 1024 * 1024) { mmsg.textContent = '✗ over 30 MB — upload it to YouTube and paste the link instead'; return; }
+          mmsg.textContent = 'Reading video…';
+          const rd = new FileReader();
+          rd.onload = async () => {
+            if (await clSendStepMedia(phase, mit, 'video',
+              {data: String(rd.result).split(',')[1], mime: f.type || 'video/mp4', title: ''}, mmsg)) setTimeout(render, 600);
+          };
+          rd.readAsDataURL(f);
+        };
+      }
       const sgo = ov.querySelector('.clskipgo');
       if (sgo) sgo.onclick = ev => {
         ev.stopPropagation();
@@ -3887,7 +3983,12 @@ async function openWorkChecklist(serial, phase) {
       // training shows Brigham's handbook wording VERBATIM (col G), with the
       // short label as a header on top — never a paraphrase (Brigham 9/3)
       const vids = String(it.video || '').split(';;').map(x => x.trim()).filter(Boolean)
-        .map(x => { const m = /^([\w-]+)@(\d+)\|?(.*)$/.exec(x); return m ? {id: m[1], t: +m[2], title: m[3]} : null; })
+        .map(x => {
+          const dm = /^drive:([\w-]+)\|?(.*)$/.exec(x);   // uploaded training clip
+          if (dm) return {src: 'https://drive.google.com/file/d/' + dm[1] + '/preview', title: dm[2]};
+          const m = /^([\w-]+)@(\d+)\|?(.*)$/.exec(x);
+          return m ? {src: 'https://www.youtube-nocookie.com/embed/' + m[1] + '?start=' + (+m[2]), title: m[3]} : null;
+        })
         .filter(Boolean);
       ov.innerHTML = `<div class="dsheet" style="min-height:70vh;max-height:88vh;overflow:auto;display:flex;flex-direction:column"><button class="dsx">✕</button>
         <h3>🎓 ${trainPhaseName(phase)} — ${esc(p.summary || '#' + serial)}</h3>
@@ -3900,10 +4001,14 @@ async function openWorkChecklist(serial, phase) {
           ${it.handbook
             ? `<div class="clhb" style="font-size:14.5px;line-height:1.6">${glossLinkify(it.handbook)}</div>`
             : `<div style="font-size:15px;line-height:1.5">${glossLinkify(esc(it.text))}</div>`}
+          ${clPhotos(it).map(x => `<div style="margin:10px 0">
+            <img src="https://drive.google.com/thumbnail?id=${esc(x.id)}&sz=w1600" alt="${esc(x.cap)}" loading="lazy"
+              style="width:100%;border-radius:10px;border:1px solid #e4dfd5">
+            ${x.cap ? `<div style="font-size:11.5px;color:#8a847b;margin-top:3px">${esc(x.cap)}</div>` : ''}</div>`).join('')}
           ${vids.map(v => `<div style="margin:10px 0">
             <div style="font-size:11px;letter-spacing:1px;color:#8a847b;text-transform:uppercase;margin-bottom:4px">▶ ${esc(v.title || 'watch')}</div>
             <iframe width="100%" height="200" style="border:0;border-radius:10px"
-              src="https://www.youtube-nocookie.com/embed/${esc(v.id)}?start=${v.t}" allowfullscreen
+              src="${esc(v.src)}" allowfullscreen
               allow="accelerometer; encrypted-media; picture-in-picture"></iframe></div>`).join('')}
           ${it.detail ? `<div style="background:#fdf3ec;border-left:3px solid #c9a227;padding:8px 10px;border-radius:0 8px 8px 0;font-size:13px;color:#6b5030">⚠ ${esc(it.detail)}</div>` : ''}
           ${/\b(pics?|pictures?|photograph|photos?)\b/i.test((it.handbook || it.text).replace(/<[^>]+>/g, ' '))
