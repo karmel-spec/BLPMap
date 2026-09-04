@@ -11965,7 +11965,7 @@ const SCHED_TABS = [
   // 🗓 Week Schedule tab retired 9/4 (Brigham) — the Week Board duplicated
   // what Planner + Schedule already cover
   ['dash', '📊 Dashboard'], ['review', '📝 Weekly Review'], ['planner', '🧮 Planner'],
-  ['schedule', '📆 Schedule'], ['sequence', '🔢 Sequence'],
+  ['schedule', '📆 Schedules'], ['sequence', '🔢 Sequence'],
   ['pipeline', '🚰 Pipeline'], ['walk', '🚶 Walk-the-Shop'], ['audit', '🧪 Card Audit'],
   ['ladder', '🪜 Skill Ladder'], ['matrix', '🔢 Versatility Matrix'],
 ];
