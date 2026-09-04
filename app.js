@@ -11490,7 +11490,9 @@ function schedPane() {
 
 /* ---------- 🛡 Admin dashboard (admin + managers + owners) ---------- */
 const ADMDASH_TABS = [
-  ['requests', '💡 App Requests'], ['brigham', '🗒 Brigham Tasks'],
+  // 🗒 Brigham Tasks tab retired 9/3 — all rows migrated to Brigham's
+  // task board (🗒 boards are the single home for his reminders now)
+  ['requests', '💡 App Requests'],
   ['curtis', '🎨 Curtis'], ['qc', '✅ QC'], ['client', '📬 Client Reports'],
 ];
 /* Native admin dashboard (Brigham 8/28): no Shop App frames, no second
@@ -11633,8 +11635,8 @@ function renderAdmDash() {
   const el = $('#admdashBody');
   if (!el) return;
   if (!isTeamAdmin()) { el.innerHTML = '<div class="empty">Admin, managers &amp; owners only.</div>'; return; }
+  if (ADMDASH.tab === 'brigham') ADMDASH.tab = 'requests';   // retired tab
   const body = ADMDASH.tab === 'requests' ? admRequestsHTML()
-    : ADMDASH.tab === 'brigham' ? admBrighamHTML()
     : ADMDASH.tab === 'curtis' ? admCurtisHTML()
     : ADMDASH.tab === 'qc' ? admQcHTML() : admClientHTML();
   el.innerHTML = `<div class="teamtabs">${ADMDASH_TABS.map(([id, label]) =>
@@ -11749,7 +11751,7 @@ function renderAdmDash() {
     if (!p) { msg.textContent = 'no match'; return; }
     switchView('map'); focusPiano(p); openPop(p.row, S.popAnchor, true);
   };
-  if (ADMDASH.tab === 'brigham' || ADMDASH.tab === 'qc') serialDatalist();
+  if (ADMDASH.tab === 'qc') serialDatalist();
 }
 
 /* ---------- views / nav / drawers ---------- */
