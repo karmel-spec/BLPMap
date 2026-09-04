@@ -5425,9 +5425,9 @@ function lateClockNudge(e) {
   names.forEach(function (n) {
     var msg = '⏰ BLP Store Map: it\'s after 6pm and you\'re still clocked in — '
       + late[n].join(' + ')
-      + '. If you\'ve gone home, open the Store Map, clock out, then reply here or use '
-      + 'My Dashboard → "Request a time fix" with the time you actually finished. '
-      + 'What time should your clock-out be corrected to?';
+      + '. If you\'ve gone home, open the Store Map and clock out, then submit a '
+      + 'time-fix request with the time you actually finished: '
+      + APP_URL + '/#fixclock';
     notifyTeam_([n], msg);
     logAct_('Store Map (auto)', 'Late clock nudge', n, late[n].join(' + ').slice(0, 140));
   });

@@ -9954,8 +9954,8 @@ function renderDash() {
     </div>
     ${myClockHistory()}
     <div class="dlockers">
-      <div class="dlocker" data-h="#myweek"><span class="ic">📋</span><b>My Week</b><span>work items · carries into Friday</span></div>
-      <div class="dlocker" data-h="#report"><span class="ic">📝</span><b>Friday Report</b><span>report what got done</span></div>
+      <div class="dlocker" data-h="#myweek"><span class="ic">📋</span><b>My Week</b><span>work items · carries into your report</span></div>
+      <div class="dlocker" data-h="#report"><span class="ic">📝</span><b>Weekly Report</b><span>due Thursday 6pm</span></div>
       <div class="dlocker" data-h="#calendars"><span class="ic">📅</span><b>My Calendar</b><span>assigned vs. reported</span></div>
       <div class="dlocker" data-pay="1"><span class="ic">💵</span><b>Paylogics ↗</b><span>paystubs · time off</span></div>
     </div>
@@ -10025,7 +10025,7 @@ function renderDash() {
   };
   body.querySelectorAll('.dlocker[data-h], .dlink2').forEach(el => el.onclick = () => {
     const h = el.dataset.h;
-    const titles = {'#myweek': '📋 My Week', '#report': '📝 My Friday Report', '#calendars': '📅 My Calendar'};
+    const titles = {'#myweek': '📋 My Week', '#report': '📝 My Weekly Report (due Thursday)', '#calendars': '📅 My Calendar'};
     dashFrame(h, titles[h] || 'Shop App');
   });
   const pay = body.querySelector('[data-pay]');
