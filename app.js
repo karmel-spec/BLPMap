@@ -4362,7 +4362,7 @@ function secOpen(key, def = true) {
   const v = lsGet('sec_' + key);
   return v == null ? def : v !== 'closed';
 }
-function secWrap(key, label, content, defOpen = true) {
+function secWrap(key, label, content, defOpen = false) {
   const open = secOpen(key, defOpen);
   return `<div class="sechead${open ? '' : ' shut'}" data-sec="${key}">${label}
       <i class="secarrow">${open ? '▾' : '▸'}</i></div>
@@ -4531,13 +4531,13 @@ function popHTML(p) {
           ${others.map(o => `<b>${esc((o.tech || '').split(/\s+/)[0] || o.tech)}</b>
             <span class="cctime" data-start="${esc(o.start)}">${clockElapsed(o.start)}</span>`).join(' · ')}
           <small>working together is fine — if this looks like a missed switch, tell a manager</small></div>` : '';
-      if (onThis) return secWrap('clock', '⏱ Work Clock', `
+      if (onThis) return secWrap('clock', '⏱ Piano Work Clock', `
         <div class="row rowflex"><span>Working on</span><b>${esc(mine.phase || '—')}</b></div>
         ${together}
         <button class="clkbtn clkout">■ Clock out — <span class="cctime" data-start="${esc(mine.start)}">${clockElapsed(mine.start)}</span></button>
         <div class="clkmsg phmsg"></div>`);
       const opts = (pianoPhases(p) || PHASES).concat(PHASE_STATES);
-      return secWrap('clock', '⏱ Work Clock', `
+      return secWrap('clock', '⏱ Piano Work Clock', `
         ${together}
         ${mine ? `<div class="clkwarn">⏱ You're on <b>#${esc(mine.serial)}</b>
           <span class="cctime" data-start="${esc(mine.start)}">${clockElapsed(mine.start)}</span> — clocking in here closes it.</div>` : ''}
@@ -7979,7 +7979,14 @@ async function queuePiano(p, newPos, pop) {
     msg.textContent = '✗ ' + e.message + ' — not saved';
   }
 }
+const CARD_SECS = ['admin', 'clock', 'loc', 'shop', 'tune', 'media', 'pw', 'notes', 'act', 'log'];
 function openPop(row, el, pinned) {
+  // every card opens compact (Brigham 9/4): switching pianos resets the
+  // section toggles; re-renders of the SAME card keep what you opened
+  if (S.lastPopRow !== row) {
+    S.lastPopRow = row;
+    CARD_SECS.forEach(k => lsDel('sec_' + k));
+  }
   S.recentRows = [row].concat((S.recentRows || []).filter(r => r !== row)).slice(0, 8);
   cancelHide();
   const p = S.data.pianos.find(x => x.row === row);
