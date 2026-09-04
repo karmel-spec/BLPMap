@@ -1356,11 +1356,13 @@ function needSpecPerf(){
       a.extra+=ch.techs[k].extra||0;
     });
     SPERF=agg;
-    schedRerender();
-  }).catch(()=>{ SPERF={}; }).then(()=>{SPERF_LOADING=false;});
+    // a render error must not throw back into this chain and clobber SPERF
+    try{ schedRerender(); }catch(e2){ console.error("spec rerender",e2); }
+  }).catch(e=>{ console.error("specperf",e); if(!SPERF) SPERF={}; }).then(()=>{SPERF_LOADING=false;});
   return false;
 }
 function specPerf(tech,skill){
+  try{
   if(!SPERF) return null;
   const a=SPERF[String(tech||"").split(/\s+/)[0].toLowerCase()+"|"+skill];
   if(!a) return null;
@@ -1378,6 +1380,7 @@ function specPerf(tech,skill){
   if(qcN) bits.push("✅ "+a.pass+"/"+qcN+" mini-QC first-pass");
   if(score!=null) bits.push("⚡ "+score);
   return {text:bits.join(" · "), score, jobs};
+  }catch(e){ return null; }
 }
 function specLadder(skill){
   return SPEC.rows.filter(r=>r.skill===skill&&r.level>0)
