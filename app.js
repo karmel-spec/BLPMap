@@ -1886,22 +1886,45 @@ function priceLabel(p) {
   if (effectivePhase(p) !== 'For Sale' || !p.price) return '';
   return String(p.price).replace(/\.\d{2}\s*$/, '').trim();
 }
-function priceText(p, cx, cy, sc) {
+function priceText(p, cx, cy, sc, sl) {
   const t = priceLabel(p);
   if (!t) return '';
-  const fs = Math.max(6, Math.min(8.5 * sc, (30 * sc) / Math.max(t.length * 0.55, 2)));
-  return `<text x="${cx}" y="${cy + 13.5 * sc}" text-anchor="middle" class="pricetag"
+  if (!sl || sc <= 1.3) {   // small rack icons: original placement
+    const fs0 = Math.max(6, Math.min(8.5 * sc, (30 * sc) / Math.max(t.length * 0.55, 2)));
+    return `<text x="${cx}" y="${cy + 13.5 * sc}" text-anchor="middle" class="pricetag"
+            font-size="${fs0}">${esc(t)}</text>`;
+  }
+  // big showroom boxes (Karmel 9/4): labels stay INSIDE the slot — font
+  // capped by box width, baseline clamped above the box bottom, leaving
+  // room for the small serial line beneath
+  const ts = Math.min(sc, 2.4);
+  const fs = Math.max(8, Math.min(9.5 * ts, (sl.w - 8) / Math.max(t.length * 0.56, 3)));
+  const sFs = serialFs_(p, sc, sl);
+  const y = Math.min(cy + 10.5 * sc + fs, sl.y + sl.h - (sFs ? sFs + 4 : 3));
+  return `<text x="${cx}" y="${y}" text-anchor="middle" class="pricetag"
           font-size="${fs}">${esc(t)}</text>`;
+}
+function serialFs_(p, sc, sl) {
+  const t = String(p.serial || '').trim();
+  if (!t) return 0;
+  const ts = Math.min(sc, 2.4);
+  return Math.max(5.5, Math.min(6.8 * ts, (sl.w - 8) / Math.max(t.length * 0.6, 3)));
 }
 
 // small-print serial under every occupied spot (Brigham request
 // 083126larson09) — saves clicking into spots while hunting a piano
-function serialText(p, cx, cy, sc) {
+function serialText(p, cx, cy, sc, sl) {
   const t = String(p.serial || '').trim();
   if (!t) return '';
-  const below = priceLabel(p) ? 19.5 : 14;
-  const fs = Math.max(4.6, Math.min(6.2 * sc, (30 * sc) / Math.max(t.length * 0.58, 3)));
-  return `<text x="${cx}" y="${cy + below * sc}" text-anchor="middle" class="serialsm"
+  if (!sl || sc <= 1.3) {   // small rack icons: original placement
+    const below0 = priceLabel(p) ? 19.5 : 14;
+    const fs0 = Math.max(4.6, Math.min(6.2 * sc, (30 * sc) / Math.max(t.length * 0.58, 3)));
+    return `<text x="${cx}" y="${cy + below0 * sc}" text-anchor="middle" class="serialsm"
+            font-size="${fs0}">${esc(t)}</text>`;
+  }
+  const fs = serialFs_(p, sc, sl);
+  const y = Math.min(cy + 10.5 * sc + (priceLabel(p) ? 9.5 * Math.min(sc, 2.4) + fs + 2 : fs), sl.y + sl.h - 2);
+  return `<text x="${cx}" y="${y}" text-anchor="middle" class="serialsm"
           font-size="${fs}">${esc(t)}</text>`;
 }
 
@@ -2731,7 +2754,7 @@ function renderMap() {
           const hl = S.focusRow === p.row || (q && matches(p, q));
           s += `<g class="piano ${finClass(p)} ${soldClass(p)} ${st} own-${ownerClass(p)} ${q && !matches(p, q) ? 'dim' : ''} ${hl ? 'hl' : ''}"
                 data-slot="${esc(sl.id)}" data-row="${p.row}">
-                <g transform="rotate(90 ${cx} ${cy})">${glyph(p.type, cx, cy, sc)}</g>${phaseText(p, cx, cy, sc)}${mediaBadge(p, cx, cy, sc)}${priceText(p, cx, cy, sc)}${finBadge(p, cx, cy, sc)}${soldBadge(p, cx, cy, sc)}${tempBadge(p, cx, cy, sc)}${ghostBadge(p, cx, cy, sc)}${serialText(p, cx, cy, sc)}</g>`;
+                <g transform="rotate(90 ${cx} ${cy})">${glyph(p.type, cx, cy, sc)}</g>${phaseText(p, cx, cy, sc)}${mediaBadge(p, cx, cy, sc)}${priceText(p, cx, cy, sc, sl)}${finBadge(p, cx, cy, sc)}${soldBadge(p, cx, cy, sc)}${tempBadge(p, cx, cy, sc)}${ghostBadge(p, cx, cy, sc)}${serialText(p, cx, cy, sc, sl)}</g>`;
         });
       } else {
         const pfs = Math.max(10, Math.min(20, sl.w * 0.4));
@@ -2769,7 +2792,7 @@ function renderMap() {
           const cy = sl.y + sl.h / 2;
           const hl = S.focusRow === p.row || (q && matches(p, q));
           s += `<g class="piano ${finClass(p)} ${soldClass(p)} ${st} own-${ownerClass(p)} ${q && !matches(p, q) ? 'dim' : ''} ${hl ? 'hl' : ''}"
-                data-slot="${esc(sl.id)}" data-row="${p.row}">${glyph(p.type, cx, cy, sc)}${phaseText(p, cx, cy, sc)}${mediaBadge(p, cx, cy, sc)}${priceText(p, cx, cy, sc)}${finBadge(p, cx, cy, sc)}${soldBadge(p, cx, cy, sc)}${tempBadge(p, cx, cy, sc)}${ghostBadge(p, cx, cy, sc)}${serialText(p, cx, cy, sc)}</g>`;
+                data-slot="${esc(sl.id)}" data-row="${p.row}">${glyph(p.type, cx, cy, sc)}${phaseText(p, cx, cy, sc)}${mediaBadge(p, cx, cy, sc)}${priceText(p, cx, cy, sc, sl)}${finBadge(p, cx, cy, sc)}${soldBadge(p, cx, cy, sc)}${tempBadge(p, cx, cy, sc)}${ghostBadge(p, cx, cy, sc)}${serialText(p, cx, cy, sc, sl)}</g>`;
         });
       } else if (!thin) {
         const pfs = Math.max(9, Math.min(20, sl.h * 0.45));
