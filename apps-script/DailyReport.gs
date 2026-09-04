@@ -2678,9 +2678,21 @@ function adjustClock_(req) {
   return withClockLock_(function () {
     var g = req._g;
     var isPay = req.clock === 'pay';
-    if (isPay ? !payrollAdmin_(g) : !timelogAdmin_(g)) {
+    // Lead-manager lane (Mark 9/2, approved by Brigham 9/4): shop-side clock
+    // fix requests route to Mark, so Mark can also FIX shop-side DAY punches
+    // — never admins' rows and never his own. Melissa + owners unchanged.
+    var leadPayOk = false;
+    if (isPay && !payrollAdmin_(g) && g && String(g.email || '').toLowerCase() === 'markhales.blp@gmail.com') {
+      var whoTech = String(req.tech || '');
+      if (!whoTech && Number(req.row) >= 2) {
+        try { whoTech = String(payrollSheet_().getRange(Number(req.row), 1).getValue() || ''); } catch (eL) {}
+      }
+      var wt = whoTech.toLowerCase();
+      leadPayOk = !!whoTech && roleSide_(whoTech) !== 'admin' && wt.indexOf('mark') !== 0;
+    }
+    if (isPay ? (!payrollAdmin_(g) && !leadPayOk) : !timelogAdmin_(g)) {
       return {error: isPay
-        ? 'Only owners and Melissa can adjust payroll punches (Google sign-in required).'
+        ? 'Only owners, Melissa — or Mark for shop-side techs — can adjust payroll punches (Google sign-in required).'
         : 'Only owners and the shop managers can adjust piano clock times (Google sign-in required).'};
     }
     var start = new Date(req.start), end = req.end ? new Date(req.end) : null;

@@ -9040,7 +9040,11 @@ function adjRow(clock, r, label, sub) {
 }
 function clockAdjustTable() {
   if (!S.fixRows || !S.payRows || !S.tlRows) return '<div class="empty">Loading clocks…</div>';
-  const canPay = isPayrollAdmin(), canTl = isTimelogAdmin();
+  // Mark (lead manager) can edit shop-side DAY punches too — the bridge
+  // enforces the lane (never admins' rows, never his own)
+  const me = (authUser() || {}).email || '';
+  const canPay = isPayrollAdmin() || me.toLowerCase() === 'markhales.blp@gmail.com';
+  const canTl = isTimelogAdmin();
   const cutoff = Date.now() - 14 * 86400000;
   const openFix = S.fixRows.filter(r => r.status === 'open');
   const doneFix = S.fixRows.filter(r => r.status !== 'open').slice(0, 8);
