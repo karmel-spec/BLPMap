@@ -3813,6 +3813,9 @@ async function openWorkChecklist(serial, phase) {
                  <input type="file" accept="image/*" capture="environment" hidden class="clshotfile"></label>
                <span class="clshotmsg phmsg" style="display:inline-block;margin-left:8px"></span>
                <div style="font-size:11px;color:#8a847b;margin-top:3px">files straight into this piano's Tech photo folder</div></div>` : ''}
+          ${/cabinetry|shelf/i.test((it.handbook || it.text).replace(/<[^>]+>/g, ' '))
+            ? `<div style="margin-top:10px"><button class="csvbtn clcabbtn" style="background:#5b4a8a">🗄 Assign the cabinetry shelf now</button>
+               <span style="font-size:11px;color:#8a847b;margin-left:8px">${(cabTokens(p) || []).length ? 'on: ' + esc(cabTokens(p).join(', ')) : 'records which rack + shelf this piano\'s cabinetry is on'}</span></div>` : ''}
         </div>
         ${st.skips.has(it.i) ? `<div style="background:#fdf6e3;border-radius:8px;padding:8px 10px;font-size:12.5px;color:#9a5b13;margin-top:8px">⏭ This step is skipped — ${esc(st.skips.get(it.i))}</div>` : ''}
         <div style="display:flex;gap:8px;margin-top:12px">
@@ -3826,6 +3829,8 @@ async function openWorkChecklist(serial, phase) {
           : !st.done.has(it.i) && !st.skips.has(it.i)
             ? `<button class="clskipask" style="background:none;border:none;color:#9a5b13;font-size:12px;margin-top:8px;text-decoration:underline;cursor:pointer">⏭ Skip</button>` : ''}`;
       ov.querySelector('.dsx').onclick = close;
+      const cabBtn = ov.querySelector('.clcabbtn');
+      if (cabBtn) cabBtn.onclick = () => openCabModal(p, ov);
       const shot = ov.querySelector('.clshotfile');
       if (shot) shot.onchange = async ev2 => {
         const f = ev2.target.files && ev2.target.files[0];
