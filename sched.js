@@ -708,7 +708,7 @@ async function loadProposal(box){
   box.innerHTML=`<div class="curmsg">Loading proposed week…</div>`;
   let got=null;
   try{
-    const r=await fetch(CONFIG.STOREMAP_BRIDGE+"?fn=proposal",{redirect:"follow"});
+    const r=await fetch(CONFIG.STOREMAP_BRIDGE+"?fn=proposal",{redirect:"follow",signal:AbortSignal.timeout(25000)});
     const j=await r.json();
     if(j.ok) got=j;
     // a double-encoded save leaves plan as a JSON string — parse, don't blank
@@ -935,7 +935,7 @@ function needMapData(){
   if(MAPD || MAPD_LOADING) return !!MAPD;
   MAPD_LOADING=true;
   Promise.all([
-    fetch("/api/data").then(r=>r.json()).catch(()=>null),
+    fetch("/api/data",{signal:AbortSignal.timeout(30000)}).then(r=>r.json()).catch(()=>null),
     fetch("https://blpsalesapp.netlify.app/.netlify/functions/team-roster?key=pianoman")
       .then(r=>r.json()).catch(()=>null),
   ]).then(([d,ro])=>{
@@ -1289,7 +1289,7 @@ let SPEC=null, SPEC_LOADING=false, SPERF=null, SPERF_LOADING=false;
 function needSpec(){
   if(SPEC||SPEC_LOADING) return !!SPEC;
   SPEC_LOADING=true;
-  fetch(CONFIG.STOREMAP_BRIDGE+"?fn=specialties",{redirect:"follow"}).then(r=>r.json()).then(j=>{
+  fetch(CONFIG.STOREMAP_BRIDGE+"?fn=specialties",{redirect:"follow",signal:AbortSignal.timeout(25000)}).then(r=>r.json()).then(j=>{
     if(j&&j.ok) SPEC=j;
     schedRerender();
   }).catch(()=>{}).then(()=>{SPEC_LOADING=false;});
@@ -1315,10 +1315,10 @@ function needSpecPerf(){
   SPERF_LOADING=true;
   const K="sb_publishable_MamcjSX0CHTdYlpKDWSkmQ_-nbuQ1z-";
   Promise.all([
-    fetch(CONFIG.STOREMAP_BRIDGE+"?fn=timelog&days=730",{redirect:"follow"}).then(r=>r.json()).catch(()=>null),
+    fetch(CONFIG.STOREMAP_BRIDGE+"?fn=timelog&days=730",{redirect:"follow",signal:AbortSignal.timeout(30000)}).then(r=>r.json()).catch(()=>null),
     fetch("https://ismacawxfvvllfinibbf.supabase.co/rest/v1/qc_requests?select=by,phase,status&limit=1000",
       {headers:{apikey:K,Authorization:"Bearer "+K}}).then(r=>r.json()).catch(()=>[]),
-    fetch(CONFIG.STOREMAP_BRIDGE+"?fn=calskillhist",{redirect:"follow"}).then(r=>r.json()).catch(()=>null),
+    fetch(CONFIG.STOREMAP_BRIDGE+"?fn=calskillhist",{redirect:"follow",signal:AbortSignal.timeout(45000)}).then(r=>r.json()).catch(()=>null),
   ]).then(([tl,qc,ch])=>{
     const agg={};   // "first|skill" -> {min,pianos:Set(180d),pass,rework,allSns:Set,extra}
     const get=(f,sk)=>{ const k=f+"|"+sk;
