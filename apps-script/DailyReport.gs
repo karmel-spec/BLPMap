@@ -2687,8 +2687,9 @@ function adjustClock_(req) {
       if (!whoTech && Number(req.row) >= 2) {
         try { whoTech = String(payrollSheet_().getRange(Number(req.row), 1).getValue() || ''); } catch (eL) {}
       }
-      var wt = whoTech.toLowerCase();
-      leadPayOk = !!whoTech && roleSide_(whoTech) !== 'admin' && wt.indexOf('mark') !== 0;
+      // Brigham 9/4: Mark may fix his OWN punches too — only admins' rows
+      // stay out of his lane (Melissa's; she can already fix her own)
+      leadPayOk = !!whoTech && roleSide_(whoTech) !== 'admin';
     }
     if (isPay ? (!payrollAdmin_(g) && !leadPayOk) : !timelogAdmin_(g)) {
       return {error: isPay
