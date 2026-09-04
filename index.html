@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Store Map — Brigham Larson Pianos</title>
 <link rel="icon" href="assets/blp-logo.png">
-<link rel="stylesheet" href="styles.css?v=190">
+<link rel="stylesheet" href="styles.css?v=191">
 </head>
 <body>
 
@@ -86,6 +86,7 @@
     <div class="navitem" data-view="team" id="navTeam" hidden><span class="ic">👥</span>Team</div>
     <div class="navitem" data-view="admdash" id="navAdmDash" hidden><span class="ic">🛡</span>Admin</div>
     <div class="navitem" data-view="manager" id="navManager" hidden><span class="ic">📊</span>Manager</div>
+    <div class="navitem" data-view="appset" id="navAppset" hidden><span class="ic">⚙️</span>Settings</div>
     <div class="crew">
       <b>Synced</b><span id="synced">loading…</span>
     </div>
@@ -287,6 +288,15 @@
     </div>
   </div>
 
+  <div class="view panelview" id="view-appset" hidden>
+    <div class="panel">
+      <h2 class="ph">⚙️ SETTINGS — ROLES &amp; TEAM</h2>
+      <p class="pd">Owners, Melissa &amp; Mark. Permissions live on roles; people get a role.
+        Every change is logged in the Activity Log.</p>
+      <div id="appsetBody"></div>
+    </div>
+  </div>
+
   <div class="view panelview" id="view-admdash" hidden>
     <div class="panel">
       <h2 class="ph">🛡 ADMIN DASHBOARD</h2>
@@ -297,7 +307,7 @@
   </div>
 </div>
 
-<script src="app.js?v=323"></script>
+<script src="app.js?v=324"></script>
 <script src="sched.js?v=6"></script>
 </body>
 </html>

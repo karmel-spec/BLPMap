@@ -7523,12 +7523,60 @@ const PAYROLL_ADMIN_EMAILS = OWNER_EMAILS.concat(['melissa@brighamlarsonpianos.c
 const TIMELOG_ADMIN_EMAILS = OWNER_EMAILS.concat(
   ['markhales.blp@gmail.com', 'matthewwessman.blp@gmail.com', 'jacobmower.blp@gmail.com']);
 function userEmail() { const u = authUser(); return u && u.email ? String(u.email).toLowerCase() : ''; }
+/* ⚙️ Settings feed + permission engine (Brigham 9/4, Design C).
+ * Sheet-driven grants override the hardcoded lists for anyone with an
+ * assignment row; everyone else keeps legacy behavior. */
+const APPSET = {at: 0, data: null};
+async function loadAppSettings(force) {
+  if (!force && APPSET.data && Date.now() - APPSET.at < 300000) return APPSET.data;
+  try {
+    const r = await fetchT('https://blpsalesapp.netlify.app/.netlify/functions/app-settings?key=pianoman', {}, 15000);
+    const j = await r.json();
+    if (j.ok) {
+      APPSET.data = j; APPSET.at = Date.now();
+      wireNavGates();
+      // 🧨 danger zone: force stale clients to reload themselves
+      const below = Number((j.settings || {}).force_refresh_below || 0);
+      const mv = +(document.querySelector('script[src*="app.js"]').src.match(/v=(\d+)/) || [])[1] || 0;
+      if (below && mv && mv < below && Date.now() - (+lsGet('frBounce') || 0) > 3600000) {
+        lsSet('frBounce', String(Date.now()));
+        location.reload();
+      }
+    }
+  } catch (e) { /* offline — legacy gates hold */ }
+  return APPSET.data;
+}
+setTimeout(loadAppSettings, 3500);
+setInterval(() => loadAppSettings(true), 600000);
+function permHas(key) {
+  const em = userEmail();
+  if (!em || !APPSET.data) return null;
+  if (OWNER_EMAILS.includes(em)) return true;
+  const a = (APPSET.data.assignments || []).find(x => x.email === em);
+  if (!a || !a.role) return null;
+  if (a.role === 'owner') return true;
+  const set = new Set(String(APPSET.data.roles[a.role] || '').split(',')
+    .map(x => x.trim().toLowerCase()).filter(Boolean));
+  String(a.plus || '').split(',').forEach(k => { k = k.trim().toLowerCase().replace(/^\+/, ''); if (k) set.add(k); });
+  String(a.minus || '').split(',').forEach(k => { k = k.trim().toLowerCase().replace(/^-/, ''); if (k) set.delete(k); });
+  return set.has('all') ? true : set.has(key);
+}
+function gateOr(legacy, key) { const ph = permHas(key); return ph === null ? legacy : ph; }
+function wireNavGates() {
+  const nm = $('#navManager');
+  if (nm) nm.hidden = !isManagerConsole();
+  const na = $('#navAppset');
+  if (na) na.hidden = !isSettingsAdmin();
+}
+function isSettingsAdmin() {
+  return gateOr(isOwner() || ['melissa@brighamlarsonpianos.com', 'markhales.blp@gmail.com'].includes(userEmail()), 'settings');
+}
 function isOwner() { return OWNER_EMAILS.includes(userEmail()); }
 function isAdminUser() { return ADMIN_EMAILS.includes(userEmail()); }
-function isPayrollAdmin() { return PAYROLL_ADMIN_EMAILS.includes(userEmail()); }
-function isTimelogAdmin() { return TIMELOG_ADMIN_EMAILS.includes(userEmail()); }
+function isPayrollAdmin() { return gateOr(PAYROLL_ADMIN_EMAILS.includes(userEmail()), 'payroll_edit'); }
+function isTimelogAdmin() { return gateOr(TIMELOG_ADMIN_EMAILS.includes(userEmail()), 'tl_edit'); }
 // 📊 Manager console — the owners and the Lead Manager only (Brigham 9/1)
-function isManagerConsole() { return isOwner() || userEmail() === 'markhales.blp@gmail.com'; }
+function isManagerConsole() { return isOwner() || gateOr(userEmail() === 'markhales.blp@gmail.com', 'manager_console'); }
 // only BLP accounts may sign in — a personal Gmail gets bounced back to
 // Google's account chooser instead of silently half-working
 function blpAccount(email) {
@@ -7611,8 +7659,7 @@ function renderAuth() {
   const na = $('#navAdmDash');
   if (na) na.hidden = !isTeamAdmin();
   // 📊 Manager console — Brigham, Karmel & Mark only
-  const nm = $('#navManager');
-  if (nm) nm.hidden = !isManagerConsole();
+  wireNavGates();
   // top-bar identity chip — who's signed in, always visible
   const tw = $('#topWho');
   if (tw && !tw.dataset.wired) {
@@ -9952,9 +9999,12 @@ async function loadMyClock(name) {
 }
 // per-person approved weekly hours (Brigham 9/3): Lisa 28, Ezzy 20;
 // everyone else (Melissa included) is on the standard 40.
-const WEEK_CAP = {lisa: 28, ezzy: 20};
+const WEEK_CAP = {lisa: 28, ezzy: 20};   // fallback when the settings feed is unreachable
 function myWeekCap(name) {
-  return WEEK_CAP[String(name || '').trim().split(/\s+/)[0].toLowerCase()] || 40;
+  const first = String(name || '').trim().split(/\s+/)[0].toLowerCase();
+  const st = APPSET.data && APPSET.data.settings;
+  if (st) return Number(st['week_cap_' + first]) || Number(st.week_cap_default) || 40;
+  return WEEK_CAP[first] || 40;
 }
 function myWeekCard() {
   const cap = myWeekCap(MYCLOCK.forName || clockName());
@@ -11892,7 +11942,7 @@ function renderAdmDash() {
 
 /* ---------- views / nav / drawers ---------- */
 function showView(v) {
-  ['map', 'report', 'board', 'cal', 'media', 'shopmap', 'archive', 'dash', 'whiteboard', 'training', 'trainingdoc', 'sched', 'team', 'admdash', 'updates', 'tboard', 'manager'].forEach(x => $('#view-' + x).hidden = x !== v);
+  ['map', 'report', 'board', 'cal', 'media', 'shopmap', 'archive', 'dash', 'whiteboard', 'training', 'trainingdoc', 'sched', 'team', 'admdash', 'updates', 'tboard', 'manager', 'appset'].forEach(x => $('#view-' + x).hidden = x !== v);
   if (v === 'archive') renderArchive();
   document.querySelectorAll('.navitem[data-view]').forEach(el =>
     el.classList.toggle('on', el.dataset.view === v));
@@ -11905,6 +11955,7 @@ function showView(v) {
   if (v === 'updates') renderUpdatesFeed();
   if (v === 'tboard') renderTaskBoard();
   if (v === 'manager') renderManager();
+  if (v === 'appset') renderAppSettings();
 }
 /* 📊 Manager console — the scorecard as its own menu tab */
 function renderManager() {
@@ -11917,6 +11968,228 @@ function renderManager() {
   if (!S.slRows) loadScoreLog();
   el.innerHTML = scorecardTable();
 }
+/* ---------- ⚙️ SETTINGS — Design C: Roles Ladder (Brigham 9/4) ---------- */
+const PERM_KEYS = [
+  ['payroll_edit', 'Edit day punches — whole team'],
+  ['payroll_edit_shop', 'Edit day punches — shop side only'],
+  ['tl_edit', 'Edit piano clock times'],
+  ['clockfix_admin', 'Resolve clock fixes — admin lane'],
+  ['clockfix_shop', 'Resolve clock fixes — shop lane'],
+  ['timeoff_admin', 'Approve time off — admin lane'],
+  ['timeoff_shop', 'Approve time off — shop lane'],
+  ['qc_judge', 'Judge mini-QC inspections'],
+  ['prequeue_approve', 'Approve pre-queue pianos'],
+  ['price_set', 'Set / edit prices'],
+  ['manager_console', 'Manager console (scorecard)'],
+  ['job_costing', 'Job costing report'],
+  ['admin_dash', 'Admin dashboard & app requests'],
+  ['payroll_report', 'Payroll report'],
+  ['roster_edit', 'Add / remove team members'],
+  ['settings', 'This Settings page'],
+];
+const SETTING_FIELDS = [
+  ['📵 Quiet hours (texting)', [
+    ['quiet_start', 'Texts allowed FROM (hour, 24h Denver)'],
+    ['quiet_end', 'Texts allowed UNTIL (hour, exclusive)'],
+    ['quiet_exempt_names', 'First names texted any time (comma)'],
+    ['quiet_exempt_keywords', 'Keywords that always send now (comma)'],
+  ]],
+  ['🔍 Mini-QC routing', [
+    ['qc_inspector', 'Inspection requests text (name)'],
+    ['qc_video_copy', 'Also texted, for training videos (blank = off)'],
+    ['qc_escalate_minutes', 'Minutes before escalation'],
+    ['qc_escalate_to', 'Escalation texts go to (comma names)'],
+  ]],
+  ['📋 Weekly reports & clocks', [
+    ['report_exempt', 'Thursday-sweep skips these first names (comma)'],
+    ['week_cap_default', 'Default weekly hours cap'],
+    ['geofence_meters', 'Day-punch distance from store (meters)'],
+  ]],
+  ['🧨 Danger zone', [
+    ['force_refresh_below', 'Force-reload app versions BELOW this number (blank = off)'],
+  ]],
+];
+const SETU = {sel: 'leadmanager', busy: false};
+async function setPost(body) {
+  const wa = writeAuth();
+  if (!wa.ok) { alert('Sign in with Google first.'); return {error: 'not signed in'}; }
+  const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+    headers: {'content-type': 'text/plain;charset=utf-8'},
+    body: JSON.stringify({pin: wa.pin, ...body, ...authFields()})});
+  return r.json();
+}
+async function renderAppSettings() {
+  const el = $('#appsetBody');
+  if (!el) return;
+  if (!isSettingsAdmin()) { el.innerHTML = '<div class="empty">Owners, Melissa &amp; Mark only.</div>'; return; }
+  el.innerHTML = '<div class="empty">Loading settings…</div>';
+  const [dump, roster] = await Promise.all([
+    setPost({action: 'settingsdump'}),
+    fetchT('https://blpsalesapp.netlify.app/.netlify/functions/team-roster?key=pianoman', {}, 20000)
+      .then(r => r.json()).catch(() => ({})),
+  ]);
+  if (!dump || !dump.ok) { el.innerHTML = '<div class="empty">✗ ' + esc((dump && dump.error) || 'could not load') + '</div>'; return; }
+  loadAppSettings(true);
+  const owner = isOwner();
+  const roles = dump.roles, assigns = dump.assignments || [], st = dump.settings || {};
+  const roleOf = {};
+  assigns.forEach(a => { (roleOf[a.role] = roleOf[a.role] || []).push(a.name.split(' ')[0] || a.email); });
+  const ROLE_LABEL = {owner: 'OWNER', leadadmin: 'LEAD ADMIN', leadmanager: 'LEAD MANAGER', manager: 'MANAGER', team: 'TEAM'};
+  const roleCard = rn => `<button class="setrole ${SETU.sel === rn ? 'on' : ''}" data-r="${rn}">
+      <b>${esc(ROLE_LABEL[rn] || rn.toUpperCase())}</b>
+      <span>${esc((roleOf[rn] || []).join(' · ') || (rn === 'team' ? 'everyone else' : '—'))}</span></button>`;
+  const selPerms = new Set(String(roles[SETU.sel] || '').split(',').map(x => x.trim().toLowerCase()).filter(Boolean));
+  const permRow = ([k, label]) => `<div class="setperm">
+      <span>${esc(label)}</span>
+      <button class="settog ${SETU.sel === 'owner' || selPerms.has('all') || selPerms.has(k) ? 'on' : ''}"
+        data-k="${k}" ${!owner || SETU.sel === 'owner' ? 'disabled' : ''}><i></i></button></div>`;
+  const teamRows = ((roster.tabs && roster.tabs['Current Team']) || []).filter(r => (r[0] || '').trim());
+  const capOf = fn => st['week_cap_' + fn.toLowerCase()] || '';
+  const assignedEmails = new Set(assigns.map(a => a.email));
+  el.innerHTML = `
+    <div class="setgrid">${['owner', 'leadadmin', 'leadmanager', 'manager', 'team'].map(roleCard).join('')}</div>
+    <h4 class="tmsec">${esc((ROLE_LABEL[SETU.sel] || SETU.sel).toUpperCase())} — what this role can do
+      ${owner ? '' : '<small class="lite">(read-only — owners edit role powers)</small>'}</h4>
+    <div class="setperms">${PERM_KEYS.map(permRow).join('')}</div>
+    <h4 class="tmsec">Privileged people <small class="lite">— everyone else is standard TEAM</small></h4>
+    <table class="settable"><tr><th>NAME</th><th>EMAIL</th><th>ROLE</th><th></th></tr>
+      ${assigns.map(a => `<tr>
+        <td><b>${esc(a.name || '—')}</b></td><td class="lite">${esc(a.email)}</td>
+        <td><select class="setrolesel" data-email="${esc(a.email)}" data-name="${esc(a.name)}"
+              ${a.role === 'owner' && !owner ? 'disabled' : ''}>
+            ${Object.keys(ROLE_LABEL).map(rn => `<option value="${rn}" ${a.role === rn ? 'selected' : ''}>${ROLE_LABEL[rn]}</option>`).join('')}
+          </select>${a.plus ? ` <span class="lite">＋${esc(a.plus)}</span>` : ''}${a.minus ? ` <span class="lite" style="color:#9e2020">−${esc(a.minus)}</span>` : ''}</td>
+        <td>${a.role === 'owner' ? '🔒' : `<button class="setdrop" data-email="${esc(a.email)}">↓ to TEAM</button>`}</td></tr>`).join('')}
+      <tr><td colspan="4"><div class="setaddp">
+        <input class="sap-name" placeholder="name"><input class="sap-email" placeholder="google sign-in email">
+        <select class="sap-role">${['leadadmin', 'leadmanager', 'manager'].map(rn => `<option value="${rn}">${ROLE_LABEL[rn]}</option>`).join('')}</select>
+        <button class="csvbtn sap-go">＋ Grant role</button><span class="sap-msg phmsg"></span></div></td></tr>
+    </table>
+    <h4 class="tmsec">Team roster <small class="lite">— from the Current Team sheet · removing archives their row</small></h4>
+    <table class="settable"><tr><th>NAME</th><th>POSITION</th><th>WEEKLY CAP</th><th></th></tr>
+      ${teamRows.map((r, i) => {
+        const fn = String(r[0] || '').trim(), ln = String(r[1] || '').trim();
+        return `<tr><td><b>${esc(fn)} ${esc(ln)}</b></td><td>${esc(String(r[2] || ''))}</td>
+          <td><input class="setcap" data-fn="${esc(fn.toLowerCase())}" value="${esc(capOf(fn))}"
+                placeholder="${esc(st.week_cap_default || '40')}" style="width:52px"> h</td>
+          <td><button class="setrm" data-row="${i + 2}" data-n="${esc(fn + ' ' + ln)}">remove…</button></td></tr>`;
+      }).join('')}
+      <tr><td colspan="4"><div class="setaddp">
+        <input class="sam-first" placeholder="first"><input class="sam-last" placeholder="last">
+        <input class="sam-pos" placeholder="position (Technician…)"><input class="sam-phone" placeholder="cell for texts">
+        <input class="sam-cap" placeholder="cap (40)" style="width:64px">
+        <button class="csvbtn sam-go">＋ Add team member</button><span class="sam-msg phmsg"></span></div></td></tr>
+    </table>
+    ${SETTING_FIELDS.map(([sect, fields]) => `<h4 class="tmsec">${esc(sect)}</h4>
+      <div class="setfields">${fields.map(([k, label]) => `<label class="setfield">
+        <span>${esc(label)}</span>
+        <input class="setval" data-k="${esc(k)}" value="${esc(st[k] || '')}">
+        <em class="setmsg phmsg"></em></label>`).join('')}</div>`).join('')}
+    <h4 class="tmsec">📣 Standup note for the morning brief</h4>
+    <div class="setaddp"><input type="date" class="sbn-date" value="${new Date(Date.now() + 86400000).toISOString().slice(0, 10)}">
+      <input class="sbn-note" placeholder="what Mark should read to the room…" style="flex:1;min-width:220px">
+      <button class="csvbtn sbn-go">Add to brief</button><span class="sbn-msg phmsg"></span></div>
+    <div class="lite" style="font-size:11.5px;margin-top:14px">Checklist &amp; glossary content live on the report sheet:
+      <a class="dlink" target="_blank" rel="noopener" href="https://docs.google.com/spreadsheets/d/11RoeVRETag5rZYX6_tEH-rf6x8JL0JeZU0P5AT0WI-I/edit#gid=1806342620">Phase Checklists ↗</a> ·
+      <a class="dlink" target="_blank" rel="noopener" href="https://docs.google.com/spreadsheets/d/11RoeVRETag5rZYX6_tEH-rf6x8JL0JeZU0P5AT0WI-I/edit#gid=200402085">Glossary ↗</a> ·
+      <a class="dlink" target="_blank" rel="noopener" href="https://docs.google.com/spreadsheets/d/11RoeVRETag5rZYX6_tEH-rf6x8JL0JeZU0P5AT0WI-I/edit#gid=550478228">Brief Notes ↗</a>
+      — every change here is stamped in the Activity Log. Lane splits (admin vs shop) still follow each person's Position.</div>`;
+
+  // ---- wiring ----
+  el.querySelectorAll('.setrole').forEach(b => b.onclick = () => { SETU.sel = b.dataset.r; renderAppSettings(); });
+  el.querySelectorAll('.settog:not([disabled])').forEach(b => b.onclick = async () => {
+    const k = b.dataset.k;
+    const cur = new Set(String(roles[SETU.sel] || '').split(',').map(x => x.trim().toLowerCase()).filter(Boolean));
+    cur.has(k) ? cur.delete(k) : cur.add(k);
+    b.classList.toggle('on');
+    const j = await setPost({action: 'roledef', role: SETU.sel, perms: [...cur].join(',')});
+    if (!j.ok) { alert('✗ ' + (j.error || 'failed')); }
+    renderAppSettings();
+  });
+  el.querySelectorAll('.setrolesel').forEach(sel2 => sel2.onchange = async () => {
+    const j = await setPost({action: 'roleset', email: sel2.dataset.email, name: sel2.dataset.name, role: sel2.value});
+    if (!j.ok) alert('✗ ' + (j.error || 'failed'));
+    renderAppSettings();
+  });
+  el.querySelectorAll('.setdrop').forEach(b => b.onclick = async () => {
+    const j = await setPost({action: 'roleset', email: b.dataset.email, remove: true});
+    if (!j.ok) alert('✗ ' + (j.error || 'failed'));
+    renderAppSettings();
+  });
+  const sapGo = el.querySelector('.sap-go');
+  if (sapGo) sapGo.onclick = async () => {
+    const name = el.querySelector('.sap-name').value.trim(), email = el.querySelector('.sap-email').value.trim();
+    const msg = el.querySelector('.sap-msg');
+    if (!name || !email.includes('@')) { msg.textContent = 'name + email needed'; return; }
+    msg.textContent = '…';
+    const j = await setPost({action: 'roleset', email, name, role: el.querySelector('.sap-role').value});
+    msg.textContent = j.ok ? '✓' : '✗ ' + (j.error || 'failed');
+    if (j.ok) renderAppSettings();
+  };
+  el.querySelectorAll('.setcap').forEach(inp => inp.onchange = async () => {
+    const j = await setPost({action: 'appsetting', key: 'week_cap_' + inp.dataset.fn, value: inp.value.trim()});
+    inp.style.borderColor = j.ok ? '#2e7d4f' : '#9e2020';
+  });
+  el.querySelectorAll('.setrm').forEach(b => b.onclick = async () => {
+    if (!confirmish('Remove ' + b.dataset.n + ' from the Current Team? Their row is archived (never deleted) and they move to Former BLP.')) return;
+    b.disabled = true; b.textContent = 'removing…';
+    try {
+      const r = await fetchT('https://blpsalesapp.netlify.app/.netlify/functions/team-roster', {
+        method: 'POST', headers: {'content-type': 'application/json'},
+        body: JSON.stringify({key: 'pianoman', tab: 'Current Team', move: {row: +b.dataset.row}})}, 25000);
+      const j = await r.json();
+      if (!j.ok) throw new Error(j.error || 'failed');
+    } catch (e) { alert('✗ ' + e.message); }
+    renderAppSettings();
+  });
+  const samGo = el.querySelector('.sam-go');
+  if (samGo) samGo.onclick = async () => {
+    const f = el.querySelector('.sam-first').value.trim(), l = el.querySelector('.sam-last').value.trim();
+    const pos = el.querySelector('.sam-pos').value.trim(), ph2 = el.querySelector('.sam-phone').value.trim();
+    const cap = el.querySelector('.sam-cap').value.trim();
+    const msg = el.querySelector('.sam-msg');
+    if (!f || !pos) { msg.textContent = 'first name + position needed'; return; }
+    msg.textContent = 'adding…'; samGo.disabled = true;
+    try {
+      const today = new Date().toLocaleDateString('en-US', {timeZone: 'America/Denver'});
+      const r = await fetchT('https://blpsalesapp.netlify.app/.netlify/functions/team-roster', {
+        method: 'POST', headers: {'content-type': 'application/json'},
+        body: JSON.stringify({key: 'pianoman', tab: 'Current Team',
+          append: [f, l, pos, today, '', '', ph2, '', 'added via Settings']})}, 25000);
+      const j = await r.json();
+      if (!j.ok) throw new Error(j.error || 'roster add failed');
+      if (ph2) await setPost({action: 'phoneset', name: f, phone: ph2});
+      if (cap) await setPost({action: 'appsetting', key: 'week_cap_' + f.toLowerCase(), value: cap});
+      msg.textContent = '✓ added';
+    } catch (e) { msg.textContent = '✗ ' + e.message; }
+    samGo.disabled = false;
+    renderAppSettings();
+  };
+  el.querySelectorAll('.setval').forEach(inp => inp.onchange = async () => {
+    const em2 = inp.nextElementSibling;
+    em2.textContent = '…';
+    const j = await setPost({action: 'appsetting', key: inp.dataset.k, value: inp.value.trim()});
+    em2.className = 'setmsg phmsg ' + (j.ok ? 'ok' : 'err');
+    em2.textContent = j.ok ? '✓ saved' : '✗ ' + (j.error || 'failed');
+    if (j.ok) loadAppSettings(true);
+  });
+  const sbnGo = el.querySelector('.sbn-go');
+  if (sbnGo) sbnGo.onclick = async () => {
+    const note = el.querySelector('.sbn-note').value.trim();
+    const msg = el.querySelector('.sbn-msg');
+    if (!note) { msg.textContent = 'write the note first'; return; }
+    msg.textContent = '…';
+    const j = await setPost({action: 'briefnote', date: el.querySelector('.sbn-date').value, note});
+    msg.className = 'sbn-msg phmsg ' + (j.ok ? 'ok' : 'err');
+    msg.textContent = j.ok ? '✓ it reads out that morning' : '✗ ' + (j.error || 'failed');
+    if (j.ok) el.querySelector('.sbn-note').value = '';
+  };
+}
+// confirm() is dead in installed PWAs — tiny sync fallback that works there
+function confirmish(text) {
+  try { return window.confirm ? window.confirm(text) : true; } catch (e) { return true; }
+}
+
 /* 🚀 App Updates — the user-facing changelog. Same "App Updates" sheet the
  * 📣 admin report logs into; everyone can read what's new. */
 async function renderUpdatesFeed() {
