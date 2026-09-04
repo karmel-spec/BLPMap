@@ -11519,6 +11519,23 @@ function admRequestsHTML() {
       <div class="admreqtext">${esc(r.text)}</div>
       <div class="admreqmeta">${r.context ? esc(r.context) + ' · ' : ''}${r.screenshot
         ? `<a href="${esc(r.screenshot)}" target="_blank" rel="noopener">📎 screenshot ↗</a>` : ''}</div>
+      <div class="admreqbtns">
+        <button class="rqcopy" data-id="${esc(r.id)}">📋 Copy for Claude</button>
+        <button class="rqsmsbtn" data-id="${esc(r.id)}">💬 Text ${esc((r.who || '').split(' ')[0])}</button>
+      </div>
+      <div class="rqsmsbox" data-id="${esc(r.id)}" hidden>
+        <div class="rqpres">
+          <button class="rqpre" data-t="Can you give a little more detail — what were you tapping, and what did you expect to happen?">more detail?</button>
+          <button class="rqpre" data-t="Could you attach a screenshot of what you're seeing? (💡 lightbulb → attach screenshot)">screenshot?</button>
+          <button class="rqpre" data-t="Is this still happening after refreshing the app (☰ menu → ⟳ Refresh app)?">still happening?</button>
+        </div>
+        <textarea class="rqsmstxt" rows="2" placeholder="text ${esc((r.who || '').split(' ')[0])} a question…"></textarea>
+        <div class="rqsmsrow">
+          <button class="rqsmssend csvbtn">Send text</button>
+          <button class="rqsmscancel csvbtn" style="background:none;border:1px solid #cfc9bf;color:inherit">Cancel</button>
+          <span class="rqsmsout phmsg"></span>
+        </div>
+      </div>
     </div>`;
   return `<h4 class="tmsec">Open <span class="pc">${open.length}</span></h4>${open.map(row).join('')
     || '<div class="empty">Nothing open. 🎉</div>'}
@@ -11646,6 +11663,47 @@ function renderAdmDash() {
       if (req) req.status = sel.value;
       renderAdmDash();
     } catch (e) { alert('✗ ' + e.message); sel.disabled = false; }
+  });
+  // 📋 Copy for Claude + 💬 text the requester — same tools as the shop
+  // app's App Requests page (Brigham 9/3)
+  el.querySelectorAll('.rqcopy').forEach(b => b.onclick = async () => {
+    const x = (ADMDASH.req || []).find(r => r.id === b.dataset.id); if (!x) return;
+    const brief = `App request ${x.id} (${x.type || 'edit'}) from ${x.who}, ${String(x.date).slice(0, 10)}:\n"${x.text}"\nContext: ${x.context || '—'}${x.screenshot ? '\nScreenshot: ' + x.screenshot : ''}`;
+    try { await navigator.clipboard.writeText(brief); b.textContent = '✓ copied'; }
+    catch (e) { b.textContent = '✗ copy blocked'; }
+    setTimeout(() => { b.textContent = '📋 Copy for Claude'; }, 1500);
+  });
+  el.querySelectorAll('.rqsmsbtn').forEach(b => b.onclick = () => {
+    const box = el.querySelector(`.rqsmsbox[data-id="${b.dataset.id}"]`); if (!box) return;
+    box.hidden = !box.hidden;
+    if (!box.hidden) box.querySelector('.rqsmstxt').focus();
+  });
+  el.querySelectorAll('.rqsmsbox').forEach(box => {
+    const x = (ADMDASH.req || []).find(r => r.id === box.dataset.id); if (!x) return;
+    const ta = box.querySelector('.rqsmstxt'), out = box.querySelector('.rqsmsout');
+    box.querySelectorAll('.rqpre').forEach(pb => pb.onclick = () => { ta.value = pb.dataset.t; ta.focus(); });
+    box.querySelector('.rqsmscancel').onclick = () => { box.hidden = true; out.textContent = ''; };
+    box.querySelector('.rqsmssend').onclick = async ev => {
+      const msgTxt = ta.value.trim();
+      if (!msgTxt) { ta.focus(); return; }
+      const btn = ev.currentTarget; btn.disabled = true; btn.textContent = 'Sending…'; out.textContent = '';
+      try {
+        const r2 = await fetchT('https://blpsalesapp.netlify.app/.netlify/functions/request-notify', {
+          method: 'POST', headers: {'content-type': 'application/json'},
+          body: JSON.stringify({key: 'pianoman', name: x.who,
+            message: `BLP Apps — about your ${x.type || 'request'} "${String(x.text).slice(0, 60)}": ${msgTxt} — ${clockName() || 'the office'}`})}, 30000);
+        const j2 = await r2.json();
+        if (j2.error) throw new Error(j2.error);
+        if (j2.sent === false && !j2.scheduled && !j2.queued) throw new Error(j2.reason || 'not sent');
+        out.className = 'rqsmsout phmsg ok';
+        out.textContent = j2.scheduled || j2.queued
+          ? `✓ queued — ${(x.who || '').split(' ')[0]} gets it at 10am (quiet hours)`
+          : `✓ texted ${(x.who || '').split(' ')[0]}`;
+        ta.value = '';
+        setTimeout(() => { box.hidden = true; out.textContent = ''; }, 2400);
+      } catch (e2) { out.className = 'rqsmsout phmsg err'; out.textContent = '✗ ' + e2.message; }
+      btn.disabled = false; btn.textContent = 'Send text';
+    };
   });
   // brigham tasks: add + mark done via the salesapp2 function
   const bAdd = el.querySelector('.brig-add');
