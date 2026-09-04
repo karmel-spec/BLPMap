@@ -4450,8 +4450,10 @@ function popHTML(p) {
            ${PHASE_STATES.filter(ph => ph !== 'In Queue').map(ph =>
              `<option value="${esc(ph)}" ${effPh === ph ? 'selected' : ''}>${esc(ph)}</option>`).join('')}
          </select></div>${gotoLine(p, effPh)}<div class="phmsg"></div>
-       ${(p.phaseNotes || '').trim() ? `<div class="phnhist" style="font-size:11px;color:#6f6a63;background:#faf8f4;border-radius:6px;padding:6px 9px;margin:4px 0;white-space:pre-wrap">📝 ${esc(String(p.phaseNotes).slice(0, 500))}</div>` : ''}
-       <div class="row phrow colorow">Colors
+       ${(p.phaseNotes || '').trim() ? `<div class="phnhist" style="font-size:11px;color:#6f6a63;background:#faf8f4;border-radius:6px;padding:6px 9px;margin:4px 0;white-space:pre-wrap">📝 ${esc(String(p.phaseNotes).slice(0, 500))}</div>` : ''}`
+    : '';
+  const colors = p.serial
+    ? `<div class="row phrow colorow">Colors
          <span style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:0">
            <input class="colorpick" maxlength="80" placeholder="first pick — refinish/plating color + sheen"
              value="${esc(p.colorPick || '')}">
@@ -4459,6 +4461,23 @@ function popHTML(p) {
              value="${esc(p.colorFinal || '')}">
          </span></div><div class="colormsg phmsg"></div>`
     : '';
+  const keysRow = p.serial
+    ? `<div class="row trkrow" title="key-top service — tap each that applies">Keys
+        <span class="trkchips">${KEY_SERVICE.map(t =>
+          `<button class="trk keybtn ${keyTokens(p).includes(t) ? 'on' : ''}" data-k="${t}">${esc(t)}</button>`).join('')}
+        </span></div><div class="keymsg phmsg"></div>`
+    : '';
+  const scopeSec = p.serial ? secWrap('scope', '🧾 Scope of Work', `
+    ${tracker}
+    ${keysRow}
+    ${colors}
+    <div class="row" style="align-items:flex-start">Special<br>instructions
+      <span style="flex:1;min-width:0;margin-left:8px">
+        <textarea class="scopenote" rows="2" maxlength="500"
+          placeholder="anything the whole job must honor — client requests, must-keeps, cautions">${esc(p.scopeNotes || '')}</textarea>
+        <div class="scopemsg phmsg"></div>
+        <div class="lite" style="font-size:11px">saves here AND into 📝 Notes below</div>
+      </span></div>`) : '';
   // opt-IN: blank asks, Yes shows the history button, No shows nothing at all
   const crVal = (p.clientReports || '').trim().toLowerCase();
   let crAsk = '';
@@ -4605,12 +4624,10 @@ function popHTML(p) {
       <input type="file" class="bnfile" accept="image/*" hidden>` : ''}
     ${p.serial ? `<button class="lhbtn">🕘 Location history</button><div class="lhout"></div>` : ''}`)}
 
+    ${scopeSec}
+
     ${(body => p.serial ? secWrap('shop', '🔨 Shop Progress', body) : body)(`
-    ${tracker}
-    ${p.serial ? `<div class="row trkrow" title="key-top service — tap each that applies">Keys
-        <span class="trkchips">${KEY_SERVICE.map(t =>
-          `<button class="trk keybtn ${keyTokens(p).includes(t) ? 'on' : ''}" data-k="${t}">${esc(t)}</button>`).join('')}
-        </span></div><div class="keymsg phmsg"></div>` : ''}
+    ${p.serial ? '' : tracker}
     ${phaser}
     ${tasksBox(p)}
     ${(p.phase || '').startsWith('Waiting') ? `<div class="row waitnote">Waiting on
@@ -5447,6 +5464,33 @@ function wirePop(p) {
       phw.onblur = phwSave;
       phw.onkeydown = ev => { if (ev.key === 'Enter') { ev.preventDefault(); clearTimeout(phwTimer); phwSave(); } };
       phw.onclick = ev => ev.stopPropagation();
+    }
+    // 🧾 scope special instructions — autosave; the bridge also copies the
+    // note into the general 📝 Notes (Brigham 9/4)
+    const scIn = pop.querySelector('.scopenote');
+    if (scIn) {
+      let scTimer = null, scLast = (p.scopeNotes || '').trim();
+      const scSave = async () => {
+        const val = scIn.value.trim();
+        if (val === scLast) return;
+        const wa = writeAuth();
+        const sm = pop.querySelector('.scopemsg');
+        if (!wa.ok) { if (sm) { sm.className = 'scopemsg phmsg err'; sm.textContent = 'sign in first'; } return; }
+        if (sm) { sm.className = 'scopemsg phmsg'; sm.textContent = '…'; }
+        try {
+          const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+            headers: {'content-type': 'text/plain;charset=utf-8'},
+            body: JSON.stringify({pin: wa.pin, action: 'setscopenote', serial: p.serial, row: p.row,
+              value: val, ...authFields()})});
+          const j = await r.json();
+          if (!j.ok) throw new Error(j.error || 'failed');
+          scLast = val; p.scopeNotes = val;
+          if (sm) { sm.className = 'scopemsg phmsg ok'; sm.textContent = '✓ saved + copied to Notes'; setTimeout(() => { sm.textContent = ''; }, 2200); }
+        } catch (e) { if (sm) { sm.className = 'scopemsg phmsg err'; sm.textContent = '✗ ' + e.message; } }
+      };
+      scIn.oninput = () => { clearTimeout(scTimer); scTimer = setTimeout(scSave, 1500); };
+      scIn.onblur = scSave;
+      scIn.onclick = ev => ev.stopPropagation();
     }
     let bnTimer = null, bnLast = (p.benchLoc || '').trim();
     const bnSave = async () => {

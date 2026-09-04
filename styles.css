@@ -1883,3 +1883,6 @@ button.cfxres:hover{border-color:#2e7d4f;color:#2e7d4f}
 .setfield{display:flex;flex-direction:column;gap:3px;font-size:12px;color:#6f6a63}
 .setfield input{font:500 13px/1.3 inherit;padding:7px 9px;border:1px solid #d7d2c7;border-radius:8px}
 .setfield em{font-style:normal;min-height:13px}
+
+/* 🧾 scope of work */
+.scopenote{width:100%;font:500 12.5px/1.4 inherit;border:1px solid #d7d2c7;border-radius:8px;padding:7px 9px;box-sizing:border-box;resize:vertical}

@@ -930,6 +930,25 @@ function doPost(e) {
       PERM_MEMO = null;
       return json_({ok: true});
     }
+    if (req.action === 'setscopenote') {
+      // 🧾 Scope of Work special instructions (Brigham 9/4): saved to a
+      // header-created SCOPE NOTES col AND copied into the general notes
+      var snSh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+      var snF = findPiano_(snSh, req.serial, req.row);
+      if (snF.error) return json_(snF);
+      var snVal = String(req.value == null ? '' : req.value).trim().slice(0, 500);
+      var snLast = snSh.getLastColumn();
+      var snHdr = snSh.getRange(2, 1, 1, snLast).getValues()[0];
+      var snCol = -1;
+      for (var snC = 0; snC < snHdr.length; snC++) {
+        if (String(snHdr[snC] || '').trim().toUpperCase() === 'SCOPE NOTES') { snCol = snC + 1; break; }
+      }
+      if (snCol < 0) { snSh.getRange(2, snLast + 1).setValue('SCOPE NOTES'); snCol = snLast + 1; }
+      snSh.getRange(snF.row, snCol).setValue(snVal);
+      if (snVal) addPianoNote_(snSh, snF.row, who, '🧾 scope: ' + snVal);
+      logAct_(who, 'Scope of Work note', snF.summary || req.serial, snVal || '(cleared)');
+      return json_({ok: true, scopeNotes: snVal});
+    }
     if (req.action === 'phoneset') {
       if (!settingsAdmin_(req._g)) return json_({error: 'Settings are for owners, Melissa and Mark only.'});
       var pName = String(req.name || '').trim(), pNum = String(req.phone || '').trim();
