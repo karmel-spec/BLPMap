@@ -4548,6 +4548,9 @@ function popHTML(p) {
           `<span class="cabchip" title="${esc(cabPretty(t))}">${esc(t)}<i class="cabdel" data-t="${esc(t)}">✕</i></span>`).join('')}
           <button class="cabadd">＋ shelf</button>
         </span></div><div class="cabmsg phmsg"></div>` : ''}
+    ${p.serial ? `<div class="row rowflex"><span>🔩 Plate hardware</span>
+      <input class="platehwin" maxlength="60" placeholder="bin / shelf / with plate…" value="${esc(p.plateHw || '')}" style="max-width:170px">
+      <span class="platehwmsg phmsg"></span></div>` : ''}
     ${p.serial ? `<div class="row rowflex"><span>🪑 Bench</span><b class="benchloc">${esc(p.benchLoc || '—')}</b></div>
     <div class="movebox benchbox">
         <input class="bnin" placeholder="bench location — spot #, shelf…" maxlength="40"
@@ -5374,6 +5377,33 @@ function wirePop(p) {
   // blur/Enter; no Set button (Brigham 8/28)
   const bnin = pop.querySelector('.bnin');
   if (bnin) {
+    // 🔩 plate hardware location (Hunter 9/4) — same autosave as Bench
+    const phw = pop.querySelector('.platehwin');
+    if (phw) {
+      let phwTimer = null, phwLast = (p.plateHw || '').trim();
+      const phwSave = async () => {
+        const val = phw.value.trim();
+        if (val === phwLast) return;
+        const wa = writeAuth();
+        const pm = pop.querySelector('.platehwmsg');
+        if (!wa.ok) { if (pm) { pm.className = 'platehwmsg phmsg err'; pm.textContent = 'sign in first'; } return; }
+        if (pm) { pm.className = 'platehwmsg phmsg'; pm.textContent = '…'; }
+        try {
+          const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+            headers: {'content-type': 'text/plain;charset=utf-8'},
+            body: JSON.stringify({pin: wa.pin, action: 'setplatehw', serial: p.serial, row: p.row,
+              value: val, ...authFields()})});
+          const j = await r.json();
+          if (!j.ok) throw new Error(j.error || 'failed');
+          phwLast = val; p.plateHw = val;
+          if (pm) { pm.className = 'platehwmsg phmsg ok'; pm.textContent = '✓'; setTimeout(() => { pm.textContent = ''; }, 1500); }
+        } catch (e) { if (pm) { pm.className = 'platehwmsg phmsg err'; pm.textContent = '✗ ' + e.message; } }
+      };
+      phw.oninput = () => { clearTimeout(phwTimer); phwTimer = setTimeout(phwSave, 1200); };
+      phw.onblur = phwSave;
+      phw.onkeydown = ev => { if (ev.key === 'Enter') { ev.preventDefault(); clearTimeout(phwTimer); phwSave(); } };
+      phw.onclick = ev => ev.stopPropagation();
+    }
     let bnTimer = null, bnLast = (p.benchLoc || '').trim();
     const bnSave = async () => {
       const val = bnin.value.trim();

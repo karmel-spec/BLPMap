@@ -113,6 +113,8 @@ function parsePianos(text) {
     ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'KEY SERVICE') : -1;
   const benchLocIdx = rows[1]
     ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'BENCH LOCATION') : -1;
+  const plateHwIdx = rows[1]
+    ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'PLATE HW LOCATION') : -1;
   const keytopIdx = rows[1]
     ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'KEYTOP STATUS') : -1;
   const impNoteIdx = rows[1]
@@ -195,6 +197,7 @@ function parsePianos(text) {
       // shop-tag statics: BENCH, PROJECT CATEGORY (plan), NOTES, REPLATING ORDERED
       bench: col(19).slice(0, 60), plan: col(23).slice(0, 220),
       benchLoc: benchLocIdx >= 0 ? col(benchLocIdx).slice(0, 80) : '',
+      plateHw: plateHwIdx >= 0 ? col(plateHwIdx).slice(0, 80) : '',
       keytopStatus: keytopIdx >= 0 ? col(keytopIdx).slice(0, 40) : '',
       importantNote: impNoteIdx >= 0 ? col(impNoteIdx).slice(0, 200) : '',
       pianoNotes: pianoNotesIdx >= 0 ? col(pianoNotesIdx).slice(0, 2000) : '',

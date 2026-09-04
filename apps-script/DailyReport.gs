@@ -973,6 +973,9 @@ function doPost(e) {
     if (req.action === 'setbench') {
       return json_(setBench_(req, who));
     }
+    if (req.action === 'setplatehw') {
+      return json_(setPlateHw_(req, who));
+    }
     if (req.action === 'setkeystatus') {
       return json_(setKeyStatus_(req, who));
     }
@@ -5745,6 +5748,25 @@ function setBench_(req, who) {
   sh.getRange(found.row, col).setValue(val);
   logAct_(who, 'Bench location', found.summary || req.serial, val || '(cleared)');
   return {ok: true, row: found.row, summary: found.summary, benchLoc: val};
+}
+/* Plate hardware location (Hunter 9/4): where this piano's bag/bin of
+ * plate screws, bolts and action holders lives while the plate is out —
+ * header-created PLATE HW LOCATION col. */
+function setPlateHw_(req, who) {
+  var val = String(req.value == null ? '' : req.value).trim().slice(0, 80);
+  var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+  var found = findPiano_(sh, req.serial, req.row);
+  if (found.error) return found;
+  var last = sh.getLastColumn();
+  var hdr = sh.getRange(2, 1, 1, last).getValues()[0];
+  var col = -1;
+  for (var c = 0; c < hdr.length; c++) {
+    if (String(hdr[c] || '').trim().toUpperCase() === 'PLATE HW LOCATION') { col = c + 1; break; }
+  }
+  if (col < 0) { sh.getRange(2, last + 1).setValue('PLATE HW LOCATION'); col = last + 1; }
+  sh.getRange(found.row, col).setValue(val);
+  logAct_(who, 'Plate hardware location', found.summary || req.serial, val || '(cleared)');
+  return {ok: true, row: found.row, summary: found.summary, plateHw: val};
 }
 /* Keytop status (Brigham 8/27): Evaluate / In Key Queue #n / In Process /
  * Done — header-created KEYTOP STATUS col, shown in the card's Concurrent

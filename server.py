@@ -139,6 +139,8 @@ def parse_pianos(raw):
                         if h.strip().upper() == 'KEY SERVICE'), -1)
     bench_loc_idx = next((i for i, h in enumerate(hdr)
                           if h.strip().upper() == 'BENCH LOCATION'), -1)
+    plate_hw_idx = next((i for i, h in enumerate(hdr)
+                         if h.strip().upper() == 'PLATE HW LOCATION'), -1)
     keytop_idx = next((i for i, h in enumerate(hdr)
                        if h.strip().upper() == 'KEYTOP STATUS'), -1)
     imp_note_idx = next((i for i, h in enumerate(hdr)
@@ -239,6 +241,7 @@ def parse_pianos(raw):
             # shop-tag statics: BENCH, PROJECT CATEGORY (plan), NOTES, REPLATING ORDERED
             'bench': col(19)[:60], 'plan': col(23)[:220],
             'benchLoc': (col(bench_loc_idx) if bench_loc_idx >= 0 else '')[:80],
+            'plateHw': (col(plate_hw_idx) if plate_hw_idx >= 0 else '')[:80],
             'keytopStatus': (col(keytop_idx) if keytop_idx >= 0 else '')[:40],
             'importantNote': (col(imp_note_idx) if imp_note_idx >= 0 else '')[:200],
             'pianoNotes': (col(piano_notes_idx) if piano_notes_idx >= 0 else '')[:2000],
