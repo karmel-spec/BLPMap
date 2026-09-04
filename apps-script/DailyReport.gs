@@ -930,6 +930,61 @@ function doPost(e) {
       PERM_MEMO = null;
       return json_({ok: true});
     }
+    if (req.action === 'contracts') {
+      // 📜 owner's form selections + contract files (Brigham 9/4).
+      // OWNERS + LEAD ADMIN ONLY — the response row also holds payment
+      // details; those columns are NEVER read or returned here.
+      if (!payrollAdmin_(req._g)) return json_({error: 'Contracts are for owners and the lead admin only.'});
+      var ctSerial = String(req.serial || '').replace(/\D/g, '');
+      var ctOwner = String(req.owner || '').toLowerCase();
+      var ctSh = SpreadsheetApp.openById(PIANO_LOG_ID).getSheetByName('Restoration Contracts');
+      var ctV = ctSh ? ctSh.getDataRange().getValues() : [];
+      var hit = null;
+      for (var ci = 1; ci < ctV.length; ci++) {
+        var rs = String(ctV[ci][18] || '').replace(/\D/g, '');
+        if (ctSerial && rs && rs === ctSerial) { hit = ctV[ci]; break; }
+      }
+      if (!hit && ctOwner) {
+        for (var cj = 1; cj < ctV.length; cj++) {
+          var nm = String(ctV[cj][3] || '').trim().toLowerCase();
+          var lastN = nm.split(/\s+/).pop();
+          if (lastN && lastN.length > 2 && ctOwner.indexOf(lastN) >= 0) { hit = ctV[cj]; break; }
+        }
+      }
+      var sel = null;
+      if (hit) {
+        var docLink = function (a2, b2) { return String(hit[a2] || hit[b2] || '').trim(); };
+        sel = {when: String(hit[0] || '').split(' ')[0], name: String(hit[3] || ''),
+          piano: [hit[15], hit[16]].map(String).filter(function (x) { return x.trim(); }).join(' '),
+          type: String(hit[17] || ''), serial: String(hit[18] || ''),
+          finishNow: String(hit[19] || ''), refinish: String(hit[25] || ''),
+          internal: String(hit[26] || hit[32] || ''), color: String(hit[27] || ''),
+          decal: String(hit[30] || ''), hardware: String(hit[40] || ''),
+          bench: String(hit[21] || ''), benchDesc: String(hit[22] || ''),
+          sentimental: String(hit[23] || ''), tuningAddon: String(hit[33] || ''),
+          payPlan: String(hit[44] || ''),
+          notes: [hit[14], hit[38], hit[59]].map(function (x) { return String(x || '').trim(); })
+            .filter(String).join(' · ').slice(0, 400),
+          docs: [[docLink(61, 62), 'Restoration Contract'], [docLink(65, 66), 'Shopwork Agreement'],
+                 [docLink(69, 70), 'Contract']].filter(function (d) { return d[0]; })};
+      }
+      var files = [];
+      try {
+        var last2 = ((sel && sel.name) || ctOwner).toLowerCase().split(/\s+/).pop();
+        if (last2 && last2.length > 2) {
+          var fold = DriveApp.getFolderById('1nIm0v5nbounf8AhzfgEfU9uK7ccqhxhb');
+          var fit = fold.getFiles(), scanned = 0;
+          while (fit.hasNext() && scanned < 300 && files.length < 6) {
+            var cf = fit.next();
+            if (cf.getName().toLowerCase().indexOf(last2) >= 0) {
+              files.push({name: cf.getName().slice(0, 90), url: cf.getUrl()});
+            }
+            scanned++;
+          }
+        }
+      } catch (eCt) {}
+      return json_({ok: true, found: !!sel, selections: sel, files: files});
+    }
     if (req.action === 'setscopenote') {
       // 🧾 Scope of Work special instructions (Brigham 9/4): saved to a
       // header-created SCOPE NOTES col AND copied into the general notes
