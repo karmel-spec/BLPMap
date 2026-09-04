@@ -10828,6 +10828,12 @@ function renderDash() {
 // optional and adds a "▶ watch video" link.
 const TRAININGS = [
   {
+    href: 'https://blpadmintraining.netlify.app/',
+    title: 'BLP Admin Training',
+    desc: 'Curriculum, practice log and scorecard for BLP admins — onboarding, foundations, and every admin duty by priority.',
+    readLabel: 'open the training app',
+  },
+  {
     doc: 'guide',
     title: 'Store Map User Guide',
     desc: 'How to use the BLP Store Map: signing in, finding pianos, clocking work time, paperwork & photos.',
@@ -10870,7 +10876,7 @@ function renderTraining() {
   el.innerHTML = TRAININGS.map((t, i) =>
     `<div class="trainrow">
        <b>${esc(t.title)}</b><span>${esc(t.desc)}</span>
-       <a class="tact" href="#" data-doc="${i}">📖 ${esc(t.readLabel || 'read')}</a>${
+       ${t.href ? `<a class="tact" href="${esc(t.href)}" target="_blank" rel="noopener">🎓 ${esc(t.readLabel || 'open')}</a>` : `<a class="tact" href="#" data-doc="${i}">📖 ${esc(t.readLabel || 'read')}</a>`}${
        t.video ? `<a class="tact" href="${esc(t.video)}" target="_blank" rel="noopener">▶ watch video</a>` + transcriptLinks() : ''
      }</div>`).join('');
   wireDocLinks(el);
