@@ -4712,7 +4712,9 @@ function popHTML(p) {
     <span class="shr" title="share this piano — text it to a teammate">↗</span>
     <span class="tag ${st}">${tags[st]}</span>
     <h3>${esc(makeModel)}</h3>
-    <div class="row rowflex"><span>Serial # <b>${esc(p.serial || '—')}</b></span>${typeBtns}</div>
+    <div class="row rowflex"><span>Serial # <b>${esc(p.serial || '—')}</b>
+      ${p.queuePos ? `<span class="qhdrchip" title="shop queue position — edit it in 📍 Locations"
+        style="display:inline-block;margin-left:8px;background:#f4f1ec;border:1px solid #dfe3e8;border-radius:999px;padding:2px 9px;font-size:12px;font-weight:800;color:#9e2020">Q-${p.queuePos}<small style="color:#8a929a;font-weight:600">/${p.queueTotal || '?'}</small></span>` : ''}</span>${typeBtns}</div>
     <div class="typemsg phmsg"></div>
     ${preQueue(p) ? `<div class="pqwarn">⚠️ <b>PRE-QUEUE</b> — deposit not received. No work is approved on this piano yet.
       ${isAdminUser() ? `<button class="pqapprove">✅ Approve for queue</button>` : `<i>admin / manager approval required to start work</i>`}
