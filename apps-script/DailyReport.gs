@@ -930,6 +930,10 @@ function doPost(e) {
       PERM_MEMO = null;
       return json_({ok: true});
     }
+    if (req.action === 'contractsync') {
+      try { return json_(contractSync_()); }
+      catch (eCS) { return json_({error: String(eCS).slice(0, 200)}); }
+    }
     if (req.action === 'contracts') {
       // 📜 owner's form selections + contract files (Brigham 9/4).
       // OWNERS + LEAD ADMIN ONLY — the response row also holds payment
@@ -5983,6 +5987,85 @@ function phaseNote_(req, who) {
   sh.getRange(found.row, col).setValue(prev ? line + '\n' + prev : line);
   return {ok: true, row: found.row, summary: found.summary};
 }
+/* 📜→🧾 CONTRACT SYNC (Brigham 9/4): every new Shopwork Agreement form
+ * response (Restoration Contracts tab) auto-fills the matching piano's
+ * Scope of Work — the whole shop sees the contractual scope on the card.
+ *   • COLOR FIRST PICK  ← owner's color choice (only if the field is empty)
+ *   • TRACK             ← +Refinish when the contract includes refinishing
+ *   • SCOPE NOTES       ← compact contract block (prepended, kept once)
+ *   • 📝 general notes   ← one 'contract applied' line
+ * Rows are stamped in a 'Synced to card' column; unmatched rows stay
+ * unstamped so they sync automatically once the piano reaches the log.
+ * Payment/banking columns (46-56) are never read. */
+function contractSync_() {
+  var ss = SpreadsheetApp.openById(PIANO_LOG_ID);
+  var cs = ss.getSheetByName('Restoration Contracts');
+  if (!cs) return {error: 'no Restoration Contracts tab'};
+  var v = cs.getDataRange().getValues();
+  var hdr = v[0] || [];
+  var mCol = -1;
+  for (var c = 0; c < hdr.length; c++) {
+    if (String(hdr[c] || '').trim() === 'Synced to card') { mCol = c + 1; break; }
+  }
+  if (mCol < 0) { mCol = hdr.length + 1; cs.getRange(1, mCol).setValue('Synced to card'); }
+  var sh = pianoSheet_(ss);
+  var pHdr = sh.getRange(2, 1, 1, sh.getLastColumn()).getValues()[0];
+  function pCol(name) {
+    for (var i = 0; i < pHdr.length; i++) {
+      if (String(pHdr[i] || '').trim().toUpperCase() === name) return i + 1;
+    }
+    return -1;
+  }
+  var colorCol = pCol('COLOR FIRST PICK'), scopeCol = pCol('SCOPE NOTES'), trackCol = pCol('TRACK');
+  if (scopeCol < 0) { scopeCol = sh.getLastColumn() + 1; sh.getRange(2, scopeCol).setValue('SCOPE NOTES'); }
+  var stamp = Utilities.formatDate(new Date(), 'America/Denver', 'M/d/yy');
+  var synced = [], skipped = 0;
+  for (var r = 1; r < v.length; r++) {
+    if (String(v[r][mCol - 1] || '').trim()) { skipped++; continue; }
+    var digits = String(v[r][18] || '').replace(/\D/g, '');
+    if (digits.length < 3) { continue; }              // no usable serial — retry forever, harmless
+    var f;
+    try { f = findPiano_(sh, digits, null); } catch (eF) { f = {error: 'x'}; }
+    if (!f || f.error) continue;                      // piano not in log yet — retry next run
+    var S9 = function (i) { return String(v[r][i] == null ? '' : v[r][i]).trim(); };
+    var refin = S9(25), color = S9(27), hardware = S9(40), interior = S9(32) || S9(26);
+    var bench = S9(21), benchD = S9(22), senti = S9(23), tune = S9(33);
+    var oNotes = [S9(14), S9(38), S9(59)].filter(String).join(' · ');
+    // color → COLOR FIRST PICK (seed only; the shop refines from here)
+    if (colorCol > 0 && color && !String(sh.getRange(f.row, colorCol).getValue() || '').trim()) {
+      sh.getRange(f.row, colorCol).setValue(color.slice(0, 80));
+    }
+    // refinishing on the contract → Refinish track token
+    if (trackCol > 0 && /^yes/i.test(refin)) {
+      var tks = String(sh.getRange(f.row, trackCol).getValue() || '');
+      if (!/refinish/i.test(tks)) {
+        sh.getRange(f.row, trackCol).setValue(tks ? tks + ', Refinish' : 'Refinish');
+      }
+    }
+    // scope block (kept once — prepended above any hand-typed instructions)
+    var parts = [];
+    if (refin) parts.push('Refinish: ' + (/^yes/i.test(refin) ? 'YES' : /^no/i.test(refin) ? 'no' : refin.slice(0, 40)));
+    if (color) parts.push('Color: ' + color.slice(0, 60));
+    if (hardware) parts.push('Hardware: ' + hardware.slice(0, 50));
+    if (interior) parts.push('Interior: ' + (/^yes/i.test(interior) ? 'YES' : interior.slice(0, 50)));
+    if (bench) parts.push('Bench: ' + bench.slice(0, 40) + (benchD ? ' (' + benchD.slice(0, 40) + ')' : ''));
+    if (senti && !/^n\/?a$/i.test(senti)) parts.push('⚠ Sentimental: ' + senti.slice(0, 110));
+    if (/^yes/i.test(tune)) parts.push('+ tuning before delivery');
+    if (oNotes) parts.push('Owner: ' + oNotes.slice(0, 150));
+    var block = '📜 Contract ' + String(v[r][0] || '').split(' ')[0] + ' (' + S9(3) + ') — ' + parts.join(' · ');
+    var prevScope = String(sh.getRange(f.row, scopeCol).getValue() || '').trim();
+    if (prevScope.indexOf('📜 Contract') < 0) {
+      sh.getRange(f.row, scopeCol).setValue((block + (prevScope ? '\n' + prevScope : '')).slice(0, 500));
+    }
+    addPianoNote_(sh, f.row, 'Contract sync', block.slice(0, 280));
+    logAct_('Contract sync', 'Scope of Work from contract', f.summary || digits, parts.join(' · ').slice(0, 150));
+    cs.getRange(r + 1, mCol).setValue('✓ ' + stamp);
+    synced.push({serial: digits, piano: f.summary});
+    if (synced.length >= 12) break;   // stay well inside the execution limit
+  }
+  return {ok: true, synced: synced, alreadyDone: skipped};
+}
+
 /* Bench location (Brigham 8/27): where the piano's bench is right now —
  * spot #, shelf, "with the piano"… — header-created BENCH LOCATION col. */
 function setBench_(req, who) {
