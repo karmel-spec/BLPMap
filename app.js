@@ -3537,7 +3537,8 @@ async function punch(action, p, phase, source, endAt, ackNote) {
       if (!(j && j.service && !j.error)) break;
       await new Promise(res => setTimeout(res, 1200 * (a + 1)));
     }
-    if (j && j.service && !j.error) return {error: 'the Google bridge hiccuped — the punch did NOT record; try again in a minute'};
+    if (j && j.service && !j.error) return punchVerify(action, p, phase,
+      'the Google bridge hiccuped — the punch did NOT record; try again in a minute');
     if (j.ok) {
       CLOCK.open = action === 'clockin'
         ? (j.open || {tech: clockName(), serial: p.serial, phase, start: new Date().toISOString()})
@@ -3548,10 +3549,46 @@ async function punch(action, p, phase, source, endAt, ackNote) {
     return j;
   } catch (e) {
     // the bridge can answer with a non-JSON error page for a few seconds
-    // mid-deploy — the punch often DID land, so re-sync before complaining
-    setTimeout(fetchClock, 2500);
-    return {error: 'the punch may not have recorded — give it a few seconds, the clock will re-sync'};
+    // mid-deploy — the punch usually DID land (Jake 9/4: recorded at
+    // 6:59:58, error shown anyway). VERIFY against the sheet before scaring
+    // anyone: the fast feed reads the Time Log directly.
+    return punchVerify(action, p, phase,
+      'the punch may not have recorded — give it a few seconds, the clock will re-sync');
   }
+}
+// after an ambiguous punch, read the Time Log itself (service-account fast
+// feed, fresh) — if the punch is there, report success instead of doubt
+async function punchVerify(action, p, phase, fallbackMsg) {
+  const me = clockName().toLowerCase();
+  for (let v = 0; v < 2; v++) {
+    await new Promise(res => setTimeout(res, 2500 + v * 2500));
+    try {
+      const r = await fetchT('https://blpsalesapp.netlify.app/.netlify/functions/clock-history?key=pianoman&days=1', {}, 15000);
+      const j = await r.json();
+      const cut = Date.now() - 4 * 60000;
+      const mine = (j.tl || []).filter(x => myClockMatch(x.tech, me) && new Date(x.start).getTime() > cut - 86400000);
+      if (action === 'clockin' && p) {
+        const hit = mine.find(x => x.serial === p.serial && !x.end && new Date(x.start).getTime() > cut);
+        if (hit) {
+          CLOCK.open = {tech: clockName(), serial: p.serial, phase: hit.phase || phase, start: hit.start};
+          CLOCK.nudged = false; CLOCK.lastAct = Date.now();
+          renderClockChip(); renderDock();
+          setTimeout(fetchClock, 4000);
+          return {ok: true, open: CLOCK.open, verified: 'from the Time Log'};
+        }
+      } else if (action === 'clockout') {
+        const stillOpen = mine.some(x => !x.end);
+        if (!stillOpen) {
+          CLOCK.open = null; CLOCK.lastAct = Date.now();
+          renderClockChip(); renderDock();
+          setTimeout(fetchClock, 4000);
+          return {ok: true, verified: 'from the Time Log'};
+        }
+      }
+    } catch (e2) { /* feed unreachable — fall through to the honest message */ }
+  }
+  setTimeout(fetchClock, 2500);
+  return {error: fallbackMsg};
 }
 /* ========= PHASE CHECKLISTS + MINI-QC (CAP pilot, Brigham 9/3) =========
  * Steps live on the 'Phase Checklists' sheet tab; state is per piano+phase
