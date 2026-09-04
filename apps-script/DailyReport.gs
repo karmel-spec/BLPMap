@@ -3554,7 +3554,7 @@ function smParseMonthDay_(s) {
 }
 function smStandup_(pianos, R) {
   var S = {bdays: [], annivs: [], newFaces: [], delivered: [], teamwork: [],
-           champ: null, personalBests: [], safety: '', standard: '', focus: [], dbg: []};
+           champ: null, personalBests: [], safety: '', standard: '', focus: [], notes: [], dbg: []};
   // anchor every date window on the brief's own date, so an evening send
   // celebrates the birthdays of the morning it's prepping for
   var now = (R && R.refDate) ? R.refDate : new Date();
@@ -3687,6 +3687,34 @@ function smStandup_(pianos, R) {
     }
   } catch (e) { S.dbg.push(String(e)); }
 
+  // 📣 manual standup notes: anyone writes a row on the report sheet's
+  // "Brief Notes" tab (Date | Note | From) and it reads out at that
+  // morning's standup — Brigham 9/3, stale-app announcement was the first
+  try {
+    var bnSs = SpreadsheetApp.openById('11RoeVRETag5rZYX6_tEH-rf6x8JL0JeZU0P5AT0WI-I');
+    var bn = bnSs.getSheetByName('Brief Notes');
+    if (bn && bn.getLastRow() > 1) {
+      var bnKey = Utilities.formatDate(now, 'America/Denver', 'yyyy-MM-dd');
+      var bnv = bn.getRange(2, 1, bn.getLastRow() - 1, 3).getValues();
+      for (var bi = 0; bi < bnv.length; bi++) {
+        var bd = bnv[bi][0], bTxt = String(bnv[bi][1] || '').trim();
+        if (!bTxt) continue;
+        var bKey = bd instanceof Date
+          ? Utilities.formatDate(bd, 'America/Denver', 'yyyy-MM-dd')
+          : String(bd || '').trim();
+        // a plain M/d or M/d/yyyy string still matches
+        if (bKey !== bnKey) {
+          var pm = /^(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?$/.exec(bKey);
+          if (!pm) continue;
+          var by2 = pm[3] ? (pm[3].length === 2 ? '20' + pm[3] : pm[3]) : String(now.getFullYear());
+          bKey = by2 + '-' + ('0' + pm[1]).slice(-2) + '-' + ('0' + pm[2]).slice(-2);
+          if (bKey !== bnKey) continue;
+        }
+        var bFrom = String(bnv[bi][2] || '').trim();
+        S.notes.push(bTxt + (bFrom ? ' <span style="color:#8a847b">— ' + bFrom + '</span>' : ''));
+      }
+    }
+  } catch (eBn) {}
   // today's focus: next up in the queue + counts the room should hear
   try {
     (R.queueUp || []).slice(0, 3).forEach(function (p) {
@@ -4096,6 +4124,7 @@ function shopManagerHtml_(R) {
   su('⭐', 'Standard of the day', SU.standard ? ['<i>' + SU.standard + '</i>'
     + ' <a href="https://blpshop.netlify.app/#policies-stime-management" '
     + 'style="color:#9e2020;font-size:12px;white-space:nowrap">full standards ↗</a>'] : []);
+  su('📣', 'Standup notes', SU.notes || []);
   su('🎯', 'Today’s focus', SU.focus || []);
   H.push('</div>');
 
