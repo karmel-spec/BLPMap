@@ -1175,6 +1175,9 @@ const AUD_STEMS=[
   ["Tuning",/tun(e|ed|ing)/],
   ["Exit Prep - Admin",/exit prep/],
 ];
+const PH_ORDER=["New Arrival - Admin","Assessment","CAP","PRSBa - Pre-Plate","PRSBb - Plate In",
+  "Lacquer Soundboard","Restringing","Chip Tuning","DHRT","1st Tuning","Refinishing",
+  "QC & Assembly","2nd Tuning","Exit Prep - Admin"];
 const AUD_FAMILY=ph=>{
   const s=String(ph||"");
   if(/^PRSB/i.test(s)) return "PRSB";
@@ -1214,7 +1217,11 @@ function renderAudit(){
           if(!card && !p.queuePos){
             rows.push({kind:"nocard",tok,line,p,card:"(no phase set)"}); flags++;
           } else if(claim && card && !/^(Waiting|Paused|For Sale|Sale Pending|Sold|In Queue)/i.test(card)
-              && AUD_FAMILY(claim)!==AUD_FAMILY(card)){
+              && AUD_FAMILY(claim)!==AUD_FAMILY(card)
+              // tuners tune pianos in every phase — a Tuning claim only flags
+              // when the card is clearly BEHIND the first tuning of the flow
+              && (AUD_FAMILY(claim)!=="Tuning"
+                  || (PH_ORDER.indexOf(card)>=0 && PH_ORDER.indexOf(card)<PH_ORDER.indexOf("Chip Tuning")))){
             rows.push({kind:"mismatch",tok,line,p,card,claim}); flags++;
           } else if(done && claim && AUD_FAMILY(claim)===AUD_FAMILY(card)){
             rows.push({kind:"stale",tok,line,p,card,claim}); flags++;
