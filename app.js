@@ -1278,9 +1278,9 @@ async function moverChecklistNeeded() {
   const first = u && u.name ? u.name.split(/\s+/)[0].toLowerCase() : '';
   if (!first) return false;
   const crew = (S.data.crew || []).map(c => String(c).toLowerCase());
-  if (crew.some(c => c.includes(first))) return true;
-  // no crew list? fall back to their name appearing on today's events
-  return evs.some(e => ((e.summary || '') + (e.description || '')).toLowerCase().includes(first));
+  // crew list ONLY — matching first names inside event text gated Curtis
+  // Biggs because "Curtis Harper" was on the calendar (090126biggs02)
+  return crew.some(c => c.includes(first));
 }
 function moverChecklist() {
   return new Promise(resolve => {
@@ -3523,6 +3523,15 @@ function impNoteGate(p, ph) {
 async function punch(action, p, phase, source, endAt, ackNote) {
   const {pin, ok} = writeAuth();
   if (!ok) return {error: 'Sign in first — hours are logged under your name.'};
+  // day clock first (Mark 9/3): piano time only counts inside a paid day.
+  // Only block on a CONFIRMED missing day punch — if payroll state can't be
+  // fetched (bridge down), let the piano punch through rather than stall work.
+  if (action === 'clockin') {
+    if (Date.now() - PAY.at > 90000) { try { await fetchPayroll(true); } catch (e) {} }
+    if (!PAY.open && PAY.at && Date.now() - PAY.at < 90000) {
+      return {error: 'Clock in for the DAY first — 👤 My Dashboard → 💵 Payroll Clock → ▶ Clock in for the day. Piano time only counts inside a paid day.'};
+    }
+  }
   const body = {pin, action, source: source || 'card', ...authFields()};
   if (p) { body.serial = p.serial; body.row = p.row; body.phase = phase || ''; }
   if (ackNote) body.ackNote = String(ackNote).slice(0, 200);
@@ -4126,6 +4135,11 @@ async function dayPunch(action) {
         ? (j.open || {tech: clockName(), start: new Date().toISOString()}) : null;
       PAY.at = 0;
       fetchPayroll(true);
+      // day OUT closes the piano clock too (Mark 9/3): nobody stays "on a
+      // piano" after their paid day ended
+      if (action === 'dayout' && CLOCK.open) {
+        try { await punch('clockout', null, '', 'day-out-auto'); } catch (e) {}
+      }
     }
     return j;
   } catch (e) { return {error: 'offline — punch not recorded, try again'}; }
