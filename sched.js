@@ -230,7 +230,7 @@ const I18N = {
   lad_sub:["Each specialty's ranked ladder — the scheduler reads straight down: if #1 isn't available, go to #2. Change a level with the selector, reorder with ▲▼, add someone with ＋. Greyed rows aren't scheduled today. The ⏱/✅/⚡ line is live evidence from the work clock and mini-QC log — it informs your rankings but never changes them by itself.","La escalera de cada especialidad en orden — el programador lee hacia abajo: si el #1 no está disponible, sigue el #2. Cambia el nivel con el selector, reordena con ▲▼, agrega con ＋. Las filas grises no trabajan hoy. La línea ⏱/✅/⚡ es evidencia en vivo del reloj y los mini-QC — informa tu criterio pero nunca cambia niveles sola."],
   mat_title:["Versatility Matrix","Matriz de versatilidad"],
   mat_sub:["Everyone × every specialty. Tap a cell to raise a level (cycles back to — after 🏆). Tap a column header for that skill's ranked ladder with today's availability. The small number in a cell is the live ⚡ performance index: work-clock hours vs the phase standard × mini-QC first-pass rate.","Todos × cada especialidad. Toca una celda para subir el nivel (vuelve a — después de 🏆). Toca el encabezado de columna para ver la escalera de esa habilidad con la disponibilidad de hoy. El número pequeño es el índice ⚡ en vivo: horas de reloj vs. estándar × tasa de mini-QC aprobados."],
-  spec_legend:["Levels: 🎓 Trainee (never alone) · ✅ Trained · 💪 Competent · 🛡 Reliable · ⭐ Expert · 🏆 Best in Shop (one per skill). ⚡ index: 100 ≈ standard hours with clean mini-QCs; higher is faster + cleaner.","Niveles: 🎓 Aprendiz (nunca solo) · ✅ Entrenado · 💪 Competente · 🛡 Confiable · ⭐ Experto · 🏆 Mejor del taller (uno por habilidad). Índice ⚡: 100 ≈ horas estándar con mini-QCs limpios; más alto = más rápido y limpio."],
+  spec_legend:["Levels: 🎓 Trainee (never alone) · ✅ Trained · 💪 Competent · 🛡 Reliable · ⭐ Expert · 🏆 Best in Shop (one per skill). 🧮 N× = all-time jobs in that skill (every weekly report ever + tech calendar history since 2024 + the work clock, distinct pianos). ⚡ index: 100 ≈ standard hours with clean mini-QCs; higher is faster + cleaner.","Niveles: 🎓 Aprendiz (nunca solo) · ✅ Entrenado · 💪 Competente · 🛡 Confiable · ⭐ Experto · 🏆 Mejor del taller (uno por habilidad). 🧮 N× = trabajos de por vida en esa habilidad (todos los reportes semanales + historial de calendario desde 2024 + el reloj, pianos distintos). Índice ⚡: 100 ≈ horas estándar con mini-QCs limpios; más alto = más rápido y limpio."],
 };
 const t = (k, ...args) => {
   let s = (I18N[k] || [k,k])[LANG === "es" ? 1 : 0];
@@ -1295,28 +1295,64 @@ function needSpec(){
   }).catch(()=>{}).then(()=>{SPEC_LOADING=false;});
   return false;
 }
+// all-time job counting shares the skill keyword stems with the calendar scan
+const SPEC_JOB_STEMS=[
+  ["CAP",/\bcap\b|action prep/i],
+  ["PRSB",/prsb|soundboard|bridge|pinblock|downbearing/i],
+  ["lacquer soundboard",/lacquer/i],
+  ["restringing",/restring|strung|stringing/i],
+  ["chip tuning",/chip/i],
+  ["tuning",/tun(e|ed|ing)/i],
+  ["DHRT for uprights",/dhrt|regulat|voicing|damper|trapwork/i],
+  ["refinishing",/refinish|sanding|sanded|buff|spray|stain/i],
+  ["QC and assembly",/\bqc\b|quality|assembl/i],
+  ["keys",/keytop|key ?work|\bkeys\b/i],
+  ["repairs",/repair/i],
+  ["refurbishing",/refurb/i],
+];
 function needSpecPerf(){
   if(SPERF||SPERF_LOADING) return !!SPERF;
   SPERF_LOADING=true;
   const K="sb_publishable_MamcjSX0CHTdYlpKDWSkmQ_-nbuQ1z-";
   Promise.all([
-    fetch(CONFIG.STOREMAP_BRIDGE+"?fn=timelog&days=180",{redirect:"follow"}).then(r=>r.json()).catch(()=>null),
+    fetch(CONFIG.STOREMAP_BRIDGE+"?fn=timelog&days=730",{redirect:"follow"}).then(r=>r.json()).catch(()=>null),
     fetch("https://ismacawxfvvllfinibbf.supabase.co/rest/v1/qc_requests?select=by,phase,status&limit=1000",
       {headers:{apikey:K,Authorization:"Bearer "+K}}).then(r=>r.json()).catch(()=>[]),
-  ]).then(([tl,qc])=>{
-    const agg={};   // "first|skill" -> {min, pianos:Set, pass, rework}
-    const get=(f,sk)=>{ const k=f+"|"+sk; return agg[k]||(agg[k]={min:0,pianos:new Set(),pass:0,rework:0}); };
+    fetch(CONFIG.STOREMAP_BRIDGE+"?fn=calskillhist",{redirect:"follow"}).then(r=>r.json()).catch(()=>null),
+  ]).then(([tl,qc,ch])=>{
+    const agg={};   // "first|skill" -> {min,pianos:Set(180d),pass,rework,allSns:Set,extra}
+    const get=(f,sk)=>{ const k=f+"|"+sk;
+      return agg[k]||(agg[k]={min:0,pianos:new Set(),pass:0,rework:0,allSns:new Set(),extra:0}); };
+    const cut180=Date.now()-180*86400000;
     (((tl||{}).rows)||[]).forEach(r=>{
       const sk=SPEC_PH2SK[String(r.phase||"").trim()]; if(!sk) return;
       const f=String(r.tech||"").split(/\s+/)[0].toLowerCase();
       if(!f||f==="claude") return;
-      const a=get(f,sk); a.min+=r.minutes||0; if(r.serial) a.pianos.add(r.serial);
+      const a=get(f,sk);
+      if(r.serial) a.allSns.add(digitsOf(r.serial));
+      if(new Date(r.start).getTime()>=cut180){ a.min+=r.minutes||0; if(r.serial) a.pianos.add(r.serial); }
     });
     (Array.isArray(qc)?qc:[]).forEach(q=>{
       const sk=SPEC_PH2SK[String(q.phase||"").trim()]; if(!sk) return;
       const f=String(q.by||"").split(/\s+/)[0].toLowerCase(); if(!f) return;
       if(q.status==="passed") get(f,sk).pass++;
       else if(q.status==="rework") get(f,sk).rework++;
+    });
+    // all-time: every weekly report line ever (history json goes back years)
+    (REPORTS.entries||[]).forEach(e=>{
+      const f=String(e.tech||"").split(/\s+/)[0].toLowerCase(); if(!f) return;
+      String(e.text||"").split(/\n/).forEach(line=>{
+        const sns=line.match(/\d{4,8}/g); if(!sns) return;
+        for(const [sk,re] of SPEC_JOB_STEMS){
+          if(re.test(line)){ const a=get(f,sk); sns.forEach(s=>a.allSns.add(s)); break; }
+        }
+      });
+    });
+    // all-time: tech Google-calendar history (bridge scan, cached server-side)
+    if(ch&&ch.techs) Object.keys(ch.techs).forEach(k=>{
+      const [f,sk]=k.split("|"); const a=get(f,sk);
+      (ch.techs[k].serials||[]).forEach(s=>a.allSns.add(s));
+      a.extra+=ch.techs[k].extra||0;
     });
     SPERF=agg;
     schedRerender();
@@ -1326,7 +1362,9 @@ function needSpecPerf(){
 function specPerf(tech,skill){
   if(!SPERF) return null;
   const a=SPERF[String(tech||"").split(/\s+/)[0].toLowerCase()+"|"+skill];
-  if(!a||(!a.min&&!a.pass&&!a.rework)) return null;
+  if(!a) return null;
+  const jobs=(a.allSns?a.allSns.size:0)+(a.extra||0);
+  if(!a.min&&!a.pass&&!a.rework&&!jobs) return null;
   const n=a.pianos.size||0, std=SPEC_STDH[skill]||0;
   const avg=n?a.min/60/n:0;
   const qcN=a.pass+a.rework;
@@ -1334,10 +1372,11 @@ function specPerf(tech,skill){
   let score=null;
   if(avg&&std){ const eff=Math.min(1.5,std/avg); score=Math.round(100*(qual==null?0.85:(a.pass+1)/(qcN+2))*eff); }
   const bits=[];
-  if(avg) bits.push("⏱ "+(avg<10?avg.toFixed(1):Math.round(avg))+"h/piano"+(std?" · std "+std+"h":"")+" · "+n+" piano"+(n===1?"":"s"));
+  if(jobs) bits.push("🧮 "+jobs+" all-time");
+  if(avg) bits.push("⏱ "+(avg<10?avg.toFixed(1):Math.round(avg))+"h/piano"+(std?" · std "+std+"h":"")+" · "+n+" recent");
   if(qcN) bits.push("✅ "+a.pass+"/"+qcN+" mini-QC first-pass");
   if(score!=null) bits.push("⚡ "+score);
-  return {text:bits.join(" · "), score};
+  return {text:bits.join(" · "), score, jobs};
 }
 function specLadder(skill){
   return SPEC.rows.filter(r=>r.skill===skill&&r.level>0)
@@ -1479,7 +1518,7 @@ function renderMatrix(){
             const lv=lvlOf[tn+"|"+sk]||0;
             const pf=lv?specPerf(tn,sk):null;
             return `<td class="spmcell ${lv?"spmc"+lv:""}" data-skill="${esc(sk)}" data-tech="${esc(tn)}"
-              title="${esc(tn+" · "+sk+" — "+SPEC_LVLS[lv].label+(pf?"\n"+pf.text:"")+"\n(tap to raise the level, long-press logic: cycles 0→6)")}">${SPEC_CELL[lv]}${pf&&pf.score!=null?`<div style="font-size:8.5px;opacity:.85">${pf.score}</div>`:""}</td>`;
+              title="${esc(tn+" · "+sk+" — "+SPEC_LVLS[lv].label+(pf?"\n"+pf.text:"")+"\n(tap to raise the level — cycles 0→6)")}">${SPEC_CELL[lv]}${pf&&(pf.jobs||pf.score!=null)?`<div style="font-size:8.5px;opacity:.85">${pf.jobs?pf.jobs+"×":""}${pf.score!=null?(pf.jobs?" ":"")+"⚡"+pf.score:""}</div>`:""}</td>`;
           }).join("")}
           <td class="num" style="font-weight:800;background:#f4f1ec">${tot}</td></tr>`;
       }).join("")}

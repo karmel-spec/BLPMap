@@ -214,6 +214,10 @@ function doGet(e) {
     try { return json_(specialtiesRows_()); }
     catch (err) { return json_({error: String(err), rows: []}); }
   }
+  if (e && e.parameter && e.parameter.fn === 'calskillhist') {
+    try { return json_(calSkillHist_()); }
+    catch (err) { return json_({error: String(err), techs: {}}); }
+  }
   if (e && e.parameter && e.parameter.fn === 'appupdates') {
     try { return json_(appUpdatesRows_()); }
     catch (err) { return json_({error: String(err), rows: []}); }
@@ -1789,6 +1793,59 @@ function setTrack_(req) {
           previous: prev, track: val};
 }
 
+/* 🧮 all-time skill job counts from the TECH CALENDARS (Brigham 9/4): every
+ * event on a mapped tech calendar since 2024 whose title matches a skill's
+ * keywords counts toward that tech×skill — distinct serials where the title
+ * has one, plus serial-less events counted individually (tunings etc.).
+ * Heavy scan → cached 6 hours. */
+var CAL_SKILL_STEMS = [
+  ['CAP', /\bcap\b|action prep/i],
+  ['PRSB', /prsb|soundboard|bridge|pinblock|downbearing/i],
+  ['lacquer soundboard', /lacquer/i],
+  ['restringing', /restring|string/i],
+  ['chip tuning', /chip/i],
+  ['tuning', /tun(e|ed|ing)/i],
+  ['DHRT for uprights', /dhrt|regulat|voicing|damper|trapwork/i],
+  ['refinishing', /refinish|sanding|buff|spray/i],
+  ['QC and assembly', /\bqc\b|quality|assembl/i],
+  ['keys', /keytop|key ?work|\bkeys\b/i],
+  ['repairs', /repair/i],
+  ['refurbishing', /refurb/i],
+];
+function calSkillHist_() {
+  var cache = CacheService.getScriptCache();
+  var hit = cache.get('calskillhist1');
+  if (hit) return JSON.parse(hit);
+  var map = techCalMap_();
+  var since = new Date('2024-01-01');
+  var now = new Date();
+  var out = {};   // "first|skill" -> {serials: {sn:1}, extra: n}
+  for (var first in map) {
+    var cal = null;
+    try { cal = CalendarApp.getCalendarById(map[first]); } catch (e1) {}
+    if (!cal) continue;
+    var evs = [];
+    try { evs = cal.getEvents(since, now); } catch (e2) { continue; }
+    for (var i = 0; i < evs.length; i++) {
+      var title = String(evs[i].getTitle() || '');
+      var sns = title.match(/\d{4,8}/g) || [];
+      for (var s = 0; s < CAL_SKILL_STEMS.length; s++) {
+        if (!CAL_SKILL_STEMS[s][1].test(title)) continue;
+        var key = first + '|' + CAL_SKILL_STEMS[s][0];
+        var slot = out[key] || (out[key] = {serials: {}, extra: 0});
+        if (sns.length) { for (var q = 0; q < sns.length; q++) slot.serials[sns[q]] = 1; }
+        else slot.extra++;
+        break;   // one skill per event — first stem wins
+      }
+    }
+  }
+  var res = {ok: true, since: '2024-01-01', techs: {}};
+  for (var k in out) {
+    res.techs[k] = {serials: Object.keys(out[k].serials), extra: out[k].extra};
+  }
+  try { cache.put('calskillhist1', JSON.stringify(res), 21600); } catch (e3) {}
+  return res;
+}
 /* 🪜 Specialties store — "Specialties" tab on the report sheet, one row per
  * skill×tech: Skill | Tech | Level 0-6 | Rank | Note | Updated | By.
  * Levels: 0 n/a · 1 Trainee · 2 Trained · 3 Competent · 4 Reliable ·
