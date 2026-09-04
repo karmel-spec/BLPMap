@@ -13030,7 +13030,14 @@ if (appsTopBtn) {
   appsTopBtn.onclick = () => {
     const m = $('#appsTopMenu');
     m.hidden = !m.hidden;
-    if (!m.hidden) placeTopMenu(appsTopBtn, m);
+    if (!m.hidden) {
+      // 🎓 Admin Training is limited to Lisa, Melissa and the owners for now
+      // (Brigham 9/4) — checked at open time so it follows account switches
+      const at = $('#appsAdminTraining');
+      if (at) at.hidden = !OWNER_EMAILS.concat(['melissa@brighamlarsonpianos.com',
+        'lisa@brighamlarsonpianos.com']).includes(userEmail());
+      placeTopMenu(appsTopBtn, m);
+    }
   };
   document.addEventListener('click', e => {
     if (!e.target.closest('#appsTopBtn') && !e.target.closest('#appsTopMenu')) {
