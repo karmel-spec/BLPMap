@@ -17,7 +17,7 @@ const PHASES = ['New Arrival - Admin', 'Assessment', 'CAP',
   'PRSB & Plate Refinishing', 'Lacquer Soundboard', 'Restringing',
   'Chip Tuning', 'DHRT', '1st Tuning', 'Refinishing', 'QC & Assembly',
   '2nd Tuning', 'Exit Prep - Admin', 'Delivered'];
-const PHASE_STATES = ['In Queue', 'Paused', 'For Sale',
+const PHASE_STATES = ['In Queue', 'Paused', 'For Sale', 'Sale Pending', 'Sold',
   'Waiting on Brigham', 'Waiting on Curtis Harper', 'Waiting on Customer', 'Waiting on OTHER'];
 // work tracks (multi-select, stored comma-separated in the TRACK column)
 const TRACKS = ['Rebuild', 'Hybrid', 'Refurbish', 'Refinish', 'Technology', 'Old Player', 'Storage', 'Misc'];   // unnumbered states; For Sale turns the icon green
@@ -51,6 +51,8 @@ function phaseLabels(phase, p) {
   if (phase === 'Waiting on Curtis Harper') return {full: 'WC', short: 'W'};
   if (phase === 'Waiting on Customer') return {full: 'WCu', short: 'W'};
   if (phase === 'Waiting on OTHER') return {full: 'WO', short: 'W'};
+  if (phase === 'Sale Pending') return {full: '$P', short: '$'};
+  if (phase === 'Sold') return {full: '$', short: '$'};
   if (phase === 'Delivered' || phase === 'For Sale') return null;
   const i = PHASES.indexOf(phase);
   if (i < 0) return null;
@@ -933,7 +935,7 @@ function pianoStatus(p) {
     const ev = S.data.events.find(e => (e.summary + e.description).includes(p.serial));
     if (ev) return ev.date === today ? 'move' : 'sched';
   }
-  if ((p.phase || '') === 'For Sale') return 'sale';
+  if (/^(For Sale|Sale Pending|Sold)$/.test(p.phase || '')) return 'sale';
   if (tuningInfo(p).next) return 'tune';
   if (p.isNew) return 'new';
   return 'in';
@@ -3617,7 +3619,7 @@ function trainPhaseName(phase) {
 const QC_ALL_UNTIL = new Date('2026-10-04T00:00:00-06:00').getTime();
 function qcGated(was) {
   const w = String(was || '').trim();
-  if (!w || /^(waiting|in queue|paused|for sale|delivered)/i.test(w)) return false;
+  if (!w || /^(waiting|in queue|paused|for sale|sale pending|sold|delivered)/i.test(w)) return false;
   return QC_PHASES.includes(w) || Date.now() < QC_ALL_UNTIL;
 }
 const PHASEQC_URL = 'https://blpsalesapp.netlify.app/.netlify/functions/phase-qc';
@@ -5635,6 +5637,40 @@ function openPhaseGateModal(p, phase, was, pop) {
     setPhase(p, phase, pop, {gated: true});
   };
 }
+/* 💰 Sale Pending / Sold (Karmel 9/3): optional buyer name — goes into the
+ * WAITING NOTE column so it shows on the card's status strip and legend. */
+function openBuyerModal(p, phase, pop) {
+  const old = document.querySelector('.dsheetov'); if (old) old.remove();
+  const ov = document.createElement('div');
+  ov.className = 'dsheetov';
+  ov.innerHTML = `<div class="dsheet"><button class="dsx">✕</button>
+    <h3>${phase === 'Sold' ? '🎉 Sold' : '💰 Sale pending'} — ${esc(p.summary || '#' + p.serial)}</h3>
+    <div class="dssub">${phase === 'Sold' ? 'Who bought it?' : 'Who is it pending for?'} Optional — skip if unknown.</div>
+    <input class="buyername" maxlength="80" placeholder="buyer's name" autocomplete="off"
+      style="width:100%;font:500 14px/1.4 inherit;padding:9px 10px;border:1px solid #d7d2c7;border-radius:9px;box-sizing:border-box">
+    <div class="rfbar" style="margin-top:12px">
+      <button class="csvbtn buyergo">${phase === 'Sold' ? 'Mark Sold' : 'Mark Sale Pending'}</button>
+      <button class="csvbtn buyerskip" style="background:none;border:1px solid #cfc9bf;color:inherit">Skip — name unknown</button>
+      <button class="csvbtn buyercancel" style="background:none;border:none;color:#8a847b">Cancel</button>
+    </div></div>`;
+  document.body.appendChild(ov);
+  const sel = pop.querySelector('.phsel');
+  const close = revert => { ov.remove(); if (revert && sel) sel.value = p.phase || ''; };
+  ov.querySelector('.dsx').onclick = () => close(true);
+  ov.querySelector('.buyercancel').onclick = () => close(true);
+  ov.onclick = ev => { if (ev.target === ov) close(true); };
+  const go = withName => {
+    const name = withName ? ov.querySelector('.buyername').value.trim() : '';
+    const note = name ? (phase === 'Sold' ? 'Sold to ' + name : 'Sale pending — ' + name) : '';
+    ov.remove();
+    setPhase(p, phase, pop, {gated: true, note});
+  };
+  ov.querySelector('.buyergo').onclick = () => go(true);
+  ov.querySelector('.buyerskip').onclick = () => go(false);
+  const inp = ov.querySelector('.buyername');
+  inp.onkeydown = ev => { if (ev.key === 'Enter') go(true); };
+  setTimeout(() => inp.focus(), 100);
+}
 async function setPhase(p, phase, pop, extra) {
   const msg = pop.querySelector('.phmsg');
   const sel = pop.querySelector('.phsel');
@@ -5642,6 +5678,10 @@ async function setPhase(p, phase, pop, extra) {
   if (phase === was) return;
   if (phase.startsWith('Waiting') && extra == null) {
     openWaitNoteModal(p, phase, pop);   // ask for details + check-back first
+    return;
+  }
+  if ((phase === 'Sale Pending' || phase === 'Sold') && extra == null) {
+    openBuyerModal(p, phase, pop);      // who's it sold to / pending for? (optional)
     return;
   }
   // 📸 phase-advance gate (Brigham 8/26): moving FORWARD in the sequence
