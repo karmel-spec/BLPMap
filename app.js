@@ -1471,11 +1471,6 @@ function mediaCard(p) {
     ${line('After video', 'avideo', p.avideo, late)}
     ${folderRow}
     ${p.serial ? `<div class="tagbtns mediaadd">
-      <button class="tagbtn maddbtn" data-kind="before">📷 Add before photos</button>
-      <button class="tagbtn maddbtn" data-kind="after">📷 Add after photos</button>
-      <input type="file" class="maddin" accept="image/*" multiple hidden>
-    </div>
-    <div class="tagbtns mediaadd">
       <button class="tagbtn wizbtn" data-kind="before">🧭 Before shot list (13)</button>
       <button class="tagbtn wizbtn" data-kind="after">🧭 After shot list (13)</button>
     </div>` : ''}
