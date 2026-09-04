@@ -10764,9 +10764,13 @@ async function tbSend(body) {
   // forwards the same op to the bridge in the background (sheet mirror,
   // notifications, activity log). 503 = not configured yet → bridge.
   try {
-    const pr = await fetch('https://blpsalesapp.netlify.app/.netlify/functions/taskboard-write', {
+    // key = the app key, NOT the user's pin: Google sign-ins have no pin
+    // and team-PIN users carry 'blp…' — both got 401 here, silently pushing
+    // every write onto the slow bridge path where archives never reached
+    // the board's Supabase reads (Melissa's frozen sticky notes, 9/3)
+    const pr = await fetchT('https://blpsalesapp.netlify.app/.netlify/functions/taskboard-write', {
       method: 'POST', headers: {'content-type': 'application/json'},
-      body: JSON.stringify({pin: wa.pin, key: wa.pin, ...body, ...authFields()})});
+      body: JSON.stringify({pin: wa.pin, key: 'pianoman', ...body, ...authFields()})}, 20000);
     if (pr.ok) {
       const pj = await pr.json();
       if (pj && pj.ok) return pj;
