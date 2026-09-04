@@ -8991,10 +8991,12 @@ function clockAdjustTable() {
   const openFix = S.fixRows.filter(r => r.status === 'open');
   const doneFix = S.fixRows.filter(r => r.status !== 'open').slice(0, 8);
   const fixes = `<h4 class="bfhd">Fix requests from the team</h4>
-    <table><tr><th>WHEN</th><th>WHO</th><th>CLOCK</th><th>WHAT NEEDS FIXING</th><th></th></tr>
+    <div class="lite" style="font-size:12px;margin:-4px 0 8px">These are OPEN — fix the punch in the tables below, then press "Mark resolved" so the row leaves this list.</div>
+    <table><tr><th>WHEN</th><th>WHO</th><th>CLOCK</th><th>WHAT NEEDS FIXING</th><th>STATUS</th></tr>
     ${openFix.map(r => `<tr><td style="white-space:nowrap">${esc(r.when)}</td><td>${esc(r.who.replace(/<[^>]*>/g, ''))}</td>
        <td>${esc(r.clock)}${r.serial ? ' #' + esc(r.serial) : ''}</td><td>${esc(r.note)}</td>
-       <td><button class="csvbtn cfxres" data-row="${r.row}">✓ Resolved</button></td></tr>`).join('')
+       <td style="white-space:nowrap"><span class="cfxopen">OPEN</span>
+         <button class="cfxres" data-row="${r.row}" title="fixed it? clear this request">Mark resolved</button></td></tr>`).join('')
      || '<tr><td colspan="5" class="empty">No open requests 🎉</td></tr>'}
     ${doneFix.map(r => `<tr style="color:#8a929a"><td style="white-space:nowrap">${esc(r.when)}</td>
        <td>${esc(r.who.replace(/<[^>]*>/g, ''))}</td><td>${esc(r.clock)}</td><td>${esc(r.note)}</td><td>${esc(r.status)}</td></tr>`).join('')}

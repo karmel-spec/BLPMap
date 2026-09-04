@@ -1852,3 +1852,9 @@ button:disabled{opacity:.55;cursor:progress}
 .rqsmsbox .rqpre{font:600 11px/1.2 inherit;border:1px dashed #c9c2b6;background:none;border-radius:999px;padding:4px 9px;cursor:pointer;color:#6f6a63}
 .rqsmsbox textarea{width:100%;font:500 13px/1.4 inherit;border:1px solid #d7d2c7;border-radius:8px;padding:7px 9px;box-sizing:border-box}
 .rqsmsrow{display:flex;gap:8px;align-items:center;margin-top:6px}
+
+/* ⏰ clock-fix requests: OPEN badge + neutral resolve action (Melissa 9/3 —
+   the old solid-green "✓ Resolved" button read as a status) */
+.cfxopen{display:inline-block;background:#fdf3ec;color:#9a5b13;border:1px solid #e8cfae;border-radius:6px;padding:2px 7px;font:700 10.5px/1.2 inherit;letter-spacing:.5px;margin-right:6px}
+button.cfxres{font:600 11.5px/1.2 inherit;border:1px solid #cfc9bf;background:#fff;border-radius:8px;padding:5px 9px;cursor:pointer;color:#2b2f33}
+button.cfxres:hover{border-color:#2e7d4f;color:#2e7d4f}
