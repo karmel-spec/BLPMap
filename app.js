@@ -11793,6 +11793,25 @@ $('.logo').style.cursor = 'pointer';
 addEventListener('keydown', e => {
   if (e.key === 'Escape' && S.view !== 'map' && !document.querySelector('.tagview')) switchView('map');
 });
+// Home/End inside any text field jump the caret to line start/end (with
+// shift-selection). On macOS Safari/installed app those keys scroll the
+// page instead — Melissa's big keyboard, 9/3.
+addEventListener('keydown', e => {
+  const t = e.target;
+  if ((e.key !== 'Home' && e.key !== 'End') || !t || e.metaKey || e.ctrlKey || e.altKey) return;
+  const isTa = t.tagName === 'TEXTAREA';
+  if (!isTa && !(t.tagName === 'INPUT' && /^(text|search|url|tel|email|)$/.test(t.type || ''))) return;
+  e.preventDefault();
+  const end = e.key === 'End';
+  const v = t.value, c = end ? t.selectionEnd : t.selectionStart;
+  let pos;
+  if (isTa) {
+    if (end) { const nl = v.indexOf('\n', c); pos = nl === -1 ? v.length : nl; }
+    else pos = v.lastIndexOf('\n', c - 1) + 1;
+  } else pos = end ? v.length : 0;
+  const anchor = e.shiftKey ? (end ? t.selectionStart : t.selectionEnd) : pos;
+  t.setSelectionRange(Math.min(anchor, pos), Math.max(anchor, pos), end ? 'forward' : 'backward');
+}, true);
 
 /* ---------- 🌐 language selector — Google page-translate, our menu ----------
  * The whole app (cards, reports, briefs links) renders in English; picking a
