@@ -3874,7 +3874,7 @@ async function updateClPill() {
     const pp = S.data.pianos.find(x => x.serial === o.serial);
     ph = pp ? String(pp.phase || '').trim() : '';
   }
-  const active = o && o.serial && o.serial !== 'MGMT' && QC_PHASES.includes(ph || o.phase) ? (ph || o.phase) : null;
+  const active = o && o.serial && o.serial !== 'MGMT' && o.serial !== 'TIDY' && QC_PHASES.includes(ph || o.phase) ? (ph || o.phase) : null;
   if (!active) { if (pill) pill.hidden = true; return; }
   const st = await clFetch(o.serial, active);
   const work = clVariantItems(st.items, S.data.pianos.find(x => x.serial === o.serial) || {}, 'work');
@@ -9826,7 +9826,8 @@ function scorecardTable() {
   const inWin = iso => iso && new Date(iso).getTime() >= cut;
   const tl = S.tlRows.filter(r => inWin(r.start) && !/test/i.test(r.phase) && !/FAKE/.test(r.serial || ''));
   const mins = rows => rows.reduce((a, r) => a + (r.minutes || 0), 0);
-  const pianoRows = tl.filter(r => !/^(Moving|Admin \/ Misc|Management)/.test(r.phase) && r.serial !== 'MGMT');
+  const pianoRows = tl.filter(r => !/^(Moving|Admin \/ Misc|Management|Shop Tidying)/.test(r.phase)
+    && r.serial !== 'MGMT' && r.serial !== 'TIDY');
   const trainRows = tl.filter(r => /^Training/.test(r.phase));
   const reworkRows = tl.filter(r => /^Rework|re-?do|fix(ing)? (earlier|previous)/i.test(r.phase));
   const workH = mins(pianoRows) / 60, trainH = mins(trainRows) / 60, reworkH = mins(reworkRows) / 60;
@@ -10673,6 +10674,24 @@ function renderDash() {
         <div class="mgmtmsg phmsg"></div>
       </div>`;
     })() : ''}
+    ${(() => {
+      // 🧹 shop tidying (Mark 9/4, 090426hales32): Korban's daily tidying and
+      // everyone's Friday organization time — clock time that isn't tied to
+      // one piano. Same pseudo-serial pattern as management time (TIDY).
+      const onTidy = o && o.serial === 'TIDY';
+      return `<div class="dbench db-tidy">
+        <h4>🧹 Shop tidying / organization</h4>
+        ${onTidy ? `<div class="dline now"><b>On tidying time</b> since ${fmtT(o.start)} —
+              <span class="cctime" data-start="${esc(o.start)}">${clockElapsed(o.start)}</span></div>
+            <button class="paybtn tidyoff">■ End tidying time</button>
+            <div class="dline dim">Opening a piano card and clocking in there switches you back to piano time automatically.</div>`
+          : o && o.serial !== 'MGMT' ? `<div class="dline">You're on <b>#${esc(o.serial)}</b> — one tap moves you to tidying and closes the piano session.</div>
+            <button class="paybtn tidyon">🧹 Switch to tidying time</button>`
+          : `<button class="paybtn tidyon">▶ Clock into shop tidying</button>
+            <div class="dline dim">Daily shop tidying and Friday organization time — cleaning, organizing, anything not attached to one piano.</div>`}
+        <div class="tidymsg phmsg"></div>
+      </div>`;
+    })()}
     ${myWeekCard()}
     <div class="dbench db-timeoff">
       <h4>🏖 Time off</h4>
@@ -10716,6 +10735,21 @@ function renderDash() {
     const j = await punch('clockout', null, '', 'dash');
     const mm = body.querySelector('.mgmtmsg');
     if (j.error) { if (mm) { mm.className = 'mgmtmsg phmsg err'; mm.textContent = j.error; } mOff.disabled = false; mOff.textContent = '■ End management time'; }
+    else renderDash();
+  };
+  const tOn = body.querySelector('.tidyon'), tOff = body.querySelector('.tidyoff');
+  if (tOn) tOn.onclick = async () => {
+    tOn.disabled = true; tOn.textContent = 'Clocking in…';
+    const j = await punch('clockin', {serial: 'TIDY', row: ''}, 'Shop Tidying', 'dash');
+    const tm = body.querySelector('.tidymsg');
+    if (j.error) { if (tm) { tm.className = 'tidymsg phmsg err'; tm.textContent = j.error; } tOn.disabled = false; tOn.textContent = '🧹 Shop tidying'; }
+    else renderDash();
+  };
+  if (tOff) tOff.onclick = async () => {
+    tOff.disabled = true; tOff.textContent = 'Clocking out…';
+    const j = await punch('clockout', null, '', 'dash');
+    const tm = body.querySelector('.tidymsg');
+    if (j.error) { if (tm) { tm.className = 'tidymsg phmsg err'; tm.textContent = j.error; } tOff.disabled = false; tOff.textContent = '■ End tidying time'; }
     else renderDash();
   };
   const cfx2 = body.querySelector('.cfixlink2');
