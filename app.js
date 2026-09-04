@@ -8013,6 +8013,11 @@ const PAYROLL_ADMIN_EMAILS = OWNER_EMAILS.concat(['melissa@brighamlarsonpianos.c
 const TIMELOG_ADMIN_EMAILS = OWNER_EMAILS.concat(
   ['markhales.blp@gmail.com', 'matthewwessman.blp@gmail.com', 'jacobmower.blp@gmail.com']);
 function userEmail() { const u = authUser(); return u && u.email ? String(u.email).toLowerCase() : ''; }
+// 🎓 Admin Training app access — Lisa, Melissa & the owners for now (Brigham 9/4)
+function adminTrainingOk() {
+  return OWNER_EMAILS.concat(['melissa@brighamlarsonpianos.com',
+    'lisa@brighamlarsonpianos.com']).includes(userEmail());
+}
 /* ⚙️ Settings feed + permission engine (Brigham 9/4, Design C).
  * Sheet-driven grants override the hardcoded lists for anyone with an
  * assignment row; everyone else keeps legacy behavior. */
@@ -10832,6 +10837,7 @@ const TRAININGS = [
     title: 'BLP Admin Training',
     desc: 'Curriculum, practice log and scorecard for BLP admins — onboarding, foundations, and every admin duty by priority.',
     readLabel: 'open the training app',
+    adminOnly: true,   // Lisa, Melissa & the owners for now (Brigham 9/4)
   },
   {
     doc: 'guide',
@@ -10874,6 +10880,7 @@ function renderTraining() {
   const el = $('#trainingBody');
   if (!el) return;
   el.innerHTML = TRAININGS.map((t, i) =>
+    (t.adminOnly && !adminTrainingOk()) ? '' :
     `<div class="trainrow">
        <b>${esc(t.title)}</b><span>${esc(t.desc)}</span>
        ${t.href ? `<a class="tact" href="${esc(t.href)}" target="_blank" rel="noopener">🎓 ${esc(t.readLabel || 'open')}</a>` : `<a class="tact" href="#" data-doc="${i}">📖 ${esc(t.readLabel || 'read')}</a>`}${
@@ -12783,6 +12790,7 @@ function switchView(v) {
   if (v === 'sched' && !isTimelogAdmin()) v = 'map';   // managers & owners only
   if ((v === 'team' || v === 'admdash') && !isTeamAdmin()) v = 'map';   // admin + managers + owners
   if (v === 'manager' && !isManagerConsole()) v = 'map';   // Brigham, Karmel & Mark only
+  if (v === 'training') renderTraining();   // re-check gated rows for whoever is signed in NOW
   S.view = v; showView(v); closeNav();
   // a leftover page scroll (from panning the map) can slide a view's top —
   // and its ✕ — up underneath the sticky header, where iOS bounce keeps it
@@ -13034,8 +13042,7 @@ if (appsTopBtn) {
       // 🎓 Admin Training is limited to Lisa, Melissa and the owners for now
       // (Brigham 9/4) — checked at open time so it follows account switches
       const at = $('#appsAdminTraining');
-      if (at) at.hidden = !OWNER_EMAILS.concat(['melissa@brighamlarsonpianos.com',
-        'lisa@brighamlarsonpianos.com']).includes(userEmail());
+      if (at) at.hidden = !adminTrainingOk();
       placeTopMenu(appsTopBtn, m);
     }
   };
