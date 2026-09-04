@@ -57,7 +57,7 @@ const I18N = {
 
   /* pipeline */
   pipe_title:["Piano Pipeline","Flujo de pianos"],
-  pipe_sub:["Every piano in play, by phase — inferred from the sequence, refinishing queue and reports. Use the selector on a card to correct its phase.","Cada piano en proceso, por fase — inferido de la secuencia, la cola de acabados y los reportes. Usa el selector en una tarjeta para corregir su fase."],
+  pipe_sub:["Every piano in play, by its live CURRENT PHASE from the Store Map cards. Fix a wrong phase on the piano's card and it updates here.","Cada piano en proceso, según su FASE ACTUAL en vivo de las tarjetas del Store Map. Corrige una fase errónea en la tarjeta del piano y se actualiza aquí."],
   handbook:["Handbook","Manual"], open_handbook:["Open the BLP Handbook →","Abrir el Manual BLP →"],
   hb_sections:["Relevant handbook sections","Secciones relevantes del manual"],
 
@@ -212,6 +212,14 @@ const I18N = {
   cur_err:["Couldn't reach the work-orders bridge: %1","No se pudo conectar con el puente de órdenes: %1"],
   cur_saved:["Saved ✓","Guardado ✓"],
   cur_savefail:["Save failed: %1","No se guardó: %1"],
+  /* sequence recommendations */
+  rec_title:["🧠 Recommended next from the queue","🧠 Recomendados de la cola"],
+  rec_sub:["Suggestions for each technician's next piano, drawn from the shop queue (queue order, track vs. specialty, current lane load). Nothing moves until a manager or owner approves it.","Sugerencias del siguiente piano para cada técnico, según la cola del taller (orden de cola, tipo de trabajo vs. especialidad, carga actual). Nada se mueve hasta que un gerente o dueño lo apruebe."],
+  rec_add:["✓ Add to sequence","✓ Agregar a la secuencia"],
+  rec_skip:["✕ Not this one","✕ Este no"],
+  rec_none:["No queue pianos are waiting for a recommendation right now.","No hay pianos en cola esperando recomendación por ahora."],
+  rec_loading:["Sizing up the queue…","Analizando la cola…"],
+  rec_added:["Added ✓","Agregado ✓"],
 };
 const t = (k, ...args) => {
   let s = (I18N[k] || [k,k])[LANG === "es" ? 1 : 0];
@@ -904,38 +912,34 @@ function renderPlanner(){
   v.innerHTML=`<div id="proposalBox"></div>`;
   loadProposal(v.querySelector("#proposalBox"));
 }
-function currentWeekColumn(){
-  if(!NOTES.length) return {label:null, byCat:{}};
-  const header=NOTES[0];
-  // latest column with any content at or before today; else latest dated column with content
-  let best=-1;
-  for(let c=1;c<header.length;c++){
-    const has=NOTES.slice(1).some(r=>(r[c]||"").trim());
-    if(has) best=c;
-  }
-  if(best<0) return {label:null, byCat:{}};
-  const byCat={}; let cat="";
-  NOTES.slice(1).forEach(r=>{
-    if((r[0]||"").trim()) cat=(r[0]||"").trim();
-    const v=(r[best]||"").trim();
-    if(v) (byCat[cat]=byCat[cat]||[]).push(v);
-  });
-  return {label:header[best], byCat};
+/* Week Board tab retired 9/4 (Brigham) — renderWeek/currentWeekColumn removed. */
+
+/* ===== live Store Map data (queue positions, phases, tracks) + roster
+ * positions — shared by the Sequence recommendations and the Pipeline's
+ * live For Sale / Sale Pending columns ===== */
+let MAPD=null, MAPD_LOADING=false, ROSTER_POS={};
+function needMapData(){
+  if(MAPD || MAPD_LOADING) return !!MAPD;
+  MAPD_LOADING=true;
+  Promise.all([
+    fetch("/api/data").then(r=>r.json()).catch(()=>null),
+    fetch("https://blpsalesapp.netlify.app/.netlify/functions/team-roster?key=pianoman")
+      .then(r=>r.json()).catch(()=>null),
+  ]).then(([d,ro])=>{
+    if(d && d.pianos) MAPD=d;
+    ((((ro||{}).tabs||{})["Current Team"])||[]).slice(1).forEach(r=>{
+      const first=String(r[0]||"").trim().toLowerCase();
+      if(first) ROSTER_POS[first]=String(r[2]||"");
+    });
+    schedRerender();
+  }).catch(()=>{}).then(()=>{ MAPD_LOADING=false; });
+  return false;
 }
-function renderWeek(){
-  const {label,byCat}=currentWeekColumn();
-  const walks=store.get(WALK_KEY,[]);
-  walks.forEach(n=>{ (byCat[n.cat]=byCat[n.cat]||[]).push("● "+(n.label?n.label+": ":"")+n.text); });
-  const cats=Object.keys(byCat);
-  $("#sview-week").innerHTML=`
-    <div class="row1"><div><h2 class="page">${t("week_title")} <span style="color:var(--mut2);font-size:16px" class="num">${label?("· "+esc(label)):""}</span></h2>
-      <div class="sub">${t("week_sub")}</div></div></div>
-    <div class="lanes">${cats.map(c=>`
-      <div class="lane"><h4>${esc(c)} <span class="n num">${byCat[c].length}</span></h4>
-        ${byCat[c].map(v=>`<div class="job">${linkSerials(esc(v))}</div>`).join("")}
-      </div>`).join("")||`<div style="color:var(--mut)">—</div>`}
-    </div>`;
+const digitsOf = s => String(s||"").replace(/\D/g,"");
+function livePhase(ph){
+  return ((MAPD&&MAPD.pianos)||[]).filter(x=>x.active && String(x.phase||"").trim()===ph);
 }
+
 function linkSerials(html){
   return html.replace(/\b(\d{4,8})\b/g,(m,d)=> PIANOS.has(skey(d))
     ? `<a class="serial-link" target="_blank" rel="noreferrer" href="${CONFIG.PIANOLOG_URL}?q=${d}">${d}</a>` : m);
@@ -956,110 +960,183 @@ function seqLaneHTML(r){
     }).join(""):`<div class="job" style="color:var(--mut2)">${t("empty_lane")}</div>`}
   </div>`;
 }
+/* ---- 🧠 next-piano recommendations (Brigham 9/4) ----
+ * Candidates = queue pianos not started (no phase / In Queue / New Arrival)
+ * and not already named in ANY sequence lane. Ranked by queue order; a
+ * refinisher gets refinish-track pianos first, everyone else the opposite;
+ * techs with the emptiest lanes are served first. Approving writes the job
+ * into that tech's row on the Sequence tab via the bridge — nothing changes
+ * until a manager/owner taps Approve. */
+const REC_DISMISS_KEY="blpmgr.recdismiss";
+function buildRecs(activeRows){
+  if(!needMapData()) return null;   // kicks off the fetch; rerenders when in
+  const inSeq=new Set();
+  seqRows().forEach(r=>r.slice(2).forEach(j=>(String(j||"").match(/\d{4,8}/g)||[]).forEach(s=>inSeq.add(s))));
+  const dism=store.get(REC_DISMISS_KEY,{});
+  const pool=MAPD.pianos.filter(p=>p.active && p.queuePos && p.serial
+      && !/pre[\s-]?queue/i.test(p.status||"")
+      && ["","In Queue","New Arrival - Admin"].includes(String(p.phase||"").trim())
+      && digitsOf(p.serial).length>=4 && !inSeq.has(digitsOf(p.serial))
+      && !dism[digitsOf(p.serial)])
+    .sort((a,b)=>a.queuePos-b.queuePos);
+  const lanes=activeRows.map(r=>{
+    const tech=(r[1]||"").trim();
+    return {tech, load:r.slice(2).filter(c=>(c||"").trim()).length,
+      refin:/refinish/i.test(ROSTER_POS[tech.split(/\s+/)[0].toLowerCase()]||"")};
+  }).sort((a,b)=>a.load-b.load);
+  const recs=[];
+  lanes.forEach(l=>{
+    if(!pool.length) return;
+    let i=pool.findIndex(p=>l.refin===/refinish/i.test(p.track||""));
+    if(i<0) i=0;
+    const p=pool.splice(i,1)[0];
+    const why=[`queue #${p.queuePos}`];
+    if(p.track) why.push(String(p.track).split(",")[0].trim());
+    why.push(l.load?`${l.load} in lane`:"open lane");
+    if(l.refin&&/refinish/i.test(p.track||"")) why.push(LANG==="es"?"acabado ↔ acabador":"refinish ↔ refinisher");
+    recs.push({tech:l.tech, p, why:why.join(" · ")});
+  });
+  return recs;
+}
+function recRowHTML(r){
+  const sn=digitsOf(r.p.serial);
+  return `<div class="job recrow" data-sn="${esc(sn)}" data-tech="${esc(r.tech)}" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+    <b style="min-width:76px">${esc(r.tech.split(/\s+/)[0].toUpperCase())}</b>
+    <span style="flex:1;min-width:180px">${linkSerials(esc((r.p.summary||"piano")+" "+r.p.serial))}
+      <div class="meta" style="font-size:11px;color:var(--mut2)">${esc(r.why)}</div></span>
+    <button class="btn2 recok" data-entry="${esc(((r.p.summary||"")+" "+r.p.serial).trim())}">${t("rec_add")}</button>
+    <button class="btn2 recno" style="color:var(--mut)">${t("rec_skip")}</button>
+    <span class="recmsg" style="font-size:12px"></span></div>`;
+}
+async function recApprove(row){
+  const tech=row.dataset.tech, entry=row.querySelector(".recok").dataset.entry;
+  const msg=row.querySelector(".recmsg");
+  const auth=(window.writeAuth?writeAuth():{pin:"",ok:true});
+  msg.textContent="…";
+  try{
+    const r=await fetch(CONFIG.STOREMAP_BRIDGE,{method:"POST",redirect:"follow",
+      headers:{"content-type":"text/plain;charset=utf-8"},
+      body:JSON.stringify({pin:auth.pin,action:"seqadd",tech,entry,
+        ...(window.authFields?authFields():{})})});
+    const j=await r.json();
+    if(j.error) throw new Error(j.error);
+    msg.textContent=t("rec_added"); msg.style.color="#2c7a3f";
+    // optimistic: put it in the lane locally so the board matches the sheet
+    const f=tech.split(/\s+/)[0].toLowerCase();
+    const lane=SEQ.find(x=>(x[1]||"").trim().split(/\s+/)[0].toLowerCase()===f);
+    if(lane) lane.push(entry);
+    setTimeout(renderSequence,700);
+  }catch(e){ msg.textContent="✗ "+(e.message||e); msg.style.color="#9e2020"; }
+}
 function renderSequence(){
   const firsts=new Set(ROSTER.map(n=>n.split(/\s+/)[0].toLowerCase()));
   const active=[], others=[];
   seqRows().forEach(r=>{
     (firsts.has((r[1]||"").trim().split(/\s+/)[0].toLowerCase())?active:others).push(r);
   });
+  const recs=buildRecs(active);
+  const recsHTML=`<div class="lane" style="margin:0 0 16px;border:1px dashed #b9a76b;background:#fdfaf1">
+    <h4>${t("rec_title")}</h4>
+    <div class="sub" style="margin:2px 0 8px">${t("rec_sub")}</div>
+    ${recs===null?`<div class="job" style="color:var(--mut2)">${t("rec_loading")}</div>`
+      :(recs.length?recs.map(recRowHTML).join(""):`<div class="job" style="color:var(--mut2)">${t("rec_none")}</div>`)}
+  </div>`;
   $("#sview-sequence").innerHTML=`
     <div class="row1"><div><h2 class="page">${t("seq_title")}</h2><div class="sub">${t("seq_sub")}</div></div></div>
+    ${recsHTML}
     <div class="lanes">${active.map(seqLaneHTML).join("")}</div>
     ${others.length?`<details style="margin-top:18px"><summary style="cursor:pointer;color:var(--mut);font-size:13.5px">+ ${others.length}</summary>
       <div class="lanes" style="margin-top:12px">${others.map(seqLaneHTML).join("")}</div></details>`:""}`;
+  document.querySelectorAll("#sview-sequence .recrow").forEach(row=>{
+    const ok=row.querySelector(".recok"), no=row.querySelector(".recno");
+    ok.onclick=()=>{ ok.disabled=true; recApprove(row); };
+    no.onclick=()=>{
+      const d=store.get(REC_DISMISS_KEY,{}); d[row.dataset.sn]=Date.now();
+      store.set(REC_DISMISS_KEY,d); renderSequence();
+    };
+  });
 }
 
 /* ================= PIPELINE ================= */
+/* Rebuilt 9/4 (Brigham): columns now come STRAIGHT from each piano's live
+ * CURRENT PHASE on the Store Map — no more keyword guessing from old
+ * reports (which kept long-gone tech names on the board). Order: shop
+ * phases left-to-right, then Waiting/Paused, For Sale, Sale Pending,
+ * Delivered at the far right. */
 const PHASES=[
-  {id:"INTAKE",   en:"New Arrival",     es:"Recién llegado",    code:"",     hb:["Storing Cabinetry"]},
-  {id:"ASSESS",   en:"Assessment",      es:"Evaluación",        code:"",     hb:["Tear-down Sheet (§16)"]},
-  {id:"TEARDOWN", en:"Teardown",        es:"Desarmado",         code:"",     hb:["Upright Teardown: Cleaning & Prep","Grand Teardown: Cleaning & Prep","Removing Tuning Pins","Storing Cabinetry (§14)","Tear-down Sheet (§16)"]},
-  {id:"PRSB",     en:"PRSB",            es:"PRSB",              code:"Perimeter · Ribs · Soundboard · Bridge", hb:["Find Proper Downbearing: Targets","How to Chisel a Bridge","Restringing (§12)"]},
-  {id:"CAP",      en:"CAP",             es:"CAP",               code:"Cleaning · Action Prep", hb:["Cleaning and Prep","Action Prep","Reshape Hammers","Hammer Prep & Hanging","Keys (§13)"]},
-  {id:"REFINISH", en:"Refinishing",     es:"Acabado",           code:"L1 · L2 · L3", hb:["Buffing Basics","Buffing Casters","Hardware (§3)"]},
-  {id:"ASSEMBLY", en:"Final Assembly",  es:"Ensamblaje final",  code:"",     hb:["Storing Cabinetry (§14)","Hardware (§3)"]},
-  {id:"DHRT",     en:"DHRT",            es:"DHRT",              code:"Dampers · Hammers · Regulation · Trapwork", hb:["Upright Regulation","Grand Piano Regulation Theory","Key Leveling","Tricks for Let Off Regulation","Aligning Backchecks","Damper Lift","Damper Spoon Regulation","Spring Strength, Drop, and Dip"]},
-  {id:"TUNING",   en:"Tuning",          es:"Afinación",         code:"",     hb:[]},
-  {id:"QC",       en:"QC",              es:"QC",                code:"",     hb:["QC Checklist (doc)"]},
-  {id:"READY",    en:"Admin Exit Prep", es:"Preparación de salida", code:"", hb:[]},
-  {id:"DELIVERED",en:"Delivered",       es:"Entregado",         code:"",     hb:[]},
-  {id:"FORSALE",  en:"For Sale",        es:"En venta",          code:"",     hb:[]},
+  {id:"QUEUE",    ph:"In Queue",                 en:"In Queue",           es:"En cola",             code:"", hb:[]},
+  {id:"INTAKE",   ph:"New Arrival - Admin",      en:"New Arrival",        es:"Recién llegado",      code:"", hb:["Storing Cabinetry"]},
+  {id:"ASSESS",   ph:"Assessment",               en:"Assessment",         es:"Evaluación",          code:"", hb:["Tear-down Sheet (§16)","Upright Teardown: Cleaning & Prep","Grand Teardown: Cleaning & Prep","Storing Cabinetry (§14)"]},
+  {id:"CAP",      ph:"CAP",                      en:"CAP",                es:"CAP",                 code:"Cleaning · Action Prep", hb:["Cleaning and Prep","Action Prep","Reshape Hammers","Hammer Prep & Hanging","Keys (§13)"]},
+  {id:"PRSB",     ph:"PRSB & Plate Refinishing", en:"PRSB & Plate",       es:"PRSB y placa",        code:"Perimeter · Ribs · Soundboard · Bridge", hb:["Find Proper Downbearing: Targets","How to Chisel a Bridge"]},
+  {id:"LACQUER",  ph:"Lacquer Soundboard",       en:"Lacquer Soundboard", es:"Laca de tabla",       code:"", hb:[]},
+  {id:"RESTRING", ph:"Restringing",              en:"Restringing",        es:"Encordado",           code:"", hb:["Restringing (§12)","Removing Tuning Pins"]},
+  {id:"CHIPTUNE", ph:"Chip Tuning",              en:"Chip Tuning",        es:"Afinación de asiento",code:"", hb:[]},
+  {id:"DHRT",     ph:"DHRT",                     en:"DHRT",               es:"DHRT",                code:"Dampers · Hammers · Regulation · Trapwork", hb:["Upright Regulation","Grand Piano Regulation Theory","Key Leveling","Tricks for Let Off Regulation","Aligning Backchecks","Damper Lift","Damper Spoon Regulation","Spring Strength, Drop, and Dip"]},
+  {id:"TUNING1",  ph:"1st Tuning",               en:"1st Tuning",         es:"1.ª afinación",       code:"", hb:[]},
+  {id:"REFINISH", ph:"Refinishing",              en:"Refinishing",        es:"Acabado",             code:"L1 · L2 · L3", hb:["Buffing Basics","Buffing Casters","Hardware (§3)"]},
+  {id:"QC",       ph:"QC & Assembly",            en:"QC & Assembly",      es:"QC y ensamblaje",     code:"", hb:["QC Checklist (doc)","Storing Cabinetry (§14)","Hardware (§3)"]},
+  {id:"TUNING2",  ph:"2nd Tuning",               en:"2nd Tuning",         es:"2.ª afinación",       code:"", hb:[]},
+  {id:"EXIT",     ph:"Exit Prep - Admin",        en:"Exit Prep",          es:"Preparación de salida", code:"", hb:[]},
+  {id:"WAITING",  ph:"",                         en:"Waiting / Paused",   es:"En espera / pausa",   code:"", hb:[]},
+  {id:"FORSALE",  ph:"For Sale",                 en:"For Sale",           es:"En venta",            code:"", hb:[]},
+  {id:"SALEPEND", ph:"Sale Pending",             en:"Sale Pending",       es:"Venta pendiente",     code:"", hb:[]},
+  {id:"DELIVERED",ph:"Delivered",                en:"Delivered",          es:"Entregado",           code:"", hb:[]},
 ];
 const phaseName=p=>LANG==="es"?p.es:p.en;
-function inferPhase(rec){
-  const ov=store.get(PH_KEY,{})[skey(rec.serial)];
-  if(ov) return ov;
-  const qc=store.get(QC_KEY,{})[skey(rec.serial)];
-  if(qc && !qc.ready) return "QC";
-  if(qc && qc.ready) return "READY";
-  // 1) sequence text from ACTIVE roster lanes only (exact serial-token match)
-  let txt="";
-  const mySerial=skey(rec.serial);
-  const firsts=new Set(ROSTER.map(n=>n.split(/\s+/)[0].toLowerCase()));
-  seqRows().forEach(r=>{
-    if(!firsts.has((r[1]||"").trim().split(/\s+/)[0].toLowerCase())) return;
-    r.slice(2).forEach(j=>{ if(j && (j.match(/\d{4,8}/g)||[]).includes(mySerial)) txt+=" "+j; });
-  });
-  const s=txt.toLowerCase();
-  if(s.trim()){
-    if(/dhrt|regulat|voic/.test(s)) return "DHRT";
-    if(/restring|prsb|soundboard|bridge|pinblock|downbearing/.test(s)) return "PRSB";
-    if(/\bcap\b|action prep|clean/.test(s)) return "CAP";
-    if(/teardown|tear down/.test(s)) return "TEARDOWN";
-    if(/tun(e|ing)/.test(s)) return "TUNING";
-    if(/rebuild|restoration|refurb/.test(s)) return "TEARDOWN";
-  }
-  // 2) refinishing queue
-  if(rec.refinishPri) return "REFINISH";
-  // 3) the piano's latest report snippet
-  const p=(rec.snip||"").toLowerCase();
-  if(/refinish|lacquer|stain|sanding|sprayed|filler|buff/.test(p)) return "REFINISH";
-  if(/assembl/.test(p)) return "ASSEMBLY";
-  if(/regulat|voic|damper|dhrt|trapwork/.test(p)) return "DHRT";
-  if(/restring|soundboard|bridge|pinblock|plate|chip/.test(p)) return "PRSB";
-  if(/action|hammer|felts|keytop|keys/.test(p)) return "CAP";
-  if(/teardown|tear down/.test(p)) return "TEARDOWN";
-  if(/tun(ed|e|ing)/.test(p)) return "TUNING";
-  return "ASSESS";
-}
 function renderPipeline(){
+  if(!needMapData()){
+    $("#sview-pipeline").innerHTML=`<div class="row1"><div><h2 class="page">${t("pipe_title")}</h2>
+      <div class="sub">${t("pipe_sub")}</div></div></div>
+      <div style="color:var(--mut2);padding:22px 0">Loading the live shop data…</div>`;
+    return;
+  }
   const cols={}; PHASES.forEach(p=>cols[p.id]=[]);
-  const recentCut=new Date(); recentCut.setDate(recentCut.getDate()-120);
-  [...PIANOS.values()].forEach(rec=>{
-    const inPlay = rec.refinishPri || rec.inSeq ||
-      (rec.lastDate && rec.lastDate >= iso(recentCut)) ||
-      store.get(QC_KEY,{})[skey(rec.serial)];
-    if(!inPlay) return;
-    const ph=inferPhase(rec);
-    (cols[ph]=cols[ph]||[]).push(rec);
+  const byPh=new Map(PHASES.map(p=>[p.ph,p.id]));
+  MAPD.pianos.forEach(x=>{
+    const ph=String(x.phase||"").trim();
+    if(!x.active){ if(ph==="Delivered") cols.DELIVERED.push(x); return; }
+    if(/^(Waiting|Paused)/i.test(ph)) return cols.WAITING.push(x);
+    if(ph==="Sold"||ph==="Sale Pending") return cols.SALEPEND.push(x);
+    if(byPh.has(ph)&&ph) return cols[byPh.get(ph)].push(x);
+    if(!ph && x.queuePos) return cols.QUEUE.push(x);
   });
+  Object.values(cols).forEach(a=>a.sort((p,q)=>(p.queuePos||9e5)-(q.queuePos||9e5)
+    || String(p.summary||"").localeCompare(String(q.summary||""))));
+  const recentCut=new Date(); recentCut.setDate(recentCut.getDate()-120);
+  const cutIso=iso(recentCut);
+  const card=x=>{
+    const rec=PIANOS.get(skey(x.serial));
+    const recent = rec && rec.lastDate && rec.lastDate>=cutIso;
+    return `<div class="pcard2"><a class="serial-link" target="_blank" rel="noreferrer" href="${CONFIG.PIANOLOG_URL}?q=${skey(x.serial)}">${esc(x.summary||("#"+x.serial))}</a>
+      <div class="meta" style="margin-top:4px">
+        ${x.location?`<span class="pill lvl">${esc(x.location)}</span>`:""}
+        ${x.queuePos?`<span class="pill lvl num">Q-${x.queuePos}</span>`:""}
+        ${String(x.phase||"")==="Sold"?`<span class="pill ok">SOLD</span>`:""}
+        ${x.price?`<span class="pill ok num">${esc(String(x.price))}</span>`:""}
+        ${recent&&rec.progress!=null?`<span class="pill ok num">${rec.progress}%</span>`:""}
+      </div>
+      ${/^(Waiting|Paused)/i.test(String(x.phase||""))?`<div style="font-size:11px;color:var(--mut2);margin-top:4px">${esc(String(x.phase))}${(x.waitNote||"").trim()?" — "+esc(x.waitNote):""}</div>`:""}
+      ${recent&&[...rec.techs].length?`<div style="font-size:11px;color:var(--mut2);margin-top:4px">${esc([...rec.techs].join(", "))}</div>`:""}
+    </div>`;
+  };
+  const colBody=rows=>{
+    const first=rows.slice(0,15), rest=rows.slice(15);
+    return first.map(card).join("")+(rest.length?`<details><summary style="cursor:pointer;color:var(--mut2);font-size:12px;padding:6px 2px">+ ${rest.length} more</summary>${rest.map(card).join("")}</details>`:"");
+  };
   $("#sview-pipeline").innerHTML=`
-    <div class="row1"><div><h2 class="page">${t("pipe_title")}</h2><div class="sub">${t("pipe_sub")}</div></div>
-      <a class="btn2" style="text-decoration:none" target="_blank" rel="noreferrer" href="${CONFIG.HANDBOOK_APP}">${t("handbook")} ↗</a></div>
+    <div class="row1"><div><h2 class="page">${t("pipe_title")}</h2><div class="sub">${t("pipe_sub")}</div></div></div>
     <div class="pipe">${PHASES.map(p=>`
       <div class="pcol"><h4>${phaseName(p)} <span style="display:flex;gap:5px;align-items:center"><span class="n num">${cols[p.id].length}</span>${p.hb.length?`<button class="hb" data-p="${p.id}">?</button>`:""}</span></h4>
         <div class="code">${p.code}</div>
-        ${cols[p.id].map(rec=>`
-          <div class="pcard2"><a class="serial-link" target="_blank" rel="noreferrer" href="${CONFIG.PIANOLOG_URL}?q=${skey(rec.serial)}">${esc(rec.label)}</a>
-            <div class="meta" style="margin-top:4px">
-              ${rec.level?`<span class="pill lvl">L${esc(rec.level)}</span>`:""}
-              ${rec.spot?`<span class="pill lvl">${esc(rec.spot)}</span>`:""}
-              ${rec.progress!=null?`<span class="pill ok num">${rec.progress}%</span>`:""}
-            </div>
-            ${[...rec.techs].length?`<div style="font-size:11px;color:var(--mut2);margin-top:4px">${esc([...rec.techs].join(", "))}</div>`:""}
-            <select data-k="${skey(rec.serial)}"><option value="">${phaseName(p)} ▾</option>${PHASES.map(x=>`<option value="${x.id}">${phaseName(x)}</option>`).join("")}</select>
-          </div>`).join("")}
+        ${colBody(cols[p.id])}
       </div>`).join("")}
     </div>`;
-  document.querySelectorAll(".pcol select").forEach(sel=>sel.onchange=()=>{
-    if(!sel.value) return;
-    const ov=store.get(PH_KEY,{}); ov[sel.dataset.k]=sel.value; store.set(PH_KEY,ov); renderPipeline();
-  });
   document.querySelectorAll(".pcol .hb").forEach(b=>b.onclick=()=>{
     const p=PHASES.find(x=>x.id===b.dataset.p);
     let pop=document.getElementById("shbpop");
     if(!pop){ pop=document.createElement("div"); pop.id="shbpop";
-      pop.innerHTML='<div id="shbcard"><button id="shbx">\u2715</button><div id="hbbox"></div></div>';
+      pop.innerHTML='<div id="shbcard"><button id="shbx">✕</button><div id="hbbox"></div></div>';
       document.body.appendChild(pop);
       pop.onclick=ev=>{ if(ev.target===pop||ev.target.id==="shbx") pop.classList.remove("on"); }; }
     $("#hbbox").innerHTML=`<h3>${phaseName(p)}</h3><div style="color:var(--mut2);font-size:12px">${p.code}</div>
@@ -1073,9 +1150,9 @@ function renderPipeline(){
   });
 }
 /* ---- Store Map integration ---- */
-const S_TABS = ["dash","review","planner","week","schedule","sequence","pipeline","walk"];
+const S_TABS = ["dash","review","planner","schedule","sequence","pipeline","walk"];
 const RENDERERS = {dash:renderDash, review:renderReview, planner:renderPlanner,
-  week:renderWeek, sequence:renderSequence, pipeline:renderPipeline, walk:renderWalk};
+  sequence:renderSequence, pipeline:renderPipeline, walk:renderWalk};
 let ACTIVE_S = null, BOOTED = false, BOOTING = false;
 function schedRerender(){
   if(ACTIVE_S && RENDERERS[ACTIVE_S]) RENDERERS[ACTIVE_S]();

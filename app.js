@@ -4547,6 +4547,12 @@ function popHTML(p) {
   const contractBlock = p.serial && (isPayrollAdmin() || isOwner())
     ? `<div class="row"><button class="ctrbtn">📜 Owner contract & selections</button></div><div class="ctrout"></div>`
     : '';
+  // 🏷 Tags section is emitted as open/close halves (its body holds literal
+  // \u-escape strings that can't ride through secWrap's template cleanly)
+  const tagsOn = secOpen('tags', false);
+  const tagsSecOpen = `<div class="sechead${tagsOn ? '' : ' shut'}" data-sec="tags">🏷 Tags
+      <i class="secarrow">${tagsOn ? '▾' : '▸'}</i></div>
+    <div class="secbody${tagsOn ? '' : ' closed'}" data-sec="tags">`;
   const admin = p.serial ? secWrap('admin', '🔐 Admin', `
     ${contractBlock}
     ${crVal === 'yes' ? `<div class="tagbtns histbtns"><button class="tagbtn creports">🤝 Client Reports History</button></div>` : ''}
@@ -4612,6 +4618,20 @@ function popHTML(p) {
            ${p.serial && isAdminUser() ? `<button class="predit">${p.price ? '✎ Edit price' : '＋ Add price'}</button>` : ''}</div>`
       : (priceLabel(p) ? `<div class="row">Price <b class="pricecard">${esc(priceLabel(p))}</b></div>` : '')}
 
+    ${p.serial ? `<button class="tunebtn reqbtn" style="margin-top:10px">📨 Request… ▾</button>
+      <div class="reqmenu" hidden>
+        <button data-req="move">🚚 Move</button>
+        <button data-req="tune">🎵 Tuning</button>
+        <button data-req="service">🔧 Service</button>
+        <button data-req="curtis">🎨 Curtis Harper</button>
+        <button data-req="admin">📋 Admin</button>
+        <button data-req="touchup">🖌 Touch Up</button>
+        <button data-req="price">💲 Price Change</button>
+        <button data-req="priority">⚡ Priority Scheduling</button>
+        <button data-req="brigham">🗒 Brigham Task</button>
+        ${(isAdminUser() || userRole()) ? `<button data-req="tempspot">📍 Temp map spot</button>` : ''}
+        <button data-req="dup" class="reqdanger">🗑 Mark as Duplicate</button>
+      </div>` : ''}
     ${p.serial ? (() => {
       const mine = CLOCK.open;
       const onThis = mine && mine.serial === p.serial;
@@ -4678,6 +4698,7 @@ function popHTML(p) {
     ${scopeSec}
 
     ${(body => p.serial ? secWrap('shop', '🔨 Shop Progress', body) : body)(`
+    ${p.serial ? `<button class="photobtn">📸 Add progress photo</button><div class="photomsg"></div>` : ''}
     ${p.serial ? '' : tracker}
     ${phaser}
     ${tasksBox(p)}
@@ -4706,21 +4727,7 @@ function popHTML(p) {
 
     ${admin}
 
-    ${p.serial ? `<button class="tunebtn reqbtn" style="margin-top:10px">📨 Request… ▾</button>
-      <div class="reqmenu" hidden>
-        <button data-req="move">🚚 Move</button>
-        <button data-req="tune">🎵 Tuning</button>
-        <button data-req="service">🔧 Service</button>
-        <button data-req="curtis">🎨 Curtis Harper</button>
-        <button data-req="admin">📋 Admin</button>
-        <button data-req="touchup">🖌 Touch Up</button>
-        <button data-req="price">💲 Price Change</button>
-        <button data-req="priority">⚡ Priority Scheduling</button>
-        <button data-req="brigham">🗒 Brigham Task</button>
-        ${(isAdminUser() || userRole()) ? `<button data-req="tempspot">📍 Temp map spot</button>` : ''}
-        <button data-req="dup" class="reqdanger">🗑 Mark as Duplicate</button>
-      </div>` : ''}
-    <div class="tagbtns">
+    ${p.serial ? tagsSecOpen : ''}<div class="tagbtns">
       ${priceLabel(p) ? `<a class="tagbtn" target="_blank" rel="noopener"
         href="${priceTagUrl(p)}">🏷 Price tag ↗</a>` : ''}
       ${p.serial ? `<button class="tagbtn shoptag">🖨 Shop tag</button>` : ''}
@@ -4734,7 +4741,7 @@ function popHTML(p) {
           <span class="tagrender">${shopTagInner(sn.d)}</span>
           ${drift ? '<i>\u26a0</i>' : ''}</button>`;
       })()}
-    </div>
+    </div>${p.serial ? '</div>' : ''}
     ${p.serial ? secWrap('notes', '📝 Notes', `
       <div class="movebox notebox">
         <input class="pnin" placeholder="add a note about this piano…" maxlength="240">
@@ -5245,9 +5252,9 @@ function wirePop(p) {
     else if (kind === 'dup') openDuplicateModal(p);
   });
   if (pop.querySelector('.taskbox')) loadTasks(p, pop);
-  const pb = pop.querySelector('.photobtn');
   const pi = pop.querySelector('.photoin');
-  if (pb) pb.onclick = ev => { ev.stopPropagation(); popPinned = true; pi.click(); };
+  pop.querySelectorAll('.photobtn').forEach(pb =>
+    pb.onclick = ev => { ev.stopPropagation(); popPinned = true; pi.click(); });
   if (pi) {
     pi.onclick = ev => ev.stopPropagation();
     pi.onchange = () => uploadPhoto(p, pi, pop);
@@ -7567,7 +7574,13 @@ async function submitBrigham(p, ov) {
 async function uploadPhoto(p, input, pop) {
   const f = input.files && input.files[0];
   if (!f) return;
-  const msg = pop.querySelector('.photomsg');
+  // the card has two 📸 buttons (Media + Shop Progress) — mirror status to
+  // every .photomsg so feedback shows next to whichever one was tapped
+  const msgNodes = [...pop.querySelectorAll('.photomsg')];
+  const msg = {
+    set className(v) { msgNodes.forEach(n => n.className = v); },
+    set textContent(v) { msgNodes.forEach(n => n.textContent = v); },
+  };
   popPinned = true;
   const {pin, ok} = writeAuth();
   if (!ok) { msg.className = 'photomsg err'; msg.textContent = 'Sign in with Google (☰ menu) to make changes — actions are logged under your name.'; return; }
@@ -8137,7 +8150,7 @@ async function queuePiano(p, newPos, pop) {
     msg.textContent = '✗ ' + e.message + ' — not saved';
   }
 }
-const CARD_SECS = ['admin', 'clock', 'loc', 'scope', 'shop', 'tune', 'media', 'pw', 'notes', 'act', 'log'];
+const CARD_SECS = ['admin', 'clock', 'loc', 'scope', 'shop', 'tune', 'media', 'pw', 'tags', 'notes', 'act', 'log'];
 function openPop(row, el, pinned) {
   // every card opens compact (Brigham 9/4): switching pianos resets the
   // section toggles; re-renders of the SAME card keep what you opened
@@ -11804,8 +11817,10 @@ addEventListener('message', ev => {
   } catch (e) { /* frame gone */ }
 });
 const SCHED_TABS = [
+  // 🗓 Week Schedule tab retired 9/4 (Brigham) — the Week Board duplicated
+  // what Planner + Schedule already cover
   ['dash', '📊 Dashboard'], ['review', '📝 Weekly Review'], ['planner', '🧮 Planner'],
-  ['week', '🗓 Week Schedule'], ['schedule', '📆 Schedule'], ['sequence', '🔢 Sequence'],
+  ['schedule', '📆 Schedule'], ['sequence', '🔢 Sequence'],
   ['pipeline', '🚰 Pipeline'], ['walk', '🚶 Walk-the-Shop'],
 ];
 const SCHED = {tab: 'planner'};

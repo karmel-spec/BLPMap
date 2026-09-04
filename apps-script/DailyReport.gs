@@ -941,6 +941,17 @@ function doPost(e) {
       try { return json_(saleSweep_(who)); }
       catch (eSW) { return json_({error: String(eSW).slice(0, 200)}); }
     }
+    if (req.action === 'seqadd') {
+      // 🧠 sequence recommendation approved (Brigham 9/4): append the job
+      // to the tech's row on the scheduling sheet's Sequence tab. Managers
+      // and owners only — the Scheduling dashboard is already gated the
+      // same way, this is the server-side lock.
+      if (!timelogAdmin_(req._g) && !payrollAdmin_(req._g)) {
+        return json_({error: 'Managers and owners only.'});
+      }
+      try { return json_(seqAdd_(String(req.tech || ''), String(req.entry || ''), who)); }
+      catch (eSQ) { return json_({error: String(eSQ).slice(0, 200)}); }
+    }
     if (req.action === 'contractsync') {
       try { return json_(contractSync_()); }
       catch (eCS) { return json_({error: String(eCS).slice(0, 200)}); }
@@ -1744,6 +1755,35 @@ function setTrack_(req) {
           previous: prev, track: val};
 }
 
+// 🧠 approved sequence recommendation → first empty cell of the tech's row
+// on the scheduling sheet's "Sequence" tab (gid 0). Tech matched by first
+// name in column B, case-insensitive.
+var SCHED_SHEET_ID = '1k9ToAeueEg5WOtaY91xXzL-a0l_AJsSZWw23tcAWECU';
+function seqAdd_(tech, entry, who) {
+  tech = tech.trim(); entry = entry.trim().slice(0, 200);
+  if (!tech || !entry) throw new Error('tech and entry are required');
+  var ss = SpreadsheetApp.openById(SCHED_SHEET_ID);
+  var sh = null;
+  var all = ss.getSheets();
+  for (var i = 0; i < all.length; i++) { if (all[i].getSheetId() === 0) { sh = all[i]; break; } }
+  if (!sh) sh = all[0];
+  var first = tech.split(/\s+/)[0].toLowerCase();
+  var vals = sh.getDataRange().getValues();
+  var rowI = -1;
+  for (var r = 0; r < vals.length; r++) {
+    var nm = String(vals[r][1] || '').trim();
+    if (nm && nm.split(/\s+/)[0].toLowerCase() === first) { rowI = r; break; }
+  }
+  if (rowI < 0) throw new Error('No "' + tech + '" lane on the Sequence tab — add the row there first.');
+  var row = vals[rowI];
+  var col = 2;   // append AFTER the last filled cell (mid-row gaps stay gaps)
+  for (var c = 2; c < row.length; c++) {
+    if (String(row[c] || '').trim()) col = c + 1;
+  }
+  sh.getRange(rowI + 1, col + 1).setValue(entry);
+  logAct_(who, 'Sequence add', entry.slice(0, 60), 'added to ' + tech + "'s sequence (recommendation approved)");
+  return {ok: true, tech: tech, cell: sh.getRange(rowI + 1, col + 1).getA1Notation()};
+}
 function saleSweep_(who) {
   var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
   var last = sh.getLastRow();
