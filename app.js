@@ -8046,7 +8046,7 @@ async function queuePiano(p, newPos, pop) {
     msg.textContent = '✗ ' + e.message + ' — not saved';
   }
 }
-const CARD_SECS = ['admin', 'clock', 'loc', 'shop', 'tune', 'media', 'pw', 'notes', 'act', 'log'];
+const CARD_SECS = ['admin', 'clock', 'loc', 'scope', 'shop', 'tune', 'media', 'pw', 'notes', 'act', 'log'];
 function openPop(row, el, pinned) {
   // every card opens compact (Brigham 9/4): switching pianos resets the
   // section toggles; re-renders of the SAME card keep what you opened
