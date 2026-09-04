@@ -987,7 +987,7 @@ function doPost(e) {
       catch (eSQ) { return json_({error: String(eSQ).slice(0, 200)}); }
     }
     if (req.action === 'contractsync') {
-      try { return json_(contractSync_()); }
+      try { return json_(contractSync_(!!req.refresh)); }
       catch (eCS) { return json_({error: String(eCS).slice(0, 200)}); }
     }
     if (req.action === 'contracts') {
@@ -6343,7 +6343,7 @@ function phaseNote_(req, who) {
  * Rows are stamped in a 'Synced to card' column; unmatched rows stay
  * unstamped so they sync automatically once the piano reaches the log.
  * Payment/banking columns (46-56) are never read. */
-function contractSync_() {
+function contractSync_(refresh) {
   var ss = SpreadsheetApp.openById(PIANO_LOG_ID);
   var cs = ss.getSheetByName('Restoration Contracts');
   if (!cs) return {error: 'no Restoration Contracts tab'};
@@ -6368,7 +6368,7 @@ function contractSync_() {
   var stamp = Utilities.formatDate(new Date(), 'America/Denver', 'M/d/yy');
   var synced = [], skipped = 0;
   for (var r = 1; r < v.length; r++) {
-    if (String(v[r][mCol - 1] || '').trim()) { skipped++; continue; }
+    if (!refresh && String(v[r][mCol - 1] || '').trim()) { skipped++; continue; }
     var digits = String(v[r][18] || '').replace(/\D/g, '');
     if (digits.length < 3) { continue; }              // no usable serial — retry forever, harmless
     var f;
@@ -6389,26 +6389,37 @@ function contractSync_() {
         sh.getRange(f.row, trackCol).setValue(tks ? tks + ', Refinish' : 'Refinish');
       }
     }
-    // scope block (kept once — prepended above any hand-typed instructions)
-    var parts = [];
-    if (refin) parts.push('Refinish: ' + (/^yes/i.test(refin) ? 'YES' : /^no/i.test(refin) ? 'no' : refin.slice(0, 40)));
-    if (color) parts.push('Color: ' + color.slice(0, 60));
-    if (hardware) parts.push('Hardware: ' + hardware.slice(0, 50));
-    if (interior) parts.push('Interior: ' + (/^yes/i.test(interior) ? 'YES' : interior.slice(0, 50)));
-    if (bench) parts.push('Bench: ' + bench.slice(0, 40) + (benchD ? ' (' + benchD.slice(0, 40) + ')' : ''));
-    if (senti && !/^n\/?a$/i.test(senti)) parts.push('⚠ Sentimental: ' + senti.slice(0, 110));
-    if (/^yes/i.test(tune)) parts.push('+ tuning before delivery');
-    if (oNotes) parts.push('Owner: ' + oNotes.slice(0, 150));
+    // scope block — the FULL contract detail (Brigham 9/4: everything except
+    // pricing shows right on the card). Every line starts with 📜 so the
+    // card pins the whole block above the editable instructions.
+    var line = function (label, val) {
+      val = String(val || '').replace(/\s*\n+\s*/g, ' ').trim();
+      return val ? (label + ': ' + val.slice(0, 300)) : '';
+    };
+    var decal9 = S9(30), finishNow9 = S9(19);
+    var L = [line('Refinishing', refin), line('Internal work', interior),
+      line('Current finish', finishNow9), line('Color', color),
+      line('Hardware', hardware), line('Decals', decal9),
+      line('Bench', bench + (benchD ? ' — ' + benchD : '')),
+      (senti && !/^n\/?a$/i.test(senti)) ? ('⚠ Sentimental: ' + senti.replace(/\s*\n+\s*/g, ' ').slice(0, 300)) : '',
+      line('Tuning before delivery', tune), line('Owner notes', oNotes)].filter(String);
     var when0 = v[r][0];
     var whenStr = (when0 instanceof Date)
       ? Utilities.formatDate(when0, 'America/Denver', 'M/d/yy')
       : String(when0 || '').split(' ')[0];
-    var block = '📜 Contract ' + whenStr + ' (' + S9(3) + ') — ' + parts.join(' · ');
+    var block = '📜 Contract ' + whenStr + ' — ' + S9(3) + '\n📜 ' + L.join('\n📜 ');
     var prevScope = String(sh.getRange(f.row, scopeCol).getValue() || '').trim();
-    if (prevScope.indexOf('📜 Contract') < 0) {
-      sh.getRange(f.row, scopeCol).setValue((block + (prevScope ? '\n' + prevScope : '')).slice(0, 500));
-      addPianoNote_(sh, f.row, 'Contract sync', block.slice(0, 280));
-      logAct_('Contract sync', 'Scope of Work from contract', f.summary || digits, parts.join(' · ').slice(0, 150));
+    var hadBlock = prevScope.indexOf('📜') >= 0;
+    if (!hadBlock || refresh) {
+      // keep any hand-typed instructions, replace only the 📜 lines
+      var keep = prevScope.split('\n').filter(function (l2) {
+        return l2.trim().indexOf('📜') !== 0;
+      }).join('\n').trim();
+      sh.getRange(f.row, scopeCol).setValue((block + (keep ? '\n' + keep : '')).slice(0, 4500));
+      if (!hadBlock) {
+        addPianoNote_(sh, f.row, 'Contract sync', block.slice(0, 280));
+        logAct_('Contract sync', 'Scope of Work from contract', f.summary || digits, L.join(' · ').slice(0, 150));
+      }
     }
     cs.getRange(r + 1, mCol).setValue('✓ ' + stamp);
     synced.push({serial: digits, piano: f.summary});
