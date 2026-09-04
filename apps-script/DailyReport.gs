@@ -852,6 +852,84 @@ function doPost(e) {
       return json_(rs);
     }
     // per-tech dashboard: PRs, piano history, anniversary — from the Time Log
+    // ⚙️ Settings page (Brigham 9/4) — all gated by settingsAdmin_
+    if (req.action === 'settingsdump') {
+      if (!settingsAdmin_(req._g)) return json_({error: 'Settings are for owners, Melissa and Mark only.'});
+      var sd = permData_();
+      var st = {};
+      appSetting_('quiet_start', '');   // prime memo
+      for (var sk in SETTINGS_MEMO) st[sk] = SETTINGS_MEMO[sk];
+      var asn = [];
+      for (var ae in sd.assign) asn.push({email: ae, name: sd.assign[ae].name, role: sd.assign[ae].role,
+        plus: sd.assign[ae].plus, minus: sd.assign[ae].minus});
+      return json_({ok: true, settings: st, roles: sd.roles, assignments: asn});
+    }
+    if (req.action === 'appsetting') {
+      if (!settingsAdmin_(req._g)) return json_({error: 'Settings are for owners, Melissa and Mark only.'});
+      var sKey = String(req.key || '').trim(), sVal = String(req.value == null ? '' : req.value).trim();
+      if (!sKey || sKey.length > 60) return json_({error: 'bad key'});
+      var sSh = SpreadsheetApp.openById('11RoeVRETag5rZYX6_tEH-rf6x8JL0JeZU0P5AT0WI-I').getSheetByName('App Settings');
+      var sVals = sSh.getDataRange().getValues();
+      var sRow = -1;
+      for (var si = 1; si < sVals.length; si++) if (String(sVals[si][0]).trim() === sKey) { sRow = si + 1; break; }
+      if (sRow < 0) { sRow = sVals.length + 1; sSh.getRange(sRow, 1).setValue(sKey); }
+      sSh.getRange(sRow, 2).setValue(sVal.slice(0, 500));
+      logAct_(who, 'Setting changed', sKey, sVal.slice(0, 120) || '(cleared)');
+      SETTINGS_MEMO = null;
+      return json_({ok: true, key: sKey, value: sVal});
+    }
+    if (req.action === 'briefnote') {
+      if (!settingsAdmin_(req._g)) return json_({error: 'Settings are for owners, Melissa and Mark only.'});
+      var bSh = SpreadsheetApp.openById('11RoeVRETag5rZYX6_tEH-rf6x8JL0JeZU0P5AT0WI-I').getSheetByName('Brief Notes');
+      if (!bSh) return json_({error: 'no Brief Notes tab'});
+      bSh.appendRow([String(req.date || ''), String(req.note || '').slice(0, 600), who.replace(/<[^>]*>/g, '').trim()]);
+      logAct_(who, 'Standup note added', String(req.date || ''), String(req.note || '').slice(0, 100));
+      return json_({ok: true});
+    }
+    if (req.action === 'roleset') {
+      if (!settingsAdmin_(req._g)) return json_({error: 'Settings are for owners, Melissa and Mark only.'});
+      var rEmail = String(req.email || '').trim().toLowerCase();
+      var rRole = String(req.role || '').trim().toLowerCase();
+      if (!rEmail || rEmail.indexOf('@') < 0) return json_({error: 'bad email'});
+      var isOwnerReq = OWNER_EMAILS.indexOf(String((req._g && req._g.email) || '').toLowerCase()) >= 0;
+      // nobody but an owner touches an owner row, assigns the owner role,
+      // or edits their own row (no self-promotion)
+      if (!isOwnerReq) {
+        if (OWNER_EMAILS.indexOf(rEmail) >= 0 || rRole === 'owner') return json_({error: 'Only an owner can change owner access.'});
+        if (rEmail === String((req._g && req._g.email) || '').toLowerCase()) return json_({error: 'You can\u2019t change your own permissions.'});
+      }
+      var aSh = SpreadsheetApp.openById('11RoeVRETag5rZYX6_tEH-rf6x8JL0JeZU0P5AT0WI-I').getSheetByName('Role Assignments');
+      var aVals = aSh.getDataRange().getValues();
+      var aRow = -1;
+      for (var ai = 1; ai < aVals.length; ai++) if (String(aVals[ai][0]).trim().toLowerCase() === rEmail) { aRow = ai + 1; break; }
+      if (req.remove) {
+        if (aRow > 0) aSh.deleteRow(aRow);
+        logAct_(who, 'Role removed', rEmail, '');
+        PERM_MEMO = null;
+        return json_({ok: true, removed: true});
+      }
+      if (aRow < 0) { aRow = aVals.length + 1; }
+      aSh.getRange(aRow, 1, 1, 5).setValues([[rEmail, String(req.name || ''), rRole,
+        String(req.plus || ''), String(req.minus || '')]]);
+      logAct_(who, 'Role set', rEmail, rRole + (req.plus ? ' +' + req.plus : '') + (req.minus ? ' -' + req.minus : ''));
+      PERM_MEMO = null;
+      return json_({ok: true});
+    }
+    if (req.action === 'roledef') {
+      var isOwn2 = OWNER_EMAILS.indexOf(String((req._g && req._g.email) || '').toLowerCase()) >= 0;
+      if (!isOwn2) return json_({error: 'Only owners can edit what a ROLE can do.'});
+      var dRole = String(req.role || '').trim().toLowerCase();
+      if (!dRole || dRole === 'owner') return json_({error: 'bad role'});
+      var dSh = SpreadsheetApp.openById('11RoeVRETag5rZYX6_tEH-rf6x8JL0JeZU0P5AT0WI-I').getSheetByName('Roles');
+      var dVals = dSh.getDataRange().getValues();
+      var dRow = -1;
+      for (var di = 1; di < dVals.length; di++) if (String(dVals[di][0]).trim().toLowerCase() === dRole) { dRow = di + 1; break; }
+      if (dRow < 0) { dRow = dVals.length + 1; dSh.getRange(dRow, 1).setValue(dRole); }
+      dSh.getRange(dRow, 2).setValue(String(req.perms || ''));
+      logAct_(who, 'Role definition changed', dRole, String(req.perms || '').slice(0, 150));
+      PERM_MEMO = null;
+      return json_({ok: true});
+    }
     if (req.action === 'techdash') {
       return json_(techDash_(String((req.user && req.user.name) || req.name || '')));
     }
@@ -2488,7 +2566,7 @@ function sweepForgottenPay_(sh) {
  * request instead. No fix / denied / desktop → allowed but flagged, so the
  * shop computers keep working. Piano punches stay soft (flag only). */
 var STORE_LAT = 40.269752, STORE_LNG = -111.682881;   // 1497 S State St, Orem
-var FENCE_METERS = 300;
+var FENCE_METERS = Number(appSetting_('geofence_meters', 300)) || 300;
 function geoAwayMiles_(req) {
   var g = req.geo;
   if (!g || typeof g === 'string') return 0;    // no GPS fix → allow
@@ -2659,6 +2737,71 @@ function payrollRows_(days) {
  * TIMELOG_ADMIN_EMAILS, any BLP-verified Google account whose first name is
  * Jacob qualifies (token-verified name, BLP domain only). */
 var OWNER_EMAILS = ['brigham@brighamlarsonpianos.com', 'karmel@brighamlarsonpianos.com'];
+/* ---- ⚙️ Settings-page permission engine (Brigham 9/4) ----
+ * Roles tab: role → comma permission keys. Role Assignments: email → role
+ * (+extra grants / -revokes). A person WITH an assignment row is governed
+ * by the sheet (revokes work); a person without one falls back to the
+ * legacy hardcoded lists, so a broken/missing tab can never lock the
+ * shop out. Owners are always ALL and cannot be demoted by non-owners. */
+var PERM_MEMO = null;
+function permData_() {
+  if (PERM_MEMO) return PERM_MEMO;
+  var out = {roles: {}, assign: {}};
+  try {
+    var ss = SpreadsheetApp.openById('11RoeVRETag5rZYX6_tEH-rf6x8JL0JeZU0P5AT0WI-I');
+    var rv = ss.getSheetByName('Roles').getDataRange().getValues();
+    for (var i = 1; i < rv.length; i++) {
+      var rn = String(rv[i][0] || '').trim().toLowerCase();
+      if (rn) out.roles[rn] = String(rv[i][1] || '');
+    }
+    var av = ss.getSheetByName('Role Assignments').getDataRange().getValues();
+    for (var j = 1; j < av.length; j++) {
+      var em = String(av[j][0] || '').trim().toLowerCase();
+      if (!em) continue;
+      out.assign[em] = {name: String(av[j][1] || ''), role: String(av[j][2] || '').trim().toLowerCase(),
+        plus: String(av[j][3] || ''), minus: String(av[j][4] || '')};
+    }
+  } catch (e) {}
+  PERM_MEMO = out;
+  return out;
+}
+// true / false when the sheet governs this email; null → caller's legacy rule
+function permHas_(g, key) {
+  var em = String((g && g.email) || '').toLowerCase();
+  if (!em) return null;
+  if (OWNER_EMAILS.indexOf(em) >= 0) return true;   // owners: always, sheet or not
+  var d = permData_();
+  var a = d.assign[em];
+  if (!a || !a.role) return null;
+  if (a.role === 'owner') return true;
+  var set = {};
+  String(d.roles[a.role] || '').split(',').forEach(function (k) { k = k.trim().toLowerCase(); if (k) set[k] = 1; });
+  String(a.plus || '').split(',').forEach(function (k) { k = k.trim().toLowerCase().replace(/^\+/, ''); if (k) set[k] = 1; });
+  String(a.minus || '').split(',').forEach(function (k) { k = k.trim().toLowerCase().replace(/^-/, ''); if (k) delete set[k]; });
+  return set['all'] ? true : !!set[String(key).toLowerCase()];
+}
+var SETTINGS_MEMO = null;
+function appSetting_(key, dflt) {
+  if (!SETTINGS_MEMO) {
+    SETTINGS_MEMO = {};
+    try {
+      var sv = SpreadsheetApp.openById('11RoeVRETag5rZYX6_tEH-rf6x8JL0JeZU0P5AT0WI-I')
+        .getSheetByName('App Settings').getDataRange().getValues();
+      for (var i = 1; i < sv.length; i++) {
+        var k = String(sv[i][0] || '').trim();
+        if (k) SETTINGS_MEMO[k] = String(sv[i][1] == null ? '' : sv[i][1]).trim();
+      }
+    } catch (e) {}
+  }
+  var v = SETTINGS_MEMO[key];
+  return v === undefined || v === '' ? dflt : v;
+}
+function settingsAdmin_(g) {
+  var ph = permHas_(g, 'settings');
+  if (ph !== null) return ph;
+  var em = String((g && g.email) || '').toLowerCase();
+  return OWNER_EMAILS.indexOf(em) >= 0 || em === 'melissa@brighamlarsonpianos.com' || em === 'markhales.blp@gmail.com';
+}
 var PAYROLL_ADMIN_EMAILS = OWNER_EMAILS.concat(['melissa@brighamlarsonpianos.com']);
 var TIMELOG_ADMIN_EMAILS = OWNER_EMAILS.concat(
   ['markhales.blp@gmail.com', 'matthewwessman.blp@gmail.com', 'jacobmower.blp@gmail.com']);
@@ -2666,9 +2809,13 @@ function blpAccount_(g) {
   return g && g.email && (/@brighamlarsonpianos\.com$/i.test(g.email) || /\.blp@gmail\.com$/i.test(g.email));
 }
 function payrollAdmin_(g) {
+  var ph = permHas_(g, 'payroll_edit');
+  if (ph !== null) return ph;
   return !!(g && g.email && PAYROLL_ADMIN_EMAILS.indexOf(g.email.toLowerCase()) >= 0);
 }
 function timelogAdmin_(g) {
+  var ph = permHas_(g, 'tl_edit');
+  if (ph !== null) return ph;
   if (g && g.email && TIMELOG_ADMIN_EMAILS.indexOf(g.email.toLowerCase()) >= 0) return true;
   return !!(blpAccount_(g) && /^jacob\b/i.test(String(g.name || '')));   // Jacob fallback (see note)
 }
@@ -2682,7 +2829,9 @@ function adjustClock_(req) {
     // fix requests route to Mark, so Mark can also FIX shop-side DAY punches
     // — never admins' rows and never his own. Melissa + owners unchanged.
     var leadPayOk = false;
-    if (isPay && !payrollAdmin_(g) && g && String(g.email || '').toLowerCase() === 'markhales.blp@gmail.com') {
+    var shopPayGrant = permHas_(g, 'payroll_edit_shop');
+    if (shopPayGrant === null) shopPayGrant = !!(g && String(g.email || '').toLowerCase() === 'markhales.blp@gmail.com');
+    if (isPay && !payrollAdmin_(g) && shopPayGrant) {
       var whoTech = String(req.tech || '');
       if (!whoTech && Number(req.row) >= 2) {
         try { whoTech = String(payrollSheet_().getRange(Number(req.row), 1).getValue() || ''); } catch (eL) {}
