@@ -1673,6 +1673,9 @@ function authorizeCalendar() {
  */
 var PHASE_HEADER = 'CURRENT PHASE';
 var PHASE_VALUES = ['New Arrival - Admin', 'Assessment', 'CAP',
+  // 9/4 PRSB split: mini-QC inspects PRSB work BEFORE the plate hides it.
+  // The old combined name stays accepted so stale clients don't error.
+  'PRSBa - Pre-Plate', 'PRSBb - Plate In',
   'PRSB & Plate Refinishing', 'Lacquer Soundboard', 'Restringing',
   'Chip Tuning', 'DHRT', '1st Tuning', 'Refinishing', 'QC & Assembly',
   '2nd Tuning', 'Exit Prep - Admin', 'Delivered',
@@ -1689,7 +1692,8 @@ var PHASE_VALUES = ['New Arrival - Admin', 'Assessment', 'CAP',
 var PHASE_MIGRATE = {
   'New Arrival': 'New Arrival - Admin',
   'Teardown': 'CAP',
-  'PRSB': 'PRSB & Plate Refinishing',
+  'PRSB': 'PRSBa - Pre-Plate',
+  'PRSB & Plate Refinishing': 'PRSBa - Pre-Plate',
   'Final Assembly': 'QC & Assembly',
   'Tuning': '1st Tuning',
   'QC': 'QC & Assembly',
@@ -3437,14 +3441,16 @@ var TRACKDEFS_URL = 'https://blpsalesapp.netlify.app/.netlify/functions/track-de
 var TASKS_URL = 'https://blpsalesapp.netlify.app/.netlify/functions/piano-tasks';
 // phase -> the specialty area that staffs it (mirrors the Store Map card)
 var SM_PHASE_AREA = {
-  'CAP': 'CAP', 'PRSB & Plate Refinishing': 'PRSB', 'Restringing': 'Restringing',
+  'CAP': 'CAP', 'PRSB & Plate Refinishing': 'PRSB',
+  'PRSBa - Pre-Plate': 'PRSB', 'PRSBb - Plate In': 'PRSB', 'Restringing': 'Restringing',
   'Refinishing': 'Refinishing', 'QC & Assembly': 'QC', '1st Tuning': 'Tuning',
   '2nd Tuning': 'Tuning', 'Chip Tuning': 'Tuning'
 };
 // median scheduled hours per phase (7 months of tech calendar history) turned
 // into "this is taking too long" day thresholds
 var SM_PHASE_DAYS = {
-  'CAP': 21, 'PRSB & Plate Refinishing': 21, 'Lacquer Soundboard': 10,
+  'CAP': 21, 'PRSB & Plate Refinishing': 21,
+  'PRSBa - Pre-Plate': 21, 'PRSBb - Plate In': 7, 'Lacquer Soundboard': 10,
   'Restringing': 14, 'Chip Tuning': 5, 'DHRT': 30, '1st Tuning': 5,
   'Refinishing': 30, 'QC & Assembly': 10, '2nd Tuning': 5,
   'Exit Prep - Admin': 7, 'Assessment': 7, 'New Arrival - Admin': 5
@@ -3574,7 +3580,8 @@ function smNormPhase_(s) {
   if (t.indexOf('chip tuning') >= 0) return 'Chip Tuning';
   if (t.indexOf('string') >= 0) return 'Restringing';
   if (t.indexOf('cap') >= 0) return 'CAP';
-  if (t.indexOf('prsb') >= 0) return 'PRSB & Plate Refinishing';
+  if (t.indexOf('prsbb') >= 0 || (t.indexOf('prsb') >= 0 && t.indexOf('plate in') >= 0)) return 'PRSBb - Plate In';
+  if (t.indexOf('prsb') >= 0) return 'PRSBa - Pre-Plate';
   if (t.indexOf('lacquer') >= 0) return 'Lacquer Soundboard';
   if (t.indexOf('dhrt') >= 0) return 'DHRT';
   if (t.indexOf('1st tuning') >= 0) return '1st Tuning';
@@ -3621,6 +3628,8 @@ var SM_PHASE_STEMS = {
   '1st Tuning': ['tun'], '2nd Tuning': ['tun'],
   'CAP': ['cap'],
   'PRSB & Plate Refinishing': ['prsb', 'plate'],
+  'PRSBa - Pre-Plate': ['prsb', 'plate'],
+  'PRSBb - Plate In': ['prsb', 'plate'],
   'Lacquer Soundboard': ['lacquer', 'soundboard'],
   'Refinishing': ['refinish', 'spray', 'sanded', 'sanding'],
   'DHRT': ['dhrt', 'regulat', 'voicing', 'voice'],

@@ -220,6 +220,11 @@ const I18N = {
   rec_none:["No queue pianos are waiting for a recommendation right now.","No hay pianos en cola esperando recomendación por ahora."],
   rec_loading:["Sizing up the queue…","Analizando la cola…"],
   rec_added:["Added ✓","Agregado ✓"],
+  /* card audit */
+  aud_title:["Report vs. Card Audit","Auditoría reporte vs. tarjeta"],
+  aud_sub:["Does each technician's latest weekly report line up with the piano data cards? Serials from every report are checked against the card's live CURRENT PHASE — mismatches usually mean the card wasn't updated. It's keyword-based, so read the line before texting anyone.","¿Coincide el último reporte semanal de cada técnico con las tarjetas de datos? Los seriales de cada reporte se comparan con la FASE ACTUAL de la tarjeta — las diferencias suelen significar que la tarjeta no se actualizó. Es por palabras clave: lee la línea antes de escribirle a alguien."],
+  aud_clean:["No conflicts found between this tech's report and the cards.","Sin conflictos entre el reporte de este técnico y las tarjetas."],
+  aud_noreport:["No weekly report for this week.","Sin reporte semanal esta semana."],
 };
 const t = (k, ...args) => {
   let s = (I18N[k] || [k,k])[LANG === "es" ? 1 : 0];
@@ -700,6 +705,8 @@ async function loadProposal(box){
     const r=await fetch(CONFIG.STOREMAP_BRIDGE+"?fn=proposal",{redirect:"follow"});
     const j=await r.json();
     if(j.ok) got=j;
+    // a double-encoded save leaves plan as a JSON string — parse, don't blank
+    if(got&&typeof got.plan==="string"){ try{got.plan=JSON.parse(got.plan);}catch(e2){got=null;} }
   }catch(e){/* bridge not deployed yet — fall through */}
   if(!got){
     try{
@@ -1071,7 +1078,8 @@ const PHASES=[
   {id:"INTAKE",   ph:"New Arrival - Admin",      en:"New Arrival",        es:"Recién llegado",      code:"", hb:["Storing Cabinetry"]},
   {id:"ASSESS",   ph:"Assessment",               en:"Assessment",         es:"Evaluación",          code:"", hb:["Tear-down Sheet (§16)","Upright Teardown: Cleaning & Prep","Grand Teardown: Cleaning & Prep","Storing Cabinetry (§14)"]},
   {id:"CAP",      ph:"CAP",                      en:"CAP",                es:"CAP",                 code:"Cleaning · Action Prep", hb:["Cleaning and Prep","Action Prep","Reshape Hammers","Hammer Prep & Hanging","Keys (§13)"]},
-  {id:"PRSB",     ph:"PRSB & Plate Refinishing", en:"PRSB & Plate",       es:"PRSB y placa",        code:"Perimeter · Ribs · Soundboard · Bridge", hb:["Find Proper Downbearing: Targets","How to Chisel a Bridge"]},
+  {id:"PRSBA",    ph:"PRSBa - Pre-Plate",        en:"PRSBa · Pre-Plate",  es:"PRSBa · sin placa",   code:"Perimeter · Ribs · Soundboard · Bridge — mini-QC before the plate", hb:["Find Proper Downbearing: Targets","How to Chisel a Bridge"]},
+  {id:"PRSBB",    ph:"PRSBb - Plate In",         en:"PRSBb · Plate In",   es:"PRSBb · placa puesta",code:"Plate back in — finish out", hb:[]},
   {id:"LACQUER",  ph:"Lacquer Soundboard",       en:"Lacquer Soundboard", es:"Laca de tabla",       code:"", hb:[]},
   {id:"RESTRING", ph:"Restringing",              en:"Restringing",        es:"Encordado",           code:"", hb:["Restringing (§12)","Removing Tuning Pins"]},
   {id:"CHIPTUNE", ph:"Chip Tuning",              en:"Chip Tuning",        es:"Afinación de asiento",code:"", hb:[]},
@@ -1151,10 +1159,98 @@ function renderPipeline(){
     document.getElementById("shbpop").classList.add("on");
   });
 }
+/* ================= 🧪 REPORT vs CARD AUDIT (Brigham 9/4) =================
+ * Are techs keeping the piano data cards updated? Every serial in each
+ * tech's latest weekly report is checked against the card's live CURRENT
+ * PHASE. Keyword-based — a coaching aid, not a verdict. */
+const AUD_STEMS=[
+  ["Restringing",/restring|strung|stringing/],
+  ["Chip Tuning",/chip/],
+  ["CAP",/\bcap\b|action prep|hammers hung|reshap/],
+  ["PRSB",/prsb|soundboard|bridge|pinblock|downbearing|ribs/],
+  ["Lacquer Soundboard",/lacquer/],
+  ["Refinishing",/refinish|sanding|sanded|spray|stain|filler|buff/],
+  ["DHRT",/dhrt|regulat|voic|damper|trapwork|let ?off|key level/],
+  ["QC & Assembly",/\bqc\b|quality|assembl/],
+  ["Tuning",/tun(e|ed|ing)/],
+  ["Exit Prep - Admin",/exit prep/],
+];
+const AUD_FAMILY=ph=>{
+  const s=String(ph||"");
+  if(/^PRSB/i.test(s)) return "PRSB";
+  if(/Tuning/i.test(s)) return "Tuning";
+  return s;
+};
+function audClaim(line){
+  const l=line.toLowerCase();
+  for(const [ph,re] of AUD_STEMS){ if(re.test(l)) return ph; }
+  return null;
+}
+function renderAudit(){
+  if(!needMapData()){
+    $("#sview-audit").innerHTML=`<div class="row1"><div><h2 class="page">${t("aud_title")}</h2>
+      <div class="sub">${t("aud_sub")}</div></div></div>
+      <div style="color:var(--mut2);padding:22px 0">Loading the live shop data…</div>`;
+    return;
+  }
+  const bySn=new Map();
+  MAPD.pianos.forEach(p=>{ const k=digitsOf(p.serial); if(k.length>=4) bySn.set(k,p); });
+  const DONE_RE=/finish|finished|done|complete|completed|100\s*%|wrapped up|ready for/i;
+  const techs=ROSTER.map(tc=>{
+    const mine=REPORTS.entries.filter(e=>e.tech===tc&&e.date).sort((a,b)=>b.date.localeCompare(a.date));
+    const rep=mine.find(e=>e.date===FRI_ISO)||mine[0];
+    const rows=[]; let flags=0;
+    if(rep){
+      const lines=String(rep.text||"").split(/\n|(?<=[.;!])\s+(?=[A-Z0-9])/).map(s=>s.trim()).filter(Boolean);
+      const seen=new Set();
+      lines.forEach(line=>{
+        (line.match(/\d{4,8}/g)||[]).forEach(tok=>{
+          if(seen.has(tok)) return; seen.add(tok);
+          const p=bySn.get(tok);
+          if(!p){ rows.push({kind:"ghost",tok,line}); return; }
+          const card=String(p.phase||"").trim();
+          const claim=audClaim(line);
+          const done=DONE_RE.test(line);
+          if(!card && !p.queuePos){
+            rows.push({kind:"nocard",tok,line,p,card:"(no phase set)"}); flags++;
+          } else if(claim && card && !/^(Waiting|Paused|For Sale|Sale Pending|Sold|In Queue)/i.test(card)
+              && AUD_FAMILY(claim)!==AUD_FAMILY(card)){
+            rows.push({kind:"mismatch",tok,line,p,card,claim}); flags++;
+          } else if(done && claim && AUD_FAMILY(claim)===AUD_FAMILY(card)){
+            rows.push({kind:"stale",tok,line,p,card,claim}); flags++;
+          }
+        });
+      });
+    }
+    return {tc,rep,rows,flags};
+  }).sort((a,b)=>b.flags-a.flags || (a.rep?0:1)-(b.rep?0:1));
+  const badge=n=>n?`<span class="pill" style="background:#f6e3e3;color:#9e2020;font-weight:700">${n} to check</span>`
+                  :`<span class="pill ok">clean</span>`;
+  const kindLabel={mismatch:"card says a different phase",stale:"reported done/finished — card phase unchanged",
+    nocard:"worked on, but the card has no phase",ghost:"serial not found on the map (typo? sold?)"};
+  const rowHTML=r=>`<div class="job" style="border-left:3px solid ${r.kind==="ghost"?"#b9b2a6":"#9e2020"};padding-left:9px;margin:7px 0">
+      <div><b>${r.p?linkSerials(esc((r.p.summary||"")+" "+r.tok)):esc("#"+r.tok)}</b>
+        ${r.card?`<span class="pill lvl">card: ${esc(r.card)}</span>`:""}
+        ${r.claim?`<span class="pill lvl">report: ${esc(r.claim)}</span>`:""}</div>
+      <div style="font-size:11.5px;color:var(--mut2);margin-top:3px">${esc(kindLabel[r.kind])}</div>
+      <div style="font-size:12px;margin-top:3px;color:var(--mut)">“${esc(r.line.slice(0,180))}”</div>
+    </div>`;
+  $("#sview-audit").innerHTML=`
+    <div class="row1"><div><h2 class="page">${t("aud_title")}</h2><div class="sub">${t("aud_sub")}</div></div></div>
+    <div class="lanes" style="grid-template-columns:1fr">${techs.map(x=>`
+      <div class="lane"><h4>${esc(x.tc)} ${badge(x.flags)}
+          ${x.rep?`<span style="font-weight:400;color:var(--mut2);font-size:12px">· report ${fmtShort(x.rep.date)}</span>`
+                 :`<span style="font-weight:400;color:#9e2020;font-size:12px">· ${t("aud_noreport")}</span>`}</h4>
+        ${x.rows.length?x.rows.map(rowHTML).join("")
+          :(x.rep?`<div class="job" style="color:var(--mut2)">${t("aud_clean")}</div>`:"")}
+      </div>`).join("")}
+    </div>`;
+}
+
 /* ---- Store Map integration ---- */
-const S_TABS = ["dash","review","planner","schedule","sequence","pipeline","walk"];
+const S_TABS = ["dash","review","planner","schedule","sequence","pipeline","walk","audit"];
 const RENDERERS = {dash:renderDash, review:renderReview, planner:renderPlanner,
-  sequence:renderSequence, pipeline:renderPipeline, walk:renderWalk};
+  sequence:renderSequence, pipeline:renderPipeline, walk:renderWalk, audit:renderAudit};
 let ACTIVE_S = null, BOOTED = false, BOOTING = false;
 function schedRerender(){
   if(ACTIVE_S && RENDERERS[ACTIVE_S]) RENDERERS[ACTIVE_S]();
