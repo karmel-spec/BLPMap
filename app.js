@@ -4846,6 +4846,8 @@ function popHTML(p) {
       </div><div class="snzmsg phmsg"></div>` : ''}` : ''}
     ${p.serial ? `<div class="tagbtns histbtns"><button class="tagbtn rreports">📄 Tech Reports History</button></div>` : ''}`)}
 
+    ${p.serial ? secWrap('pw', '📁 Paperwork', paperworkCard(p)) : ''}
+
     ${p.serial ? secWrap('tune', '🎵 Tuning', `
       <div class="row">Last tuned <b>${ti.last ? esc(fmtDayYear(ti.last)) + ' · ' + daysSince(ti.last) + 'd ago' : '— none on record (18-mo calendar scan)'}</b></div>
       ${ti.next ? `<div class="row">Scheduled <b class="tunesched">🎵 ${esc(fmtDay(ti.next.date))} · ${esc(ti.next.time)}</b></div>`
@@ -4857,8 +4859,6 @@ function popHTML(p) {
     ${(body => p.serial ? secWrap('media', '📷 Media', body) : body)(`
     ${mediaCard(p)}
     ${photo}`)}
-
-    ${p.serial ? secWrap('pw', '📁 Paperwork', paperworkCard(p)) : ''}
 
     ${admin}
 
