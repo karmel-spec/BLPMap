@@ -75,21 +75,29 @@ const BRIDGE_URL =
 // outage and never fakes a save. Everything else keeps the ping guard.
 const RELAY_ACTIONS = /^(set[a-z]+|move|unmarkduplicate|tempresolve)$/;
 const RELAY_URL = 'https://blpsalesapp.netlify.app/.netlify/functions/pianolog-write';
+// fetch with a hard deadline — shop Wi-Fi + a stalled connection used to
+// hang uploads forever ("Sending…" stuck, Melissa/Brigham 9/3). A timeout
+// aborts the socket so the caller can fail honestly or retry.
+function fetchT(url, opts, ms) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), ms || 25000);
+  return fetch(url, {...opts, signal: ctrl.signal}).finally(() => clearTimeout(t));
+}
 async function bridgeFetch(url, opts) {
   // durable-relay branch: whitelisted piano-log writes
   try {
     const body = JSON.parse(opts && opts.body || '{}');
     if (body.action && RELAY_ACTIONS.test(body.action)) {
-      const rr = await fetch(RELAY_URL, {method: 'POST',
+      const rr = await fetchT(RELAY_URL, {method: 'POST',
         headers: {'content-type': 'application/json'},
-        body: JSON.stringify({...body, relayKey: 'pianoman'})});
+        body: JSON.stringify({...body, relayKey: 'pianoman'})}, 20000);
       if (rr.ok || rr.status === 502) return rr;   // real result, queued-ack, or honest error
       // relay itself unreachable/misconfigured — fall through to the bridge
     }
   } catch (e) { /* non-JSON body or relay down — use the bridge directly */ }
   for (let a = 0; a < 4; a++) {
     let r;
-    try { r = await fetch(url, opts); }
+    try { r = await fetchT(url, opts, 25000); }
     catch (e) {
       if (a === 3) throw e;
       await new Promise(res => setTimeout(res, 1000 * (a + 1)));
@@ -3148,17 +3156,26 @@ function openSuggestBox() {
             + ' \u2014 take a screenshot (that saves as PNG) or convert it to JPG/PNG, then attach it to a follow-up suggestion';
         }
         else {
-        const up = await fetch('https://blpsalesapp.netlify.app/.netlify/functions/request-shot', {
-          method: 'POST', headers: {'content-type': 'application/json'},
-          // team key, not the user's pin: Google-signed-in users have no
-          // pin, and an empty key made this endpoint reject every
-          // screenshot (found 8/29) — same pattern as the card uploads
-          body: JSON.stringify({key: 'pianoman', id: Date.now().toString(36),
-            photo: dataUrl.split(',')[1], photoType: 'image/jpeg',
-            photoName: (shotFile.name || 'screenshot.png').replace(/[^\w.-]+/g, '_').slice(0, 40)})});
-        const uj = await up.json().catch(() => ({}));
-        if (uj.url) body.screenshotUrl = uj.url;
-        else shotFailed = 'the upload service didn\u2019t accept it (probably a momentary hiccup) \u2014 wait a minute and attach the picture to a follow-up suggestion';
+        // 45s hard deadline + one retry: a stalled connection must never
+        // leave the button stuck on "Sending…" — worst case the suggestion
+        // files WITHOUT the picture and says so plainly
+        let uj = null;
+        for (let ua = 0; ua < 2 && !(uj && uj.url); ua++) {
+          try {
+            const up = await fetchT('https://blpsalesapp.netlify.app/.netlify/functions/request-shot', {
+              method: 'POST', headers: {'content-type': 'application/json'},
+              // team key, not the user's pin: Google-signed-in users have no
+              // pin, and an empty key made this endpoint reject every
+              // screenshot (found 8/29) — same pattern as the card uploads
+              body: JSON.stringify({key: 'pianoman', id: Date.now().toString(36),
+                photo: dataUrl.split(',')[1], photoType: 'image/jpeg',
+                photoName: (shotFile.name || 'screenshot.png').replace(/[^\w.-]+/g, '_').slice(0, 40)})}, 45000);
+            uj = await up.json().catch(() => ({}));
+          } catch (eUp) { uj = null; }
+          if (!(uj && uj.url) && ua === 0) msg.textContent = 'Upload is slow — retrying the screenshot…';
+        }
+        if (uj && uj.url) body.screenshotUrl = uj.url;
+        else shotFailed = 'the upload timed out (slow connection or a service hiccup) \u2014 your suggestion still went in; attach the picture to a follow-up when the connection is better';
         }
       }
       // Google sometimes answers the generic service ping without running
@@ -7297,6 +7314,9 @@ async function uploadPhoto(p, input, pop) {
 
 function downscalePhoto(file, maxDim, quality) {
   return new Promise((resolve, reject) => {
+    // watchdog: a file the browser can't decode sometimes never fires
+    // onload OR onerror — don't let the whole submit hang on it
+    setTimeout(() => reject(new Error('image took too long to read')), 20000);
     const img = new Image();
     const url = URL.createObjectURL(file);
     img.onload = () => {
