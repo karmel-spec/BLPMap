@@ -104,7 +104,11 @@ async function bridgeFetch(url, opts) {
       continue;
     }
     let j = null;
-    try { j = await r.clone().json(); } catch (e) { return r; }   // non-JSON: caller's own retry/error path
+    // non-JSON = Google's HTML error page (mid-deploy or overloaded) — never
+    // hand that to a caller's r.json() ("Unexpected token '<'" popups, 9/3):
+    // treat it like a failed attempt and retry
+    try { j = await r.clone().json(); }
+    catch (e) { await new Promise(res => setTimeout(res, 1200 * (a + 1))); continue; }
     if (!(j && j.service && !j.error)) return r;   // real action result
     await new Promise(res => setTimeout(res, 1200 * (a + 1)));
   }
