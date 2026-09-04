@@ -1120,7 +1120,6 @@ function renderPipeline(){
         ${recent&&rec.progress!=null?`<span class="pill ok num">${rec.progress}%</span>`:""}
       </div>
       ${/^(Waiting|Paused)/i.test(String(x.phase||""))?`<div style="font-size:11px;color:var(--mut2);margin-top:4px">${esc(String(x.phase))}${(x.waitNote||"").trim()?" — "+esc(x.waitNote):""}</div>`:""}
-      ${recent&&[...rec.techs].length?`<div style="font-size:11px;color:var(--mut2);margin-top:4px">${esc([...rec.techs].join(", "))}</div>`:""}
     </div>`;
   };
   const colBody=rows=>{
