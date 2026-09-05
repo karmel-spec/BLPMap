@@ -11281,7 +11281,7 @@ const TB_HEADSHOTS = {
   "mckinly lopp": "https://www.brighamlarsonpianos.com/cdn/shop/files/McKinly.Lopp.BW_129ac078-af8a-43c7-8f6b-289dcd5a3c8c.jpg?v=1725655625&width=240",
   "curtis biggs": "https://www.brighamlarsonpianos.com/cdn/shop/files/Curtis.Biggs.BW_1.jpg?v=1735942281&width=240",
   "matthew wessman": "https://www.brighamlarsonpianos.com/cdn/shop/files/IMG_0550_1_8ffe567c-f80c-4f25-bd13-6612fcae0870.jpg?v=1735942280&width=240",
-  "jake pulver": "https://www.brighamlarsonpianos.com/cdn/shop/files/5U4A1089_2.jpg?v=1775244857&width=240",
+  "jake pulver": "https://www.brighamlarsonpianos.com/cdn/shop/files/IMG_0609.heic?v=1735947079&width=240",
   "korban greenhalgh": "https://www.brighamlarsonpianos.com/cdn/shop/files/Korban.Greenhalgh.BW_5229d778-dd21-4a40-826d-6abd075d2503.jpg?v=1735947374&width=240",
   "marcelo cornejo": "https://www.brighamlarsonpianos.com/cdn/shop/files/MARCE-BW_2.jpg?v=1735947379&width=240",
   "doris arancibia": "https://www.brighamlarsonpianos.com/cdn/shop/files/DORIS-BW_2.jpg?v=1735946727&width=240",
