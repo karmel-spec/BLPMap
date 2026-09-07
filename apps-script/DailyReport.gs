@@ -1143,6 +1143,11 @@ function doPost(e) {
       return json_(aps);
     }
     // read-only audit of the applied week / delete duplicate applied events
+    if (req.action === 'settechcal') {
+      var stc = setTechCal_(req);
+      if (stc.ok) logAct_(who, 'Tech calendar mapped', stc.tech, (stc.previous || '(none)') + ' → ' + (stc.calendarId || '(blank)'));
+      return json_(stc);
+    }
     if (req.action === 'checkschedule' || req.action === 'dedupeschedule') {
       var sc = scheduleCheck_({dedupe: req.action === 'dedupeschedule'});
       if (sc.ok && sc.dedupe) logAct_(who, 'Schedule duplicate events removed', sc.week,
@@ -4106,7 +4111,7 @@ function applyScheduleLocked_(req) {
     if (!calId) { results.push({tech: tch.name, skipped: 'no calendar mapped'}); return; }
     if (req.markOnly) { applied.push(tch.name); results.push({tech: tch.name, events: 0, marked: true}); return; }
     var cal;
-    try { cal = CalendarApp.getCalendarById(calId); } catch (e) { cal = null; }
+    try { cal = calById_(calId); } catch (e) { cal = null; }   // subscribes if only shared
     if (!cal) { results.push({tech: tch.name, error: 'no access to ' + calId}); return; }
     var made = 0, failed = 0;
     (tch.days || []).forEach(function (blocks, di) {
@@ -4168,7 +4173,7 @@ function scheduleCheck_(req) {
     var calId = map[key];
     if (!calId) { row.skipped = 'no calendar mapped'; techs.push(row); return; }
     var cal = null;
-    try { cal = CalendarApp.getCalendarById(calId); } catch (e1) {}
+    try { cal = calById_(calId); } catch (e1) {}
     if (!cal) { row.error = 'no access to ' + calId; techs.push(row); return; }
     var evs = [];
     try { evs = cal.getEvents(start, end); } catch (e2) { row.error = String(e2); techs.push(row); return; }
@@ -4188,6 +4193,29 @@ function scheduleCheck_(req) {
   });
   return {ok: true, week: plan.week, weekStart: weekStart, dedupe: doDelete,
           duplicates: dupExtra, removed: removed, techs: techs};
+}
+
+/* Tech Calendars upsert (Brigham 2026-09-06: Ricardo had no row, so his
+ * approved week was skipped). PIN-gated; {tech, calendarId} — blank
+ * calendarId keeps the row but disables applies for that tech. */
+function setTechCal_(req) {
+  var name = String(req.tech || '').trim();
+  var id = String(req.calendarId || '').trim();
+  if (!name) return {error: 'tech name required'};
+  if (id && !/^[^@\s]+@[^@\s]+$/.test(id)) return {error: 'calendarId must be an email-style calendar id'};
+  techCalMap_();   // ensures the tab exists
+  var ss = SpreadsheetApp.openById('11RoeVRETag5rZYX6_tEH-rf6x8JL0JeZU0P5AT0WI-I');
+  var sh = ss.getSheetByName(TECH_CAL_TAB);
+  var vals = sh.getDataRange().getValues();
+  var prev = '', rowNo = 0;
+  for (var i = 1; i < vals.length; i++) {
+    if (String(vals[i][0] || '').trim().toLowerCase() === name.toLowerCase()) { rowNo = i + 1; prev = String(vals[i][1] || ''); break; }
+  }
+  if (rowNo) sh.getRange(rowNo, 2).setValue(id);
+  else { sh.appendRow([name, id]); rowNo = sh.getLastRow(); }
+  var access = null;
+  if (id) { try { access = !!calById_(id); } catch (e) { access = false; } }
+  return {ok: true, tech: name, calendarId: id, previous: prev, row: rowNo, calendarReachable: access};
 }
 
 /* ---- the briefing itself ---- */
