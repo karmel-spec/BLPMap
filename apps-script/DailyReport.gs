@@ -4166,7 +4166,7 @@ function scheduleCheck_(req) {
   var techs = [], dupExtra = 0, removed = 0;
   (plan.techs || []).forEach(function (tch) {
     var key = String(tch.name || '').toLowerCase();
-    var row = {tech: tch.name, planned: 0, applied: 0, unique: 0, extra: 0, removed: 0};
+    var row = {tech: tch.name, planned: 0, applied: 0, unique: 0, extra: 0, removed: 0, events: []};
     (tch.days || []).forEach(function (blocks) {
       (blocks || []).forEach(function (b) { if (b[2] !== 'hold') row.planned++; });
     });
@@ -4184,6 +4184,12 @@ function scheduleCheck_(req) {
       if (desc.indexOf(APPLIED_TAG) < 0) return;
       row.applied++;
       var k = ev.getTitle() + '|' + ev.getStartTime().getTime() + '|' + ev.getEndTime().getTime();
+      // every tagged event, so a planned-vs-on-calendar mismatch is explainable
+      // (Mark showed 7 vs 6 on 9/6 with counts alone)
+      row.events.push({title: String(ev.getTitle() || ''),
+        start: Utilities.formatDate(ev.getStartTime(), 'America/Denver', 'EEE M/d h:mm a'),
+        end: Utilities.formatDate(ev.getEndTime(), 'America/Denver', 'h:mm a'),
+        dup: !!seen[k]});
       if (!seen[k]) { seen[k] = true; row.unique++; return; }
       row.extra++;
       if (doDelete) { try { ev.deleteEvent(); row.removed++; } catch (e4) {} }

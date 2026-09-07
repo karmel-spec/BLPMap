@@ -898,6 +898,10 @@ async function loadProposal(box){
       out.innerHTML=(note||"")+`<b>${esc(j.week||"")}</b> — ${j.duplicates?j.duplicates+" duplicate event"+(j.duplicates===1?"":"s")+" on the live calendars":"no duplicates on the live calendars"}<br>`
         +j.techs.map(r=>`<b>${esc(r.tech)}</b>: `+(r.skipped||r.error?esc(r.skipped||r.error)
           :`${r.applied} on calendar / ${r.planned} planned${r.extra?` <span style="color:var(--red)">(+${r.extra} dup)</span>`:""}`)).join(" · ")
+        // mismatched techs get their tagged events listed so the odd one out is visible
+        +j.techs.filter(r=>r.events&&r.events.length&&(r.applied!==r.planned||r.extra)).map(r=>
+          `<div style="margin-top:6px"><b>${esc(r.tech)}</b> on calendar:<ul style="margin:2px 0 0 18px;padding:0">`
+          +r.events.map(ev=>`<li${ev.dup?' style="color:var(--red)"':''}>${esc(ev.start)}–${esc(ev.end)} ${esc(ev.title)}${ev.dup?" (duplicate)":""}</li>`).join("")+`</ul></div>`).join("")
         +(j.duplicates&&!j.dedupe?`<br><span style="display:inline-flex;gap:7px;margin-top:8px;align-items:center;flex-wrap:wrap">
             <input id="dedupePin" type="password" placeholder="Team PIN" autocomplete="off"
               style="border:1px solid #cfc9bf;border-radius:6px;padding:8px 11px;font:inherit;font-size:13.5px">
