@@ -257,6 +257,10 @@ function doGet(e) {
     try { return json_(paperworkScan_(e.parameter.serial)); }
     catch (err) { return json_({error: String(err), files: []}); }
   }
+  if (e && e.parameter && e.parameter.fn === 'schedulecheck') {
+    try { return json_(scheduleCheck_({})); }
+    catch (err) { return json_({error: String(err), techs: []}); }
+  }
   if (e && e.parameter && e.parameter.fn === 'proposal') {
     try { return json_(latestProposal_()); }
     catch (err) { return json_({error: String(err)}); }
@@ -1137,6 +1141,13 @@ function doPost(e) {
       if (aps.ok) logAct_(who, 'Schedule APPLIED to tech calendars', aps.week,
         aps.results.map(function (r) { return r.tech + ':' + (r.events != null ? r.events : (r.skipped || r.error)); }).join(', '));
       return json_(aps);
+    }
+    // read-only audit of the applied week / delete duplicate applied events
+    if (req.action === 'checkschedule' || req.action === 'dedupeschedule') {
+      var sc = scheduleCheck_({dedupe: req.action === 'dedupeschedule'});
+      if (sc.ok && sc.dedupe) logAct_(who, 'Schedule duplicate events removed', sc.week,
+        sc.techs.map(function (r) { return r.tech + ':' + (r.removed || 0); }).join(', '));
+      return json_(sc);
     }
     if (req.action === 'setpayplan') {
       var spp = setPayPlan_(req);
@@ -4042,6 +4053,15 @@ function shopClock_(t) {
   return {h: h, min: parseInt(m[2], 10)};
 }
 function applySchedule_(req) {
+  // Brigham 2026-09-06: three "Apply selected" taps on the phone raced and
+  // each read meta before any wrote it, so the week went out 3x for most
+  // techs. Serialize applies — the second caller then sees appliedTechs.
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(45000); }
+  catch (eL) { return {error: 'another apply is still running — wait a minute, reload, and check the calendars before retrying'}; }
+  try { return applyScheduleLocked_(req); } finally { lock.releaseLock(); }
+}
+function applyScheduleLocked_(req) {
   var got = latestProposal_();
   if (!got.ok) return got;
   // selective approve: req.techs = ['Doris', …] applies only those; omitted
@@ -4120,6 +4140,54 @@ function applySchedule_(req) {
   got.meta.appliedAt = new Date().toISOString();
   proposalSheet_().getRange(1, 1).setValue(JSON.stringify(got.meta));
   return {ok: true, week: plan.week, results: results, appliedTechs: got.meta.appliedTechs, applied: got.meta.applied};
+}
+
+/* 🧹 Schedule apply audit (Brigham 2026-09-06): count the proposal-applied
+ * events on every mapped tech calendar for the proposal's week and flag
+ * duplicates (same title + start + end). Only events carrying APPLIED_TAG in
+ * their description are touched — hand-made calendar entries are ignored.
+ * dedupe:true deletes the extras (keeps one per title/start/end). */
+var APPLIED_TAG = 'Applied from the Shop Manager schedule proposal';
+function scheduleCheck_(req) {
+  var got = latestProposal_();
+  if (!got.ok) return got;
+  var plan = got.plan;
+  var weekStart = plan.weekStart || got.meta.weekStart;
+  var start = new Date(weekStart + 'T00:00:00');
+  if (isNaN(start.getTime())) return {error: 'proposal has no weekStart date'};
+  var end = new Date(start); end.setDate(end.getDate() + 5);   // Mon 00:00 -> Sat 00:00
+  var map = techCalMap_();
+  var doDelete = !!(req && req.dedupe);
+  var techs = [], dupExtra = 0, removed = 0;
+  (plan.techs || []).forEach(function (tch) {
+    var key = String(tch.name || '').toLowerCase();
+    var row = {tech: tch.name, planned: 0, applied: 0, unique: 0, extra: 0, removed: 0};
+    (tch.days || []).forEach(function (blocks) {
+      (blocks || []).forEach(function (b) { if (b[2] !== 'hold') row.planned++; });
+    });
+    var calId = map[key];
+    if (!calId) { row.skipped = 'no calendar mapped'; techs.push(row); return; }
+    var cal = null;
+    try { cal = CalendarApp.getCalendarById(calId); } catch (e1) {}
+    if (!cal) { row.error = 'no access to ' + calId; techs.push(row); return; }
+    var evs = [];
+    try { evs = cal.getEvents(start, end); } catch (e2) { row.error = String(e2); techs.push(row); return; }
+    var seen = {};
+    evs.forEach(function (ev) {
+      var desc = '';
+      try { desc = String(ev.getDescription() || ''); } catch (e3) {}
+      if (desc.indexOf(APPLIED_TAG) < 0) return;
+      row.applied++;
+      var k = ev.getTitle() + '|' + ev.getStartTime().getTime() + '|' + ev.getEndTime().getTime();
+      if (!seen[k]) { seen[k] = true; row.unique++; return; }
+      row.extra++;
+      if (doDelete) { try { ev.deleteEvent(); row.removed++; } catch (e4) {} }
+    });
+    dupExtra += row.extra; removed += row.removed;
+    techs.push(row);
+  });
+  return {ok: true, week: plan.week, weekStart: weekStart, dedupe: doDelete,
+          duplicates: dupExtra, removed: removed, techs: techs};
 }
 
 /* ---- the briefing itself ---- */

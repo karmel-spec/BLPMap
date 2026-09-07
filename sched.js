@@ -730,6 +730,7 @@ async function loadProposal(box){
         ${meta.applied?" · <b style='color:#7fc48f'>APPLIED "+esc((meta.appliedAt||"").slice(0,10))+"</b>":""}</span>
       <button class="applybtn" id="applySched" ${meta.applied||meta.fallback?"disabled":""}>
         ${meta.applied?"✓ Applied to calendars":meta.fallback?"Apply (needs bridge update)":(meta.appliedTechs&&meta.appliedTechs.length?"✅ Approve more — "+meta.appliedTechs.length+" of "+((plan&&plan.techs)||[]).length+" applied":"✅ Approve — apply to live tech calendars")}</button>
+      ${(meta.appliedTechs&&meta.appliedTechs.length)?`<button class="applybtn ghost" id="checkSched" title="Count this week's applied events on each tech's real calendar and flag duplicates">🧹 Check calendars</button>`:""}
     </div>
     <div class="propbody">
       <div class="adjustbar">
@@ -881,7 +882,45 @@ async function loadProposal(box){
     }catch(e){
       out.className="applyout err"; out.textContent="✗ "+e.message;
       ab.disabled=false; ab.textContent="✅ Approve — apply to live tech calendars";
+      const g2=box.querySelector("#applyGo2"); if(g2){ g2.disabled=false; g2.textContent="Apply selected"; }
     }
+  };
+  // 🧹 audit the applied week: real-calendar event counts per tech, duplicates
+  // (same title+start+end, tagged as proposal-applied) with a PIN-gated cleanup
+  const cb=box.querySelector("#checkSched");
+  if(cb) cb.onclick=async()=>{
+    const out=box.querySelector("#applyOut");
+    cb.disabled=true; cb.textContent="Checking…";
+    const post=body=>fetch(CONFIG.STOREMAP_BRIDGE,{method:"POST",redirect:"follow",
+      headers:{"content-type":"text/plain;charset=utf-8"},body:JSON.stringify(body)}).then(r=>r.json());
+    const render=(j,note)=>{
+      out.className="applyout"+(j.duplicates?" err":"");
+      out.innerHTML=(note||"")+`<b>${esc(j.week||"")}</b> — ${j.duplicates?j.duplicates+" duplicate event"+(j.duplicates===1?"":"s")+" on the live calendars":"no duplicates on the live calendars"}<br>`
+        +j.techs.map(r=>`<b>${esc(r.tech)}</b>: `+(r.skipped||r.error?esc(r.skipped||r.error)
+          :`${r.applied} on calendar / ${r.planned} planned${r.extra?` <span style="color:var(--red)">(+${r.extra} dup)</span>`:""}`)).join(" · ")
+        +(j.duplicates&&!j.dedupe?`<br><span style="display:inline-flex;gap:7px;margin-top:8px;align-items:center;flex-wrap:wrap">
+            <input id="dedupePin" type="password" placeholder="Team PIN" autocomplete="off"
+              style="border:1px solid #cfc9bf;border-radius:6px;padding:8px 11px;font:inherit;font-size:13.5px">
+            <button class="abtn" id="dedupeGo">Remove ${j.duplicates} duplicate${j.duplicates===1?"":"s"}</button></span>`:"");
+      const dg=out.querySelector("#dedupeGo"), dp=out.querySelector("#dedupePin");
+      if(dg) dg.onclick=async()=>{
+        if(!dp.value.trim()){ dp.focus(); return; }
+        dg.disabled=true; dg.textContent="Removing…";
+        try{
+          const j2=await post({action:"dedupeschedule",pin:dp.value.trim(),user:{name:(localStorage.getItem("blpmgr.name")||"Shop Manager")+" (Shop Manager)"}});
+          if(j2.error) throw new Error(j2.error);
+          const j3=await post({action:"checkschedule",pin:localStorage.getItem("blp.appkey")||"pianoman"});
+          if(j3.error) throw new Error(j3.error);
+          render(j3,`✓ Removed ${j2.removed} duplicate event${j2.removed===1?"":"s"}.<br>`);
+        }catch(e){ out.className="applyout err"; out.textContent="✗ "+e.message; }
+      };
+    };
+    try{
+      const j=await post({action:"checkschedule",pin:localStorage.getItem("blp.appkey")||"pianoman"});
+      if(j.error) throw new Error(j.error==="unauthorized"?"bridge needs the check/dedupe update":j.error);
+      render(j);
+    }catch(e){ out.className="applyout err"; out.textContent="✗ "+e.message; }
+    cb.disabled=false; cb.textContent="🧹 Check calendars";
   };
   if(ab&&!ab.disabled) ab.onclick=()=>{
     const out=box.querySelector("#applyOut");
@@ -913,6 +952,10 @@ async function loadProposal(box){
       const sel=picked();
       if(!sel.length){ out.insertAdjacentHTML("beforeend","<br><b style='color:var(--red)'>Check at least one technician.</b>"); return; }
       if(!pin.value.trim()){ pin.focus(); return; }
+      // one request per tap — a slow phone tapping "Apply selected" three
+      // times used to fire three concurrent applies (9/6 triple-write)
+      const g2=box.querySelector("#applyGo2");
+      if(g2){ if(g2.disabled) return; g2.disabled=true; g2.textContent="Applying…"; }
       doApply(pin.value.trim(),sel);
     };
     box.querySelector("#applyGo2").onclick=go;
