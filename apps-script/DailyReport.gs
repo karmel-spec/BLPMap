@@ -2270,6 +2270,15 @@ function who_(req) {
 
 function verifyGoogle_(tok) {
   if (!tok) return null;
+  // Speed (Brigham 9/8 "can we speed up the save?"): the same token is sent
+  // with every write for up to an hour — verify it once, cache 20 min.
+  var ck = null, cache = null;
+  try {
+    cache = CacheService.getScriptCache();
+    ck = 'gtok_' + Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, tok)).slice(0, 40);
+    var hit = cache.get(ck);
+    if (hit) { var hj = JSON.parse(hit); if (Number(hj.exp) * 1000 > Date.now()) return {email: hj.email, name: hj.name}; }
+  } catch (eC) { ck = null; }
   try {
     var r = UrlFetchApp.fetch(
       'https://oauth2.googleapis.com/tokeninfo?id_token=' + encodeURIComponent(tok),
@@ -2278,6 +2287,7 @@ function verifyGoogle_(tok) {
     var j = JSON.parse(r.getContentText());
     if (GOOGLE_CLIENT_ID.indexOf('PASTE') < 0 && j.aud !== GOOGLE_CLIENT_ID) return null;
     if (Number(j.exp) * 1000 < Date.now()) return null;
+    if (ck && cache) { try { cache.put(ck, JSON.stringify({email: j.email || '', name: j.name || '', exp: j.exp}), 1200); } catch (eP) {} }
     return {email: j.email || '', name: j.name || ''};
   } catch (err) { return null; }
 }
@@ -3242,6 +3252,10 @@ var PERM_MEMO = null;
 function permData_() {
   if (PERM_MEMO) return PERM_MEMO;
   var out = {roles: {}, assign: {}};
+  try {   // 5-minute cache — two sheet reads on every gated write otherwise
+    var pc = CacheService.getScriptCache().get('permdata1');
+    if (pc) { PERM_MEMO = JSON.parse(pc); return PERM_MEMO; }
+  } catch (eC) {}
   try {
     var ss = SpreadsheetApp.openById('11RoeVRETag5rZYX6_tEH-rf6x8JL0JeZU0P5AT0WI-I');
     var rv = ss.getSheetByName('Roles').getDataRange().getValues();
@@ -3258,6 +3272,7 @@ function permData_() {
     }
   } catch (e) {}
   PERM_MEMO = out;
+  try { CacheService.getScriptCache().put('permdata1', JSON.stringify(out), 300); } catch (eP) {}
   return out;
 }
 // true / false when the sheet governs this email; null → caller's legacy rule
@@ -3357,11 +3372,11 @@ function adjustClock_(req) {
       }
       var row = Number(req.row);
       if (!(row >= 2) || row > sh.getLastRow()) return {error: 'bad row'};
-      sh.getRange(row, 2).setValue(Utilities.formatDate(start, 'America/Denver', 'yyyy-MM-dd'));
-      sh.getRange(row, 3, 1, 3).setValues([[start.toISOString(), end ? end.toISOString() : '', mins]]);
-      var oldNote = String(sh.getRange(row, 7).getValue() || '');
-      sh.getRange(row, 7).setValue((oldNote ? oldNote + ' · ' : '') + stamp);
-      return {ok: true, tech: String(sh.getRange(row, 1).getValue())};
+      var rng = sh.getRange(row, 1, 1, 7), cur = rng.getValues()[0];   // one read, one write
+      var oldNote = String(cur[6] || '');
+      rng.setValues([[cur[0], Utilities.formatDate(start, 'America/Denver', 'yyyy-MM-dd'),
+        start.toISOString(), end ? end.toISOString() : '', mins, cur[5], (oldNote ? oldNote + ' · ' : '') + stamp]]);
+      return {ok: true, tech: String(cur[0] || '')};
     }
     var tsh = timeLogSheet_();
     if (req.add) {
@@ -3375,11 +3390,12 @@ function adjustClock_(req) {
     }
     var trow = Number(req.row);
     if (!(trow >= 2) || trow > tsh.getLastRow()) return {error: 'bad row'};
-    tsh.getRange(trow, 5, 1, 3).setValues([[start.toISOString(), end ? end.toISOString() : '', mins]]);
-    var oldBy = String(tsh.getRange(trow, 9).getValue() || '');
-    tsh.getRange(trow, 9).setValue((oldBy ? oldBy + ' · ' : '') + stamp);
-    return {ok: true, tech: String(tsh.getRange(trow, 1).getValue()),
-            piano: String(tsh.getRange(trow, 3).getValue())};
+    var trng = tsh.getRange(trow, 1, 1, 9), tcur = trng.getValues()[0];   // one read, one write
+    var oldBy = String(tcur[8] || '');
+    tcur[4] = start.toISOString(); tcur[5] = end ? end.toISOString() : ''; tcur[6] = mins;
+    tcur[8] = (oldBy ? oldBy + ' · ' : '') + stamp;
+    trng.setValues([tcur]);
+    return {ok: true, tech: String(tcur[0] || ''), piano: String(tcur[2] || '')};
   });
 }
 /* Team-member "please fix my clock" requests — one tab, worked from the

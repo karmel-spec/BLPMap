@@ -9906,8 +9906,45 @@ async function adjResolveFrom(fixRow, msgEl) {
   } else if (msgEl) msgEl.textContent += ' · (could not auto-resolve the request: ' + ((j && j.error) || 'no reply') + ' — press Mark resolved above)';
   S.fixRows = null; loadClockFixes();
 }
+/* Speed (Brigham 9/8): after a save the report used to blank to "Loading
+ * clocks…" while all three clock feeds reloaded (5–8 s). Now the saved row is
+ * patched locally and re-rendered at once; the feeds refresh quietly behind. */
+function adjPatchLocal(clock, row, start, end, extra) {
+  const list = clock === 'pay' ? S.payRows : S.tlRows;
+  const r = (list || []).find(x => x.row === row);
+  if (!r) return;
+  r.start = start; r.end = end || '';
+  r.minutes = end ? Math.max(1, Math.round((new Date(end) - new Date(start)) / 60000)) : 0;
+  if (clock === 'pay') r.date = denverDay(start);
+  Object.assign(r, extra || {});
+}
+async function refreshClocksQuiet() {
+  try {
+    const [p, t] = await Promise.all([
+      fetch(BRIDGE_URL + '?fn=payrollrows&days=190', {redirect: 'follow'}).then(r => r.json()),
+      fetch(BRIDGE_URL + '?fn=timelog&days=365', {redirect: 'follow'}).then(r => r.json())]);
+    if (p && p.rows) S.payRows = p.rows;
+    if (t && t.rows) S.tlRows = t.rows;
+    renderReport();
+  } catch (e) { /* keep the locally patched rows */ }
+}
+// a punch that comes out longer than 14 h, or that starts/ends at exactly
+// midnight, is almost always a typo in the date-time box — ask first
+function adjSanity(start, end, who) {
+  if (!start) return true;
+  const s = new Date(start), e = end ? new Date(end) : null;
+  const hrs = e ? (e - s) / 3600000 : 0;
+  const midnight = d => d && d.getHours() === 0 && d.getMinutes() === 0;
+  const flags = [];
+  if (hrs > 14) flags.push(`a ${hrs.toFixed(1)}-hour day`);
+  if (midnight(s)) flags.push('a 12:00 AM clock-in');
+  if (midnight(e)) flags.push('a 12:00 AM clock-out');
+  if (e && hrs < 0) { alert('Clock-out is before clock-in — fix the times first.'); return false; }
+  if (!flags.length) return true;
+  return confirm(`${who || 'This punch'} would have ${flags.join(' and ')}. Save anyway?`);
+}
 function adjSlowNotice(msgEl, verb) {
-  return setTimeout(() => { if (msgEl && /…$/.test(msgEl.textContent || '')) msgEl.textContent = verb + '… Google is slow right now, still trying (up to a minute)'; }, 8000);
+  return setTimeout(() => { if (msgEl && /…$/.test(msgEl.textContent || '')) msgEl.textContent = verb + '… still working — Google\'s bridge is slow for a few minutes after each app update; don\'t press again, it will finish'; }, 8000);
 }
 async function resumeAdjIntent() {
   let raw = null;
@@ -10633,6 +10670,8 @@ function renderReport() {
       adjStashAndRenew({adjEdit: {clock: b.dataset.clock, row: +b.dataset.row, pre: {start, end}, hint: (S.adjEdit || {}).hint || '', fromFix: (S.adjEdit || {}).fromFix || null}});
       return;
     }
+    const whoName = (tr.children[1] && tr.children[1].textContent.trim().split('\n')[0]) || '';
+    if (!adjSanity(start, end, whoName)) return;
     b.disabled = true; msg.textContent = 'saving…'; msg.classList.remove('adjerr');
     const slow = adjSlowNotice(msg, 'saving');
     const j = await adjustPost({action: 'adjustclock', clock: b.dataset.clock, row: +b.dataset.row,
@@ -10642,9 +10681,14 @@ function renderReport() {
     if (!adjFeedback(msg, j, `saved — ${who}: ${fmtT(new Date(start).toISOString())} → ${end ? fmtT(new Date(end).toISOString()) : 'open'}`)) { b.disabled = false; return; }
     b.textContent = '✓ saved';
     const fromFix = (S.adjEdit || {}).fromFix;
-    S.adjEdit = null; S.payRows = null; S.tlRows = null;
-    await adjResolveFrom(fromFix, msg);
-    loadPayroll();
+    const savedClock = b.dataset.clock, savedRow = +b.dataset.row;
+    adjPatchLocal(savedClock, savedRow, new Date(start).toISOString(), end ? new Date(end).toISOString() : '',
+      savedClock === 'pay' ? {note: 'adjusted just now — syncing…'} : {});
+    S.adjEdit = null;
+    renderReport();   // row closes at once with the new times
+    setTimeout(() => { const el = document.querySelector(`.rpt[data-r="clockadjust"] .adjedit[data-clock="${savedClock}"][data-row="${savedRow}"]`); const row = el && el.closest('tr'); if (row) { row.scrollIntoView({behavior: 'smooth', block: 'center'}); row.classList.add('adjflash'); setTimeout(() => row.classList.remove('adjflash'), 2500); } }, 0);
+    adjResolveFrom(fromFix, null);
+    refreshClocksQuiet();
   });
   body.querySelectorAll('.adjaddbar .adjaddbtn').forEach(b => b.onclick = async () => {
     const bar = b.closest('.adjaddbar'), clock = bar.dataset.clock;
@@ -10657,6 +10701,7 @@ function renderReport() {
       adjStashAndRenew({add: {clock, tech, serial: val('.a-serial'), phase: val('.a-phase'), start, end, fromFix: bar.dataset.fromfix || null}});
       return;
     }
+    if (!adjSanity(start, end, tech)) return;
     b.disabled = true; msg.textContent = 'adding…'; msg.classList.remove('adjerr');
     const slow = adjSlowNotice(msg, 'adding');
     const j = await adjustPost({action: 'adjustclock', clock, add: true, tech,
@@ -10667,9 +10712,9 @@ function renderReport() {
     b.textContent = '✓ added';
     bar.querySelectorAll('input').forEach(i => i.value = '');
     const fromFix = bar.dataset.fromfix; delete bar.dataset.fromfix;
-    S.payRows = null; S.tlRows = null;
-    await adjResolveFrom(fromFix, msg);
-    loadPayroll();
+    setTimeout(() => { b.textContent = 'Add'; b.disabled = false; }, 2500);
+    adjResolveFrom(fromFix, msg);
+    refreshClocksQuiet();
   });
   body.querySelectorAll('.rptf').forEach(el => {
     const apply = () => {
