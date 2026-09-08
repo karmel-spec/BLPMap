@@ -9535,10 +9535,23 @@ function fDate(scope, f, cur, title) {
 
 function payTimeTable() {
   if (!S.payRows || !S.tlRows) return '<div class="empty">Loading payroll punches…</div>';
-  const f = S.payF || (S.payF = {who: '', from: '', to: '', group: 'day'});
+  // Brigham 9/8: Melissa runs payroll off the DAY clock; Mark + the owners
+  // also want every individual piano / management / cleaning session from
+  // the Work Clock — so the report has a detail switch (default by role)
+  // plus a category filter for those sessions.
+  const seesDetail = isOwner() || userEmail() === 'markhales.blp@gmail.com';
+  const f = S.payF || (S.payF = {who: '', from: '', to: '', group: 'day', detail: seesDetail ? 'all' : 'day', cat: ''});
+  if (f.detail === undefined) f.detail = seesDetail ? 'all' : 'day';
+  if (f.cat === undefined) f.cat = '';
   const techs = [...new Set([...S.payRows.map(r => r.tech), ...S.tlRows.map(r => r.tech)])].sort();
   const rows = S.payRows.filter(r =>
     (!f.who || r.tech === f.who) && inRange(r.date, f));
+  // Work Clock sessions, same member + range (+ category when chosen)
+  const tlAll = S.tlRows.filter(r =>
+    (!f.who || r.tech === f.who) && inRange(denverDay(r.start), f));
+  const cats = [...new Set(tlAll.map(r => r.phase || '(no phase)'))].sort();
+  const tl = f.cat ? tlAll.filter(r => (r.phase || '(no phase)') === f.cat) : tlAll;
+  const showTl = f.detail === 'all';
   const bar = filterBar('pay', [
     fSel('pay', 'who', f.who, techs, 'All team members'),
     fDate('pay', 'from', f.from, 'from'), fDate('pay', 'to', f.to, 'to'),
@@ -9546,9 +9559,14 @@ function payTimeTable() {
        <option value="day" ${f.group === 'day' ? 'selected' : ''}>Daily punches</option>
        <option value="week" ${f.group === 'week' ? 'selected' : ''}>Weekly totals</option>
        <option value="month" ${f.group === 'month' ? 'selected' : ''}>Monthly totals</option></select>`,
+    `<select class="rptf" data-scope="pay" data-f="detail" title="Melissa: day clock is all payroll needs · Mark & owners: every piano / management / cleaning session too">
+       <option value="day" ${!showTl ? 'selected' : ''}>Day clock only (payroll)</option>
+       <option value="all" ${showTl ? 'selected' : ''}>+ piano & category sessions</option></select>`,
+    showTl ? fSel('pay', 'cat', f.cat, cats, 'All categories / phases') : '',
     `<button class="csvbtn" data-csv="paydays">⬇ CSV — punches</button>`,
     `<button class="csvbtn" data-csv="paytotals">⬇ CSV — totals</button>`,
-  ]);
+    showTl ? `<button class="csvbtn" data-csv="paysessions">⬇ CSV — piano sessions</button>` : '',
+  ].filter(Boolean));
   // day rows + grouped totals
   let main;
   if (f.group === 'day') {
@@ -9563,44 +9581,61 @@ function payTimeTable() {
     const agg = {};
     rows.forEach(r => {
       const k = key(r.date) + '|' + r.tech;
-      (agg[k] = agg[k] || {period: key(r.date), tech: r.tech, mins: 0, days: new Set()});
+      (agg[k] = agg[k] || {period: key(r.date), tech: r.tech, mins: 0, days: new Set(), tlMins: 0});
       agg[k].mins += r.minutes || 0;
       agg[k].days.add(r.date);
+    });
+    if (showTl) tl.forEach(r => {   // piano-clock minutes alongside, same period buckets
+      const day = denverDay(r.start), per = f.group === 'week' ? weekKey(day) : monthKey(day);
+      const k = per + '|' + r.tech;
+      (agg[k] = agg[k] || {period: per, tech: r.tech, mins: 0, days: new Set(), tlMins: 0});
+      agg[k].tlMins += r.minutes || 0;
     });
     const list = Object.values(agg).sort((a, b) =>
       b.period.localeCompare(a.period) || a.tech.localeCompare(b.tech));
     const plabel = f.group === 'week' ? 'WEEK OF' : 'MONTH';
-    main = `<table><tr><th>${plabel}</th><th>TEAM MEMBER</th><th>DAYS</th><th>HOURS</th><th>HOURS (DECIMAL)</th></tr>
+    main = `<table><tr><th>${plabel}</th><th>TEAM MEMBER</th><th>DAYS</th><th>DAY-CLOCK HOURS</th><th>HOURS (DECIMAL)</th>${showTl ? '<th>PIANO-CLOCK HOURS</th>' : ''}</tr>
       ${list.map(g => `<tr><td>${esc(g.period)}</td><td>${esc(g.tech)}</td>
-        <td>${g.days.size}</td><td>${fmtHM(g.mins)}</td><td>${hDec(g.mins)}</td></tr>`).join('')
-       || '<tr><td colspan="5" class="empty">No payroll punches in this range yet.</td></tr>'}</table>`;
+        <td>${g.days.size}</td><td>${fmtHM(g.mins)}</td><td>${hDec(g.mins)}</td>${showTl ? `<td>${g.tlMins ? fmtHM(g.tlMins) : '—'}</td>` : ''}</tr>`).join('')
+       || `<tr><td colspan="${showTl ? 6 : 5}" class="empty">No payroll punches in this range yet.</td></tr>`}</table>`;
   }
   // per-member range totals
   const tot = {};
   rows.forEach(r => { tot[r.tech] = (tot[r.tech] || 0) + (r.minutes || 0); });
   const totals = Object.entries(tot).sort((a, b) => b[1] - a[1]);
-  // per-piano / per-category hours from the Work Clock, same member + range
-  const tl = S.tlRows.filter(r =>
-    (!f.who || r.tech === f.who) && inRange(denverDay(r.start), f));
   const byPhase = {}, byPiano = {};
   tl.forEach(r => {
     byPhase[r.phase || '(no phase)'] = (byPhase[r.phase || '(no phase)'] || 0) + r.minutes;
-    const pk = (r.piano || '?') + ' #' + r.serial;
+    const pk = (r.piano || r.phase || '?') + (r.serial && !/^(MGMT|TIDY)$/i.test(r.serial) ? ' #' + r.serial : '');
     byPiano[pk] = (byPiano[pk] || 0) + r.minutes;
   });
   const phaseRows = Object.entries(byPhase).sort((a, b) => b[1] - a[1]);
   const pianoRows = Object.entries(byPiano).sort((a, b) => b[1] - a[1]).slice(0, 40);
+  const sessions = showTl ? [...tl].sort((a, b) => new Date(b.start) - new Date(a.start)).slice(0, 600) : [];
+  const pianoLabel = r => /^(MGMT|TIDY)$/i.test(r.serial || '') ? '—' : `${esc(r.piano || '?')} <small>#${esc(r.serial)}</small>`;
   CSV_EXPORTS.paydays = () => ['payroll-punches.csv',
     [['Date', 'Team member', 'Clock in', 'Clock out', 'Minutes', 'Hours (decimal)', 'Note'],
      ...rows.map(r => [r.date, r.tech, fmtT(r.start), r.end ? fmtT(r.end) : 'OPEN', r.minutes, hDec(r.minutes), r.note])]];
   CSV_EXPORTS.paytotals = () => ['payroll-totals.csv',
     [['Team member', 'Minutes', 'Hours (decimal)'],
      ...totals.map(([t, m]) => [t, m, hDec(m)])]];
+  CSV_EXPORTS.paysessions = () => ['piano-clock-sessions.csv',
+    [['Date', 'Team member', 'Piano', 'Serial', 'Phase / category', 'Clock in', 'Clock out', 'Minutes', 'Hours (decimal)', 'Source'],
+     ...tl.map(r => [denverDay(r.start), r.tech, r.piano, r.serial, r.phase, fmtT(r.start), r.end ? fmtT(r.end) : 'OPEN', r.minutes, hDec(r.minutes), r.source])]];
+  const sessionsHtml = !showTl ? '' : `
+    <h4 class="bfhd">Piano Work Clock sessions — every individual clock-in (piano, management, cleaning…), same filters${f.cat ? ' · ' + esc(f.cat) : ''}</h4>
+    <table><tr><th>DATE</th><th>TEAM MEMBER</th><th>PIANO</th><th>PHASE / CATEGORY</th><th>IN</th><th>OUT</th><th>HOURS</th></tr>
+    ${sessions.map(r => `<tr><td>${esc(denverDay(r.start))}</td><td>${esc(r.tech)}</td><td>${pianoLabel(r)}</td>
+        <td>${esc(r.phase || '—')}</td><td>${fmtT(r.start)}</td>
+        <td>${r.end ? fmtT(r.end) : '<b style="color:#2e7d4f">open</b>'}</td><td>${r.minutes ? fmtHM(r.minutes) : '—'}</td></tr>`).join('')
+     || '<tr><td colspan="7" class="empty">No piano work-clock sessions in this range.</td></tr>'}</table>
+    ${tl.length > sessions.length ? `<div class="lite" style="font-size:11.5px;margin:4px 0 10px">Showing the latest ${sessions.length} of ${tl.length} sessions — narrow the dates or use the CSV for all of them.</div>` : ''}`;
   return bar + main + `
-    <h4 class="bfhd">Range totals per team member</h4>
+    <h4 class="bfhd">Range totals per team member — day clock</h4>
     <table><tr><th>TEAM MEMBER</th><th>HOURS</th><th>HOURS (DECIMAL)</th></tr>
     ${totals.map(([t, m]) => `<tr><td>${esc(t)}</td><td>${fmtHM(m)}</td><td>${hDec(m)}</td></tr>`).join('')
      || '<tr><td colspan="3" class="empty">—</td></tr>'}</table>
+    ${sessionsHtml}
     <h4 class="bfhd">Hours by category of work — same filters, from the piano Work Clock</h4>
     <table><tr><th>PHASE / CATEGORY</th><th>HOURS</th></tr>
     ${phaseRows.map(([p, m]) => `<tr><td>${esc(p)}</td><td>${fmtHM(m)}</td></tr>`).join('')
@@ -9856,6 +9891,21 @@ function adjFeedback(msgEl, j, okText) {
   cfxToast('⚠ ' + err);
   return false;
 }
+/* Save/Add that came from an ✎ Apply also flips that request to resolved
+ * (which texts the team member) — Brigham 9/8: "the edit request above
+ * should change from Apply to resolved". */
+async function adjResolveFrom(fixRow, msgEl) {
+  if (!fixRow) { S.fixRows = null; loadClockFixes(); return; }
+  const fx = (S.fixRows || []).find(r => r.row === +fixRow);
+  if (!fx || fx.status !== 'open') { S.fixRows = null; loadClockFixes(); return; }
+  const j = await adjustPost({action: 'resolveclockfix', row: +fixRow, status: 'resolved'});
+  const who = fx.who.replace(/<[^>]*>/g, '').trim().split(/\s+/)[0];
+  if (j && !j.error) {
+    cfxToast(j.texted ? `✓ saved · ${who}'s request marked resolved and ${who} has been texted` : `✓ saved · ${who}'s request marked resolved`);
+    if (msgEl) msgEl.textContent += ` · request resolved${j.texted ? ', ' + who + ' texted' : ''}`;
+  } else if (msgEl) msgEl.textContent += ' · (could not auto-resolve the request: ' + ((j && j.error) || 'no reply') + ' — press Mark resolved above)';
+  S.fixRows = null; loadClockFixes();
+}
 function adjSlowNotice(msgEl, verb) {
   return setTimeout(() => { if (msgEl && /…$/.test(msgEl.textContent || '')) msgEl.textContent = verb + '… Google is slow right now, still trying (up to a minute)'; }, 8000);
 }
@@ -9887,6 +9937,7 @@ async function resumeAdjIntent() {
         const set = (c, v) => { const x = el.querySelector(c); if (x && v) x.value = v; };
         set('.a-tech', it.add.tech); set('.a-serial', it.add.serial); set('.a-phase', it.add.phase);
         set('.a-start', it.add.start); set('.a-end', it.add.end);
+        if (it.add.fromFix) el.dataset.fromfix = it.add.fromFix;
         const m = el.querySelector('.adjmsg'); if (m) m.textContent = '🔐 sign-in renewed — press Add to apply';
       }
     } else el = rpt.querySelector('tr.adjediting');
@@ -10323,7 +10374,10 @@ const REPORT_DEFS = () => [
   {id: 'adminbriefs', sec: 'admin', icon: '💼', title: 'ADMIN DAILY BRIEF', count: null,
    desc: 'The nightly Admin briefing, archived as Google Docs — payments, media and delivery logistics. Each row has its own ↗ share button.',
    html: () => briefsTable('admin')},
-  {id: 'paytime', sec: 'admin', show: isPayrollAdmin, icon: '⏰', title: 'TIME CLOCK — PAYROLL', count: null,
+  // Brigham 9/8: Mark (lead manager) sees the payroll time clock too — his
+  // role already carries the payroll_report key; it just was never wired
+  {id: 'paytime', sec: 'admin', show: () => isPayrollAdmin() || gateOr(userEmail() === 'markhales.blp@gmail.com', 'payroll_report'),
+   icon: '⏰', title: 'TIME CLOCK — PAYROLL', count: null,
    desc: 'Team clock-in / clock-out for payroll: every arrival-and-exit punch from the dashboard Payroll Clock, filterable by team member and date, with daily punches or weekly/monthly totals, plus that member\u2019s hours by piano and by category of work from the piano Work Clock. Red rows were auto-closed (forgot to clock out) — review before running payroll. The CSV buttons export spreadsheets.',
    html: payTimeTable},
   {id: 'jobcost', sec: 'admin', show: isOwner, icon: '💰', title: 'JOB COSTING — PER PIANO', count: null,
@@ -10534,7 +10588,7 @@ function renderReport() {
       const day = denverDay(m.pick.start);
       const pre = {start: m.times.in ? day + 'T' + m.times.in : '', end: m.times.out ? day + 'T' + m.times.out : ''};
       const filled = [pre.start && 'start', pre.end && 'end'].filter(Boolean);
-      S.adjEdit = {clock: m.clock, row: m.pick.row, pre,
+      S.adjEdit = {clock: m.clock, row: m.pick.row, pre, fromFix: fx.row,
         hint: (m.exact ? '' : 'nearest punch (no punch on the day named) — ')
           + (filled.length ? `${filled.join(' + ')} prefilled from the note — check, then Save. ` : '') + req};
       renderReport();
@@ -10548,6 +10602,7 @@ function renderReport() {
       const bar = document.querySelector(`.rpt[data-r="clockadjust"] .adjaddbar[data-clock="${m.clock}"]`);
       if (!bar) { alert('No matching punch found and you do not have the add-punch permission for this clock.'); return; }
       const set = (c, v) => { const el = bar.querySelector(c); if (el && v) el.value = v; };
+      bar.dataset.fromfix = fx.row;   // Add will also resolve this request
       set('.a-tech', m.who); set('.a-serial', m.serial);
       set('.a-start', m.date + 'T' + (m.times.in || '08:00')); set('.a-end', m.times.out ? m.date + 'T' + m.times.out : '');
       const msg = bar.querySelector('.adjmsg'); if (msg) msg.textContent = 'no punch on ' + m.date + ' — add it from ' + req;
@@ -10575,7 +10630,7 @@ function renderReport() {
     const msg = tr.querySelector('.adjmsg');
     if (!start) { msg.textContent = 'start time required'; return; }
     if (adjExpired()) {   // renew first — a redirect mid-save would lose this edit
-      adjStashAndRenew({adjEdit: {clock: b.dataset.clock, row: +b.dataset.row, pre: {start, end}, hint: (S.adjEdit || {}).hint || ''}});
+      adjStashAndRenew({adjEdit: {clock: b.dataset.clock, row: +b.dataset.row, pre: {start, end}, hint: (S.adjEdit || {}).hint || '', fromFix: (S.adjEdit || {}).fromFix || null}});
       return;
     }
     b.disabled = true; msg.textContent = 'saving…'; msg.classList.remove('adjerr');
@@ -10585,7 +10640,10 @@ function renderReport() {
     clearTimeout(slow);
     const who = (tr.children[1] && tr.children[1].textContent.trim().split('\n')[0]) || 'punch';
     if (!adjFeedback(msg, j, `saved — ${who}: ${fmtT(new Date(start).toISOString())} → ${end ? fmtT(new Date(end).toISOString()) : 'open'}`)) { b.disabled = false; return; }
+    b.textContent = '✓ saved';
+    const fromFix = (S.adjEdit || {}).fromFix;
     S.adjEdit = null; S.payRows = null; S.tlRows = null;
+    await adjResolveFrom(fromFix, msg);
     loadPayroll();
   });
   body.querySelectorAll('.adjaddbar .adjaddbtn').forEach(b => b.onclick = async () => {
@@ -10596,7 +10654,7 @@ function renderReport() {
     if (!tech || !start) { msg.textContent = 'name and start time required'; return; }
     if (clock === 'piano' && !val('.a-serial')) { msg.textContent = 'piano serial required'; return; }
     if (adjExpired()) {
-      adjStashAndRenew({add: {clock, tech, serial: val('.a-serial'), phase: val('.a-phase'), start, end}});
+      adjStashAndRenew({add: {clock, tech, serial: val('.a-serial'), phase: val('.a-phase'), start, end, fromFix: bar.dataset.fromfix || null}});
       return;
     }
     b.disabled = true; msg.textContent = 'adding…'; msg.classList.remove('adjerr');
@@ -10606,8 +10664,11 @@ function renderReport() {
       start: new Date(start).toISOString(), end: end ? new Date(end).toISOString() : ''});
     clearTimeout(slow);
     if (!adjFeedback(msg, j, `added — ${tech}: ${fmtT(new Date(start).toISOString())} → ${end ? fmtT(new Date(end).toISOString()) : 'open'}`)) { b.disabled = false; return; }
+    b.textContent = '✓ added';
     bar.querySelectorAll('input').forEach(i => i.value = '');
+    const fromFix = bar.dataset.fromfix; delete bar.dataset.fromfix;
     S.payRows = null; S.tlRows = null;
+    await adjResolveFrom(fromFix, msg);
     loadPayroll();
   });
   body.querySelectorAll('.rptf').forEach(el => {
@@ -10644,7 +10705,10 @@ function renderReport() {
     const rb = tr.closest('.rptbody');
     if (p && rb) { popPinned = true; openPop(p.row, rb, true); }
   });
-  body.querySelectorAll('.csvbtn').forEach(b => b.onclick = ev => {
+  // only REAL export buttons (data-csv) — the green Save/Add buttons in the
+  // clock adjustments share the .csvbtn look and were getting their click
+  // handlers overwritten here, so they did nothing (Brigham 9/8)
+  body.querySelectorAll('.csvbtn[data-csv]').forEach(b => b.onclick = ev => {
     ev.stopPropagation();
     const mk = CSV_EXPORTS[b.dataset.csv];
     if (mk) { const [name, rows] = mk(); downloadCsv(name, rows); }
