@@ -1161,7 +1161,7 @@ function renderPipeline(){
     const ph=String(x.phase||"").trim();
     if(!x.active){ if(ph==="Delivered") cols.DELIVERED.push(x); return; }
     if(/^(Waiting|Paused)/i.test(ph)) return cols.WAITING.push(x);
-    if(ph==="Sold"||ph==="Sale Pending") return cols.SALEPEND.push(x);
+    if(ph==="Sold"||ph==="Sale Pending"||ph==="Post Sale QC") return cols.SALEPEND.push(x);
     if(byPh.has(ph)&&ph) return cols[byPh.get(ph)].push(x);
     if(!ph && x.queuePos) return cols.QUEUE.push(x);
   });
@@ -1176,7 +1176,7 @@ function renderPipeline(){
       <div class="meta" style="margin-top:4px">
         ${x.location?`<span class="pill lvl">${esc(x.location)}</span>`:""}
         ${x.queuePos?`<span class="pill lvl num">Q-${x.queuePos}</span>`:""}
-        ${String(x.phase||"")==="Sold"?`<span class="pill ok">SOLD</span>`:""}
+        ${String(x.phase||"")==="Sold"?`<span class="pill ok">SOLD</span>`:""}${String(x.phase||"")==="Post Sale QC"?`<span class="pill ok">QC</span>`:""}
         ${x.price?`<span class="pill ok num">${esc(String(x.price))}</span>`:""}
         ${recent&&rec.progress!=null?`<span class="pill ok num">${rec.progress}%</span>`:""}
       </div>

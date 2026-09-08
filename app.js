@@ -34,7 +34,7 @@ const PHASE_NUMS = (() => {
   });
   return m;
 })();
-const PHASE_STATES = ['In Queue', 'Paused', 'For Sale', 'Sale Pending', 'Sold',
+const PHASE_STATES = ['In Queue', 'Paused', 'For Sale', 'Post Sale QC', 'Sale Pending', 'Sold',
   'Waiting on Brigham', 'Waiting on Curtis Harper', 'Waiting on Customer', 'Waiting on OTHER'];
 // work tracks (multi-select, stored comma-separated in the TRACK column)
 const TRACKS = ['Rebuild', 'Hybrid', 'Refurbish', 'Refinish', 'Technology', 'Old Player', 'Storage', 'Misc'];   // unnumbered states; For Sale turns the icon green
@@ -69,6 +69,7 @@ function phaseLabels(phase, p) {
   if (phase === 'Waiting on Customer') return {full: 'WCu', short: 'W'};
   if (phase === 'Waiting on OTHER') return {full: 'WO', short: 'W'};
   if (phase === 'Sale Pending') return {full: '$P', short: '$'};
+  if (phase === 'Post Sale QC') return {full: '$QC', short: '$'};
   if (phase === 'Sold') return {full: '$', short: '$'};
   if (phase === 'Delivered' || phase === 'For Sale') return null;
   const i = PHASES.indexOf(phase);
@@ -1050,7 +1051,7 @@ function pianoStatus(p) {
     const ev = S.data.events.find(e => (e.summary + e.description).includes(p.serial));
     if (ev) return ev.date === today ? 'move' : 'sched';
   }
-  if (/^(For Sale|Sale Pending|Sold)$/.test(p.phase || '')) return 'sale';
+  if (/^(For Sale|Post Sale QC|Sale Pending|Sold)$/.test(p.phase || '')) return 'sale';
   if (tuningInfo(p).next) return 'tune';
   if (p.isNew) return 'new';
   return 'in';
@@ -3771,7 +3772,7 @@ async function punchVerify(action, p, phase, fallbackMsg) {
  * techs. Advancing OUT of a checklist phase requires a manager mini-QC:
  * request → text to Mark (30-min escalation to Mark+Karmel) → C-rail
  * inspection → pass advances the phase, fail creates a 🔁 Rework card. */
-const QC_PHASES = ['CAP', 'PRSBa - Pre-Plate', 'QC & Assembly'];   // PRSBa MUST stay (plate hides the work after); QC & Assembly = mini-QC of the QC (Brigham 9/4)
+const QC_PHASES = ['CAP', 'PRSBa - Pre-Plate', 'QC & Assembly', 'Post Sale QC'];   // PRSBa MUST stay (plate hides the work after); QC & Assembly / Post Sale QC = mini-QC of the QC (Brigham 9/4, 9/8)
 // acronym school (Brigham 9/3): TRAINING mode spells acronyms out so newbies
 // learn them; trained techs see the acronyms alone everywhere else.
 const PHASE_LONG = {
@@ -4954,6 +4955,10 @@ function popHTML(p) {
 
     ${(body => p.serial ? secWrap('shop', '🔨 Shop Progress', body) : body)(`
     ${p.serial ? `<button class="photobtn">📸 Add progress photo</button><div class="photomsg"></div>` : ''}
+    ${p.serial && effPh === 'Post Sale QC' ? `<div style="background:#eef6ef;border:1.5px solid #7fc48f;border-radius:10px;padding:9px 11px;margin:6px 0">
+      <b style="font-size:12.5px">💲 Pre-delivery final QC</b>
+      <div class="lite" style="font-size:11.5px;margin:2px 0 7px">This piano already passed its showroom QC — run the full worksheet once more so it leaves perfect. Checks here start fresh; the original QC record stays untouched.</div>
+      <button class="tagbtn psqcbtn" style="background:#2f7d4f;color:#fff;border-color:#2f7d4f">📋 Open the QC worksheet</button></div>` : ''}
     ${p.serial ? '' : tracker}
     ${phaser}
     ${tasksBox(p)}
@@ -5511,6 +5516,11 @@ function wirePop(p) {
   const pi = pop.querySelector('.photoin');
   pop.querySelectorAll('.photobtn').forEach(pb =>
     pb.onclick = ev => { ev.stopPropagation(); popPinned = true; pi.click(); });
+  const psqc = pop.querySelector('.psqcbtn');
+  if (psqc) psqc.onclick = ev => {
+    ev.stopPropagation(); popPinned = true;
+    openWorkChecklist(p.serial, 'Post Sale QC');
+  };
   if (pi) {
     pi.onclick = ev => ev.stopPropagation();
     pi.onchange = () => uploadPhoto(p, pi, pop);

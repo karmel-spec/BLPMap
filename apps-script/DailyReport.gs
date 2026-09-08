@@ -1734,7 +1734,7 @@ var PHASE_VALUES = ['New Arrival - Admin', 'Assessment', 'CAP',
   'PRSB & Plate Refinishing', 'Lacquer Soundboard', 'Restringing',
   'Chip Tuning', 'DHRT', '1st Tuning', 'Refinishing', 'QC & Assembly',
   '2nd Tuning', 'Exit Prep - Admin', 'Delivered',
-  'In Queue', 'Paused', 'For Sale', 'Sale Pending', 'Sold',
+  'In Queue', 'Paused', 'For Sale', 'Post Sale QC', 'Sale Pending', 'Sold',
   'Waiting on Brigham', 'Waiting on Curtis Harper', 'Waiting on Customer', 'Waiting on OTHER',
   // track-sheet steps outside the master 14 (refurbishing/repair tracks) —
   // the app's normTrackPhase canonicalizes the Sequence-sheet wording to
@@ -2069,7 +2069,7 @@ function saleSweep_(who) {
   var bass = sh.getRange(1, 39, n, 1).getValues();     // task cells (settaskcell cols)
   var dec = sh.getRange(1, 40, n, 1).getValues();
   var today = Utilities.formatDate(new Date(), 'America/Denver', 'M/d/yy');
-  var KEEP = /^(Waiting|Sale Pending|Sold|Paused)/i;
+  var KEEP = /^(Waiting|Sale Pending|Sold|Paused|Post Sale QC)/i;
   var counts = {pianos: 0, phase: 0, keys: 0, plate: 0, bass: 0, decals: 0};
   for (var r = 2; r < n; r++) {   // data starts row 3 (index 2)
     if (!String(serials[r][0] || '').trim() && !String(stat[r][0] || '').trim()) continue;
