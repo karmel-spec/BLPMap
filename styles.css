@@ -721,6 +721,9 @@ td a{color:#9e2020}
 .sgtypes{display:flex;gap:8px;margin-bottom:9px}
 .sgt{border:1.5px solid #cfd6dc;background:#fff;border-radius:999px;padding:6px 14px;font:700 13px 'Assistant',sans-serif;cursor:pointer}
 .sgt.on{background:#9e2020;border-color:#9e2020;color:#fff}
+.sgdev{border:1.5px solid #cfd6dc;background:#fff;border-radius:999px;padding:5px 12px;font:700 12px 'Assistant',sans-serif;cursor:pointer}
+.sgdev.on{background:#2b2f33;border-color:#2b2f33;color:#fff}
+.usecbody{margin:2px 0 10px}
 .sgtext{width:100%;box-sizing:border-box;min-height:84px;border:1px solid #cfd6dc;border-radius:9px;padding:9px 11px;font:14px/1.4 'Assistant',sans-serif;resize:vertical}
 .sgrow{display:flex;align-items:center;gap:10px;margin-top:9px}
 .sgshot{border:1px dashed #b9c2cb;border-radius:8px;padding:7px 12px;font-size:12.5px;color:#5c6770;cursor:pointer}

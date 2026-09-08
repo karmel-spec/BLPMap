@@ -3250,6 +3250,11 @@ function openSuggestBox() {
         <button class="sgt on" data-t="edit">✏️ Edit</button>
         <button class="sgt" data-t="idea">💡 Idea</button>
       </div>
+      <div class="sgtypes sgdevrow" style="margin-top:4px">
+        <span class="lite" style="font-size:11px;align-self:center;margin-right:2px">Where did this happen?</span>
+        <button class="sgdev" data-d="phone">📱 Phone</button>
+        <button class="sgdev" data-d="computer">💻 Computer</button>
+      </div>
       <textarea class="sgtext" maxlength="1500" placeholder="What's wrong / what would make it better? A sentence or two is plenty."></textarea>
       <div class="sgrow">
         <label class="sgshot">📷 Attach screenshot<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden></label>
@@ -3268,6 +3273,14 @@ function openSuggestBox() {
     ov.querySelectorAll('.sgt').forEach(x => x.classList.remove('on'));
     b.classList.add('on'); type = b.dataset.t;
   });
+  // 📱/💻 where the issue happened (Brigham 9/8) — pre-detected from the
+  // device, tappable to override (e.g. reporting a phone issue from a laptop)
+  let device = (window.innerWidth <= 760 || /iphone|android.*mobile|ipad/i.test(navigator.userAgent))
+    ? 'phone' : 'computer';
+  const devPaint = () => ov.querySelectorAll('.sgdev').forEach(x =>
+    x.classList.toggle('on', x.dataset.d === device));
+  devPaint();
+  ov.querySelectorAll('.sgdev').forEach(b => b.onclick = () => { device = b.dataset.d; devPaint(); });
   const fin = ov.querySelector('.sgshot input');
   const prev = ov.querySelector('.sgprev'), prevImg = prev.querySelector('img');
   const clearShot = () => {
@@ -3309,7 +3322,8 @@ function openSuggestBox() {
     sendBtn.textContent = 'Sending…';
     msg.className = 'sgmsg'; msg.textContent = shotFile ? 'Uploading screenshot…' : 'Sending…';
     const body = {pin, action: 'suggest', type, text,
-      context: 'view:' + (S.view || 'map') + (openSerial ? ' · piano #' + openSerial : ''),
+      context: 'view:' + (S.view || 'map') + (openSerial ? ' · piano #' + openSerial : '')
+        + (device === 'phone' ? ' · 📱 phone' : ' · 💻 computer'),
       ...authFields()};
     try {
       if (shotFile) {
@@ -12832,27 +12846,57 @@ function confirmish(text) {
 async function renderUpdatesFeed() {
   const el = $('#updatesBody');
   if (!el) return;
-  if (!S.auRows) {
-    el.innerHTML = '<div class="empty">Loading the update log…</div>';
+  // refetch on every open (max once a minute) — the log was caching forever,
+  // so people with the app left open never saw new updates (Brigham 9/8)
+  if (!S.auRows || Date.now() - (S.auAt || 0) > 60000) {
+    if (!S.auRows) el.innerHTML = '<div class="empty">Loading the update log…</div>';
     try {
       const r = await fetch(BRIDGE_URL + '?fn=appupdates', {redirect: 'follow'});
-      S.auRows = (await r.json()).rows || [];
-    } catch (e) { el.innerHTML = '<div class="empty">✗ could not load updates — try again</div>'; return; }
+      const rows = (await r.json()).rows;
+      if (rows) { S.auRows = rows; S.auAt = Date.now(); }
+    } catch (e) {
+      if (!S.auRows) { el.innerHTML = '<div class="empty">✗ could not load updates — try again</div>'; return; }
+    }
   }
-  const rows = S.auRows;
+  const rows = S.auRows || [];
   if (!rows.length) { el.innerHTML = '<div class="empty">No updates logged yet.</div>'; return; }
+  // three sections (Brigham 9/8): explicit lead emoji wins (🔧 fix, 📖
+  // handbook, ✨/anything else = feature); older rows classify by keywords
+  const catOf = t => {
+    if (/^🔧/.test(t)) return 'fix';
+    if (/^📖/.test(t)) return 'handbook';
+    if (/^✨/.test(t)) return 'feature';
+    if (/handbook|glossary|worksheet word|checklist wording|training doc/i.test(t)) return 'handbook';
+    if (/\bfix(ed|es)?\b|bug|error|no longer|now works|reliab|unauthoriz|cut off|garbl|was camera-only|stale/i.test(t)) return 'fix';
+    return 'feature';
+  };
   const day = iso => {
     const d = new Date(iso);
     return isNaN(d) ? String(iso).slice(0, 10)
       : d.toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric', timeZone: 'America/Denver'});
   };
-  let lastDay = '';
-  el.innerHTML = rows.map(r => {
-    const d = day(r.at);
-    const head = d !== lastDay ? `<h4 class="updday">${esc(d)}</h4>` : '';
-    lastDay = d;
-    return `${head}<div class="updrow">🚀 ${esc(r.text)}</div>`;
-  }).join('');
+  const section = (key, label, icon, list) => {
+    if (!list.length) return '';
+    const open = lsGet('updsec_' + key) !== 'shut';
+    let lastDay = '';
+    const bodyHTML = list.map(r => {
+      const d = day(r.at);
+      const head = d !== lastDay ? `<h4 class="updday">${esc(d)}</h4>` : '';
+      lastDay = d;
+      return `${head}<div class="updrow">${icon} ${esc(r.text)}</div>`;
+    }).join('');
+    return `<div class="sechead ${open ? '' : 'shut'}" data-usec="${key}">${label}
+        <span class="pc">${list.length}</span><i class="secarrow">${open ? '▾' : '▸'}</i></div>
+      <div class="usecbody" ${open ? '' : 'hidden'}>${bodyHTML}</div>`;
+  };
+  el.innerHTML =
+    section('feat', '✨ New Features', '✨', rows.filter(r => catOf(r.text) === 'feature'))
+    + section('fix', '🔧 Fixes & Edits', '🔧', rows.filter(r => catOf(r.text) === 'fix'))
+    + section('hb', '📖 Handbook & Checklist Updates', '📖', rows.filter(r => catOf(r.text) === 'handbook'));
+  el.querySelectorAll('.sechead[data-usec]').forEach(h => h.onclick = () => {
+    lsSet('updsec_' + h.dataset.usec, lsGet('updsec_' + h.dataset.usec) === 'shut' ? 'open' : 'shut');
+    renderUpdatesFeed();
+  });
 }
 function switchView(v) {
   if (v === 'sched' && !isTimelogAdmin()) v = 'map';   // managers & owners only
