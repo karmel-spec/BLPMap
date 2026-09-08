@@ -9740,7 +9740,7 @@ function clockAdjustTable() {
   let pay = '';
   if (canPay) {
     const rows = S.payRows.filter(r => new Date(r.start) >= cutoff);
-    pay = `<h4 class="bfhd">Payroll day punches — last 14 days (owners & Melissa)</h4>
+    pay = `<h4 class="bfhd">Payroll day punches — last 14 days (owners, Melissa & Mark)</h4>
       <table><tr><th>DATE</th><th>TEAM MEMBER</th><th>IN → OUT</th><th>HOURS</th><th></th></tr>
       ${rows.map(r => adjRow('pay', r, esc(r.date), esc(r.tech))).join('')
        || '<tr><td colspan="5" class="empty">No punches yet.</td></tr>'}</table>
