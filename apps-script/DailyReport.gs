@@ -3431,9 +3431,29 @@ function resolveClockFix_(req, who) {
       return {error: reqName + ' is on the admin side — Melissa resolves this one'};
     }
   }
-  sh.getRange(row, 6).setValue('resolved by ' + ((g.name || g.email)) + ' ' +
-    Utilities.formatDate(new Date(), 'America/Denver', 'M/d'));
-  return {ok: true};
+  var by = (g.name || g.email) + ' ' + Utilities.formatDate(new Date(), 'America/Denver', 'M/d');
+  var whoName = String(sh.getRange(row, 2).getValue() || '').replace(/\s*[(<].*$/, '').trim();
+  var note = String(sh.getRange(row, 5).getValue() || '').trim();
+  // Brigham 9/8: team members re-send the same request 2–3× when they are not
+  // sure it went through → managers can archive the copies as duplicates
+  // (no text — the original's resolve already told them).
+  if (String(req.status || '') === 'duplicate') {
+    sh.getRange(row, 6).setValue('duplicate — already applied · ' + by);
+    return {ok: true, status: 'duplicate'};
+  }
+  sh.getRange(row, 6).setValue('resolved by ' + by);
+  // Brigham 9/8: tell the team member their clock is fixed so they can stop
+  // wondering (and stop re-sending). Best-effort text via the sales-app relay.
+  var texted = false;
+  if (whoName && !/^claude test/i.test(whoName)) {
+    try {
+      notifyTeam_([whoName], '✅ Your clock fix request has been applied — "' + note.slice(0, 110)
+        + (note.length > 110 ? '…' : '') + '". Your time clock is correct now. '
+        + 'If anything still looks off, check 👤 My Dashboard → Payroll Clock or send one new request (no need to re-send).');
+      texted = true;
+    } catch (eT) { /* text best-effort */ }
+  }
+  return {ok: true, status: 'resolved', texted: texted, who: whoName};
 }
 function clockFixRows_() {
   var sh = clockFixSheet_();
