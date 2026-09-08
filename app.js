@@ -9709,12 +9709,72 @@ function adjRow(clock, r, label, sub) {
       <td>${r.minutes ? fmtHM(r.minutes) : '—'}</td>
       <td><button class="adjedit" data-clock="${clock}" data-row="${r.row}">✎ adjust</button></td></tr>`;
   }
+  const hint = S.adjEdit.hint ? `<div class="lite" style="font-size:11.5px;margin-bottom:6px;white-space:normal">📎 ${esc(S.adjEdit.hint)}</div>` : '';
   return `<tr class="adjediting"><td>${label}</td><td>${sub}</td>
-    <td colspan="3"><span class="rfd">start <input type="datetime-local" class="adjstart" value="${toLocalInput(r.start)}"></span>
+    <td colspan="3">${hint}<span class="rfd">start <input type="datetime-local" class="adjstart" value="${toLocalInput(r.start)}"></span>
       <span class="rfd">end <input type="datetime-local" class="adjend" value="${toLocalInput(r.end)}"></span>
       <button class="csvbtn adjsave" data-clock="${clock}" data-row="${r.row}">Save</button>
       <button class="adjedit adjcancel">cancel</button>
       <span class="adjmsg phmsg"></span></td></tr>`;
+}
+/* "Apply" on a fix request: find the punch the request is talking about and
+ * open it in edit mode (or prefill the "+ missed punch" bar when there is
+ * no punch to edit). Match = same person + the date named in the note
+ * (M/D, "September 2nd", "1st of September", "today"…; else the request's
+ * own day) + the piano serial for Piano-clock requests. */
+const MONTHS3 = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+function cfxDates(fx) {
+  const note = String(fx.note || '').toLowerCase();
+  const now = new Date();
+  // the request's own day ("MMM d, h:mm a" from the bridge — no year)
+  let filed = new Date(fx.when + ' ' + now.getFullYear());
+  if (isNaN(filed)) filed = now; else if (filed - now > 86400000) filed.setFullYear(filed.getFullYear() - 1);
+  const ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const mk = (m, d, y) => { const dt = new Date(y || filed.getFullYear(), m, d); if (!y && dt - now > 86400000) dt.setFullYear(dt.getFullYear() - 1); return ymd(dt); };
+  const out = [];
+  let m;
+  const re1 = /\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/g;
+  while ((m = re1.exec(note))) { let y = m[3] ? +m[3] : 0; if (y && y < 100) y += 2000; out.push(mk(+m[1] - 1, +m[2], y)); }
+  const mon = '(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\\.?';
+  const re2 = new RegExp('\\b' + mon + '\\s+(\\d{1,2})(?:st|nd|rd|th)?\\b', 'g');
+  while ((m = re2.exec(note))) out.push(mk(MONTHS3.indexOf(m[1]), +m[2]));
+  const re3 = new RegExp('\\b(\\d{1,2})(?:st|nd|rd|th)?\\s+(?:of\\s+)?' + mon + '\\b', 'g');
+  while ((m = re3.exec(note))) out.push(mk(MONTHS3.indexOf(m[2]), +m[1]));
+  if (/\byesterday\b/.test(note)) { const d = new Date(filed); d.setDate(d.getDate() - 1); out.push(ymd(d)); }
+  if (/\btoday\b|\bthis morning\b|\bfirst thing\b/.test(note)) out.push(ymd(filed));
+  out.push(ymd(filed));   // fallback: the day it was filed
+  return [...new Set(out)];
+}
+function cfxMatch(fx) {
+  const who = String(fx.who || '').replace(/<[^>]*>/g, '').trim().toLowerCase();
+  const first = who.split(/\s+/)[0] || '';
+  const sameWho = t => { const n = String(t || '').trim().toLowerCase(); return n && (n === who || who.startsWith(n) || n.startsWith(who) || (first.length > 2 && n.split(/\s+/)[0] === first)); };
+  const clock = /piano/i.test(fx.clock) ? 'piano' : 'pay';
+  const serial = String(fx.serial || '').trim();
+  const dates = cfxDates(fx);
+  let rows = (clock === 'pay' ? S.payRows : S.tlRows) || [];
+  rows = rows.filter(r => sameWho(r.tech));
+  if (clock === 'piano' && serial) {
+    const bySerial = rows.filter(r => String(r.serial).trim() === serial);
+    if (bySerial.length) rows = bySerial;
+  }
+  const dayOf = r => denverDay(r.start);
+  const dayNum = d => new Date(d + 'T12:00').getTime();
+  // best = named date first (prefer the auto-closed / still-open punch, then the longest)
+  const rank = r => (/auto:|forgot to clock out/i.test(r.note || '') || !r.end ? 100000 : 0) + (r.minutes || 0);
+  let pick = null, pickDist = Infinity;
+  for (const d of dates) {
+    const hits = rows.filter(r => dayOf(r) === d).sort((a, b) => rank(b) - rank(a));
+    if (hits.length) { pick = hits[0]; pickDist = 0; break; }
+  }
+  if (!pick) {
+    const target = dayNum(dates[0]);
+    for (const r of rows) {
+      const dist = Math.abs(dayNum(dayOf(r)) - target) / 86400000;
+      if (dist <= 3 && dist < pickDist) { pick = r; pickDist = dist; }
+    }
+  }
+  return {clock, serial, date: dates[0], who: String(fx.who || '').replace(/<[^>]*>/g, '').trim(), pick, exact: pickDist === 0};
 }
 function clockAdjustTable() {
   if (!S.fixRows || !S.payRows || !S.tlRows) return '<div class="empty">Loading clocks…</div>';
@@ -9732,6 +9792,7 @@ function clockAdjustTable() {
     ${openFix.map(r => `<tr><td style="white-space:nowrap">${esc(r.when)}</td><td>${esc(r.who.replace(/<[^>]*>/g, ''))}</td>
        <td>${esc(r.clock)}${r.serial ? ' #' + esc(r.serial) : ''}</td><td>${esc(r.note)}</td>
        <td style="white-space:nowrap"><span class="cfxopen">OPEN</span>
+         <button class="cfxres cfxapply" data-row="${r.row}" title="open the punch this request is about so you can fix it">✎ Apply →</button>
          <button class="cfxres" data-row="${r.row}" title="fixed it? clear this request">Mark resolved</button></td></tr>`).join('')
      || '<tr><td colspan="5" class="empty">No open requests 🎉</td></tr>'}
     ${doneFix.map(r => `<tr style="color:#8a929a"><td style="white-space:nowrap">${esc(r.when)}</td>
@@ -9739,7 +9800,8 @@ function clockAdjustTable() {
     </table>`;
   let pay = '';
   if (canPay) {
-    const rows = S.payRows.filter(r => new Date(r.start) >= cutoff);
+    const keep = r => new Date(r.start) >= cutoff || (S.adjEdit && S.adjEdit.clock === 'pay' && S.adjEdit.row === r.row);
+    const rows = S.payRows.filter(keep);
     pay = `<h4 class="bfhd">Payroll day punches — last 14 days (owners, Melissa & Mark)</h4>
       <table><tr><th>DATE</th><th>TEAM MEMBER</th><th>IN → OUT</th><th>HOURS</th><th></th></tr>
       ${rows.map(r => adjRow('pay', r, esc(r.date), esc(r.tech))).join('')
@@ -9752,7 +9814,8 @@ function clockAdjustTable() {
   }
   let tl = '';
   if (canTl) {
-    const rows = S.tlRows.filter(r => new Date(r.start) >= cutoff);
+    const keep = r => new Date(r.start) >= cutoff || (S.adjEdit && S.adjEdit.clock === 'piano' && S.adjEdit.row === r.row);
+    const rows = S.tlRows.filter(keep);
     tl = `<h4 class="bfhd">Piano Work Clock sessions — last 14 days (owners & shop managers)</h4>
       <table><tr><th>PIANO</th><th>TECH · PHASE</th><th>IN → OUT</th><th>HOURS</th><th></th></tr>
       ${rows.map(r => adjRow('piano', r,
@@ -10329,7 +10392,32 @@ function renderReport() {
     if (j.error) { alert(j.error); b.disabled = false; return; }
     TO.rows = null; loadTimeOff();
   });
-  body.querySelectorAll('.cfxres').forEach(b => b.onclick = async () => {
+  body.querySelectorAll('.cfxapply').forEach(b => b.onclick = () => {
+    const fx = (S.fixRows || []).find(r => r.row === +b.dataset.row);
+    if (!fx) return;
+    const m = cfxMatch(fx);
+    const req = `${m.who.split(/\s+/)[0]}'s request: “${String(fx.note || '').slice(0, 140)}”`;
+    const focus = el => { if (!el) return; el.scrollIntoView({behavior: 'smooth', block: 'center'}); el.classList.add('adjflash'); setTimeout(() => el.classList.remove('adjflash'), 2500); };
+    if (m.pick) {
+      S.adjEdit = {clock: m.clock, row: m.pick.row,
+        hint: (m.exact ? '' : 'nearest punch (no punch on the day named) — ') + req};
+      renderReport();
+      requestAnimationFrame(() => focus(document.querySelector('.rpt[data-r="clockadjust"] tr.adjediting')));
+      return;
+    }
+    // no punch to edit → prefill the "+ missed punch" bar
+    S.adjEdit = null;
+    renderReport();
+    requestAnimationFrame(() => {
+      const bar = document.querySelector(`.rpt[data-r="clockadjust"] .adjaddbar[data-clock="${m.clock}"]`);
+      if (!bar) { alert('No matching punch found and you do not have the add-punch permission for this clock.'); return; }
+      const set = (c, v) => { const el = bar.querySelector(c); if (el && v) el.value = v; };
+      set('.a-tech', m.who); set('.a-serial', m.serial); set('.a-start', m.date + 'T08:00');
+      const msg = bar.querySelector('.adjmsg'); if (msg) msg.textContent = 'no punch on ' + m.date + ' — add it from ' + req;
+      focus(bar);
+    });
+  });
+  body.querySelectorAll('.cfxres:not(.cfxapply)').forEach(b => b.onclick = async () => {
     b.disabled = true;
     const j = await adjustPost({action: 'resolveclockfix', row: +b.dataset.row});
     if (j.error) { alert(j.error); b.disabled = false; return; }
