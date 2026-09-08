@@ -9826,6 +9826,12 @@ function cfxMatch(fx) {
   }
   return {clock, serial, date, who, pick, exact, times};
 }
+function cfxToast(msg) {
+  let el = document.getElementById('cfxtoast');
+  if (!el) { el = document.createElement('div'); el.id = 'cfxtoast'; el.className = 'cfxtoast'; document.body.appendChild(el); }
+  el.textContent = msg; el.classList.add('on');
+  clearTimeout(cfxToast._t); cfxToast._t = setTimeout(() => el.classList.remove('on'), 4500);
+}
 function clockAdjustTable() {
   if (!S.fixRows || !S.payRows || !S.tlRows) return '<div class="empty">Loading clocks…</div>';
   // Mark (lead manager) can edit shop-side DAY punches too — the bridge
@@ -9836,14 +9842,22 @@ function clockAdjustTable() {
   const cutoff = Date.now() - 14 * 86400000;
   const openFix = S.fixRows.filter(r => cfxSinceLaunch(r) && r.status === 'open');
   const doneFix = S.fixRows.filter(r => cfxSinceLaunch(r) && r.status !== 'open').slice(0, 8);
+  // same person + same wording as another request (open or already handled)
+  // → almost certainly a re-send; flag it so the manager archives it as a
+  // duplicate instead of fixing the punch twice
+  const fxKey = r => (r.who.replace(/<[^>]*>/g, '').trim() + '|' + String(r.note || '').trim().toLowerCase().replace(/\s+/g, ' ')).toLowerCase();
+  const fxCount = {};
+  S.fixRows.filter(cfxSinceLaunch).forEach(r => { const k = fxKey(r); fxCount[k] = (fxCount[k] || 0) + 1; });
+  const isDup = r => fxCount[fxKey(r)] > 1;
   const fixes = `<h4 class="bfhd">Fix requests from the team</h4>
-    <div class="lite" style="font-size:12px;margin:-4px 0 8px">These are OPEN — fix the punch in the tables below, then press "Mark resolved" so the row leaves this list.</div>
+    <div class="lite" style="font-size:12px;margin:-4px 0 8px">These are OPEN — ✎ Apply opens the punch, fix it, then "Mark resolved" clears the row and <b>texts the team member that their clock is fixed</b>. A re-sent copy of a request you already applied → "Duplicate" archives it without a text.</div>
     <table><tr><th>WHEN</th><th>WHO</th><th>CLOCK</th><th>WHAT NEEDS FIXING</th><th>STATUS</th></tr>
-    ${openFix.map(r => `<tr><td style="white-space:nowrap">${esc(r.when)}</td><td>${esc(r.who.replace(/<[^>]*>/g, ''))}</td>
-       <td>${esc(r.clock)}${r.serial ? ' #' + esc(r.serial) : ''}</td><td>${esc(r.note)}</td>
+    ${openFix.map(r => `<tr${isDup(r) ? ' class="cfxdupl"' : ''}><td style="white-space:nowrap">${esc(r.when)}</td><td>${esc(r.who.replace(/<[^>]*>/g, ''))}</td>
+       <td>${esc(r.clock)}${r.serial ? ' #' + esc(r.serial) : ''}</td><td>${esc(r.note)}${isDup(r) ? ' <span class="cfxdupmark" title="the same person sent this exact request more than once">⧉ sent ' + fxCount[fxKey(r)] + '×</span>' : ''}</td>
        <td style="white-space:nowrap"><span class="cfxopen">OPEN</span>
          <button class="cfxres cfxapply" data-row="${r.row}" title="open the punch this request is about so you can fix it">✎ Apply →</button>
-         <button class="cfxres" data-row="${r.row}" title="fixed it? clear this request">Mark resolved</button></td></tr>`).join('')
+         <button class="cfxres" data-row="${r.row}" title="fixed it? clear this request and text the team member that their clock is correct">Mark resolved</button>
+         <button class="cfxres cfxdup" data-row="${r.row}" title="a copy of a request that was already applied — archive it (no text)">Duplicate</button></td></tr>`).join('')
      || '<tr><td colspan="5" class="empty">No open requests 🎉</td></tr>'}
     ${doneFix.map(r => `<tr style="color:#8a929a"><td style="white-space:nowrap">${esc(r.when)}</td>
        <td>${esc(r.who.replace(/<[^>]*>/g, ''))}</td><td>${esc(r.clock)}</td><td>${esc(r.note)}</td><td>${esc(r.status)}</td></tr>`).join('')}
@@ -10473,9 +10487,12 @@ function renderReport() {
     }, 0);
   });
   body.querySelectorAll('.cfxres:not(.cfxapply)').forEach(b => b.onclick = async () => {
-    b.disabled = true;
-    const j = await adjustPost({action: 'resolveclockfix', row: +b.dataset.row});
-    if (j.error) { alert(j.error); b.disabled = false; return; }
+    const dup = b.classList.contains('cfxdup');
+    if (dup && !confirm('Archive this request as a DUPLICATE of one already applied? The team member will not be texted.')) return;
+    b.disabled = true; b.textContent = dup ? 'archiving…' : 'resolving…';
+    const j = await adjustPost({action: 'resolveclockfix', row: +b.dataset.row, status: dup ? 'duplicate' : 'resolved'});
+    if (j.error) { alert(j.error); b.disabled = false; b.textContent = dup ? 'Duplicate' : 'Mark resolved'; return; }
+    if (!dup && j.who) cfxToast(j.texted ? `✓ resolved — ${j.who.split(' ')[0]} has been texted that their clock is fixed` : '✓ resolved');
     S.fixRows = null; loadClockFixes();
   });
   body.querySelectorAll('.adjedit').forEach(b => b.onclick = () => {
@@ -13321,7 +13338,12 @@ document.querySelectorAll('.feedgo').forEach(b => b.onclick = () => {
   window.applyHeaderLayout = applyHeaderLayout;
   applyHeaderLayout();
   let hlT = null;
-  window.addEventListener('resize', () => { clearTimeout(hlT); hlT = setTimeout(applyHeaderLayout, 200); });
+  const refit = () => { clearTimeout(hlT); hlT = setTimeout(applyHeaderLayout, 120); };
+  window.addEventListener('resize', refit);
+  // window.resize does not always fire (split-screen drags, emulated
+  // viewports, font loading changing button widths) — watch the bar itself
+  try { const bar = document.querySelector('header.bar'); if (bar && window.ResizeObserver) new ResizeObserver(refit).observe(bar); } catch (e) {}
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(refit).catch(() => {});
 })();
 
 $('#legendBtn').onclick = () => { const p = $('#legendPanel'); p.hidden = !p.hidden; };

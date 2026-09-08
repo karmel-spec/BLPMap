@@ -984,6 +984,10 @@ tr.jcp td{border-top:2px solid #e3e6e9;padding-top:9px}
 .adjedit:hover{border-color:#c9a0a0}
 tr.adjediting td{background:#fdf8ee}
 button.cfxapply{color:#9e2020;border-color:#e2c4c4;margin-right:4px}
+button.cfxdup{color:#6f7a84;margin-left:4px}
+button.cfxdup:hover{border-color:#6f7a84;color:#2b2f33}
+.cfxdupmark{display:inline-block;margin-left:6px;background:#f1f3f5;color:#5a636b;border:1px solid #d9dee3;border-radius:6px;padding:1px 6px;font:700 10.5px/1.3 inherit;white-space:nowrap}
+tr.cfxdupl td{background:#fbfbf9}
 button.cfxapply:hover{border-color:#9e2020;color:#9e2020}
 .adjflash td,.adjaddbar.adjflash{animation:adjflash 2.4s ease-out}
 @keyframes adjflash{0%{background:#fff3b0}100%{background:#fdf8ee}}
@@ -1912,3 +1916,6 @@ button.cfxres:hover{border-color:#2e7d4f;color:#2e7d4f}
 .kqbtn:hover .kqrect{fill:#fbeecb}
 .kqtxt{fill:#6b5030;font-family:inherit}
 .kqcount{fill:#9e2020;font-weight:700}
+
+.cfxtoast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);background:#1c1c1e;color:#fff;padding:10px 16px;border-radius:10px;font-size:13px;font-weight:700;box-shadow:0 10px 30px rgba(0,0,0,.3);z-index:400;opacity:0;pointer-events:none;transition:opacity .25s,transform .25s;max-width:92vw}
+.cfxtoast.on{opacity:1;transform:translateX(-50%) translateY(0)}
