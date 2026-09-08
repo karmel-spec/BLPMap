@@ -8414,6 +8414,7 @@ function consumeOidcHash() {
   } catch (e) { /* malformed token — stay signed out */ }
 }
 consumeOidcHash();
+setTimeout(() => { try { resumeAdjIntent(); } catch (e) {} }, 800);   // finish a clock edit interrupted by the sign-in renewal
 // finish a redirect sign-in: gsi-callback leaves the credential here
 try {
   const redirCred = localStorage.getItem('blpGsiCred');
@@ -9826,6 +9827,73 @@ function cfxMatch(fx) {
   }
   return {clock, serial, date, who, pick, exact, times};
 }
+/* Payroll / piano-clock edits need a VERIFIED Google identity (the team PIN
+ * is not enough). Google tokens die hourly; renewing = a full-page bounce
+ * through accounts.google.com — which, fired in the background 400 ms after
+ * a click (writeAuth), silently killed the Save in flight and dropped the
+ * manager back on the map (Brigham 9/8: "the green Save button does
+ * nothing"). Now: detect the lapse BEFORE posting, stash what was typed,
+ * renew, and on return reopen the same row prefilled so one more Save
+ * applies it. */
+function adjExpired() {
+  const u = authUser();
+  return !!(u && !u.pinOnly && u.exp * 1000 < Date.now() + 30000);
+}
+function adjStashAndRenew(intent) {
+  try { lsSet('adjResume', JSON.stringify({...intent, at: Date.now()})); } catch (e) {}
+  cfxToast('🔐 Your Google sign-in expired (Google renews it hourly). Renewing now — your edit comes right back, then press ' + (intent.add ? 'Add' : 'Save') + ' once more.');
+  const u = authUser();
+  setTimeout(() => oidcLogin(u ? u.email : ''), 1200);
+}
+function adjFeedback(msgEl, j, okText) {
+  if (j && !j.error) {
+    if (msgEl) { msgEl.textContent = '✓ ' + okText; msgEl.classList.remove('adjerr'); }
+    cfxToast('✓ ' + okText);
+    return true;
+  }
+  const err = (j && j.error) || 'no reply from the Google bridge — nothing was saved';
+  if (msgEl) { msgEl.textContent = '⚠ ' + err; msgEl.classList.add('adjerr'); }
+  cfxToast('⚠ ' + err);
+  return false;
+}
+function adjSlowNotice(msgEl, verb) {
+  return setTimeout(() => { if (msgEl && /…$/.test(msgEl.textContent || '')) msgEl.textContent = verb + '… Google is slow right now, still trying (up to a minute)'; }, 8000);
+}
+async function resumeAdjIntent() {
+  let raw = null;
+  try { raw = lsGet('adjResume'); } catch (e) {}
+  if (!raw) return;
+  let it = null;
+  try { it = JSON.parse(raw); } catch (e) {}
+  lsDel('adjResume');
+  if (!it || Date.now() - (it.at || 0) > 15 * 60000) return;
+  if (!authUser()) { cfxToast('Sign in to finish the clock edit you started.'); return; }
+  for (let i = 0; i < 40 && !(S.data && S.data.pianos); i++) await new Promise(r => setTimeout(r, 300));
+  switchView('report');
+  S.openReport = 'clockadjust';
+  if (!S.fixRows) loadClockFixes();
+  if (!S.payRows) loadPayroll();
+  if (!S.tlRows) loadTimeLog();
+  for (let i = 0; i < 100 && !(S.fixRows && S.payRows && S.tlRows); i++) await new Promise(r => setTimeout(r, 300));
+  if (it.adjEdit) S.adjEdit = {...it.adjEdit, hint: '🔐 sign-in renewed — your times are back, press Save to apply. ' + (it.adjEdit.hint || '')};
+  renderReport();
+  setTimeout(() => {
+    const rpt = document.querySelector('.rpt[data-r="clockadjust"]');
+    if (!rpt) return;
+    let el = null;
+    if (it.add) {
+      el = rpt.querySelector(`.adjaddbar[data-clock="${it.add.clock}"]`);
+      if (el) {
+        const set = (c, v) => { const x = el.querySelector(c); if (x && v) x.value = v; };
+        set('.a-tech', it.add.tech); set('.a-serial', it.add.serial); set('.a-phase', it.add.phase);
+        set('.a-start', it.add.start); set('.a-end', it.add.end);
+        const m = el.querySelector('.adjmsg'); if (m) m.textContent = '🔐 sign-in renewed — press Add to apply';
+      }
+    } else el = rpt.querySelector('tr.adjediting');
+    if (el) { el.scrollIntoView({behavior: 'smooth', block: 'center'}); el.classList.add('adjflash'); setTimeout(() => el.classList.remove('adjflash'), 2500); }
+    cfxToast('🔐 Sign-in renewed — your clock edit is back. Check it, then press ' + (it.add ? 'Add' : 'Save') + '.');
+  }, 0);
+}
 function cfxToast(msg) {
   let el = document.getElementById('cfxtoast');
   if (!el) { el = document.createElement('div'); el.id = 'cfxtoast'; el.className = 'cfxtoast'; document.body.appendChild(el); }
@@ -10489,9 +10557,10 @@ function renderReport() {
   body.querySelectorAll('.cfxres:not(.cfxapply)').forEach(b => b.onclick = async () => {
     const dup = b.classList.contains('cfxdup');
     if (dup && !confirm('Archive this request as a DUPLICATE of one already applied? The team member will not be texted.')) return;
+    if (adjExpired()) { adjStashAndRenew({}); return; }
     b.disabled = true; b.textContent = dup ? 'archiving…' : 'resolving…';
     const j = await adjustPost({action: 'resolveclockfix', row: +b.dataset.row, status: dup ? 'duplicate' : 'resolved'});
-    if (j.error) { alert(j.error); b.disabled = false; b.textContent = dup ? 'Duplicate' : 'Mark resolved'; return; }
+    if (j.error) { cfxToast('⚠ ' + j.error); b.disabled = false; b.textContent = dup ? 'Duplicate' : 'Mark resolved'; return; }
     if (!dup && j.who) cfxToast(j.texted ? `✓ resolved — ${j.who.split(' ')[0]} has been texted that their clock is fixed` : '✓ resolved');
     S.fixRows = null; loadClockFixes();
   });
@@ -10505,10 +10574,17 @@ function renderReport() {
     const start = tr.querySelector('.adjstart').value, end = tr.querySelector('.adjend').value;
     const msg = tr.querySelector('.adjmsg');
     if (!start) { msg.textContent = 'start time required'; return; }
-    b.disabled = true; msg.textContent = 'saving…';
+    if (adjExpired()) {   // renew first — a redirect mid-save would lose this edit
+      adjStashAndRenew({adjEdit: {clock: b.dataset.clock, row: +b.dataset.row, pre: {start, end}, hint: (S.adjEdit || {}).hint || ''}});
+      return;
+    }
+    b.disabled = true; msg.textContent = 'saving…'; msg.classList.remove('adjerr');
+    const slow = adjSlowNotice(msg, 'saving');
     const j = await adjustPost({action: 'adjustclock', clock: b.dataset.clock, row: +b.dataset.row,
       start: new Date(start).toISOString(), end: end ? new Date(end).toISOString() : ''});
-    if (j.error) { msg.textContent = j.error; b.disabled = false; return; }
+    clearTimeout(slow);
+    const who = (tr.children[1] && tr.children[1].textContent.trim().split('\n')[0]) || 'punch';
+    if (!adjFeedback(msg, j, `saved — ${who}: ${fmtT(new Date(start).toISOString())} → ${end ? fmtT(new Date(end).toISOString()) : 'open'}`)) { b.disabled = false; return; }
     S.adjEdit = null; S.payRows = null; S.tlRows = null;
     loadPayroll();
   });
@@ -10519,11 +10595,18 @@ function renderReport() {
     const tech = val('.a-tech'), start = val('.a-start'), end = val('.a-end');
     if (!tech || !start) { msg.textContent = 'name and start time required'; return; }
     if (clock === 'piano' && !val('.a-serial')) { msg.textContent = 'piano serial required'; return; }
-    b.disabled = true; msg.textContent = 'adding…';
+    if (adjExpired()) {
+      adjStashAndRenew({add: {clock, tech, serial: val('.a-serial'), phase: val('.a-phase'), start, end}});
+      return;
+    }
+    b.disabled = true; msg.textContent = 'adding…'; msg.classList.remove('adjerr');
+    const slow = adjSlowNotice(msg, 'adding');
     const j = await adjustPost({action: 'adjustclock', clock, add: true, tech,
       serial: val('.a-serial'), phase: val('.a-phase'),
       start: new Date(start).toISOString(), end: end ? new Date(end).toISOString() : ''});
-    if (j.error) { msg.textContent = j.error; b.disabled = false; return; }
+    clearTimeout(slow);
+    if (!adjFeedback(msg, j, `added — ${tech}: ${fmtT(new Date(start).toISOString())} → ${end ? fmtT(new Date(end).toISOString()) : 'open'}`)) { b.disabled = false; return; }
+    bar.querySelectorAll('input').forEach(i => i.value = '');
     S.payRows = null; S.tlRows = null;
     loadPayroll();
   });
