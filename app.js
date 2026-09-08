@@ -9768,6 +9768,48 @@ function myTimeOffLines() {
 }
 /* 📣 App Updates — Brigham logs what changed; one button texts everything
  * since the last share to the chosen audience (team / managers / admins). */
+/* 🌟 Team Spotlight (Brigham 9/8): weekly interview pairs + question bank */
+async function loadSpotlight() {
+  try {
+    const r = await fetch(BRIDGE_URL + '?fn=spotlight', {redirect: 'follow'});
+    const j = await r.json();
+    if (j.ok) S.spotData = j;
+  } catch (e) { S.spotData = S.spotData || null; }
+  renderReport();
+}
+function mondayOfThisWeek() {
+  const d = new Date(new Date().toLocaleString('en-US', {timeZone: 'America/Denver'}));
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+function spotlightTable() {
+  const d = S.spotData;
+  if (!d) return '<div class="empty">Loading the spotlight schedule…</div>';
+  const mon = mondayOfThisWeek();
+  const cur = d.pairs.find(p => p.week === mon) || d.pairs.find(p => p.week >= mon);
+  const upcoming = d.pairs.filter(p => p.week >= mon);
+  const past = d.pairs.filter(p => p.week < mon);
+  const fmtW = w => { const [y, m, dd] = w.split('-'); return `${+m}/${+dd}`; };
+  return `
+    ${cur ? `<div style="background:#fdf6e3;border:1.5px solid #c9a227;border-radius:12px;padding:12px 14px;margin-bottom:12px">
+      <b style="font-size:15px">🌟 This week (${fmtW(cur.week)}): <span style="color:#9e2020">${esc(cur.interviewer)}</span> interviews <span style="color:#9e2020">${esc(cur.subject)}</span></b>
+      <div class="lite" style="margin-top:3px">${esc(cur.interviewer)} picks a handful of questions below, interviews ${esc(cur.subject)} during the week, and presents what they learned at the morning meeting. Next week, ${esc(cur.subject)} becomes the interviewer.</div>
+    </div>` : ''}
+    <div id="spotPicks"></div>
+    <button class="csvbtn" id="spotRoll" style="margin-bottom:12px">🎲 Pick 5 random questions</button>
+    <h4 class="tmsec">Upcoming pairs</h4>
+    <div class="tscroll" style="max-height:260px"><table>
+      <tr><th>WEEK OF</th><th>INTERVIEWER</th><th>SPOTLIGHT ON</th></tr>
+      ${upcoming.map(p => `<tr ${p.week === mon ? 'style="background:#fdf6e3;font-weight:700"' : ''}>
+        <td>${fmtW(p.week)}</td><td>${esc(p.interviewer)}</td><td>${esc(p.subject)}</td></tr>`).join('')}
+    </table></div>
+    ${past.length ? `<details style="margin:8px 0"><summary style="cursor:pointer;color:#8a929a">Past spotlights (${past.length})</summary>
+      <table>${past.map(p => `<tr><td>${fmtW(p.week)}</td><td>${esc(p.interviewer)}</td><td>${esc(p.subject)}</td></tr>`).join('')}</table></details>` : ''}
+    <h4 class="tmsec" style="margin-top:14px">The 100 questions — pick any you like</h4>
+    <div class="tscroll" style="max-height:340px"><table>
+      ${d.questions.map((q2, i) => `<tr><td class="num" style="width:34px;color:#8a929a">${i + 1}</td><td>${esc(q2)}</td></tr>`).join('')}
+    </table></div>`;
+}
 async function loadAppUpdates() {
   try {
     const r = await fetch(BRIDGE_URL + '?fn=appupdates', {redirect: 'follow'});
@@ -10002,6 +10044,9 @@ const REPORT_DEFS = () => [
      try { return S.fixRows ? S.fixRows.filter(r => r.status === 'open').length : null; } catch (e) { return null; } })(),
    desc: 'Fix mistakes and forgotten punches. Team fix requests land here; payroll day punches are editable by owners & Melissa, piano Work Clock sessions by owners & the shop managers (Mark, Matthew, Jacob). Every adjustment is stamped with who changed it.',
    html: clockAdjustTable},
+  {id: 'spotlight', sec: 'shop', icon: '🌟', title: 'TEAM SPOTLIGHT', count: null,
+   desc: 'One teammate interviews another each week and presents what they learned at the morning meeting. This week’s pair, the full schedule, and the 100-question bank live here — edit pairs on the report sheet’s "Team Spotlight" tab.',
+   html: spotlightTable},
   {id: 'appupdates', sec: 'admin', show: () => isPayrollAdmin() || isTimelogAdmin(), icon: '📣', title: 'APP UPDATES — TEAM TEXTS', count: (() => {
      try { return S.auRows ? S.auRows.filter(r => !r.sharedAt).length : null; } catch (e) { return null; } })(),
    desc: 'Log what changed in the apps, then text everything since the last share to the whole team, the managers, or the admins — one tap. Shared updates keep their history below.',
@@ -10105,6 +10150,15 @@ function renderReport() {
       renderReport();
       const v = $('#view-report'); if (v) v.scrollTop = 0;
     };
+    const roll = body.querySelector('#spotRoll');
+    if (roll) roll.onclick = () => {
+      const qs = (S.spotData && S.spotData.questions) || [];
+      const pick = [...qs].sort(() => Math.random() - 0.5).slice(0, 5);
+      const box = body.querySelector('#spotPicks');
+      if (box) box.innerHTML = `<div style="background:#eef6ef;border:1.5px solid #7fc48f;border-radius:12px;padding:10px 13px;margin-bottom:10px">
+        <b style="font-size:12.5px">🎲 Your 5 — roll again for a new set</b>
+        ${pick.map(q2 => `<div style="padding:4px 0;border-top:1px solid #dcecdc">• ${esc(q2)}</div>`).join('')}</div>`;
+    };
   } else {
     const rptCard = r => `
       <div class="rpt" data-r="${r.id}">
@@ -10142,6 +10196,7 @@ function renderReport() {
     if (S.openReport === 'jobcost' && !S.tlRows) loadTimeLog();
     if (S.openReport === 'queue' && !S.tlRows) loadTimeLog();   // ASSIGNED TO column
     if (S.openReport === 'appupdates' && !S.auRows) loadAppUpdates();
+    if (S.openReport === 'spotlight' && !S.spotData) loadSpotlight();
     if (S.openReport === 'clockadjust') {
       if (!S.fixRows) loadClockFixes();
       if (!S.payRows) loadPayroll();

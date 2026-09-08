@@ -214,6 +214,10 @@ function doGet(e) {
     try { return json_(specialtiesRows_()); }
     catch (err) { return json_({error: String(err), rows: []}); }
   }
+  if (e && e.parameter && e.parameter.fn === 'spotlight') {
+    try { return json_(spotlightData_()); }
+    catch (err) { return json_({error: String(err), pairs: [], questions: []}); }
+  }
   if (e && e.parameter && e.parameter.fn === 'calskillhist') {
     try { return json_(calSkillHist_()); }
     catch (err) { return json_({error: String(err), techs: {}}); }
@@ -1870,6 +1874,37 @@ function calSkillHist_() {
   }
   try { cache.put('calskillhist2', JSON.stringify(res), 21600); } catch (e3) {}
   return res;
+}
+/* 🌟 Team Spotlight (Brigham 9/8): weekly pairs — one teammate interviews
+ * another and presents at the morning meeting. Pairs on "Team Spotlight"
+ * tab (Week of | Interviewer | Spotlight on | Presented), question bank on
+ * "Spotlight Questions" (# | Question). Both auto-created. */
+function spotlightData_() {
+  var ss = SpreadsheetApp.openById('11RoeVRETag5rZYX6_tEH-rf6x8JL0JeZU0P5AT0WI-I');
+  var p = ss.getSheetByName('Team Spotlight');
+  if (!p) {
+    p = ss.insertSheet('Team Spotlight', ss.getSheets().length);
+    p.getRange(1, 1, 1, 4).setValues([['Week of', 'Interviewer', 'Spotlight on', 'Presented']]);
+  }
+  var q = ss.getSheetByName('Spotlight Questions');
+  if (!q) {
+    q = ss.insertSheet('Spotlight Questions', ss.getSheets().length);
+    q.getRange(1, 1, 1, 2).setValues([['#', 'Question']]);
+  }
+  var pv = p.getDataRange().getValues(), qv = q.getDataRange().getValues();
+  var pairs = [], qs = [];
+  for (var i = 1; i < pv.length; i++) {
+    var w = pv[i][0];
+    var wk = (w instanceof Date) ? Utilities.formatDate(w, 'America/Denver', 'yyyy-MM-dd') : String(w || '').trim();
+    if (!wk) continue;
+    pairs.push({week: wk, interviewer: String(pv[i][1] || ''), subject: String(pv[i][2] || ''),
+      presented: String(pv[i][3] || '')});
+  }
+  for (var j = 1; j < qv.length; j++) {
+    var t = String(qv[j][1] || '').trim();
+    if (t) qs.push(t);
+  }
+  return {ok: true, pairs: pairs, questions: qs};
 }
 /* 🪜 Specialties store — "Specialties" tab on the report sheet, one row per
  * skill×tech: Skill | Tech | Level 0-6 | Rank | Note | Updated | By.
