@@ -9722,6 +9722,17 @@ function adjRow(clock, r, label, sub) {
  * no punch to edit). Match = same person + the date named in the note
  * (M/D, "September 2nd", "1st of September", "today"…; else the request's
  * own day) + the piano serial for Piano-clock requests. */
+/* The team officially moved to this clock on Sept 1, 2026 (Brigham 9/8):
+ * fix requests filed before that (the August trial period) stay in the
+ * sheet but are hidden from the report. `when` comes as "MMM d, h:mm a". */
+const CLOCK_FIX_SINCE = '2026-09-01';
+function cfxSinceLaunch(fx) {
+  const now = new Date();
+  let d = new Date(String(fx.when || '') + ' ' + now.getFullYear());
+  if (isNaN(d)) return true;   // unparseable → don't hide
+  if (d - now > 86400000) d.setFullYear(d.getFullYear() - 1);
+  return d.toLocaleDateString('en-CA') >= CLOCK_FIX_SINCE;
+}
 const CFX_MON = {jan:0,ene:0,feb:1,mar:2,apr:3,abr:3,may:4,jun:5,jul:6,aug:7,ago:7,sep:8,set:8,oct:9,nov:10,dic:11,dec:11};
 function cfxDates(fx) {
   const note = String(fx.note || '').toLowerCase();
@@ -9822,8 +9833,8 @@ function clockAdjustTable() {
   const canPay = isPayrollAdmin() || me.toLowerCase() === 'markhales.blp@gmail.com';
   const canTl = isTimelogAdmin();
   const cutoff = Date.now() - 14 * 86400000;
-  const openFix = S.fixRows.filter(r => r.status === 'open');
-  const doneFix = S.fixRows.filter(r => r.status !== 'open').slice(0, 8);
+  const openFix = S.fixRows.filter(r => cfxSinceLaunch(r) && r.status === 'open');
+  const doneFix = S.fixRows.filter(r => cfxSinceLaunch(r) && r.status !== 'open').slice(0, 8);
   const fixes = `<h4 class="bfhd">Fix requests from the team</h4>
     <div class="lite" style="font-size:12px;margin:-4px 0 8px">These are OPEN — fix the punch in the tables below, then press "Mark resolved" so the row leaves this list.</div>
     <table><tr><th>WHEN</th><th>WHO</th><th>CLOCK</th><th>WHAT NEEDS FIXING</th><th>STATUS</th></tr>
@@ -10236,7 +10247,7 @@ const REPORT_DEFS = () => [
    desc: 'Shop hours per piano from the Work Clock ledger, broken down by technician and phase — filter by piano, technician, phase, or date range, then export CSV spreadsheets (summary or raw sessions) for job costing.',
    html: jobCostTable},
   {id: 'clockadjust', sec: 'admin', show: () => isPayrollAdmin() || isTimelogAdmin(), icon: '🛠', title: 'TIME CLOCK ADJUSTMENTS', count: (() => {
-     try { return S.fixRows ? S.fixRows.filter(r => r.status === 'open').length : null; } catch (e) { return null; } })(),
+     try { return S.fixRows ? S.fixRows.filter(r => cfxSinceLaunch(r) && r.status === 'open').length : null; } catch (e) { return null; } })(),
    desc: 'Fix mistakes and forgotten punches. Team fix requests land here; payroll day punches are editable by owners & Melissa, piano Work Clock sessions by owners & the shop managers (Mark, Matthew, Jacob). Every adjustment is stamped with who changed it.',
    html: clockAdjustTable},
   {id: 'spotlight', sec: 'shop', icon: '🌟', title: 'TEAM SPOTLIGHT', count: null,
