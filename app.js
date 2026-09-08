@@ -10444,13 +10444,13 @@ function renderReport() {
         hint: (m.exact ? '' : 'nearest punch (no punch on the day named) — ')
           + (filled.length ? `${filled.join(' + ')} prefilled from the note — check, then Save. ` : '') + req};
       renderReport();
-      requestAnimationFrame(() => focus(document.querySelector('.rpt[data-r="clockadjust"] tr.adjediting')));
+      setTimeout(() => focus(document.querySelector('.rpt[data-r="clockadjust"] tr.adjediting')), 0);
       return;
     }
     // no punch to edit → prefill the "+ missed punch" bar
     S.adjEdit = null;
     renderReport();
-    requestAnimationFrame(() => {
+    setTimeout(() => {
       const bar = document.querySelector(`.rpt[data-r="clockadjust"] .adjaddbar[data-clock="${m.clock}"]`);
       if (!bar) { alert('No matching punch found and you do not have the add-punch permission for this clock.'); return; }
       const set = (c, v) => { const el = bar.querySelector(c); if (el && v) el.value = v; };
@@ -10458,7 +10458,7 @@ function renderReport() {
       set('.a-start', m.date + 'T' + (m.times.in || '08:00')); set('.a-end', m.times.out ? m.date + 'T' + m.times.out : '');
       const msg = bar.querySelector('.adjmsg'); if (msg) msg.textContent = 'no punch on ' + m.date + ' — add it from ' + req;
       focus(bar);
-    });
+    }, 0);
   });
   body.querySelectorAll('.cfxres:not(.cfxapply)').forEach(b => b.onclick = async () => {
     b.disabled = true;
