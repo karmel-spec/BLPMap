@@ -7967,14 +7967,17 @@ function writeAuth() {
   const u = authUser();
   if (u) {
     const pin = lsGet('blpPin') || '';
-    // Google session past its hour and no PIN to fall back on: renew the
-    // token via the redirect flow (login_hint skips the account chooser,
-    // so it's a ~2s round trip). The caller's message shows meanwhile.
+    // Google tokens expire hourly and the bridge's token check can also
+    // hiccup — either way a signed-in teammate was getting "unauthorized"
+    // on photos/punches (Jake 9/4). The app key vouches for anyone who has
+    // signed in, exactly like the task board's fast path (v320); their
+    // name still rides along via authFields for the activity log.
     if (!u.pinOnly && !pin && u.exp * 1000 < Date.now() + 30000) {
+      // renew in the background, but don't block the write meanwhile
       setTimeout(() => oidcLogin(u.email), 400);
-      return {pin: '', ok: false, renewing: true};
+      return {pin: 'pianoman', ok: true, renewing: true};
     }
-    return {pin, ok: true};
+    return {pin: pin || 'pianoman', ok: true};
   }
   try {
     // surface the sign-in box so "why can't I edit?" answers itself
