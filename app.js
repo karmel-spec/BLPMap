@@ -4391,6 +4391,7 @@ function renderClockChip() {
     chip = document.createElement('button');
     chip.id = 'clockchip'; chip.className = 'clockchip';
     bar.insertBefore(chip, document.querySelector('.drawerbtn'));
+    if (window.applyHeaderLayout) setTimeout(window.applyHeaderLayout, 0);   // chip takes room — re-fit the header
     chip.onclick = () => {
       const o = CLOCK.open; if (!o) return;
       const p = S.data.pianos.find(x => x.serial === o.serial);
@@ -13269,23 +13270,55 @@ document.querySelectorAll('.feedgo').forEach(b => b.onclick = () => {
              document.getElementById('whoTopMenu')])
     .concat([...(homes.size ? [...homes.keys()] : [])])
     .filter((n, i, arr) => n && arr.indexOf(n) === i);
+  const toDrawer = (n, tools) => {
+    if (!homes.has(n)) homes.set(n, {parent: n.parentNode, next: n.nextSibling});
+    if (n.parentNode !== tools) tools.appendChild(n);
+  };
+  const toHome = (n, tools) => {
+    const home = homes.get(n);
+    if (home && n.parentNode === tools) {
+      if (home.next && home.next.parentNode === home.parent) home.parent.insertBefore(n, home.next);
+      else home.parent.appendChild(n);
+    }
+  };
+  // In-between widths (Brigham 9/8): tablets / half-screen windows are wider
+  // than the 760px mobile cut but not wide enough for every button, and the
+  // search bar — the one control that must always stay visible — was the
+  // only thing that shrank, sliding under its neighbours. Now the header
+  // bumps buttons into the ☰ drawer one at a time, least important first,
+  // until the bar fits with the search at its minimum width.
+  const BUMP_ORDER = () => [
+    document.getElementById('suggestBtn'), document.getElementById('hardRefreshBtn'),
+    document.getElementById('queueBtn'), document.getElementById('wbBtn'),
+    document.getElementById('boardBtn'),
+    [document.getElementById('topWho'), document.getElementById('whoTopMenu')],   // identity (menu travels with it)
+    document.getElementById('appsTopBtn') && document.getElementById('appsTopBtn').closest('.topreq'),
+    document.getElementById('reqTopBtn') && document.getElementById('reqTopBtn').closest('.topreq'),
+  ].filter(Boolean);
+  const overflowing = bar => {
+    const s = document.getElementById('search');
+    return bar.scrollWidth > bar.clientWidth + 1 || (s && s.getBoundingClientRect().width < 150);
+  };
   function applyHeaderLayout() {
     const tools = document.getElementById('drawerTools');
-    if (!tools) return;
+    const bar = document.querySelector('header.bar');
+    if (!tools || !bar) return;
     const mobile = window.innerWidth <= 760;
-    for (const n of nodes()) {
-      if (mobile) {
-        if (!homes.has(n)) homes.set(n, {parent: n.parentNode, next: n.nextSibling});
-        if (n.parentNode !== tools) tools.appendChild(n);
-      } else {
-        const home = homes.get(n);
-        if (home && n.parentNode === tools) {
-          if (home.next && home.next.parentNode === home.parent) home.parent.insertBefore(n, home.next);
-          else home.parent.appendChild(n);
-        }
-      }
+    if (mobile) {
+      for (const n of nodes()) toDrawer(n, tools);
+      bar.classList.remove('slim');
+      return;
     }
+    // start from the full header, then bump until it fits
+    for (const n of nodes()) toHome(n, tools);
+    bar.classList.remove('slim');
+    for (const step of BUMP_ORDER()) {
+      if (!overflowing(bar)) break;
+      for (const n of [].concat(step)) if (n) toDrawer(n, tools);
+    }
+    if (overflowing(bar)) bar.classList.add('slim');   // last resort: drop the logo
   }
+  window.applyHeaderLayout = applyHeaderLayout;
   applyHeaderLayout();
   let hlT = null;
   window.addEventListener('resize', () => { clearTimeout(hlT); hlT = setTimeout(applyHeaderLayout, 200); });

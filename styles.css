@@ -643,7 +643,13 @@ td a{color:#9e2020}
 .dlink:hover{border-color:#3a6ea5;background:#eef4fb}
 
 /* ---- search type-ahead ---- */
-.searchwrap{position:relative;flex-shrink:1;min-width:0}
+/* the search is the header's most important control (Brigham 9/8): it may
+   shrink to 150px but never below, and never overflows its wrapper — the JS
+   header layout bumps lower-priority buttons into the ☰ drawer first */
+.searchwrap{position:relative;flex:0 1 210px;min-width:150px}
+.searchwrap .search{width:100%}
+.bar.slim .logo{display:none}
+@media (max-width:760px){.searchwrap{flex:1 1 auto;min-width:0}}   /* one-row mobile header: search takes the slack */
 .searchac{position:absolute;top:calc(100% + 4px);left:0;width:min(360px,86vw);background:#fff;
   border:1px solid #dfe3e7;border-radius:10px;box-shadow:0 12px 30px rgba(20,30,40,.22);
   z-index:60;overflow:hidden;max-height:340px;overflow-y:auto}
