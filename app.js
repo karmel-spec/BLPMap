@@ -1906,7 +1906,7 @@ function paperworkCard(p) {
                 rel="noopener" title="${esc(it.name || '')}">open ↗</a>
               <button class="pwdel" data-k="${k}" title="remove link">✕</button></span>`
            : `<span class="pwhave"><label class="pwshoot" title="photograph the sheet">📷 scan
-                <input type="file" accept="image/*" capture="environment" hidden class="pwshootfile" data-k="${k}" data-label="${esc(label.replace(/^\S+\s/, ''))}"></label>
+                <input type="file" accept="image/*" hidden class="pwshootfile" data-k="${k}" data-label="${esc(label.replace(/^\S+\s/, ''))}"></label>
               <button class="pwadd" data-k="${k}">＋ link</button></span>`}
     </div>`;
   }).join('');
@@ -4129,7 +4129,7 @@ async function openWorkChecklist(serial, phase) {
           ${it.detail ? `<div style="background:#fdf3ec;border-left:3px solid #c9a227;padding:8px 10px;border-radius:0 8px 8px 0;font-size:13px;color:#6b5030">⚠ ${esc(it.detail)}</div>` : ''}
           ${/\b(pics?|pictures?|photograph|photos?)\b/i.test((it.handbook || it.text).replace(/<[^>]+>/g, ' '))
             ? `<div style="margin-top:10px"><label class="csvbtn" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px">📷 Take the photo now
-                 <input type="file" accept="image/*" capture="environment" hidden class="clshotfile"></label>
+                 <input type="file" accept="image/*" hidden class="clshotfile"></label>
                <span class="clshotmsg phmsg" style="display:inline-block;margin-left:8px"></span>
                <div style="font-size:11px;color:#8a847b;margin-top:3px">files straight into this piano's Tech photo folder</div></div>` : ''}
           ${/cabinetry|shelf/i.test((it.handbook || it.text).replace(/<[^>]+>/g, ' '))
