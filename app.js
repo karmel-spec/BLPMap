@@ -34,7 +34,7 @@ const PHASE_NUMS = (() => {
   });
   return m;
 })();
-const PHASE_STATES = ['In Queue', 'Paused', 'For Sale', 'Post Sale QC', 'Sale Pending', 'Sold',
+const PHASE_STATES = ['In Queue', 'Paused', 'For Sale', 'Sale Pending', 'Sold', 'Post Sale QC',
   'Waiting on Brigham', 'Waiting on Curtis Harper', 'Waiting on Customer', 'Waiting on OTHER'];
 // work tracks (multi-select, stored comma-separated in the TRACK column)
 const TRACKS = ['Rebuild', 'Hybrid', 'Refurbish', 'Refinish', 'Technology', 'Old Player', 'Storage', 'Misc'];   // unnumbered states; For Sale turns the icon green

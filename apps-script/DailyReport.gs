@@ -1734,7 +1734,7 @@ var PHASE_VALUES = ['New Arrival - Admin', 'Assessment', 'CAP',
   'PRSB & Plate Refinishing', 'Lacquer Soundboard', 'Restringing',
   'Chip Tuning', 'DHRT', '1st Tuning', 'Refinishing', 'QC & Assembly',
   '2nd Tuning', 'Exit Prep - Admin', 'Delivered',
-  'In Queue', 'Paused', 'For Sale', 'Post Sale QC', 'Sale Pending', 'Sold',
+  'In Queue', 'Paused', 'For Sale', 'Sale Pending', 'Sold', 'Post Sale QC',
   'Waiting on Brigham', 'Waiting on Curtis Harper', 'Waiting on Customer', 'Waiting on OTHER',
   // track-sheet steps outside the master 14 (refurbishing/repair tracks) —
   // the app's normTrackPhase canonicalizes the Sequence-sheet wording to
