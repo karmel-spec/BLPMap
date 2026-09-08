@@ -9711,8 +9711,8 @@ function adjRow(clock, r, label, sub) {
   }
   const hint = S.adjEdit.hint ? `<div class="lite" style="font-size:11.5px;margin-bottom:6px;white-space:normal">📎 ${esc(S.adjEdit.hint)}</div>` : '';
   return `<tr class="adjediting"><td>${label}</td><td>${sub}</td>
-    <td colspan="3">${hint}<span class="rfd">start <input type="datetime-local" class="adjstart" value="${toLocalInput(r.start)}"></span>
-      <span class="rfd">end <input type="datetime-local" class="adjend" value="${toLocalInput(r.end)}"></span>
+    <td colspan="3">${hint}<span class="rfd">start <input type="datetime-local" class="adjstart" value="${(S.adjEdit.pre && S.adjEdit.pre.start) || toLocalInput(r.start)}"></span>
+      <span class="rfd">end <input type="datetime-local" class="adjend" value="${(S.adjEdit.pre && S.adjEdit.pre.end) || toLocalInput(r.end)}"></span>
       <button class="csvbtn adjsave" data-clock="${clock}" data-row="${r.row}">Save</button>
       <button class="adjedit adjcancel">cancel</button>
       <span class="adjmsg phmsg"></span></td></tr>`;
@@ -9722,7 +9722,7 @@ function adjRow(clock, r, label, sub) {
  * no punch to edit). Match = same person + the date named in the note
  * (M/D, "September 2nd", "1st of September", "today"…; else the request's
  * own day) + the piano serial for Piano-clock requests. */
-const MONTHS3 = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+const CFX_MON = {jan:0,ene:0,feb:1,mar:2,apr:3,abr:3,may:4,jun:5,jul:6,aug:7,ago:7,sep:8,set:8,oct:9,nov:10,dic:11,dec:11};
 function cfxDates(fx) {
   const note = String(fx.note || '').toLowerCase();
   const now = new Date();
@@ -9730,28 +9730,62 @@ function cfxDates(fx) {
   let filed = new Date(fx.when + ' ' + now.getFullYear());
   if (isNaN(filed)) filed = now; else if (filed - now > 86400000) filed.setFullYear(filed.getFullYear() - 1);
   const ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  const mk = (m, d, y) => { const dt = new Date(y || filed.getFullYear(), m, d); if (!y && dt - now > 86400000) dt.setFullYear(dt.getFullYear() - 1); return ymd(dt); };
-  const out = [];
+  const mk = (m, d, y) => { if (m < 0 || d < 1 || d > 31) return null; const dt = new Date(y || filed.getFullYear(), m, d); if (!y && dt - now > 86400000) dt.setFullYear(dt.getFullYear() - 1); return ymd(dt); };
+  const named = [];
   let m;
   const re1 = /\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/g;
-  while ((m = re1.exec(note))) { let y = m[3] ? +m[3] : 0; if (y && y < 100) y += 2000; out.push(mk(+m[1] - 1, +m[2], y)); }
-  const mon = '(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\\.?';
-  const re2 = new RegExp('\\b' + mon + '\\s+(\\d{1,2})(?:st|nd|rd|th)?\\b', 'g');
-  while ((m = re2.exec(note))) out.push(mk(MONTHS3.indexOf(m[1]), +m[2]));
-  const re3 = new RegExp('\\b(\\d{1,2})(?:st|nd|rd|th)?\\s+(?:of\\s+)?' + mon + '\\b', 'g');
-  while ((m = re3.exec(note))) out.push(mk(MONTHS3.indexOf(m[2]), +m[1]));
-  if (/\byesterday\b/.test(note)) { const d = new Date(filed); d.setDate(d.getDate() - 1); out.push(ymd(d)); }
-  if (/\btoday\b|\bthis morning\b|\bfirst thing\b/.test(note)) out.push(ymd(filed));
-  out.push(ymd(filed));   // fallback: the day it was filed
-  return [...new Set(out)];
+  while ((m = re1.exec(note))) { let y = m[3] ? +m[3] : 0; if (y && y < 100) y += 2000; named.push(mk(+m[1] - 1, +m[2], y)); }
+  const mon = '(jan|ene|feb|mar|apr|abr|may|jun|jul|aug|ago|sep|set|oct|nov|dic|dec)[a-z]*\\.?,?';
+  const re2 = new RegExp('\\b' + mon + '\\s*(\\d{1,2})(?:st|nd|rd|th)?\\b(?![:/]|\\s*(?:am|pm))', 'g');   // "September 4", "Sept, 1st"
+  while ((m = re2.exec(note))) named.push(mk(CFX_MON[m[1]], +m[2]));
+  const re3 = new RegExp('\\b(\\d{1,2})(?:st|nd|rd|th)?\\s+(?:of|de)\\s+' + mon + '\\b', 'g');   // "1st of September", "3 de septiembre"
+  while ((m = re3.exec(note))) named.push(mk(CFX_MON[m[2]], +m[1]));
+  if (/\byesterday\b|\bayer\b/.test(note)) { const d = new Date(filed); d.setDate(d.getDate() - 1); named.push(ymd(d)); }
+  if (/\btoday\b|\bthis morning\b|\bhoy\b|\besta mañana\b/.test(note)) named.push(ymd(filed));
+  return {named: [...new Set(named.filter(Boolean))], filed: ymd(filed)};
+}
+/* clock-in / clock-out times mentioned in the note ("out at 2:40",
+ * "salida … 3:45 pm", "from 8:05am-3:55pm", "Clock in: 10:14 am") → HH:MM */
+function cfxTimes(note) {
+  const s = String(note || '').toLowerCase().replace(/([ap])\.m\./g, '$1m');
+  const norm = (h, mi, ap) => {
+    h = +h; mi = +(mi || 0);
+    if (h > 23 || mi > 59) return null;
+    if (ap === 'pm' && h < 12) h += 12; else if (ap === 'am' && h === 12) h = 0;
+    else if (!ap && h >= 1 && h <= 6) h += 12;          // shop hours: bare "2:40" is afternoon
+    return String(h).padStart(2, '0') + ':' + String(mi).padStart(2, '0');
+  };
+  const T = '(\\d{1,2}):(\\d{2})\\s*(am|pm)?|(\\d{1,2})\\s*(am|pm)';
+  const out = {in: null, out: null};
+  // explicit range first: "8:05am-3:55pm", "from 8:04am … to 4:03pm", "de 8 am a 4 pm"
+  const rg = new RegExp('(?:' + T + ')\\s*(?:-|–|—|to|a|hasta|until|till)\\s*(?:' + T + ')').exec(s);
+  if (rg) {
+    out.in = rg[1] ? norm(rg[1], rg[2], rg[3]) : norm(rg[4], 0, rg[5]);
+    out.out = rg[6] ? norm(rg[6], rg[7], rg[8]) : norm(rg[9], 0, rg[10]);
+  }
+  const IN = /clock(?:ed|ing)?\s*(?:me\s+)?in\b|clockin\b|punch(?:ed)?\s*in\b|\bin at\b|\bin:|\bentrada\b|\bentr[eé]\b|\bstart(?:ed)?\b|\bfrom\b|\bdesde\b|\bempec[eé]\b|\bin\b/g;
+  const OUT = /clock(?:ed|ing)?\s*(?:me\s+)?out\b|clockout\b|punch(?:ed)?\s*out\b|\bout at\b|\bout:|\bsalida\b|\bsal[ií]\b|\bleft\b|\buntil\b|\btill\b|\bto\b|\bhasta\b|\bterm[ií]n[eé]\b|\bout\b/g;
+  const lastIdx = (re, txt) => { let k = -1, mm; re.lastIndex = 0; while ((mm = re.exec(txt))) k = mm.index; return k; };
+  const re = new RegExp(T, 'g');
+  let m;
+  while ((m = re.exec(s))) {
+    const t = m[1] ? norm(m[1], m[2], m[3]) : norm(m[4], 0, m[5]);
+    if (!t) continue;
+    const before = s.slice(Math.max(0, m.index - 80), m.index);
+    const i = lastIdx(IN, before), o = lastIdx(OUT, before);
+    if (i < 0 && o < 0) continue;
+    if (o > i) { if (!out.out) out.out = t; } else if (!out.in) out.in = t;
+  }
+  return out;
 }
 function cfxMatch(fx) {
-  const who = String(fx.who || '').replace(/<[^>]*>/g, '').trim().toLowerCase();
-  const first = who.split(/\s+/)[0] || '';
-  const sameWho = t => { const n = String(t || '').trim().toLowerCase(); return n && (n === who || who.startsWith(n) || n.startsWith(who) || (first.length > 2 && n.split(/\s+/)[0] === first)); };
+  const who = String(fx.who || '').replace(/<[^>]*>/g, '').trim();
+  const wl = who.toLowerCase(), first = wl.split(/\s+/)[0] || '';
+  const sameWho = t => { const n = String(t || '').trim().toLowerCase(); return n && (n === wl || wl.startsWith(n) || n.startsWith(wl) || (first.length > 2 && n.split(/\s+/)[0] === first)); };
   const clock = /piano/i.test(fx.clock) ? 'piano' : 'pay';
   const serial = String(fx.serial || '').trim();
-  const dates = cfxDates(fx);
+  const {named, filed} = cfxDates(fx);
+  const times = cfxTimes(fx.note);
   let rows = (clock === 'pay' ? S.payRows : S.tlRows) || [];
   rows = rows.filter(r => sameWho(r.tech));
   if (clock === 'piano' && serial) {
@@ -9760,21 +9794,25 @@ function cfxMatch(fx) {
   }
   const dayOf = r => denverDay(r.start);
   const dayNum = d => new Date(d + 'T12:00').getTime();
-  // best = named date first (prefer the auto-closed / still-open punch, then the longest)
+  // prefer the auto-closed / still-open punch, then the longest one that day
   const rank = r => (/auto:|forgot to clock out/i.test(r.note || '') || !r.end ? 100000 : 0) + (r.minutes || 0);
-  let pick = null, pickDist = Infinity;
-  for (const d of dates) {
+  const cands = named.length ? named : [filed];
+  let pick = null, exact = false, date = cands[0];
+  for (const d of cands) {
     const hits = rows.filter(r => dayOf(r) === d).sort((a, b) => rank(b) - rank(a));
-    if (hits.length) { pick = hits[0]; pickDist = 0; break; }
+    if (hits.length) { pick = hits[0]; exact = true; date = d; break; }
   }
-  if (!pick) {
-    const target = dayNum(dates[0]);
+  // "forgot to clock in" / "clock me in" style → there is nothing to edit, add one
+  const addish = /forgot to clock in|clock me in|need to be clocked in|didn'?t clock in|wasn'?t clocked in|no (?:me |pude )?(?:march|fich|clock)|issues? clocking me in|worked .*\bfrom\b/i.test(fx.note || '');
+  if (!pick && !named.length && !addish) {   // no date in the note: nearest punch to the filing day
+    const target = dayNum(filed);
+    let best = Infinity;
     for (const r of rows) {
       const dist = Math.abs(dayNum(dayOf(r)) - target) / 86400000;
-      if (dist <= 3 && dist < pickDist) { pick = r; pickDist = dist; }
+      if (dist <= 3 && dist < best) { pick = r; best = dist; date = dayOf(r); }
     }
   }
-  return {clock, serial, date: dates[0], who: String(fx.who || '').replace(/<[^>]*>/g, '').trim(), pick, exact: pickDist === 0};
+  return {clock, serial, date, who, pick, exact, times};
 }
 function clockAdjustTable() {
   if (!S.fixRows || !S.payRows || !S.tlRows) return '<div class="empty">Loading clocks…</div>';
@@ -10399,8 +10437,12 @@ function renderReport() {
     const req = `${m.who.split(/\s+/)[0]}'s request: “${String(fx.note || '').slice(0, 140)}”`;
     const focus = el => { if (!el) return; el.scrollIntoView({behavior: 'smooth', block: 'center'}); el.classList.add('adjflash'); setTimeout(() => el.classList.remove('adjflash'), 2500); };
     if (m.pick) {
-      S.adjEdit = {clock: m.clock, row: m.pick.row,
-        hint: (m.exact ? '' : 'nearest punch (no punch on the day named) — ') + req};
+      const day = denverDay(m.pick.start);
+      const pre = {start: m.times.in ? day + 'T' + m.times.in : '', end: m.times.out ? day + 'T' + m.times.out : ''};
+      const filled = [pre.start && 'start', pre.end && 'end'].filter(Boolean);
+      S.adjEdit = {clock: m.clock, row: m.pick.row, pre,
+        hint: (m.exact ? '' : 'nearest punch (no punch on the day named) — ')
+          + (filled.length ? `${filled.join(' + ')} prefilled from the note — check, then Save. ` : '') + req};
       renderReport();
       requestAnimationFrame(() => focus(document.querySelector('.rpt[data-r="clockadjust"] tr.adjediting')));
       return;
@@ -10412,7 +10454,8 @@ function renderReport() {
       const bar = document.querySelector(`.rpt[data-r="clockadjust"] .adjaddbar[data-clock="${m.clock}"]`);
       if (!bar) { alert('No matching punch found and you do not have the add-punch permission for this clock.'); return; }
       const set = (c, v) => { const el = bar.querySelector(c); if (el && v) el.value = v; };
-      set('.a-tech', m.who); set('.a-serial', m.serial); set('.a-start', m.date + 'T08:00');
+      set('.a-tech', m.who); set('.a-serial', m.serial);
+      set('.a-start', m.date + 'T' + (m.times.in || '08:00')); set('.a-end', m.times.out ? m.date + 'T' + m.times.out : '');
       const msg = bar.querySelector('.adjmsg'); if (msg) msg.textContent = 'no punch on ' + m.date + ' — add it from ' + req;
       focus(bar);
     });
