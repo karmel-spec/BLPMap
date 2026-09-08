@@ -711,7 +711,7 @@ function openRefinishQ() {
       return `<div class="kqrow" ${p ? `data-row="${p.row}"` : ''} style="display:flex;gap:10px;align-items:center;padding:8px 2px;border-top:1px solid #f0ece5;${p ? 'cursor:pointer' : 'opacity:.75'}">
       <b style="min-width:34px;color:#9e2020">#${x.pri}</b>
       <span style="flex:1">${esc(x.brand)} <span class="lite">#${esc(x.serial)}</span>
-        ${x.req ? `<div class="lite" style="font-size:11px">${esc(x.req.slice(0, 70))}</div>` : ''}</span>
+        ${x.req ? `<div class="lite" style="font-size:11px;white-space:normal;line-height:1.4">${esc(x.req)}</div>` : ''}</span>
       ${x.lvl ? `<span class="lite" style="font-weight:700">L${esc(x.lvl)}</span>` : ''}
       <span class="lite">${esc(x.loc || (p ? p.location || '' : ''))}</span></div>`;
     }).join('') || '<div class="pwnone" style="display:block;padding:8px 0">The refinishing sheet is empty — nothing queued.</div>'}
@@ -3971,6 +3971,7 @@ async function openWorkChecklist(serial, phase) {
     if (done && pendNotes.has(idx)) { st.notes.set(idx, pendNotes.get(idx)); pendNotes.delete(idx); }
     if (!done) st.notes.delete(idx);
     clToggle(serial, phase, idx, done, false, done ? note : '');
+    if (done && typeof checkComplete === 'function') setTimeout(checkComplete, 50);
   };
   // 📝 a note on any checklist item (Brigham 9/4, QC digitization) — saves
   // with the check; typed before checking, it rides along when checked
@@ -3978,6 +3979,42 @@ async function openWorkChecklist(serial, phase) {
     if (st.done.has(idx)) { st.notes.set(idx, note); clToggle(serial, phase, idx, true, false, note); }
     else pendNotes.set(idx, note);
   };
+  // Post Sale QC complete → ask for the manager's mini-QC pass-off right away
+  // (Brigham 9/8): the normal request goes to the inspector + video copy per
+  // Settings (Brigham + Karmel today); Mark gets a text too.
+  let qcFired = !!st.request;
+  const checkComplete = async () => {
+    if (phase !== 'Post Sale QC' || qcFired) return;
+    if (!work.length || !work.every(it => st.done.has(it.i) || st.skips.has(it.i))) return;
+    qcFired = true;
+    const box = ov.querySelector('.clcomplete');
+    if (box) { box.hidden = false; box.textContent = '✅ QC complete — requesting the mini-QC pass-off…'; }
+    try {
+      const j = await requestMiniQc(p, 'Sold', 'Post Sale QC');
+      if (j && j.id && !j.existing) {
+        const link = location.origin + location.pathname + '#qc=' + j.id;
+        fetch('https://blpsalesapp.netlify.app/.netlify/functions/request-notify', {
+          method: 'POST', headers: {'content-type': 'application/json'},
+          body: JSON.stringify({key: 'pianoman', name: 'Mark Hales',
+            message: `✅ Post Sale QC finished on ${p.summary || '#' + serial} (#${serial}) by ${clockName() || 'the QC tech'} — please do the mini-QC pass-off or leave feedback/training notes: ${link}`})})
+          .catch(() => {});
+      }
+      if (box) box.textContent = j && j.existing
+        ? '✅ QC complete — a mini-QC request for this piano is already waiting on Brigham/Mark.'
+        : '✅ QC complete — Brigham, Karmel & Mark have been texted to do the mini-QC pass-off (or leave feedback).';
+    } catch (e) { if (box) box.textContent = '✅ QC complete — could not send the mini-QC request (' + e.message + '); advance the phase to request it.'; }
+  };
+  // Summary mode (Brigham 9/8, Curtis's pilot): each step shrinks to its
+  // header phrase with a ▸ to expand the full verbatim wording
+  const qcShort = t => {
+    const s = String(t || '').trim();
+    const m = /^([^:(—–]{3,70}?)\s*[:(—–]/.exec(s);
+    if (m) return m[1].trim();
+    const w = s.split(/\s+/);
+    return w.length > 9 ? w.slice(0, 9).join(' ') + '…' : s;
+  };
+  let dense = lsGet('clMode') === 'summary';
+  const expanded = new Set();
   // a skipped step needs the WHY — it shows amber here and on the mini-QC rail
   const saveSkip = (idx, note) => { st.done.delete(idx); st.skips.set(idx, note); clToggle(serial, phase, idx, true, true, note); };
   let skipAsk = null;   // step index currently being asked for a skip reason
@@ -3993,8 +4030,25 @@ async function openWorkChecklist(serial, phase) {
         <div class="dssub">${doneN}/${work.length} steps · shared with the whole team · from the Restoration Handbook</div>
         <div style="height:8px;background:#efece6;border-radius:4px;overflow:hidden;margin:6px 0 10px">
           <div style="height:100%;width:${work.length ? doneN / work.length * 100 : 0}%;background:linear-gradient(90deg,#c9a227,#2f7d4f)"></div></div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 10px">
+          <span style="display:inline-flex;border:1.5px solid #cfc9bf;border-radius:999px;overflow:hidden;font-size:12px;font-weight:700">
+            <button class="clmode" data-m="full" style="border:none;padding:5px 12px;background:${dense ? '#fff' : '#2b2f33'};color:${dense ? '#57524b' : '#fff'}">Full</button>
+            <button class="clmode" data-m="summary" style="border:none;padding:5px 12px;background:${dense ? '#2b2f33' : '#fff'};color:${dense ? '#fff' : '#57524b'}">Summary</button></span>
+          ${p.row ? `<span style="position:relative">
+            <button class="clreq" style="border:1.5px solid #3a6ea5;background:#fff;color:#3a6ea5;border-radius:999px;padding:5px 12px;font-size:12px;font-weight:700">📨 Request ▾</button>
+            <div class="clreqmenu reqmenu" hidden style="position:absolute;left:0;top:34px;z-index:5;background:#fff;border:1px solid #cfc9bf;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.18);min-width:190px">
+              <button data-req="touchup">🖌 Finish touch-up</button>
+              <button data-req="brigham">🗒 Brigham task</button>
+              <button data-req="service">🔧 Service</button>
+              <button data-req="tune">🎵 Tuning</button>
+              <button data-req="admin">📋 Admin</button>
+            </div></span>` : ''}
+          <span class="lite" style="font-size:11px">${dense ? 'tap ▸ on a step for the full instructions' : 'every word of each step'}</span>
+        </div>
+        <div class="clcomplete" ${qcFired && phase === 'Post Sale QC' ? '' : 'hidden'} style="background:#eef6ef;border:1.5px solid #7fc48f;border-radius:10px;padding:8px 11px;margin:0 0 10px;font-size:12.5px;font-weight:700">${qcFired ? '✅ Mini-QC pass-off already requested for this piano.' : ''}</div>
         ${work.map(it => {
           const isDone = st.done.has(it.i), isSkip = st.skips.has(it.i);
+          const showFull = !dense || expanded.has(it.i);
           return `<div style="border-top:1px solid #f0ece5">
           <div class="clstep" data-i="${it.i}" style="display:flex;gap:10px;padding:9px 2px;cursor:pointer">
           <div style="width:20px;height:20px;border-radius:6px;flex:0 0 auto;margin-top:1px;
@@ -4003,10 +4057,11 @@ async function openWorkChecklist(serial, phase) {
               : 'border:2px solid #c9c2b6'}">${isDone ? '✓' : isSkip ? '⏭' : ''}</div>
           <div style="flex:1;${isDone ? 'color:#8a847b;text-decoration:line-through' : ''}">
             <span style="font-size:10px;letter-spacing:1px;color:#9e2020;text-transform:uppercase">${esc(it.section)}</span><br>
-            ${esc(it.text)}${it.detail && !isDone && !isSkip ? `<div style="font-size:11.5px;color:#9a5b13">⚠ ${esc(it.detail)}</div>` : ''}
+            ${showFull ? esc(it.text) : `<b>${esc(qcShort(it.text))}</b>`}${it.detail && showFull && !isDone && !isSkip ? `<div style="font-size:11.5px;color:#9a5b13">⚠ ${esc(it.detail)}</div>` : ''}
             ${!isDone && !isSkip ? clMediaRow(it) : ''}
             ${(st.notes.get(it.i) || pendNotes.get(it.i)) ? `<div style="font-size:11.5px;color:#274b6d">📝 ${esc(st.notes.get(it.i) || pendNotes.get(it.i))}${pendNotes.has(it.i) ? ' <i style="color:#8a847b">(saves with the check)</i>' : ''}</div>` : ''}
             ${isSkip ? `<div style="font-size:11.5px;color:#9a5b13">⏭ skipped — ${esc(st.skips.get(it.i))} <u>undo</u></div>` : ''}</div>
+          ${dense ? `<button class="clexp" data-i="${it.i}" title="${expanded.has(it.i) ? 'hide' : 'show'} the full instructions" style="border:1px solid #cfc9bf;background:none;border-radius:8px;padding:3px 8px;color:#57524b;font-size:13px;flex:0 0 auto;height:26px">${expanded.has(it.i) ? '▾' : '▸'}</button>` : ''}
           <button class="clnote" data-i="${it.i}" title="add a note on this item" style="border:1px solid #cfdcec;background:none;border-radius:8px;padding:3px 7px;color:#3a6ea5;font-size:12px;flex:0 0 auto;height:26px">📝</button>
           ${canMedia ? `<button class="clmed" data-i="${it.i}" title="attach a training video / photo to this step" style="border:1px solid #cfdcec;background:none;border-radius:8px;padding:3px 7px;color:#3a6ea5;font-size:12px;flex:0 0 auto;height:26px">🎬</button>` : ''}
           ${!isDone && !isSkip ? `<button class="clskip" data-i="${it.i}" style="border:1px solid #cfc9bf;background:none;border-radius:8px;padding:3px 8px;color:#9a5b13;font-size:11px;flex:0 0 auto;height:26px">Skip</button>` : ''}
@@ -4056,6 +4111,31 @@ async function openWorkChecklist(serial, phase) {
         render();
         const inp = ov.querySelector('.clnotewhy'); if (inp) inp.focus();
       });
+      ov.querySelectorAll('.clexp').forEach(b => b.onclick = ev => {
+        ev.stopPropagation();
+        const i = +b.dataset.i;
+        expanded.has(i) ? expanded.delete(i) : expanded.add(i);
+        render();
+      });
+      ov.querySelectorAll('.clmode').forEach(b => b.onclick = ev => {
+        ev.stopPropagation();
+        dense = b.dataset.m === 'summary';
+        lsSet('clMode', dense ? 'summary' : 'full');
+        render();
+      });
+      const rq = ov.querySelector('.clreq'), rqm = ov.querySelector('.clreqmenu');
+      if (rq && rqm) {
+        rq.onclick = ev => { ev.stopPropagation(); rqm.hidden = !rqm.hidden; };
+        rqm.querySelectorAll('button').forEach(b => b.onclick = ev => {
+          ev.stopPropagation(); rqm.hidden = true;
+          const k = b.dataset.req;
+          if (k === 'touchup') openGenericModal(p, 'Touch Up');
+          else if (k === 'brigham') openBrighamModal(p);
+          else if (k === 'service') openServiceModal(p);
+          else if (k === 'tune') openTuneModal(p);
+          else if (k === 'admin') openAdminModal(p);
+        });
+      }
       const ngo = ov.querySelector('.clnotego');
       if (ngo) ngo.onclick = ev => {
         ev.stopPropagation();
