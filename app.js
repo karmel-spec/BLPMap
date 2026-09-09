@@ -4752,18 +4752,43 @@ async function loadTimeOff() {
 }
 // "my clock is wrong" request — any team member; lands on the 🛠 Time Clock
 // Adjustments list for Melissa / the shop managers to correct
+/* Mark 9/8 (request 090826hales36): the team picks the day and types the
+ * CORRECT clock-in / clock-out times instead of describing them. The
+ * request still travels as one note ("9/8: clock in 8:02 AM, clock out
+ * 4:03 PM. …") so the sheet, the manager's text and ✎ Apply's parser all
+ * keep working — and Apply now prefills exactly those times. */
+function cfxComposeNote(ymd, inT, outT, text) {
+  const fmt = t => {
+    if (!t) return '';
+    const [h, m] = t.split(':').map(Number);
+    return `${((h + 11) % 12) + 1}:${String(m).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`;
+  };
+  const parts = [];
+  if (inT) parts.push('clock in ' + fmt(inT));
+  if (outT) parts.push('clock out ' + fmt(outT));
+  const [y, mo, d] = String(ymd || '').split('-').map(Number);
+  const day = mo && d ? `${mo}/${d}` : '';
+  const head = parts.length ? `${day ? day + ': ' : ''}${parts.join(', ')}.` : (day ? `${day}.` : '');
+  return [head, String(text || '').trim()].filter(Boolean).join(' ');
+}
 function clockFixModal(prefill) {
   const old = document.querySelector('.dsheetov'); if (old) old.remove();
   const ov = document.createElement('div');
   ov.className = 'dsheetov';
+  const today = new Date().toLocaleDateString('en-CA');
   ov.innerHTML = `<div class="dsheet"><button class="dsx">✕</button>
     <h3>🛠 Request a time fix</h3>
-    <div class="dssub">Goes straight to the adjustments list — include the day and the correct times.</div>
+    <div class="dssub">Pick the day and enter the times that are <b>correct</b> — leave a time blank if that punch is already right.</div>
     <div class="rfbar"><select class="cf-clock">
       <option value="pay">My day clock (payroll)</option>
       <option value="piano">A piano work clock</option></select>
       <input type="text" class="cf-serial" placeholder="piano serial" style="display:none"></div>
-    <textarea class="cf-note" rows="4" placeholder="e.g. Forgot to clock out Tuesday — I actually left at 4:30 PM">${esc(prefill || '')}</textarea>
+    <div class="rfbar">
+      <label class="rfd">day <input type="date" class="cf-date" value="${today}" max="${today}"></label>
+      <label class="rfd">correct clock-in <input type="time" class="cf-in"></label>
+      <label class="rfd">correct clock-out <input type="time" class="cf-out"></label>
+    </div>
+    <textarea class="cf-note" rows="2" placeholder="anything else the approver should know (optional)">${esc(prefill || '')}</textarea>
     <div class="rfbar"><button class="csvbtn cf-send">Send request</button><span class="cf-msg phmsg"></span></div>
   </div>`;
   document.body.appendChild(ov);
@@ -4771,11 +4796,16 @@ function clockFixModal(prefill) {
   const sel = ov.querySelector('.cf-clock'), ser = ov.querySelector('.cf-serial');
   sel.onchange = () => { ser.style.display = sel.value === 'piano' ? '' : 'none'; };
   ov.querySelector('.cf-send').onclick = async () => {
-    const note = ov.querySelector('.cf-note').value.trim();
+    const text = ov.querySelector('.cf-note').value.trim();
+    const ymd = ov.querySelector('.cf-date').value, inT = ov.querySelector('.cf-in').value, outT = ov.querySelector('.cf-out').value;
     const msg = ov.querySelector('.cf-msg');
-    if (!note) { msg.textContent = 'describe what needs fixing'; return; }
+    if (!inT && !outT && !text) { msg.textContent = 'enter the correct clock-in and/or clock-out time (or describe the fix)'; return; }
+    if (inT && outT && outT <= inT) { msg.textContent = 'clock-out must be after clock-in'; return; }
+    if (sel.value === 'piano' && !ser.value.trim()) { msg.textContent = 'which piano? enter its serial'; return; }
+    const note = cfxComposeNote(ymd, inT, outT, text);
     msg.textContent = 'sending…';
-    const j = await adjustPost({action: 'clockfix', clock: sel.value, serial: ser.value.trim(), note});
+    const j = await adjustPost({action: 'clockfix', clock: sel.value, serial: ser.value.trim(), note,
+      date: ymd, inAt: inT, outAt: outT});
     if (j.error) { msg.textContent = j.error; return; }
     ov.querySelector('.dsheet').innerHTML =
       '<h3>✅ Request sent</h3><div class="dssub">It’s on the adjustments list — the fix will show on your dashboard once it’s made.</div>';
@@ -11413,9 +11443,9 @@ function renderDash() {
           manager time adjustment ›</a>`;
         pm.querySelector('.geo-fix').onclick = e => {
           e.preventDefault();
-          clockFixModal(`I tried to clock ${dir} at `
+          clockFixModal(`Tried to clock ${dir} at `
             + new Date().toLocaleTimeString('en-US', {hour: 'numeric', minute: '2-digit'})
-            + ` but was away from the shop (${j.awayMiles} mi). My actual clock-${dir} time should be: `);
+            + ` from ${j.awayMiles} mi away (geofence) — correct time entered above.`);
         };
       }
       pb.disabled = false;
