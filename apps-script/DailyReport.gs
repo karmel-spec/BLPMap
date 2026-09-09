@@ -3625,9 +3625,10 @@ function setRequestStatus_(req) {
       var rWho = String(vals[i][2]), rText = String(vals[i][4]);
       // Walter 9/9: flipping a request to Live from the Store Map now texts
       // the requester (the Shop Manager already did) — once, not on every
-      // re-select of the same status
+      // re-select of the same status. `quiet: true` skips the text (used when
+      // back-filling statuses for work that shipped weeks ago).
       var texted = false;
-      if (String(req.status) === 'Live' && !wasLive && rWho && !/^claude test/i.test(rWho)) {
+      if (String(req.status) === 'Live' && !wasLive && !req.quiet && rWho && !/^claude test/i.test(rWho)) {
         try {
           notifyTeam_([rWho], '✅ Your app request ' + String(req.id) + ' is live — "'
             + rText.slice(0, 110) + (rText.length > 110 ? '…' : '')
