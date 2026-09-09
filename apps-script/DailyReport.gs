@@ -3434,19 +3434,8 @@ function resolveClockFix_(req, who) {
   var sh = clockFixSheet_();
   var row = Number(req.row);
   if (!(row >= 2) || row > sh.getLastRow()) return {error: 'bad row'};
-  // lane check (Brigham 9/1): Mark resolves shop-side requests, Melissa the
-  // admins'; the owners resolve either lane
-  var em = String((g && g.email) || '').toLowerCase();
-  if (em !== 'brigham@brighamlarsonpianos.com' && em !== 'karmel@brighamlarsonpianos.com') {
-    var reqName = String(sh.getRange(row, 2).getValue() || '').replace(/\s*[(<].*$/, '').trim();
-    var side2 = roleSide_(reqName);
-    if (em === 'melissa@brighamlarsonpianos.com' && side2 !== 'admin') {
-      return {error: reqName + ' is on the shop side — Mark resolves this one'};
-    }
-    if (em !== 'melissa@brighamlarsonpianos.com' && side2 === 'admin') {
-      return {error: reqName + ' is on the admin side — Melissa resolves this one'};
-    }
-  }
+  // Lanes opened (Brigham 9/9): Mark and Melissa may resolve ANY request now
+  // that both can fix any punch. (The 9/1 shop/admin lane check lived here.)
   var by = (g.name || g.email) + ' ' + Utilities.formatDate(new Date(), 'America/Denver', 'M/d');
   var whoName = String(sh.getRange(row, 2).getValue() || '').replace(/\s*[(<].*$/, '').trim();
   var note = String(sh.getRange(row, 5).getValue() || '').trim();
