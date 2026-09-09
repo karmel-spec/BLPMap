@@ -8086,8 +8086,14 @@ function writeAuth() {
     // signed in, exactly like the task board's fast path (v320); their
     // name still rides along via authFields for the activity log.
     if (!u.pinOnly && !pin && u.exp * 1000 < Date.now() + 30000) {
-      // renew in the background, but don't block the write meanwhile
-      setTimeout(() => oidcLogin(u.email), 400);
+      // Token lapsed. Do NOT bounce through accounts.google.com here: that
+      // full-page redirect killed the write in flight (Brigham 9/8) and, for
+      // a browser with no Google session, trapped every page load on Google's
+      // sign-in screen (9/9 — fetchPhones runs at boot). Ask GIS for a silent
+      // renewal instead; the write goes through on the app key meanwhile and
+      // the account box shows "session expired" so the person can re-sign.
+      try { if (window.google && google.accounts && google.accounts.id) google.accounts.id.prompt(); } catch (e) {}
+      try { renderAuth(); } catch (e) {}
       return {pin: 'pianoman', ok: true, renewing: true};
     }
     return {pin: pin || 'pianoman', ok: true};
