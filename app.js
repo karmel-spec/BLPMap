@@ -10112,7 +10112,7 @@ function clockAdjustTable() {
         <span class="rfd">out <input type="datetime-local" class="a-end"></span>
         <button class="csvbtn adjaddbtn">Add</button><span class="adjmsg phmsg"></span></div>`;
   }
-  let tl = '';
+  let tl = '', tlAdd = '';
   if (canTl) {
     const keep = r => new Date(r.start) >= cutoff || (S.adjEdit && S.adjEdit.clock === 'piano' && S.adjEdit.row === r.row);
     const rows = S.tlRows.filter(keep).sort((a, b) => new Date(a.start) - new Date(b.start));
@@ -10121,8 +10121,10 @@ function clockAdjustTable() {
       ${rows.map(r => adjRow('piano', r,
           `${esc(r.piano || '—')}<br><small>#${esc(r.serial)}</small>`,
           `${esc(r.tech)}<br><small>${esc(r.phase || '')}</small>`)).join('')
-       || '<tr><td colspan="5" class="empty">No sessions yet.</td></tr>'}</table></div>
-      <div class="rfbar adjaddbar" data-clock="piano"><b>+ missed piano session:</b>
+       || '<tr><td colspan="5" class="empty">No sessions yet.</td></tr>'}</table></div>`;
+    // top of the report too (Mark 9/8, request 090826hales38): it used to be
+    // the very last thing on the page
+    tlAdd = `<div class="rfbar adjaddbar" data-clock="piano"><b>+ missed piano session:</b>
         <input type="text" class="a-tech" placeholder="tech name">
         <input type="text" class="a-serial" placeholder="piano serial">
         <input type="text" class="a-phase" placeholder="phase">
@@ -10130,7 +10132,7 @@ function clockAdjustTable() {
         <span class="rfd">out <input type="datetime-local" class="a-end"></span>
         <button class="csvbtn adjaddbtn">Add</button><span class="adjmsg phmsg"></span></div>`;
   }
-  return payAdd + fixes + pay + tl;
+  return payAdd + tlAdd + fixes + pay + tl;
 }
 
 /* 📦 Delivered-archive report — same rows as the old sidebar view (click a
