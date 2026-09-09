@@ -43,6 +43,21 @@ and deploy a new version; until then the app shows "the bridge needs an
 update" when a photo is taken. The Apps Script account must have edit
 access to the piano photo folders (root `1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ`).
 
+### Redeploying the bridge — encoding matters
+`DailyReport.gs` is full of emoji, arrows and dashes in string literals
+(texts, sheet notes). A paste that went through a non-UTF-8 clipboard
+turns every one of them into Mac Roman garble ("→" arrives as "‚Üí",
+"🛠" as "üõ†") — that is what the team's texts looked like on Sep 6–8 2026.
+From a terminal, copy with the locale set and verify before pasting:
+
+```sh
+LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 pbcopy < apps-script/DailyReport.gs
+pbpaste | cmp - apps-script/DailyReport.gs && echo ok
+```
+
+After deploying, open the bridge URL: the ping must show `"enc":"→ — 🛠"`
+intact. If it shows garble, the paste was bad — redo it.
+
 ## Local dev
 `python3 server.py` still works exactly as before (port 8641) and needs
 `config.json` for the calendar. The local 6 AM scheduler is now just a

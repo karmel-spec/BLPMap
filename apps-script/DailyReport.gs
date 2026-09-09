@@ -281,7 +281,11 @@ function doGet(e) {
     try { return json_(techs_()); }
     catch (err) { return json_({error: String(err), techs: []}); }
   }
-  return json_({ok: true, service: 'BLP Store Map bridge'});
+  // enc: a deploy pasted through a non-UTF-8 clipboard (pbcopy without
+  // LANG set, 9/6 + 9/9) turns every emoji/dash/arrow in this file into
+  // Mac Roman garble — the team's texts read "‚Üí" for →. The app compares
+  // this literal to detect a bad paste.
+  return json_({ok: true, service: 'BLP Store Map bridge', enc: '→ — 🛠'});
 }
 
 /**
