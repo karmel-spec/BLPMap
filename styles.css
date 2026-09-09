@@ -1920,3 +1920,6 @@ button.cfxres:hover{border-color:#2e7d4f;color:#2e7d4f}
 
 .cfxtoast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);background:#1c1c1e;color:#fff;padding:10px 16px;border-radius:10px;font-size:13px;font-weight:700;box-shadow:0 10px 30px rgba(0,0,0,.3);z-index:400;opacity:0;pointer-events:none;transition:opacity .25s,transform .25s;max-width:92vw}
 .cfxtoast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* phone header while clocked in: the chip keeps the timer, drops the serial so the search bar keeps room (9/9) */
+@media (max-width:760px){.clockchip .ccser{display:none}.clockchip{padding:5px 9px}}
