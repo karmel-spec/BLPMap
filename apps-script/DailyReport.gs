@@ -19,6 +19,7 @@ var APP_URL = 'https://blpstoremap.netlify.app';
 var REPORT_TO = 'info@brighamlarsonpianos.com';
 var PIANO_LOG_ID = '1ZunbPKygpQlcXfTyPowDHdUE9spJ3uV1XA4iX1eoKRc';
 var BRIDGE_SECRET = 'PASTE_SECRET_HERE';   // server-to-server auth (optional)
+var BRIDGE_REV = '2026-09-09.7';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = 'PASTE_PIN_HERE';           // what BLP team members type to move pianos
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -285,7 +286,8 @@ function doGet(e) {
   // LANG set, 9/6 + 9/9) turns every emoji/dash/arrow in this file into
   // Mac Roman garble — the team's texts read "‚Üí" for →. The app compares
   // this literal to detect a bad paste.
-  return json_({ok: true, service: 'BLP Store Map bridge', enc: '→ — 🛠'});
+  // rev: bump on every change so a deploy can be confirmed from the ping
+  return json_({ok: true, service: 'BLP Store Map bridge', enc: '→ — 🛠', rev: BRIDGE_REV});
 }
 
 /**
