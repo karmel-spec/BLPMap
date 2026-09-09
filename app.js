@@ -10077,7 +10077,14 @@ function clockAdjustTable() {
     ${fxBar}
     <table><tr><th>WHEN</th><th>WHO</th><th>CLOCK</th><th>WHAT NEEDS FIXING</th><th>STATUS</th></tr>
     ${openFix.map(r => `<tr${isDup(r) ? ' class="cfxdupl"' : ''}><td style="white-space:nowrap">${esc(r.when)}</td><td>${esc(r.who.replace(/<[^>]*>/g, ''))}</td>
-       <td>${esc(r.clock)}${r.serial ? ' #' + esc(r.serial) : ''}</td><td>${esc(r.note)}${isDup(r) ? ' <span class="cfxdupmark" title="the same person sent this exact request more than once">⧉ sent ' + fxCount[fxKey(r)] + '×</span>' : ''}</td>
+       <td style="white-space:nowrap">${canPay || canTl
+         // Mark 9/8: re-type a request filed under the wrong clock (and set
+         // the piano serial) so ✎ Apply searches the right punch list
+         ? `<select class="cfxclock" data-row="${r.row}" title="which clock this request is about">
+              <option value="pay" ${/piano/i.test(r.clock) ? '' : 'selected'}>Day clock</option>
+              <option value="piano" ${/piano/i.test(r.clock) ? 'selected' : ''}>Piano clock</option></select>
+            <input type="text" class="cfxserial" data-row="${r.row}" placeholder="serial #" value="${esc(r.serial || '')}" title="piano serial this request is about" ${/piano/i.test(r.clock) ? '' : 'hidden'}>`
+         : esc(r.clock) + (r.serial ? ' #' + esc(r.serial) : '')}</td><td>${esc(r.note)}${isDup(r) ? ' <span class="cfxdupmark" title="the same person sent this exact request more than once">⧉ sent ' + fxCount[fxKey(r)] + '×</span>' : ''}</td>
        <td style="white-space:nowrap"><span class="cfxopen">OPEN</span>
          <button class="cfxres cfxapply" data-row="${r.row}" title="open the punch this request is about so you can fix it">✎ Apply →</button>
          <button class="cfxres" data-row="${r.row}" title="fixed it? clear this request and text the team member that their clock is correct">Mark resolved</button>
@@ -10723,6 +10730,42 @@ function renderReport() {
     }, 0);
   });
   body.querySelectorAll('.cfxclear').forEach(b => b.onclick = () => { S.cfxF = null; renderReport(); });
+  // clock-type editor on a fix request (Mark 9/8): Day ↔ Piano, plus the
+  // serial for piano requests. Saves through the bridge; a bridge that
+  // predates the action answers without `clockfix`, so the change is then
+  // kept for this session only and the manager is told so.
+  const cfxSaveType = async (row, clock, serial) => {
+    const fx = (S.fixRows || []).find(r => r.row === row);
+    if (!fx) return;
+    if (adjExpired()) { adjStashAndRenew({}); return; }
+    const j = await adjustPost({action: 'clockfixtype', row, clock, serial});
+    if (j && j.error && j.error !== 'serial required') { cfxToast('⚠ ' + j.error); renderReport(); return; }
+    fx.clock = clock === 'pay' ? 'Day clock' : 'Piano clock';
+    fx.serial = clock === 'pay' ? '' : serial;
+    if (j && j.clockfix) cfxToast(`✓ request is now a ${fx.clock} fix${fx.serial ? ' for #' + fx.serial : ''} — ✎ Apply will look there`);
+    else cfxToast('⚠ changed for this session only — the Google bridge needs its update before this saves to the sheet');
+    renderReport();
+  };
+  body.querySelectorAll('.cfxclock').forEach(sel => sel.onchange = () => {
+    const row = +sel.dataset.row;
+    const ser = body.querySelector(`.cfxserial[data-row="${row}"]`);
+    if (sel.value === 'piano') {
+      ser.hidden = false;
+      if (!ser.value.trim()) { ser.focus(); return; }   // save once the serial is typed
+    }
+    cfxSaveType(row, sel.value, ser.value.trim());
+  });
+  body.querySelectorAll('.cfxserial').forEach(inp => {
+    const save = () => {
+      const row = +inp.dataset.row, fx = (S.fixRows || []).find(r => r.row === row);
+      const sel = body.querySelector(`.cfxclock[data-row="${row}"]`);
+      if (!fx || !sel || sel.value !== 'piano') return;
+      if (inp.value.trim() === String(fx.serial || '') && /piano/i.test(fx.clock)) return;   // nothing changed
+      cfxSaveType(row, 'piano', inp.value.trim());
+    };
+    inp.onblur = save;
+    inp.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); inp.blur(); } };
+  });
   body.querySelectorAll('.cfxres:not(.cfxapply)').forEach(b => b.onclick = async () => {
     const dup = b.classList.contains('cfxdup');
     if (dup && !confirm('Archive this request as a DUPLICATE of one already applied? The team member will not be texted.')) return;

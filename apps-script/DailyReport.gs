@@ -1138,6 +1138,9 @@ function doPost(e) {
     if (req.action === 'resolveclockfix') {
       return json_(resolveClockFix_(req, who));
     }
+    if (req.action === 'clockfixtype') {
+      return json_(setClockFixType_(req, who));
+    }
     if (req.action === 'setpaperwork') {
       var spw = setPaperwork_(req);
       if (spw.ok) logAct_(who, 'Paperwork', spw.summary || req.serial,
@@ -3434,6 +3437,25 @@ function clockFixRequest_(req, who) {
       + ' (approve in Store Map → Reports → 🛠 Time Clock Adjustments)');
   } catch (eN) { /* text best-effort */ }
   return {ok: true};
+}
+/* Mark 9/8 (request 090826hales37): a request filed under the wrong clock
+ * (McKinly's Petrof note came in as a Day clock fix) can be re-typed by
+ * anyone who may resolve it, so ✎ Apply looks in the right punch list.
+ * `clockfix: true` in the reply lets the app tell a real save apart from
+ * an older bridge that doesn't know this action yet. */
+function setClockFixType_(req, who) {
+  var g = req._g;
+  if (!payrollAdmin_(g) && !timelogAdmin_(g)) {
+    return {error: 'Only owners, Melissa, or the shop managers can change a request’s clock.'};
+  }
+  var sh = clockFixSheet_();
+  var row = Number(req.row);
+  if (!(row >= 2) || row > sh.getLastRow()) return {error: 'bad row'};
+  var clock = req.clock === 'pay' ? 'Day clock' : 'Piano clock';
+  var serial = clock === 'Piano clock' ? String(req.serial || '').trim().slice(0, 40) : '';
+  sh.getRange(row, 3, 1, 2).setValues([[clock, serial]]);
+  logAct_(who, 'Clock fix re-typed', serial || '(day clock)', 'request row ' + row + ' → ' + clock);
+  return {ok: true, clockfix: true, row: row, clock: clock, serial: serial};
 }
 function resolveClockFix_(req, who) {
   var g = req._g;
