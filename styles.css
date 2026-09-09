@@ -979,9 +979,9 @@ tr.jcp td{border-top:2px solid #e3e6e9;padding-top:9px}
 .paymsg.err{color:#9e2020;font-size:12.5px;margin:4px 0}
 
 /* clock adjustments */
-.adjedit{font:600 11px/1.2 inherit;font-family:inherit;color:#9e2020;background:#fff;
+.adjedit,.cfxclear{font:600 11px/1.2 inherit;font-family:inherit;color:#9e2020;background:#fff;
   border:1px solid #d7dbdf;border-radius:8px;padding:5px 9px;cursor:pointer}
-.adjedit:hover{border-color:#c9a0a0}
+.adjedit:hover,.cfxclear:hover{border-color:#c9a0a0}
 tr.adjediting td{background:#fdf8ee}
 button.cfxapply{color:#9e2020;border-color:#e2c4c4;margin-right:4px}
 button.cfxdup{color:#6f7a84;margin-left:4px}

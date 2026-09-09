@@ -9780,13 +9780,18 @@ function adjRow(clock, r, label, sub) {
  * fix requests filed before that (the August trial period) stay in the
  * sheet but are hidden from the report. `when` comes as "MMM d, h:mm a". */
 const CLOCK_FIX_SINCE = '2026-09-01';
-function cfxSinceLaunch(fx) {
+function cfxWhenYmd(fx) {
   const now = new Date();
   let d = new Date(String(fx.when || '') + ' ' + now.getFullYear());
-  if (isNaN(d)) return true;   // unparseable → don't hide
+  if (isNaN(d)) return '';
   if (d - now > 86400000) d.setFullYear(d.getFullYear() - 1);
-  return d.toLocaleDateString('en-CA') >= CLOCK_FIX_SINCE;
+  return d.toLocaleDateString('en-CA');
 }
+function cfxSinceLaunch(fx) {
+  const y = cfxWhenYmd(fx);
+  return !y || y >= CLOCK_FIX_SINCE;   // unparseable → don't hide
+}
+const cfxWho = fx => String(fx.who || '').replace(/<[^>]*>/g, '').trim();
 const CFX_MON = {jan:0,ene:0,feb:1,mar:2,apr:3,abr:3,may:4,jun:5,jul:6,aug:7,ago:7,sep:8,set:8,oct:9,nov:10,dic:11,dec:11};
 function cfxDates(fx) {
   const note = String(fx.note || '').toLowerCase();
@@ -9829,7 +9834,9 @@ function cfxTimes(note) {
     out.out = rg[6] ? norm(rg[6], rg[7], rg[8]) : norm(rg[9], 0, rg[10]);
   }
   const IN = /clock(?:ed|ing)?\s*(?:me\s+)?in\b|clockin\b|punch(?:ed)?\s*in\b|\bin at\b|\bin:|\bentrada\b|\bentr[eé]\b|\bstart(?:ed)?\b|\bfrom\b|\bdesde\b|\bempec[eé]\b|\bin\b/g;
-  const OUT = /clock(?:ed|ing)?\s*(?:me\s+)?out\b|clockout\b|punch(?:ed)?\s*out\b|\bout at\b|\bout:|\bsalida\b|\bsal[ií]\b|\bleft\b|\buntil\b|\btill\b|\bto\b|\bhasta\b|\bterm[ií]n[eé]\b|\bout\b/g;
+  // a bare "to" only marks a clock-out inside an explicit range (handled
+  // above) — in prose ("got to our meeting at 8:02") it is not a punch-out
+  const OUT = /clock(?:ed|ing)?\s*(?:me\s+)?out\b|clockout\b|punch(?:ed)?\s*out\b|\bout at\b|\bout:|\bsalida\b|\bsal[ií]\b|\bleft\b|\buntil\b|\btill\b|\bhasta\b|\bterm[ií]n[eé]\b|\bout\b/g;
   const lastIdx = (re, txt) => { let k = -1, mm; re.lastIndex = 0; while ((mm = re.exec(txt))) k = mm.index; return k; };
   const re = new RegExp(T, 'g');
   let m;
@@ -10013,8 +10020,38 @@ function clockAdjustTable() {
   const canPay = isPayrollAdmin() || me.toLowerCase() === 'markhales.blp@gmail.com';
   const canTl = isTimelogAdmin();
   const cutoff = Date.now() - 14 * 86400000;
-  const openFix = S.fixRows.filter(r => cfxSinceLaunch(r) && r.status === 'open');
-  const doneFix = S.fixRows.filter(r => cfxSinceLaunch(r) && r.status !== 'open').slice(0, 8);
+  // filter bar: status · team member · clock · text · date range. Default
+  // view is unchanged (open requests + the 8 most recently handled).
+  const f = S.cfxF || (S.cfxF = {st: '', who: '', clock: '', q: '', from: '', to: ''});
+  const since = S.fixRows.filter(cfxSinceLaunch);
+  const whos = [...new Set(since.map(cfxWho))].sort((a, b) => a.localeCompare(b));
+  const stOf = r => r.status === 'open' ? 'open' : /dup/i.test(r.status) ? 'duplicate' : 'resolved';
+  const q = f.q.trim().toLowerCase();
+  const match = r => (!f.who || cfxWho(r) === f.who)
+    && (!f.clock || (/piano/i.test(r.clock) ? 'piano' : 'day') === f.clock)
+    && (!q || `${cfxWho(r)} ${r.clock} ${r.serial || ''} ${r.note} ${r.status}`.toLowerCase().includes(q))
+    && (!f.from || cfxWhenYmd(r) >= f.from) && (!f.to || cfxWhenYmd(r) <= f.to);
+  const hits = since.filter(match);
+  const openFix = f.st && f.st !== 'open' && f.st !== 'all' ? [] : hits.filter(r => r.status === 'open');
+  const doneFix = f.st === 'open' ? []
+    : f.st === 'all' ? hits.filter(r => r.status !== 'open')
+    : f.st ? hits.filter(r => stOf(r) === f.st)
+    : hits.filter(r => r.status !== 'open').slice(0, 8);
+  const filtered = !!(f.st || f.who || f.clock || q || f.from || f.to);
+  const fxBar = `<div class="rfbar">
+      <select class="rptf" data-scope="cfx" data-f="st">
+        ${[['', 'Open + recently handled'], ['open', 'Open only'], ['resolved', 'Resolved'], ['duplicate', 'Duplicates'], ['all', 'All requests']]
+          .map(([v, t]) => `<option value="${v}" ${f.st === v ? 'selected' : ''}>${t}</option>`).join('')}</select>
+      <select class="rptf" data-scope="cfx" data-f="who"><option value="">All team members</option>
+        ${whos.map(w => `<option ${f.who === w ? 'selected' : ''}>${esc(w)}</option>`).join('')}</select>
+      <select class="rptf" data-scope="cfx" data-f="clock">
+        ${[['', 'Both clocks'], ['day', 'Day clock'], ['piano', 'Piano clock']]
+          .map(([v, t]) => `<option value="${v}" ${f.clock === v ? 'selected' : ''}>${t}</option>`).join('')}</select>
+      <input type="text" class="rptf" data-scope="cfx" data-f="q" placeholder="🔍 note, serial, name…" value="${esc(f.q)}">
+      <label class="rfd">from <input type="date" class="rptf" data-scope="cfx" data-f="from" value="${esc(f.from)}"></label>
+      <label class="rfd">to <input type="date" class="rptf" data-scope="cfx" data-f="to" value="${esc(f.to)}"></label>
+      <span class="lite" style="font-size:11.5px;white-space:nowrap">${openFix.length + doneFix.length} of ${since.length}${filtered ? ' <button class="cfxclear" type="button">clear filters</button>' : ''}</span>
+    </div>`;
   // same person + same wording as another request (open or already handled)
   // → almost certainly a re-send; flag it so the manager archives it as a
   // duplicate instead of fixing the punch twice
@@ -10024,6 +10061,7 @@ function clockAdjustTable() {
   const isDup = r => fxCount[fxKey(r)] > 1;
   const fixes = `<h4 class="bfhd">Fix requests from the team</h4>
     <div class="lite" style="font-size:12px;margin:-4px 0 8px">These are OPEN — ✎ Apply opens the punch, fix it, then "Mark resolved" clears the row and <b>texts the team member that their clock is fixed</b>. A re-sent copy of a request you already applied → "Duplicate" archives it without a text.</div>
+    ${fxBar}
     <table><tr><th>WHEN</th><th>WHO</th><th>CLOCK</th><th>WHAT NEEDS FIXING</th><th>STATUS</th></tr>
     ${openFix.map(r => `<tr${isDup(r) ? ' class="cfxdupl"' : ''}><td style="white-space:nowrap">${esc(r.when)}</td><td>${esc(r.who.replace(/<[^>]*>/g, ''))}</td>
        <td>${esc(r.clock)}${r.serial ? ' #' + esc(r.serial) : ''}</td><td>${esc(r.note)}${isDup(r) ? ' <span class="cfxdupmark" title="the same person sent this exact request more than once">⧉ sent ' + fxCount[fxKey(r)] + '×</span>' : ''}</td>
@@ -10031,19 +10069,21 @@ function clockAdjustTable() {
          <button class="cfxres cfxapply" data-row="${r.row}" title="open the punch this request is about so you can fix it">✎ Apply →</button>
          <button class="cfxres" data-row="${r.row}" title="fixed it? clear this request and text the team member that their clock is correct">Mark resolved</button>
          <button class="cfxres cfxdup" data-row="${r.row}" title="a copy of a request that was already applied — archive it (no text)">Duplicate</button></td></tr>`).join('')
-     || '<tr><td colspan="5" class="empty">No open requests 🎉</td></tr>'}
+     || (doneFix.length ? '' : `<tr><td colspan="5" class="empty">${filtered ? 'No requests match these filters' : 'No open requests 🎉'}</td></tr>`)}
     ${doneFix.map(r => `<tr style="color:#8a929a"><td style="white-space:nowrap">${esc(r.when)}</td>
        <td>${esc(r.who.replace(/<[^>]*>/g, ''))}</td><td>${esc(r.clock)}</td><td>${esc(r.note)}</td><td>${esc(r.status)}</td></tr>`).join('')}
     </table>`;
-  let pay = '';
+  let pay = '', payAdd = '';
   if (canPay) {
     const keep = r => new Date(r.start) >= cutoff || (S.adjEdit && S.adjEdit.clock === 'pay' && S.adjEdit.row === r.row);
     const rows = S.payRows.filter(keep);
     pay = `<h4 class="bfhd">Payroll day punches — last 14 days (owners, Melissa & Mark)</h4>
       <table><tr><th>DATE</th><th>TEAM MEMBER</th><th>IN → OUT</th><th>HOURS</th><th></th></tr>
       ${rows.map(r => adjRow('pay', r, esc(r.date), esc(r.tech))).join('')
-       || '<tr><td colspan="5" class="empty">No punches yet.</td></tr>'}</table>
-      <div class="rfbar adjaddbar" data-clock="pay"><b>+ missed day punch:</b>
+       || '<tr><td colspan="5" class="empty">No punches yet.</td></tr>'}</table>`;
+    // at the top of the report (Mark 9/8): a forgotten day punch is the most
+    // common fix and shouldn't need a scroll past every table to reach
+    payAdd = `<div class="rfbar adjaddbar" data-clock="pay"><b>+ missed day punch:</b>
         <input type="text" class="a-tech" placeholder="team member name">
         <span class="rfd">in <input type="datetime-local" class="a-start"></span>
         <span class="rfd">out <input type="datetime-local" class="a-end"></span>
@@ -10067,7 +10107,7 @@ function clockAdjustTable() {
         <span class="rfd">out <input type="datetime-local" class="a-end"></span>
         <button class="csvbtn adjaddbtn">Add</button><span class="adjmsg phmsg"></span></div>`;
   }
-  return fixes + pay + tl;
+  return payAdd + fixes + pay + tl;
 }
 
 /* 📦 Delivered-archive report — same rows as the old sidebar view (click a
@@ -10640,10 +10680,16 @@ function renderReport() {
     const focus = el => { if (!el) return; el.scrollIntoView({behavior: 'smooth', block: 'center'}); el.classList.add('adjflash'); setTimeout(() => el.classList.remove('adjflash'), 2500); };
     if (m.pick) {
       const day = denverDay(m.pick.start);
-      const pre = {start: m.times.in ? day + 'T' + m.times.in : '', end: m.times.out ? day + 'T' + m.times.out : ''};
+      // a punch that is still open stays open: only the start gets prefilled,
+      // and a parsed "end" earlier than the start is a misread, not a time
+      const live = !m.pick.end;
+      const backwards = m.times.in && m.times.out && m.times.out <= m.times.in;
+      const pre = {start: m.times.in ? day + 'T' + m.times.in : '',
+        end: !live && !backwards && m.times.out ? day + 'T' + m.times.out : ''};
       const filled = [pre.start && 'start', pre.end && 'end'].filter(Boolean);
       S.adjEdit = {clock: m.clock, row: m.pick.row, pre, fromFix: fx.row,
         hint: (m.exact ? '' : 'nearest punch (no punch on the day named) — ')
+          + (live ? 'still clocked in — leave end blank. ' : '')
           + (filled.length ? `${filled.join(' + ')} prefilled from the note — check, then Save. ` : '') + req};
       renderReport();
       setTimeout(() => focus(document.querySelector('.rpt[data-r="clockadjust"] tr.adjediting')), 0);
@@ -10663,6 +10709,7 @@ function renderReport() {
       focus(bar);
     }, 0);
   });
+  body.querySelectorAll('.cfxclear').forEach(b => b.onclick = () => { S.cfxF = null; renderReport(); });
   body.querySelectorAll('.cfxres:not(.cfxapply)').forEach(b => b.onclick = async () => {
     const dup = b.classList.contains('cfxdup');
     if (dup && !confirm('Archive this request as a DUPLICATE of one already applied? The team member will not be texted.')) return;
@@ -10737,6 +10784,7 @@ function renderReport() {
     const apply = () => {
       const scope = el.dataset.scope === 'pay' ? (S.payF || (S.payF = {}))
         : el.dataset.scope === 'to' ? (S.toF || (S.toF = {}))
+        : el.dataset.scope === 'cfx' ? (S.cfxF || (S.cfxF = {}))
         : (S.jcF || (S.jcF = {}));
       scope[el.dataset.f] = el.value;
       renderReport();
