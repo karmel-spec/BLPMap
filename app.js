@@ -4960,8 +4960,14 @@ function popHTML(p) {
     ${crAsk}
     <div class="row rowflex payrow"><span>Payment plan</span>
       <select class="paysel"><option value="">— not set —</option>
-        ${PAY_PLANS.map(o => `<option ${p.payPlan === o ? 'selected' : ''}>${o}</option>`).join('')}
-      </select></div><div class="paymsg phmsg"></div>
+        ${PAY_PLANS.concat(p.payPlan && !PAY_PLANS.includes(p.payPlan) ? [p.payPlan] : [])
+          .map(o => `<option ${p.payPlan === o ? 'selected' : ''}>${o}</option>`).join('')}
+        <option value="__monthly">Monthly — custom amount…</option>
+      </select></div>
+    <div class="row rowflex paycustom" hidden><span>$ per month</span>
+      <span><input type="number" class="paymo" min="1" step="1" placeholder="1000" style="width:84px;font:inherit;font-size:12px;padding:3px 6px;border:1px solid #cfd6dc;border-radius:6px">
+      <button class="tagbtn paymosave" style="margin-left:4px">Save</button></span></div>
+    <div class="paymsg phmsg"></div>
     <div class="row" title="the client's admin journey — tap a step to mark it done">Admin steps
       <b>${asDone.length}/${ADMIN_STEPS.length}</b></div>
     <div class="adminsteps">${ADMIN_STEPS.map((s, i) => {
@@ -5579,7 +5585,31 @@ function wirePop(p) {
   const pay = pop.querySelector('.paysel');
   if (pay) {
     pay.onclick = ev => ev.stopPropagation();
-    pay.onchange = () => setPayPlan(p, pay.value, pop);
+    // Melissa 9/9 (request 090926terry29): a client on an approved custom
+    // monthly amount (the 1877 Steinway D at $1k/month) gets "Monthly — custom
+    // amount…" → the figure is typed once and stored as "Monthly $1,000/mo"
+    pay.onchange = () => {
+      const custom = pop.querySelector('.paycustom');
+      if (pay.value === '__monthly') {
+        custom.hidden = false;
+        const cur = String(p.payPlan || '').match(/\$([\d,]+)/);
+        const inp = custom.querySelector('.paymo');
+        if (cur && !inp.value) inp.value = cur[1].replace(/,/g, '');
+        inp.focus();
+        return;
+      }
+      custom.hidden = true;
+      setPayPlan(p, pay.value, pop);
+    };
+    const pms = pop.querySelector('.paymosave');
+    if (pms) pms.onclick = async ev => {
+      ev.stopPropagation();
+      const v = Math.round(+pop.querySelector('.paymo').value);
+      const msg = pop.querySelector('.paymsg');
+      if (!(v > 0)) { msg.className = 'paymsg phmsg err'; msg.textContent = 'enter the monthly amount'; return; }
+      if (await setPayPlan(p, `Monthly $${v.toLocaleString('en-US')}/mo`, pop)) openPop(p.row, S.popAnchor, true);
+    };
+    pop.querySelectorAll('.paycustom input, .paycustom button').forEach(el => el.onclick = el.onclick || (ev => ev.stopPropagation()));
   }
   pop.querySelectorAll('.astep').forEach(b => b.onclick = ev => {
     ev.stopPropagation();
@@ -6647,9 +6677,11 @@ async function setPayPlan(p, plan, pop) {
     if (j.error === 'unauthorized') { lsDel('blpPin'); throw new Error('Not authorized'); }
     if (!j.ok) throw new Error(j.error || 'save failed');
     if (msg) { msg.className = 'paymsg phmsg ok'; msg.textContent = '✓ saved'; }
+    return true;
   } catch (e) {
     p.payPlan = was;
     if (msg) { msg.className = 'paymsg phmsg err'; msg.textContent = 'Error: ' + e.message; }
+    return false;
   }
 }
 function adminStepsOf(p) {
@@ -6702,10 +6734,13 @@ async function checkPayMilestone(p, pop) {
   if (!ok) return;
   const first = (ownerNameOf(p) || 'there').split(/\s+/)[0];
   const nmYr = [p.year, p.make, p.model].filter(Boolean).join(' ') || p.summary;
+  const monthly = /^Monthly\b/i.test(p.payPlan);   // custom monthly amount: nothing extra falls due at a milestone
   const payAsk = p.payPlan === 'Pd in Full' ? ''
     : p.payPlan === '4 Progress Payments'
       ? `\n\nWith the ${milestone}% milestone reached, this is also the point in your payment plan where the next progress payment comes due. We'll send the invoice separately — and as always, reach out with any questions.`
-      : `\n\nA friendly note that per your ${p.payPlan} plan, this milestone is a great time for the next payment — we'll send the details separately.`;
+      : monthly
+        ? `\n\nYour monthly payment plan (${p.payPlan.replace(/^Monthly\s*/i, '')}) simply continues as arranged — nothing extra is due at this milestone.`
+        : `\n\nA friendly note that per your ${p.payPlan} plan, this milestone is a great time for the next payment — we'll send the details separately.`;
   const clientDraft = `Subject: Your ${nmYr} — ${milestone}% complete at Brigham Larson Pianos\n\n`
     + `Hi ${first},\n\nGreat news from the shop — your ${nmYr} has reached ${milestone}% completion. `
     + `The piano is currently in ${effectivePhase(p) || 'the shop'}, and the work is moving along beautifully.${payAsk}\n\n`

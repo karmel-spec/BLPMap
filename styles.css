@@ -225,6 +225,7 @@ body{background:#f7f8f9;color:#121212;display:flex;flex-direction:column;overflo
 .secbody.closed{display:none}
 /* admin: payment plan select */
 .paysel{font-size:12px;border:1px solid #cfd6dc;border-radius:6px;padding:3px 6px;background:#fff;color:#121212;max-width:150px}
+.paycustom[hidden]{display:none}
 /* admin: client-journey step checklist */
 .adminsteps{display:flex;flex-direction:column;gap:3px;margin:4px 0}
 .astep{display:flex;align-items:center;gap:7px;text-align:left;background:#fff;border:1px solid #e0dcd4;border-radius:6px;padding:4px 8px;font-size:11px;color:#5a626a;cursor:pointer}
