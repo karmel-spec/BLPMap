@@ -12296,6 +12296,19 @@ function renderTaskBoard() {
   };
   const bhs = TB_HEADSHOTS[tbNorm(TB.person)];
   const binit = TB.person.split(/\s+/).map(w => w[0] || '').join('').slice(0, 2).toUpperCase();
+  // keep the reader's place (Melissa 9/4, request 090426terry19): every
+  // action rebuilds the board, which put each column — and the page — back
+  // at the top. Remember where each column, the board strip and the page
+  // were, and put them back once the new DOM is in.
+  const keep = {};
+  el.querySelectorAll('.kan .kcol').forEach(c => { keep[c.dataset.col] = c.scrollTop; });
+  const kan0 = el.querySelector('.kan');
+  const kanLeft = kan0 ? kan0.scrollLeft : 0;
+  let scroller = el.parentElement;
+  while (scroller && scroller !== document.body && !(scroller.scrollHeight > scroller.clientHeight
+    && /auto|scroll/.test(getComputedStyle(scroller).overflowY))) scroller = scroller.parentElement;
+  const pageEl = scroller && scroller !== document.body ? scroller : document.scrollingElement;
+  const pageTop = pageEl ? pageEl.scrollTop : 0;
   el.innerHTML = `${strip}
     <div class="khead"><span class="khav" style="background:${tbAvColor(TB.person)}">${bhs
         ? `<img src="${esc(bhs)}" alt="">` : esc(binit)}</span>
@@ -12307,6 +12320,10 @@ function renderTaskBoard() {
       ${canEdit ? '<button class="kadd">＋ Card</button><button class="kaddcol" title="add a column">＋ Column</button>' : ''}
       <button class="karchbtn" title="archived cards — search & restore">🗂</button></div>
     <div class="kan">${boardCols.map(([k, l]) => col(k, l)).join('')}</div>`;
+  el.querySelectorAll('.kan .kcol').forEach(c => { if (keep[c.dataset.col] != null) c.scrollTop = keep[c.dataset.col]; });
+  const kan1 = el.querySelector('.kan');
+  if (kan1 && kanLeft) kan1.scrollLeft = kanLeft;
+  if (pageEl && pageTop) pageEl.scrollTop = pageTop;
   // wiring
   el.querySelectorAll('.face').forEach(f => f.onclick = () => { TB.person = f.dataset.p; renderTaskBoard(); });
   const ka = el.querySelector('.kadd');
