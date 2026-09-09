@@ -3249,7 +3249,9 @@ function openSuggestBox() {
       <div class="sgtypes">
         <button class="sgt on" data-t="edit">✏️ Edit</button>
         <button class="sgt" data-t="idea">💡 Idea</button>
+        <button class="sgt" data-t="handbook" title="suggest a change to the Restoration Handbook — Brigham reviews it before anything is edited">📖 Handbook</button>
       </div>
+      <div class="lite sghbnote" style="font-size:11.5px;margin:-4px 0 8px" hidden>📖 Suggestions for the <b>Restoration Handbook</b> go to a separate list that Brigham reviews and approves before the handbook changes. Name the section and say what it should say instead.</div>
       <div class="sgtypes sgdevrow" style="margin-top:4px">
         <span class="lite" style="font-size:11px;align-self:center;margin-right:2px">Where did this happen?</span>
         <button class="sgdev" data-d="phone">📱 Phone</button>
@@ -3269,9 +3271,18 @@ function openSuggestBox() {
   document.body.appendChild(ov);
   ov.onclick = ev => { if (ev.target === ov || ev.target.closest('.tvx')) ov.remove(); };
   let type = 'edit', shotFile = null;
+  const PLACEHOLDER = {
+    edit: "What's wrong / what would make it better? A sentence or two is plenty.",
+    idea: "What's wrong / what would make it better? A sentence or two is plenty.",
+    // 📖 handbook suggestions (Karmel 9/8): a separate review lane for Brigham
+    handbook: 'Which section of the Restoration Handbook, and what should it say instead? (e.g. "Refinishing → Sanding, step 3: add that the grit is 220")',
+  };
   ov.querySelectorAll('.sgt').forEach(b => b.onclick = () => {
     ov.querySelectorAll('.sgt').forEach(x => x.classList.remove('on'));
     b.classList.add('on'); type = b.dataset.t;
+    ov.querySelector('.sgtext').placeholder = PLACEHOLDER[type] || PLACEHOLDER.edit;
+    ov.querySelector('.sghbnote').hidden = type !== 'handbook';
+    ov.querySelector('.sgdevrow').hidden = type === 'handbook';   // "where did this happen" is about the apps
   });
   // 📱/💻 where the issue happened (Brigham 9/8) — pre-detected from the
   // device, tappable to override (e.g. reporting a phone issue from a laptop)
@@ -3377,7 +3388,9 @@ function openSuggestBox() {
       msg.className = 'sgmsg ok';
       msg.textContent = '✓ Filed as ' + j.id + (shotFailed
         ? ' — but it went in WITHOUT the picture: ' + shotFailed + '.'
-        : ' — thank you! You\u2019ll see it move to Live here when it ships.');
+        : type === 'handbook'
+          ? ' — thank you! Brigham reviews handbook suggestions before anything changes; it moves to Live here once the handbook is updated.'
+          : ' — thank you! You\u2019ll see it move to Live here when it ships.');
       ov.querySelector('.sgtext').value = ''; clearShot();
       loadMyRequests(ov);
     } catch (e) { msg.className = 'sgmsg err'; msg.textContent = '✗ ' + e.message; }
@@ -3393,7 +3406,7 @@ async function loadMyRequests(ov) {
     const me = clockName().toLowerCase();
     const mine = (j.requests || []).filter(x => (x.who || '').toLowerCase() === me).slice(0, 12);
     if (!mine.length) { box.innerHTML = '<i>none yet — be the first!</i>'; return; }
-    const ICONS = {bug: '🐛', edit: '✏️', idea: '💡'};
+    const ICONS = {bug: '🐛', edit: '✏️', idea: '💡', handbook: '📖'};
     box.innerHTML = mine.map(x => `<div class="sgreq">
       <span class="sgst s${esc(x.status.replace(/\s/g, ''))}">${esc(x.status)}</span>
       <span class="sgtxt">${ICONS[x.type] || '💡'} ${esc(x.text.slice(0, 220))}${x.text.length > 220 ? '…' : ''}</span>
@@ -12843,11 +12856,16 @@ async function admFetchRequests() {
 }
 function admRequestsHTML() {
   if (!ADMDASH.req) { admFetchRequests(); return '<div class="empty">Loading app requests…</div>'; }
-  const open = ADMDASH.req.filter(r => !['Tested', 'Declined'].includes(r.status));
-  const closed = ADMDASH.req.filter(r => ['Tested', 'Declined'].includes(r.status));
-  const row = r => `<div class="admreq">
+  const isHb = r => r.type === 'handbook';
+  const done = r => ['Tested', 'Declined'].includes(r.status);
+  // 📖 handbook suggestions (Karmel 9/8) sit in their own section — Brigham
+  // reviews/approves them before the Restoration Handbook is edited
+  const hbOpen = ADMDASH.req.filter(r => isHb(r) && !done(r));
+  const open = ADMDASH.req.filter(r => !isHb(r) && !done(r));
+  const closed = ADMDASH.req.filter(done);
+  const row = r => `<div class="admreq${isHb(r) ? ' admreqhb' : ''}">
       <div class="admreqtop"><b>${esc(r.who)}</b>
-        <span class="chip ${r.type === 'bug' ? 'c-due' : r.type === 'idea' ? 'c-from' : 'c-piano'}">${esc(r.type || 'edit')}</span>
+        <span class="chip ${r.type === 'bug' ? 'c-due' : r.type === 'idea' ? 'c-from' : isHb(r) ? 'c-hb' : 'c-piano'}">${esc(r.type || 'edit')}</span>
         <small>${esc(String(r.date).slice(0, 10))} · ${esc(r.id)}</small>
         <select class="reqst" data-id="${esc(r.id)}">
           ${REQ_STATES.map(st => `<option ${r.status === st ? 'selected' : ''}>${st}</option>`).join('')}
@@ -12873,7 +12891,12 @@ function admRequestsHTML() {
         </div>
       </div>
     </div>`;
-  return `<h4 class="tmsec">Open <span class="pc">${open.length}</span></h4>${open.map(row).join('')
+  // Brigham's queue goes first — it is short and the 100+ app requests
+  // below it would bury it
+  return `<h4 class="tmsec">📖 Handbook suggestions — Brigham reviews before the handbook changes <span class="pc">${hbOpen.length}</span></h4>
+    <div class="lite" style="font-size:11.5px;margin:-4px 0 8px">Requested = awaiting Brigham · In progress = approved, edit under way · Live = handbook updated · Declined = not adopting</div>
+    ${hbOpen.map(row).join('') || '<div class="empty">No handbook suggestions waiting.</div>'}
+    <h4 class="tmsec" style="margin-top:22px">Open <span class="pc">${open.length}</span></h4>${open.map(row).join('')
     || '<div class="empty">Nothing open. 🎉</div>'}
     <details style="margin-top:14px"><summary style="cursor:pointer;color:#8a929a">Completed / declined (${closed.length})</summary>
       ${closed.slice(0, 40).map(row).join('')}</details>`;

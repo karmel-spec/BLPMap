@@ -857,6 +857,15 @@ function doPost(e) {
     if (req.action === 'suggest') {
       var sg = addRequest_(req);
       if (sg.ok) logAct_(who, 'App request', sg.id, String(req.type || '') + ': ' + String(req.text || '').slice(0, 90));
+      // 📖 handbook suggestions (Karmel 9/8) are Brigham's to approve — text
+      // him so they don't wait for someone to open the dashboard
+      if (sg.ok && String(req.type || '') === 'handbook') {
+        try {
+          notifyTeam_(['Brigham'], '📖 Handbook suggestion ' + sg.id + ' — ' + (clockTech_(req) || who) + ': '
+            + String(req.text || '').slice(0, 160)
+            + ' (review in Store Map → Admin → App Requests → Handbook suggestions)');
+        } catch (eH) { /* text best-effort */ }
+      }
       return json_(sg);
     }
     if (req.action === 'taskcard') {

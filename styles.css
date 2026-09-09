@@ -1033,6 +1033,7 @@ button.cfxapply:hover{border-color:#9e2020;color:#9e2020}
 
 /* 💡 suggestion box — inline screenshot preview before sending */
 .sgprev{position:relative;display:inline-block;margin-top:9px}
+.sgprev[hidden],.sgdevrow[hidden]{display:none}
 .sgprev img{display:block;max-height:140px;max-width:100%;border-radius:9px;border:1px solid #cfd6dc}
 .sgprevx{position:absolute;top:-8px;right:-8px;width:22px;height:22px;border-radius:50%;
   border:1px solid #cfd6dc;background:#fff;color:#3a4046;font-size:12px;line-height:1;
@@ -1362,6 +1363,8 @@ button.cfxapply:hover{border-color:#9e2020;color:#9e2020}
 .c-due{background:#fdecec;color:#a03030}
 .c-dueok{background:#eaf5ec;color:#2f7d4f}
 .c-from{background:#f4ecfd;color:#6a3aa0}
+.c-hb{background:#fdf3e3;color:#8a5a12}
+.admreqhb{border-color:#e8d5b0;background:#fffdf8}
 .kmove{display:flex;gap:6px;margin-top:7px}
 .kmove button{border:1px solid #d8dce1;background:#fafbfc;border-radius:6px;padding:2px 10px;
   font-size:11px;cursor:pointer}
