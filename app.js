@@ -3728,14 +3728,17 @@ async function punch(action, p, phase, source, endAt, ackNote) {
     }
     if (j && j.service && !j.error) return punchVerify(action, p, phase,
       'the Google bridge hiccuped — the punch did NOT record; try again in a minute');
-    if (j.ok) {
+    if (j && j.ok) {
       CLOCK.open = action === 'clockin'
         ? (j.open || {tech: clockName(), serial: p.serial, phase, start: new Date().toISOString()})
         : null;
       CLOCK.nudged = false; CLOCK.lastAct = Date.now();
-      renderClockChip(); renderDock();
+      // the punch IS recorded at this point — a hiccup drawing the chip/dock
+      // must not turn into "may not have recorded" (Jake 9/9, every clock-in)
+      try { renderClockChip(); } catch (eR) { console.warn('clock chip render', eR); }
+      try { renderDock(); } catch (eR) { console.warn('dock render', eR); }
     }
-    return j;
+    return j || {error: 'no reply from the bridge'};
   } catch (e) {
     // the bridge can answer with a non-JSON error page for a few seconds
     // mid-deploy — the punch usually DID land (Jake 9/4: recorded at
@@ -3761,7 +3764,7 @@ async function punchVerify(action, p, phase, fallbackMsg) {
         if (hit) {
           CLOCK.open = {tech: clockName(), serial: p.serial, phase: hit.phase || phase, start: hit.start};
           CLOCK.nudged = false; CLOCK.lastAct = Date.now();
-          renderClockChip(); renderDock();
+          try { renderClockChip(); renderDock(); } catch (eR) { console.warn('dock render', eR); }
           setTimeout(fetchClock, 4000);
           return {ok: true, open: CLOCK.open, verified: 'from the Time Log'};
         }
@@ -3769,7 +3772,7 @@ async function punchVerify(action, p, phase, fallbackMsg) {
         const stillOpen = mine.some(x => !x.end);
         if (!stillOpen) {
           CLOCK.open = null; CLOCK.lastAct = Date.now();
-          renderClockChip(); renderDock();
+          try { renderClockChip(); renderDock(); } catch (eR) { console.warn('dock render', eR); }
           setTimeout(fetchClock, 4000);
           return {ok: true, verified: 'from the Time Log'};
         }
@@ -4437,7 +4440,7 @@ function renderDock() {
       <button class="dockfold" title="minimize — shrink to just the timer">▾</button>
     </div>
     <div class="dockmenu" hidden>
-      ${recents.map(x => `<div class="dockopt" data-row="${x.row}">📌 ${esc(x.summary.slice(0, 34))} · #${esc(x.serial)}</div>`).join('')}
+      ${recents.map(x => `<div class="dockopt" data-row="${x.row}">📌 ${esc(String(x.summary || x.serial || '').slice(0, 34))} · #${esc(x.serial)}</div>`).join('')}
       <input class="dockfindin" placeholder="🔍 type a serial, name or spot…" autocomplete="off"
         style="width:100%;box-sizing:border-box;margin:6px 0 2px;padding:8px 10px;border:2px solid #c9a227;border-radius:8px;font:inherit;font-size:13px">
       <div class="dockfindres"></div>
