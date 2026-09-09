@@ -1333,10 +1333,16 @@ function doPost(e) {
       if (String(serials[r - 1][0] || '').trim().toLowerCase() === want) matches.push(r);
     }
     if (!matches.length) return json_({error: 'serial not found above the SOLD section'});
-    if (matches.length > 1 && !req.row) {
+    // same guard as findPiano_ (Curtis 9/7): the app's row is only trusted
+    // when that row really holds this serial — a stale row must never move
+    // a different piano
+    var reqRow = Number(req.row);
+    var rowOk = reqRow >= 1 && reqRow <= last
+      && String(serials[reqRow - 1][0] || '').trim().toLowerCase() === want;
+    if (matches.length > 1 && !rowOk) {
       return json_({error: 'multiple active rows share this serial', rows: matches});
     }
-    var row = req.row || matches[0];
+    var row = rowOk ? reqRow : matches[0];
     var summary = String(sh.getRange(row, 4).getValue() || '');
     var current = String(sh.getRange(row, 21).getValue() || '');
     if (req.action === 'move' && req.newLocation != null && String(req.newLocation).trim()) {
