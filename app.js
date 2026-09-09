@@ -12949,12 +12949,37 @@ async function admFetchRequests() {
 function admRequestsHTML() {
   if (!ADMDASH.req) { admFetchRequests(); return '<div class="empty">Loading app requests…</div>'; }
   const isHb = r => r.type === 'handbook';
-  const done = r => ['Tested', 'Declined'].includes(r.status);
+  // Filters (Walter 9/9): "Open" is Requested + In progress only — a request
+  // that went Live leaves the working list, but stays one filter or search
+  // away (status, team member, type, free text) for later reference.
+  const f = ADMDASH.reqF || (ADMDASH.reqF = {st: 'open', who: '', type: '', q: ''});
+  // Resolved / Archived: legacy statuses from the Shop Manager era — closed too
+  const isOpen = r => !['Live', 'Tested', 'Declined', 'Resolved', 'Archived'].includes(r.status);
+  const stOk = r => f.st === 'open' ? isOpen(r) : f.st === 'all' ? true : r.status === f.st;
+  const q = f.q.trim().toLowerCase();
+  const match = r => stOk(r) && (!f.who || r.who === f.who) && (!f.type || (r.type || 'edit') === f.type)
+    && (!q || `${r.who} ${r.type || 'edit'} ${r.id} ${r.text} ${r.context || ''} ${r.status}`.toLowerCase().includes(q));
+  const hits = ADMDASH.req.filter(match);
   // 📖 handbook suggestions (Karmel 9/8) sit in their own section — Brigham
   // reviews/approves them before the Restoration Handbook is edited
-  const hbOpen = ADMDASH.req.filter(r => isHb(r) && !done(r));
-  const open = ADMDASH.req.filter(r => !isHb(r) && !done(r));
-  const closed = ADMDASH.req.filter(done);
+  const hbOpen = hits.filter(isHb);
+  const open = hits.filter(r => !isHb(r));
+  const whos = [...new Set(ADMDASH.req.map(r => r.who).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  const types = [...new Set(ADMDASH.req.map(r => r.type || 'edit'))].sort();
+  const filtered = f.st !== 'open' || f.who || f.type || q;
+  const STATES = [['open', 'Open (Requested + In progress)'], ['Live', 'Live — shipped'], ['Tested', 'Tested — confirmed by requester'], ['Declined', 'Declined']]
+    .concat(['Resolved', 'Archived'].filter(s => ADMDASH.req.some(r => r.status === s)).map(s => [s, s + ' (legacy)']))
+    .concat([['all', 'All requests']]);
+  const bar = `<div class="rfbar reqfbar">
+      <select class="reqf" data-f="st">${STATES.map(([v, t]) => `<option value="${v}" ${f.st === v ? 'selected' : ''}>${t}</option>`).join('')}</select>
+      <select class="reqf" data-f="who"><option value="">All team members</option>
+        ${whos.map(w => `<option ${f.who === w ? 'selected' : ''}>${esc(w)}</option>`).join('')}</select>
+      <select class="reqf" data-f="type"><option value="">All types</option>
+        ${types.map(t => `<option ${f.type === t ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select>
+      <input type="text" class="reqf" data-f="q" placeholder="🔍 words, name, or request id…" value="${esc(f.q)}">
+      <span class="lite" style="font-size:11.5px;white-space:nowrap">${hits.length} of ${ADMDASH.req.length}${filtered ? ' <button class="cfxclear reqfclear" type="button">clear filters</button>' : ''}</span>
+    </div>`;
+  const label = f.st === 'open' ? 'Open' : f.st === 'all' ? 'All requests' : f.st;
   const row = r => `<div class="admreq${isHb(r) ? ' admreqhb' : ''}">
       <div class="admreqtop"><b>${esc(r.who)}</b>
         <span class="chip ${r.type === 'bug' ? 'c-due' : r.type === 'idea' ? 'c-from' : isHb(r) ? 'c-hb' : 'c-piano'}">${esc(r.type || 'edit')}</span>
@@ -12985,13 +13010,12 @@ function admRequestsHTML() {
     </div>`;
   // Brigham's queue goes first — it is short and the 100+ app requests
   // below it would bury it
-  return `<h4 class="tmsec">📖 Handbook suggestions — Brigham reviews before the handbook changes <span class="pc">${hbOpen.length}</span></h4>
+  return `${bar}
+    <h4 class="tmsec">📖 Handbook suggestions — Brigham reviews before the handbook changes <span class="pc">${hbOpen.length}</span></h4>
     <div class="lite" style="font-size:11.5px;margin:-4px 0 8px">Requested = awaiting Brigham · In progress = approved, edit under way · Live = handbook updated · Declined = not adopting</div>
-    ${hbOpen.map(row).join('') || '<div class="empty">No handbook suggestions waiting.</div>'}
-    <h4 class="tmsec" style="margin-top:22px">Open <span class="pc">${open.length}</span></h4>${open.map(row).join('')
-    || '<div class="empty">Nothing open. 🎉</div>'}
-    <details style="margin-top:14px"><summary style="cursor:pointer;color:#8a929a">Completed / declined (${closed.length})</summary>
-      ${closed.slice(0, 40).map(row).join('')}</details>`;
+    ${hbOpen.map(row).join('') || `<div class="empty">${filtered ? 'No handbook suggestions match these filters.' : 'No handbook suggestions waiting.'}</div>`}
+    <h4 class="tmsec" style="margin-top:22px">${esc(label)} <span class="pc">${open.length}</span></h4>${open.map(row).join('')
+    || `<div class="empty">${filtered ? 'No requests match these filters.' : 'Nothing open. 🎉'}</div>`}`;
 }
 async function admFetchBrigham() {
   try {
@@ -13098,6 +13122,18 @@ function renderAdmDash() {
   el.querySelector('.admrefresh').onclick = () => {
     ADMDASH.req = ADMDASH.brig = ADMDASH.curtis = null; renderAdmDash();
   };
+  // requests: filter bar (status / team member / type / search)
+  el.querySelectorAll('.reqf').forEach(inp => {
+    const apply = () => {
+      (ADMDASH.reqF || (ADMDASH.reqF = {}))[inp.dataset.f] = inp.value;
+      renderAdmDash();
+      const again = el.querySelector(`.reqf[data-f="${inp.dataset.f}"]`);
+      if (again && again.type === 'text') { again.focus(); again.setSelectionRange(again.value.length, again.value.length); }
+    };
+    if (inp.tagName === 'SELECT') inp.onchange = apply;
+    else inp.oninput = () => { clearTimeout(inp._t); inp._t = setTimeout(apply, 300); };
+  });
+  el.querySelectorAll('.reqfclear').forEach(b => b.onclick = () => { ADMDASH.reqF = null; renderAdmDash(); });
   // requests: status dropdown writes through the bridge (Google-verified)
   el.querySelectorAll('.reqst').forEach(sel => sel.onchange = async () => {
     const wa = writeAuth();
