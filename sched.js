@@ -875,7 +875,10 @@ async function loadProposal(box){
       const j=await r.json();
       if(j.error) throw new Error(j.error);
       out.className="applyout";
-      out.innerHTML="✓ Applied — "+j.results.map(x=>`<b>${esc(x.tech)}</b>: ${x.events!=null?x.events+" events":esc(x.skipped||x.error||"?")}`).join(" · ");
+      // offDays: the tech's own calendar said they're off that day, so the
+      // proposal's blocks were NOT put on it (Melissa 9/7 — Curtis Wed/Fri)
+      out.innerHTML="✓ Applied — "+j.results.map(x=>`<b>${esc(x.tech)}</b>: ${x.events!=null?x.events+" events":esc(x.skipped||x.error||"?")}`
+        +(x.offDays&&x.offDays.length?` <span style="color:#9e2020">· skipped ${x.offDays.map(o=>esc(o.day)).join(", ")} — calendar says “${esc(x.offDays[0].why)}”</span>`:"")).join(" · ");
       if(j.applied){ ab.textContent="✓ Applied to calendars"; }
       else { ab.disabled=false; ab.textContent="✅ Approve — apply to live tech calendars"; }
       setTimeout(()=>loadProposal(box),2500);

@@ -1159,8 +1159,16 @@ function doPost(e) {
     if (req.action === 'applyschedule') {
       var aps = applySchedule_(req);
       if (aps.ok) logAct_(who, 'Schedule APPLIED to tech calendars', aps.week,
-        aps.results.map(function (r) { return r.tech + ':' + (r.events != null ? r.events : (r.skipped || r.error)); }).join(', '));
+        aps.results.map(function (r) {
+          return r.tech + ':' + (r.events != null ? r.events : (r.skipped || r.error))
+            + (r.offDays ? ' (skipped ' + r.offDays.map(function (o) { return o.day; }).join(', ') + ' — off on calendar)' : '');
+        }).join(', '));
       return json_(aps);
+    }
+    if (req.action === 'schedrule') {
+      var srl = addSchedRule_(req, who);
+      if (srl.ok) logAct_(who, 'Scheduling rule added', '', srl.rule.slice(0, 120));
+      return json_(srl);
     }
     // read-only audit of the applied week / delete duplicate applied events
     if (req.action === 'settechcal') {
@@ -4222,8 +4230,18 @@ function applyScheduleLocked_(req) {
     var cal;
     try { cal = calById_(calId); } catch (e) { cal = null; }   // subscribes if only shared
     if (!cal) { results.push({tech: tch.name, error: 'no access to ' + calId}); return; }
-    var made = 0, failed = 0;
+    var made = 0, failed = 0, offDays = [];
     (tch.days || []).forEach(function (blocks, di) {
+      // Melissa 9/7 (request 090726terry22): the draft put Curtis on
+      // Wednesday + Friday although his calendar says "Curtis off Wednesdays
+      // and Fridays". The tech's own calendar wins — a day it marks off is
+      // skipped and reported, whatever the proposal says.
+      var dayAt = new Date(start); dayAt.setDate(dayAt.getDate() + di);
+      var off = calOffMarker_(cal, dayAt);
+      if (off && (blocks || []).some(function (b) { return b[2] !== 'hold'; })) {
+        offDays.push({day: Utilities.formatDate(dayAt, 'America/Denver', 'EEE M/d'), why: off});
+        return;
+      }
       (blocks || []).forEach(function (b) {
         if (b[2] === 'hold') return;               // already on their calendar
         var t1 = shopClock_(b[0]), t2 = shopClock_(b[1]);
@@ -4241,7 +4259,9 @@ function applyScheduleLocked_(req) {
         } catch (e) { failed++; }
       });
     });
-    results.push({tech: tch.name, events: made, failed: failed});
+    var res = {tech: tch.name, events: made, failed: failed};
+    if (offDays.length) res.offDays = offDays;
+    results.push(res);
     // a tech whose every event-create failed (e.g. read-only calendar access)
     // must NOT be recorded as applied — that hid Matthew's failure on 8/16
     if (made > 0 || failed === 0) applied.push(tch.name);
@@ -4262,6 +4282,50 @@ function applyScheduleLocked_(req) {
  * their description are touched — hand-made calendar entries are ignored.
  * dedupe:true deletes the extras (keeps one per title/start/end). */
 var APPLIED_TAG = 'Applied from the Shop Manager schedule proposal';
+/* Is this day marked OFF on the tech's own calendar? Looks for an event
+ * whose title says so ("Curtis off Wednesdays and Fridays", "PTO", "out
+ * sick", "vacation", holidays…) — any length, all-day or not. Returns the
+ * event title (the reason to show) or ''. */
+var OFF_TITLE_RE = /\b(off|out|pto|vacation|vacay|sick|holiday|day off|no work|not (?:in|working)|unavailable|labor day|memorial day|thanksgiving|christmas|new year)\b/i;
+// work that merely contains "off"/"out": drop-offs, pickups, deliveries, tunings
+var NOT_OFF_RE = /\b(drop[- ]?off|pick[- ]?up|deliver(?:y|ies)?|moving|move|tuning|off[- ]?site|check[- ]?out|sign[- ]?off|kick[- ]?off)\b/i;
+function calOffMarker_(cal, day) {
+  try {
+    var evs = cal.getEventsForDay(day);
+    for (var i = 0; i < evs.length; i++) {
+      var t = String(evs[i].getTitle() || '');
+      // "Applied…" blocks from an earlier proposal are work, never an off marker
+      var d = ''; try { d = String(evs[i].getDescription() || ''); } catch (e1) {}
+      if (d.indexOf(APPLIED_TAG) >= 0) continue;
+      if (NOT_OFF_RE.test(t)) continue;
+      // "Dentist — out 1-3pm": a stated time range is a partial absence, not a day off
+      if (/\d{1,2}(?::\d{2})?\s*(?:am|pm)?\s*[-–—]\s*\d{1,2}/i.test(t)) continue;
+      if (OFF_TITLE_RE.test(t)) return t.trim();
+    }
+  } catch (e) { /* calendar unreadable — don't block the apply */ }
+  return '';
+}
+/* Standing scheduling rules — the "Scheduling Rules" tab every weekly draft
+ * (and the Planner's Claude revision) reads. Managers add one directly. */
+function schedRulesSheet_() {
+  var ss = SpreadsheetApp.openById('11RoeVRETag5rZYX6_tEH-rf6x8JL0JeZU0P5AT0WI-I');
+  var sh = ss.getSheetByName('Scheduling Rules');
+  if (!sh) {
+    sh = ss.insertSheet('Scheduling Rules', ss.getSheets().length);
+    sh.getRange(1, 1, 1, 3).setValues([['When', 'Rule', 'By']]);
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+function addSchedRule_(req, who) {
+  var g = req._g;
+  if (!timelogAdmin_(g)) return {error: 'Only owners and the shop managers can add scheduling rules (Google sign-in required).'};
+  var rule = String(req.rule || '').trim().slice(0, 400);
+  if (!rule) return {error: 'write the rule first'};
+  var sh = schedRulesSheet_();
+  sh.appendRow([Utilities.formatDate(new Date(), 'America/Denver', 'M/d/yy h:mm a'), rule, String((g && (g.name || g.email)) || who || '')]);
+  return {ok: true, rule: rule, rules: sh.getLastRow() - 1};
+}
 function scheduleCheck_(req) {
   var got = latestProposal_();
   if (!got.ok) return got;
