@@ -9961,6 +9961,18 @@ function adjFeedback(msgEl, j, okText) {
 /* Save/Add that came from an ✎ Apply also flips that request to resolved
  * (which texts the team member) — Brigham 9/8: "the edit request above
  * should change from Apply to resolved". */
+/* Melissa 9/8 (request 090826terry23): a punch fixed straight from the table
+ * — without going through ✎ Apply — still resolves the open request that is
+ * about it, when exactly one request points at this punch. Re-sent copies
+ * of the same request stay open for the manager's "Duplicate" button. */
+function cfxAutoLink(clock, row) {
+  const open = (S.fixRows || []).filter(r => r.status === 'open' && cfxSinceLaunch(r));
+  const hits = open.filter(fx => {
+    const m = cfxMatch(fx);
+    return m.clock === clock && m.pick && m.pick.row === row;
+  });
+  return hits.length ? hits[0].row : null;
+}
 async function adjResolveFrom(fixRow, msgEl) {
   if (!fixRow) { S.fixRows = null; loadClockFixes(); return; }
   const fx = (S.fixRows || []).find(r => r.row === +fixRow);
@@ -10835,8 +10847,10 @@ function renderReport() {
     const who = (tr.children[1] && tr.children[1].textContent.trim().split('\n')[0]) || 'punch';
     if (!adjFeedback(msg, j, `saved — ${who}: ${fmtT(new Date(start).toISOString())} → ${end ? fmtT(new Date(end).toISOString()) : 'open'}`)) { b.disabled = false; return; }
     b.textContent = '✓ saved';
-    const fromFix = (S.adjEdit || {}).fromFix;
     const savedClock = b.dataset.clock, savedRow = +b.dataset.row;
+    // linked by ✎ Apply, or — Melissa 9/8 — found by matching the punch the
+    // manager edited directly (before the patch moves its date)
+    const fromFix = (S.adjEdit || {}).fromFix || cfxAutoLink(savedClock, savedRow);
     adjPatchLocal(savedClock, savedRow, new Date(start).toISOString(), end ? new Date(end).toISOString() : '',
       savedClock === 'pay' ? {note: 'adjusted just now — syncing…'} : {});
     S.adjEdit = null;
