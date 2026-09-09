@@ -8401,9 +8401,12 @@ function oidcLogin(hintEmail) {
   const nonce = (crypto.randomUUID ? crypto.randomUUID()
     : String(Math.random()).slice(2) + Date.now());
   lsSet('blpNonce', nonce);
+  // local dev (ruby serve.rb / server.py) comes back to itself — the OAuth
+  // client lists http://localhost:8641 as an authorized redirect URI
+  const dev = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
   const q = new URLSearchParams({
     client_id: GOOGLE_CLIENT_ID,
-    redirect_uri: 'https://blpstoremap.netlify.app/',
+    redirect_uri: dev ? location.origin + '/' : 'https://blpstoremap.netlify.app/',
     response_type: 'id_token',
     scope: 'openid email profile',
     nonce,

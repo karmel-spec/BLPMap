@@ -4,3 +4,4 @@ data/storemap.xlsx
 config.json
 node_modules/
 tech-dash-designs.html
+.claude/
