@@ -13068,6 +13068,7 @@ function renderAdmDash() {
       if (!j.ok) throw new Error(j.error || 'failed');
       const req = ADMDASH.req.find(x => x.id === sel.dataset.id);
       if (req) req.status = sel.value;
+      if (j.texted) cfxToast(`✓ Live — ${(j.who || 'the requester').split(' ')[0]} has been texted`);
       renderAdmDash();
     } catch (e) { alert('✗ ' + e.message); sel.disabled = false; }
   });

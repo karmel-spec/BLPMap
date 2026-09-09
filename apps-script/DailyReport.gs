@@ -3611,10 +3611,24 @@ function setRequestStatus_(req) {
   var vals = sh.getDataRange().getValues();
   for (var i = 1; i < vals.length; i++) {
     if (String(vals[i][0]) === String(req.id)) {
+      var wasLive = String(vals[i][7] || '') === 'Live';
       sh.getRange(i + 1, 8, 1, 3).setValues([[String(req.status),
         clockTech_(req) || '', new Date().toISOString()]]);
+      var rWho = String(vals[i][2]), rText = String(vals[i][4]);
+      // Walter 9/9: flipping a request to Live from the Store Map now texts
+      // the requester (the Shop Manager already did) — once, not on every
+      // re-select of the same status
+      var texted = false;
+      if (String(req.status) === 'Live' && !wasLive && rWho && !/^claude test/i.test(rWho)) {
+        try {
+          notifyTeam_([rWho], '✅ Your app request ' + String(req.id) + ' is live — "'
+            + rText.slice(0, 110) + (rText.length > 110 ? '…' : '')
+            + '". Try it, then open the 💡 box in the Store Map and tap "It works" (or send a new request if it isn’t right yet).');
+          texted = true;
+        } catch (eT) { /* text best-effort */ }
+      }
       return {ok: true, id: String(req.id), status: String(req.status),
-              who: String(vals[i][2]), text: String(vals[i][4]).slice(0, 140)};
+              who: rWho, text: rText.slice(0, 140), texted: texted};
     }
   }
   return {error: 'request not found'};
