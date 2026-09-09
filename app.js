@@ -1633,12 +1633,9 @@ function keytopPhotoGate(p, o) {
     shotMsg.className = 'pg-shot phmsg'; shotMsg.textContent = 'Uploading…';
     try {
       const dataUrl = await downscalePhoto(f, 2048, 0.85);
-      const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
-        headers: {'content-type': 'text/plain;charset=utf-8'},
-        body: JSON.stringify({pin: wa.pin, action: 'photo', kind: 'progress', serial: p.serial,
+      const j = await photoPost({pin: wa.pin, action: 'photo', kind: 'progress', serial: p.serial,
           row: p.row, stage: o.stage, mime: 'image/jpeg',
-          data: dataUrl.split(',')[1], ...authFields()})});
-      const j = await r.json();
+          data: dataUrl.split(',')[1], ...authFields()});
       if (!j.saved) throw new Error(j.error || 'upload failed');
       shotMsg.className = 'pg-shot phmsg ok'; shotMsg.textContent = '✓ photo filed';
       go.disabled = false;
@@ -1787,12 +1784,9 @@ function openShotWizard(p, kind) {
     const snapBtn = ov.querySelector('.swsnap');
     if (snapBtn) snapBtn.disabled = true;
     try {
-      const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
-        headers: {'content-type': 'text/plain;charset=utf-8'},
-        body: JSON.stringify({pin: wa.pin, action: 'photo', kind, serial: p.serial, row: p.row,
+      const j = await photoPost({pin: wa.pin, action: 'photo', kind, serial: p.serial, row: p.row,
           stage: shotStage(kind, W.idx, list[W.idx]), share: 1, mime: 'image/jpeg',
-          data: dataUrl.split(',')[1], ...authFields()})});
-      const j = await r.json();
+          data: dataUrl.split(',')[1], ...authFields()});
       if (!j.saved) throw new Error(j.error || 'upload failed');
       W.done[W.idx] = true;
       if (kind === 'before' && j.id) W.beforeIds[W.idx] = j.id;
@@ -4274,12 +4268,9 @@ async function openWorkChecklist(serial, phase) {
         sm.className = 'clshotmsg phmsg'; sm.textContent = 'Uploading…';
         try {
           const dataUrl = await downscalePhoto(f, 2048, 0.85);
-          const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
-            headers: {'content-type': 'text/plain;charset=utf-8'},
-            body: JSON.stringify({pin: wa.pin, action: 'photo', serial, row: p.row,
+          const j2 = await photoPost({pin: wa.pin, action: 'photo', serial, row: p.row,
               stage: phase + ' — ' + it.text.slice(0, 40), mime: 'image/jpeg',
-              data: dataUrl.split(',')[1], ...authFields()})});
-          const j2 = await r.json();
+              data: dataUrl.split(',')[1], ...authFields()});
           if (!j2.saved) throw new Error(j2.error || 'upload failed');
           sm.className = 'clshotmsg phmsg ok'; sm.textContent = '✓ filed to the Tech folder';
         } catch (e2) { sm.className = 'clshotmsg phmsg err'; sm.textContent = '✗ ' + e2.message; }
@@ -5917,12 +5908,9 @@ function wirePop(p) {
         msg.className = 'mdmsg'; msg.textContent = `Uploading ${kind} photo ${done + 1}/${files.length}…`;
         try {
           const dataUrl = await downscalePhoto(f, 2048, 0.85);   // web/Shopify-ready JPEG
-          const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
-            headers: {'content-type': 'text/plain;charset=utf-8'},
-            body: JSON.stringify({pin: wa.pin, action: 'photo', kind, serial: p.serial, row: p.row,
+          const j = await photoPost({pin: wa.pin, action: 'photo', kind, serial: p.serial, row: p.row,
               stage: kind === 'before' ? 'Before' : 'After', mime: 'image/jpeg',
-              data: dataUrl.split(',')[1], ...authFields()})});
-          const j = await r.json();
+              data: dataUrl.split(',')[1], ...authFields()});
           if (!j.saved) throw new Error(j.error || 'upload failed');
           done++;
         } catch (e) {
@@ -6082,12 +6070,9 @@ function wirePop(p) {
       msg.textContent = 'uploading bench photo…';
       try {
         const dataUrl = await downscalePhoto(f, 2048, 0.85);
-        const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
-          headers: {'content-type': 'text/plain;charset=utf-8'},
-          body: JSON.stringify({pin: wa.pin, action: 'photo', kind: 'tech', serial: p.serial,
+        const j = await photoPost({pin: wa.pin, action: 'photo', kind: 'tech', serial: p.serial,
             row: p.row, stage: 'Bench photo', mime: 'image/jpeg',
-            data: dataUrl.split(',')[1], ...authFields()})});
-        const j = await r.json();
+            data: dataUrl.split(',')[1], ...authFields()});
         if (!j.saved) throw new Error(j.error || 'upload failed');
         msg.textContent = '✓ bench photo filed to the Tech folder';
       } catch (e) { msg.textContent = '✗ ' + e.message; }
@@ -6108,12 +6093,9 @@ function wirePop(p) {
     if (msg) { msg.className = 'pwmsg phmsg'; msg.textContent = 'Uploading scan…'; }
     try {
       const dataUrl = await downscalePhoto(f, 2048, 0.85);
-      const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
-        headers: {'content-type': 'text/plain;charset=utf-8'},
-        body: JSON.stringify({pin: wa.pin, action: 'photo', kind: 'paperwork',
+      const j = await photoPost({pin: wa.pin, action: 'photo', kind: 'paperwork',
           serial: p.serial, row: p.row, stage: 'Paperwork ' + label,
-          mime: 'image/jpeg', data: dataUrl.split(',')[1], ...authFields()})});
-      const j = await r.json();
+          mime: 'image/jpeg', data: dataUrl.split(',')[1], ...authFields()});
       if (!j.saved) throw new Error(j.error || 'upload failed');
       await setPaperwork(p, k, j.link, j.name, pop);
     } catch (e) { if (msg) { msg.className = 'pwmsg phmsg err'; msg.textContent = '✗ ' + e.message; } }
@@ -6189,12 +6171,9 @@ function openPhaseGateModal(p, phase, was, pop) {
     shotMsg.className = 'pg-shot phmsg'; shotMsg.textContent = 'Uploading…';
     try {
       const dataUrl = await downscalePhoto(f, 2048, 0.85);
-      const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
-        headers: {'content-type': 'text/plain;charset=utf-8'},
-        body: JSON.stringify({pin: wa.pin, action: 'photo', kind: 'progress', serial: p.serial,
+      const j = await photoPost({pin: wa.pin, action: 'photo', kind: 'progress', serial: p.serial,
           row: p.row, stage: was || 'progress', mime: 'image/jpeg',
-          data: dataUrl.split(',')[1], ...authFields()})});
-      const j = await r.json();
+          data: dataUrl.split(',')[1], ...authFields()});
       if (!j.saved) throw new Error(j.error || 'upload failed');
       shotMsg.className = 'pg-shot phmsg ok'; shotMsg.textContent = '✓ photo filed';
       go.disabled = false;
@@ -8085,6 +8064,30 @@ async function submitBrigham(p, ov) {
 
 // one-tap progress photo: camera → downscale → the piano's Tech Drive folder
 // (named serial__phase__date so client updates can pull photos per stage)
+/* Every photo upload goes through here (Lupita 8/25 + 9/8, requests
+ * 082526chavoya01 / 090826chavoya03: "can't submit photos"). Photos are the
+ * biggest bridge posts, so: a 60 s deadline instead of the default 25 s,
+ * and the same ping-imposter detection adjustPost has — when Google answers
+ * the service ping instead of running the action, retry, and if it keeps
+ * happening say so plainly instead of "the bridge needs an update". */
+async function photoPost(body) {
+  for (let a = 0; a < 3; a++) {
+    try {
+      const r = await fetchT(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+        headers: {'content-type': 'text/plain;charset=utf-8'}, body: JSON.stringify(body)}, 60000);
+      const j = await r.json();
+      if (j && j.service && !j.saved && !j.error) {   // ping imposter — the upload never ran
+        await new Promise(res => setTimeout(res, 1500 * (a + 1)));
+        continue;
+      }
+      return j;
+    } catch (e) {
+      if (a === 2) return {error: (e && e.name === 'AbortError') ? 'the upload timed out — check the connection and try again' : 'no reply from the Google bridge — try again in a minute'};
+      await new Promise(res => setTimeout(res, 1500 * (a + 1)));
+    }
+  }
+  return {error: 'the Google bridge hiccuped — the photo did NOT save; try again in a minute'};
+}
 async function uploadPhoto(p, input, pop) {
   const f = input.files && input.files[0];
   if (!f) return;
@@ -8102,14 +8105,9 @@ async function uploadPhoto(p, input, pop) {
     msg.className = 'photomsg'; msg.textContent = 'Preparing photo…';
     const dataUrl = await downscalePhoto(f, 1800, 0.85);
     msg.textContent = 'Uploading to the piano’s Tech folder…';
-    const r = await fetch(BRIDGE_URL, {
-      method: 'POST', redirect: 'follow',
-      headers: {'content-type': 'text/plain;charset=utf-8'},
-      body: JSON.stringify({pin, action: 'photo', serial: p.serial, row: p.row,
-        stage: effectivePhase(p) || '', mime: 'image/jpeg',
-        data: dataUrl.split(',')[1], ...authFields()}),
-    });
-    const j = await r.json();
+    const j = await photoPost({pin, action: 'photo', serial: p.serial, row: p.row,
+      stage: effectivePhase(p) || '', mime: 'image/jpeg',
+      data: dataUrl.split(',')[1], ...authFields()});
     if (j.error === 'unauthorized') {
       lsDel('blpPin');
       msg.className = 'photomsg err'; msg.textContent = '✗ Not authorized — sign in again (☰ menu), then retry.';
@@ -8117,7 +8115,7 @@ async function uploadPhoto(p, input, pop) {
       msg.className = 'photomsg err'; msg.textContent = '✗ ' + j.error;
     } else if (!j.saved) {
       msg.className = 'photomsg err';
-      msg.textContent = '✗ The bridge needs an update — paste the repo’s DailyReport.gs into Apps Script and deploy a new version.';
+      msg.textContent = '✗ The photo did not save — try again; if it keeps failing, send a 💡 request with this message.';
     } else {
       msg.className = 'photomsg ok'; msg.textContent = `✓ Saved as ${j.name}`;
     }
