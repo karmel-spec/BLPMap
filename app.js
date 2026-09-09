@@ -3530,7 +3530,12 @@ async function fetchClock() {
     const me = clockName().toLowerCase();
     const was = CLOCK.open && CLOCK.open.serial;
     CLOCK.open = j.open.find(o => (o.tech || '').toLowerCase() === me) || null;
-    if ((CLOCK.open && CLOCK.open.serial) !== was) { renderClockChip(); renderDock(); }
+    if ((CLOCK.open && CLOCK.open.serial) !== was) {
+      // separately guarded: a chip hiccup must never hide the bottom dock
+      // (Jacob 9/8, request 090826mower12 — same failure Jake saw)
+      try { renderClockChip(); } catch (eR) { console.warn('clock chip render', eR); }
+      try { renderDock(); } catch (eR) { console.warn('dock render', eR); }
+    }
   } catch (e) { /* offline — keep last */ }
 }
 /* Confirmation popup before any piano clock change (Brigham 8/27) — a DOM
