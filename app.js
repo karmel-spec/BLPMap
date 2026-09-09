@@ -4393,7 +4393,12 @@ function renderClockChip() {
     if (!bar) return;
     chip = document.createElement('button');
     chip.id = 'clockchip'; chip.className = 'clockchip';
-    bar.insertBefore(chip, document.querySelector('.drawerbtn'));
+    // on phones the header slimming has moved 🚚 (.drawerbtn) into the ☰
+    // drawer, so it is no longer a child of the bar — insertBefore threw
+    // "not a child of this node" on every first clock-in (Jake 9/9)
+    const ref = [document.querySelector('.drawerbtn'), document.getElementById('menuBtn')]
+      .find(el => el && el.parentNode === bar);
+    if (ref) bar.insertBefore(chip, ref); else bar.appendChild(chip);
     if (window.applyHeaderLayout) setTimeout(window.applyHeaderLayout, 0);   // chip takes room — re-fit the header
     chip.onclick = () => {
       const o = CLOCK.open; if (!o) return;
