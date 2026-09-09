@@ -3802,7 +3802,13 @@ async function punchVerify(action, p, phase, fallbackMsg) {
  * techs. Advancing OUT of a checklist phase requires a manager mini-QC:
  * request → text to Mark (30-min escalation to Mark+Karmel) → C-rail
  * inspection → pass advances the phase, fail creates a 🔁 Rework card. */
-const QC_PHASES = ['CAP', 'PRSBa - Pre-Plate', 'QC & Assembly', 'Post Sale QC'];   // PRSBa MUST stay (plate hides the work after); QC & Assembly / Post Sale QC = mini-QC of the QC (Brigham 9/4, 9/8)
+// phases whose advance is gated by a manager mini-QC. PRSBa MUST stay (plate
+// hides the work after); QC & Assembly = mini-QC of the QC (Brigham 9/4).
+// Post Sale QC — the pre-delivery final QC — is NOT gated (Mark 9/8, request
+// 090826hales35): the worksheet itself is the check, no second inspection.
+const QC_PHASES = ['CAP', 'PRSBa - Pre-Plate', 'QC & Assembly'];
+// phases that carry a digital checklist (worksheet + progress pill)
+const CHECKLIST_PHASES = QC_PHASES.concat(['Post Sale QC']);
 // acronym school (Brigham 9/3): TRAINING mode spells acronyms out so newbies
 // learn them; trained techs see the acronyms alone everywhere else.
 const PHASE_LONG = {
@@ -3824,6 +3830,7 @@ const QC_ALL_UNTIL = new Date('2026-10-04T00:00:00-06:00').getTime();
 function qcGated(was) {
   const w = String(was || '').trim();
   if (!w || /^(waiting|in queue|paused|for sale|sale pending|sold|delivered)/i.test(w)) return false;
+  if (w === 'Post Sale QC') return false;   // the final QC is the check itself (Mark 9/8) — training month included
   return QC_PHASES.includes(w) || Date.now() < QC_ALL_UNTIL;
 }
 const PHASEQC_URL = 'https://blpsalesapp.netlify.app/.netlify/functions/phase-qc';
@@ -3905,7 +3912,7 @@ async function updateClPill() {
     const pp = S.data.pianos.find(x => x.serial === o.serial);
     ph = pp ? String(pp.phase || '').trim() : '';
   }
-  const active = o && o.serial && o.serial !== 'MGMT' && o.serial !== 'TIDY' && QC_PHASES.includes(ph || o.phase) ? (ph || o.phase) : null;
+  const active = o && o.serial && o.serial !== 'MGMT' && o.serial !== 'TIDY' && CHECKLIST_PHASES.includes(ph || o.phase) ? (ph || o.phase) : null;
   if (!active) { if (pill) pill.hidden = true; return; }
   const st = await clFetch(o.serial, active);
   const work = clVariantItems(st.items, S.data.pianos.find(x => x.serial === o.serial) || {}, 'work');
@@ -3995,30 +4002,22 @@ async function openWorkChecklist(serial, phase) {
     if (st.done.has(idx)) { st.notes.set(idx, note); clToggle(serial, phase, idx, true, false, note); }
     else pendNotes.set(idx, note);
   };
-  // Post Sale QC complete → ask for the manager's mini-QC pass-off right away
-  // (Brigham 9/8): the normal request goes to the inspector + video copy per
-  // Settings (Brigham + Karmel today); Mark gets a text too.
-  let qcFired = !!st.request;
+  // Post Sale QC complete → no mini-QC pass-off any more (Mark 9/8, request
+  // 090826hales35): the final QC IS the inspection. Mark still gets an FYI
+  // text (Brigham 9/8 wanted him told) so delivery can be lined up.
+  let qcFired = !!st.request || lsGet('psqcDone_' + serial) === '1';
   const checkComplete = async () => {
     if (phase !== 'Post Sale QC' || qcFired) return;
     if (!work.length || !work.every(it => st.done.has(it.i) || st.skips.has(it.i))) return;
     qcFired = true;
+    lsSet('psqcDone_' + serial, '1');
     const box = ov.querySelector('.clcomplete');
-    if (box) { box.hidden = false; box.textContent = '✅ QC complete — requesting the mini-QC pass-off…'; }
-    try {
-      const j = await requestMiniQc(p, 'Sold', 'Post Sale QC');
-      if (j && j.id && !j.existing) {
-        const link = location.origin + location.pathname + '#qc=' + j.id;
-        fetch('https://blpsalesapp.netlify.app/.netlify/functions/request-notify', {
-          method: 'POST', headers: {'content-type': 'application/json'},
-          body: JSON.stringify({key: 'pianoman', name: 'Mark Hales',
-            message: `✅ Post Sale QC finished on ${p.summary || '#' + serial} (#${serial}) by ${clockName() || 'the QC tech'} — please do the mini-QC pass-off or leave feedback/training notes: ${link}`})})
-          .catch(() => {});
-      }
-      if (box) box.textContent = j && j.existing
-        ? '✅ QC complete — a mini-QC request for this piano is already waiting on Brigham/Mark.'
-        : '✅ QC complete — Brigham, Karmel & Mark have been texted to do the mini-QC pass-off (or leave feedback).';
-    } catch (e) { if (box) box.textContent = '✅ QC complete — could not send the mini-QC request (' + e.message + '); advance the phase to request it.'; }
+    if (box) { box.hidden = false; box.textContent = '✅ Final QC complete — this piano is ready to deliver. Mark has been told.'; }
+    fetch('https://blpsalesapp.netlify.app/.netlify/functions/request-notify', {
+      method: 'POST', headers: {'content-type': 'application/json'},
+      body: JSON.stringify({key: 'pianoman', name: 'Mark Hales',
+        message: `✅ Post Sale QC finished on ${p.summary || '#' + serial} (#${serial}) by ${clockName() || 'the QC tech'} — ready to deliver. (No mini-QC pass-off needed on the final QC.)`})})
+      .catch(() => {});
   };
   // Summary mode (Brigham 9/8, Curtis's pilot): each step shrinks to its
   // header phrase with a ▸ to expand the full verbatim wording
@@ -4061,7 +4060,7 @@ async function openWorkChecklist(serial, phase) {
             </div></span>` : ''}
           <span class="lite" style="font-size:11px">${dense ? 'tap ▸ on a step for the full instructions' : 'every word of each step'}</span>
         </div>
-        <div class="clcomplete" ${qcFired && phase === 'Post Sale QC' ? '' : 'hidden'} style="background:#eef6ef;border:1.5px solid #7fc48f;border-radius:10px;padding:8px 11px;margin:0 0 10px;font-size:12.5px;font-weight:700">${qcFired ? '✅ Mini-QC pass-off already requested for this piano.' : ''}</div>
+        <div class="clcomplete" ${qcFired && phase === 'Post Sale QC' ? '' : 'hidden'} style="background:#eef6ef;border:1.5px solid #7fc48f;border-radius:10px;padding:8px 11px;margin:0 0 10px;font-size:12.5px;font-weight:700">${qcFired ? '✅ Final QC complete — ready to deliver.' : ''}</div>
         ${work.map(it => {
           const isDone = st.done.has(it.i), isSkip = st.skips.has(it.i);
           const showFull = !dense || expanded.has(it.i);
