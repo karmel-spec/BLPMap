@@ -1880,6 +1880,13 @@ button:disabled{opacity:.55;cursor:progress}
    the old solid-green "✓ Resolved" button read as a status) */
 .cfxopen{display:inline-block;background:#fdf3ec;color:#9a5b13;border:1px solid #e8cfae;border-radius:6px;padding:2px 7px;font:700 10.5px/1.2 inherit;letter-spacing:.5px;margin-right:6px}
 button.cfxres{font:600 11.5px/1.2 inherit;border:1px solid #cfc9bf;background:#fff;border-radius:8px;padding:5px 9px;cursor:pointer;color:#2b2f33}
+/* punch tables scroll in their own box so the column titles stay visible
+   (Melissa 9/8); box-shadow stands in for th's border, which sticky +
+   border-collapse drops */
+.stickytbl{max-height:62vh;overflow:auto;border:1px solid #eceef0;border-radius:9px;margin-bottom:6px}
+.stickytbl table{margin:0}
+.stickytbl th{position:sticky;top:0;background:#fff;z-index:2;border-bottom:0;box-shadow:0 2px 0 #eceef0;padding-left:8px}
+.stickytbl td{padding-left:8px}
 .cfxclock,.cfxserial{font:600 11.5px/1.2 inherit;font-family:inherit;border:1px solid #cfc9bf;background:#fff;border-radius:7px;padding:4px 6px;color:#2b2f33}
 .cfxserial{width:78px;margin-left:4px}
 button.cfxres:hover{border-color:#2e7d4f;color:#2e7d4f}

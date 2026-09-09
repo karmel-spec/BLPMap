@@ -10096,11 +10096,14 @@ function clockAdjustTable() {
   let pay = '', payAdd = '';
   if (canPay) {
     const keep = r => new Date(r.start) >= cutoff || (S.adjEdit && S.adjEdit.clock === 'pay' && S.adjEdit.row === r.row);
-    const rows = S.payRows.filter(keep);
+    // chronological, not sheet order (Melissa 9/8): added/adjusted punches
+    // are appended to the sheet, so 9/4 could sit between 8/31 and 9/2.
+    // The table scrolls in its own box so the column titles stay put.
+    const rows = S.payRows.filter(keep).sort((a, b) => new Date(a.start) - new Date(b.start));
     pay = `<h4 class="bfhd">Payroll day punches — last 14 days (owners, Melissa & Mark)</h4>
-      <table><tr><th>DATE</th><th>TEAM MEMBER</th><th>IN → OUT</th><th>HOURS</th><th></th></tr>
+      <div class="stickytbl"><table><tr><th>DATE</th><th>TEAM MEMBER</th><th>IN → OUT</th><th>HOURS</th><th></th></tr>
       ${rows.map(r => adjRow('pay', r, esc(r.date), esc(r.tech))).join('')
-       || '<tr><td colspan="5" class="empty">No punches yet.</td></tr>'}</table>`;
+       || '<tr><td colspan="5" class="empty">No punches yet.</td></tr>'}</table></div>`;
     // at the top of the report (Mark 9/8): a forgotten day punch is the most
     // common fix and shouldn't need a scroll past every table to reach
     payAdd = `<div class="rfbar adjaddbar" data-clock="pay"><b>+ missed day punch:</b>
@@ -10112,13 +10115,13 @@ function clockAdjustTable() {
   let tl = '';
   if (canTl) {
     const keep = r => new Date(r.start) >= cutoff || (S.adjEdit && S.adjEdit.clock === 'piano' && S.adjEdit.row === r.row);
-    const rows = S.tlRows.filter(keep);
+    const rows = S.tlRows.filter(keep).sort((a, b) => new Date(a.start) - new Date(b.start));
     tl = `<h4 class="bfhd">Piano Work Clock sessions — last 14 days (owners & shop managers)</h4>
-      <table><tr><th>PIANO</th><th>TECH · PHASE</th><th>IN → OUT</th><th>HOURS</th><th></th></tr>
+      <div class="stickytbl"><table><tr><th>PIANO</th><th>TECH · PHASE</th><th>IN → OUT</th><th>HOURS</th><th></th></tr>
       ${rows.map(r => adjRow('piano', r,
           `${esc(r.piano || '—')}<br><small>#${esc(r.serial)}</small>`,
           `${esc(r.tech)}<br><small>${esc(r.phase || '')}</small>`)).join('')
-       || '<tr><td colspan="5" class="empty">No sessions yet.</td></tr>'}</table>
+       || '<tr><td colspan="5" class="empty">No sessions yet.</td></tr>'}</table></div>
       <div class="rfbar adjaddbar" data-clock="piano"><b>+ missed piano session:</b>
         <input type="text" class="a-tech" placeholder="tech name">
         <input type="text" class="a-serial" placeholder="piano serial">
