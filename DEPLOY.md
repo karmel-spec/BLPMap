@@ -56,7 +56,11 @@ pbpaste | cmp - apps-script/DailyReport.gs && echo ok
 ```
 
 After deploying, open the bridge URL: the ping must show `"enc":"→ — 🛠"`
-intact. If it shows garble, the paste was bad — redo it.
+intact (if it shows garble, the paste was bad — redo it) and `"rev"` equal
+to `BRIDGE_REV` at the top of `DailyReport.gs`. Bump `BRIDGE_REV` with every
+change — it is the only reliable way to tell that a paste actually took
+(a skipped ⌘S or a deployment left on its old version looks identical
+otherwise; it happened 9/9).
 
 ## Local dev
 `python3 server.py` still works exactly as before (port 8641) and needs
