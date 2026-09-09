@@ -624,7 +624,15 @@ function findPiano_(sh, serial, rowOverride) {
     if (String(serials[r - 1][0] || '').trim().toLowerCase() === want) matches.push(r);
   }
   if (!matches.length) return {error: 'serial not found above the SOLD section'};
-  var row = rowOverride || matches[0];
+  // The app's row number comes from a CSV snapshot up to ~2.5 min old; a row
+  // inserted, deleted or re-sorted above it meanwhile makes it point at a
+  // DIFFERENT piano (Curtis 9/7, request 090726biggs03: clocked in on the
+  // Steinway 55038, the Time Log said "1907 Lester"). Honor the override only
+  // when that row really holds this serial; otherwise resolve by serial.
+  var row = null;
+  var ro = Number(rowOverride);
+  if (ro >= 1 && ro <= last && String(serials[ro - 1][0] || '').trim().toLowerCase() === want) row = ro;
+  if (!row) row = matches[0];
   return {row: row,
           summary: String(sh.getRange(row, 4).getValue() || ''),
           location: String(sh.getRange(row, 21).getValue() || '')};
