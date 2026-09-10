@@ -7530,6 +7530,7 @@ const SERVICE_TECHS = [
   {id: 'jakepulver.blp@gmail.com', name: 'Jake Pulver'},
   {id: 'mckinlylopp.blp@gmail.com', name: 'McKinly Lopp'},
   {id: 'curtisbiggs.blp@gmail.com', name: 'Curtis Biggs'},
+  {id: 'matthewwessman.blp@gmail.com', name: 'Matthew Wessman'},   // Mark 9/2, request 090226hales22
 ];
 function openServiceModal(p) {
   popPinned = false; $('#pop').hidden = true;
