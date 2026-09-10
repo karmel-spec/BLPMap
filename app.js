@@ -9835,16 +9835,17 @@ async function adjustPost(body) {
   }
   return {error: 'the Google bridge hiccuped and the change did NOT save — try again in a minute'};
 }
-function adjRow(clock, r, label, sub) {
+function adjRow(clock, r, label, sub, dateCell) {
   const ed = S.adjEdit && S.adjEdit.clock === clock && S.adjEdit.row === r.row;
+  const dt = dateCell ? `<td style="white-space:nowrap">${dateCell}</td>` : '';
   if (!ed) {
-    return `<tr><td>${label}</td><td>${sub}</td>
+    return `<tr>${dt}<td>${label}</td><td>${sub}</td>
       <td>${fmtT(r.start)} → ${r.end ? fmtT(r.end) : '<b style="color:#2e7d4f">open</b>'}</td>
       <td>${r.minutes ? fmtHM(r.minutes) : '—'}</td>
       <td><button class="adjedit" data-clock="${clock}" data-row="${r.row}">✎ adjust</button></td></tr>`;
   }
   const hint = S.adjEdit.hint ? `<div class="lite" style="font-size:11.5px;margin-bottom:6px;white-space:normal">📎 ${esc(S.adjEdit.hint)}</div>` : '';
-  return `<tr class="adjediting"><td>${label}</td><td>${sub}</td>
+  return `<tr class="adjediting">${dt}<td>${label}</td><td>${sub}</td>
     <td colspan="3">${hint}<span class="rfd">start <input type="datetime-local" class="adjstart" value="${(S.adjEdit.pre && S.adjEdit.pre.start) || toLocalInput(r.start)}"></span>
       <span class="rfd">end <input type="datetime-local" class="adjend" value="${(S.adjEdit.pre && S.adjEdit.pre.end) || toLocalInput(r.end)}"></span>
       <button class="csvbtn adjsave" data-clock="${clock}" data-row="${r.row}">Save</button>
@@ -10196,11 +10197,12 @@ function clockAdjustTable() {
     const keep = r => new Date(r.start) >= cutoff || (S.adjEdit && S.adjEdit.clock === 'piano' && S.adjEdit.row === r.row);
     const rows = S.tlRows.filter(keep).sort((a, b) => new Date(a.start) - new Date(b.start));
     tl = `<h4 class="bfhd">Piano Work Clock sessions — last 14 days (owners & shop managers)</h4>
-      <div class="stickytbl"><table><tr><th>PIANO</th><th>TECH · PHASE</th><th>IN → OUT</th><th>HOURS</th><th></th></tr>
+      <div class="stickytbl"><table><tr><th>DATE</th><th>PIANO</th><th>TECH · PHASE</th><th>IN → OUT</th><th>HOURS</th><th></th></tr>
       ${rows.map(r => adjRow('piano', r,
           `${esc(r.piano || '—')}<br><small>#${esc(r.serial)}</small>`,
-          `${esc(r.tech)}<br><small>${esc(r.phase || '')}</small>`)).join('')
-       || '<tr><td colspan="5" class="empty">No sessions yet.</td></tr>'}</table></div>`;
+          `${esc(r.tech)}<br><small>${esc(r.phase || '')}</small>`,
+          fmtDay(denverDay(r.start)))).join('')
+       || '<tr><td colspan="6" class="empty">No sessions yet.</td></tr>'}</table></div>`;
     // top of the report too (Mark 9/8, request 090826hales38): it used to be
     // the very last thing on the page
     tlAdd = `<div class="rfbar adjaddbar" data-clock="piano"><b>+ missed piano session:</b>
