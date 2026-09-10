@@ -19,7 +19,7 @@ var APP_URL = 'https://blpstoremap.netlify.app';
 var REPORT_TO = 'info@brighamlarsonpianos.com';
 var PIANO_LOG_ID = '1ZunbPKygpQlcXfTyPowDHdUE9spJ3uV1XA4iX1eoKRc';
 var BRIDGE_SECRET = 'PASTE_SECRET_HERE';   // server-to-server auth (optional)
-var BRIDGE_REV = '2026-09-09.7';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-09-10.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = 'PASTE_PIN_HERE';           // what BLP team members type to move pianos
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -2919,8 +2919,19 @@ function clockInLocked_(req) {
               open: {tech: tech, serial: closed.serial, phase: closed.phase, start: closed.start}};
     }
   }
-  var psh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
-  var f = findPiano_(psh, req.serial, req.row);
+  // Management / Tidying time (pseudo-serials MGMT / TIDY): not pianos — skip
+  // the Piano Log lookup and label the session plainly so reports can tell
+  // them apart. MGMT mirrors the app's manager-only card (isTimelogAdmin).
+  var pseudo = {MGMT: 'Management', TIDY: 'Shop tidying'}[String(req.serial)] || '';
+  if (String(req.serial) === 'MGMT' && !(payrollAdmin_(req._g) || timelogAdmin_(req._g))) {
+    return {error: 'Management time is for owners and managers (Google sign-in required).'};
+  }
+  var summary = pseudo;
+  if (!pseudo) {
+    var psh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+    var f = findPiano_(psh, req.serial, req.row);
+    summary = (f && f.summary) || '';
+  }
   var startIso = new Date().toISOString();
   // ❗ IMPORTANT-note acknowledgment (Karmel 8/29): the tech checked the box
   // saying they read the note before this clock-in — keep a named record
@@ -2928,7 +2939,7 @@ function clockInLocked_(req) {
     logAct_(tech, 'Acknowledged IMPORTANT note (' + String(req.phase || 'work') + ')',
             String(req.serial), String(req.ackNote).slice(0, 200));
   }
-  sh.appendRow([tech, String(req.serial), (f && f.summary) || '', String(req.phase || ''),
+  sh.appendRow([tech, String(req.serial), summary, String(req.phase || ''),
                 startIso, '', '', String(req.source || 'card'), '']);
   return {ok: true, closed: closed,
           open: {tech: tech, serial: String(req.serial), phase: String(req.phase || ''), start: startIso}};
@@ -5590,7 +5601,7 @@ function techDash_(name) {
   // per-piano rollup, newest first
   var byPiano = {}, order = [];
   rows.forEach(function (r) {
-    if (!r.serial) return;
+    if (!r.serial || r.serial === 'MGMT' || r.serial === 'TIDY') return;   // pseudo-serials aren't pianos
     if (!byPiano[r.serial]) { byPiano[r.serial] = {serial: r.serial, piano: r.piano, phases: {}, minutes: 0, last: ''}; order.push(r.serial); }
     var b = byPiano[r.serial];
     b.minutes += r.minutes;
@@ -5610,7 +5621,7 @@ function techDash_(name) {
     var w = Utilities.formatDate(new Date(r.start), 'America/Denver', 'YYYY-ww');
     perDay[d] = (perDay[d] || 0) + r.minutes;
     perWeek[w] = (perWeek[w] || 0) + r.minutes;
-    (weekPianos[w] = weekPianos[w] || {})[r.serial] = true;
+    if (r.serial !== 'MGMT' && r.serial !== 'TIDY') (weekPianos[w] = weekPianos[w] || {})[r.serial] = true;
     if (!longest || r.minutes > longest.minutes) longest = r;
   });
   function best(map) {
@@ -6344,7 +6355,8 @@ function lateClockNudge(e) {
   try {
     (timeClockState_().open || []).forEach(function (o) {
       if (movers[firstOf(o.tech)]) return;
-      (late[o.tech] = late[o.tech] || []).push('🎹 ' + (o.piano || o.serial)
+      (late[o.tech] = late[o.tech] || []).push(
+        (o.serial === 'MGMT' ? '🧑‍💼 ' : o.serial === 'TIDY' ? '🧹 ' : '🎹 ') + (o.piano || o.serial)
         + (o.phase ? ' (' + o.phase + ')' : ''));
     });
   } catch (e1) {}
