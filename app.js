@@ -8675,10 +8675,12 @@ async function queuePiano(p, newPos, pop) {
 const CARD_SECS = ['admin', 'clock', 'loc', 'scope', 'shop', 'tune', 'media', 'pw', 'tags', 'notes', 'act', 'log'];
 function openPop(row, el, pinned) {
   // every card opens compact (Brigham 9/4): switching pianos resets the
-  // section toggles; re-renders of the SAME card keep what you opened
+  // section toggles; re-renders of the SAME card keep what you opened.
+  // Per-device opt-out (Mark 9/10, request 091026hales39): ☰ menu →
+  // "Cards remember my open sections" keeps the toggles across pianos.
   if (S.lastPopRow !== row) {
     S.lastPopRow = row;
-    CARD_SECS.forEach(k => lsDel('sec_' + k));
+    if (lsGet('secKeep') !== '1') CARD_SECS.forEach(k => lsDel('sec_' + k));
   }
   S.recentRows = [row].concat((S.recentRows || []).filter(r => r !== row)).slice(0, 8);
   cancelHide();
@@ -13717,6 +13719,12 @@ function loadTranslator() {
     list.innerHTML = LANGS.map(([c, name]) =>
       `<button class="langchip notranslate ${saved === c || (!saved && c === 'en') ? 'on' : ''}" data-l="${c}" translate="no">${name}</button>`).join('');
     list.querySelectorAll('.langchip').forEach(b => b.onclick = () => setLang(b.dataset.l));
+  }
+  // per-device card preference (Mark 9/10): remember open sections across pianos
+  const sk = document.getElementById('secKeepTog');
+  if (sk) {
+    sk.checked = lsGet('secKeep') === '1';
+    sk.onchange = () => { if (sk.checked) lsSet('secKeep', '1'); else lsDel('secKeep'); };
   }
   const btn = $('#langBtn');
   if (btn) btn.onclick = () => { list.hidden = !list.hidden; };
