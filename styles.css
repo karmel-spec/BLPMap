@@ -969,14 +969,20 @@ body{top:0!important}
 .csvbtn:hover{background:#256742}
 tr.jcp td{border-top:2px solid #e3e6e9;padding-top:9px}
 
-/* dashboard payroll clock card */
-.db-pay .paybtn{display:block;width:100%;margin:9px 0 4px;padding:13px 14px;
+/* dashboard payroll / management / tidying clock cards */
+.db-pay .paybtn,.db-mgmt .paybtn,.db-tidy .paybtn{display:block;width:100%;margin:9px 0 4px;padding:13px 14px;
   font:700 15px/1.2 inherit;font-family:inherit;border:0;border-radius:10px;cursor:pointer;color:#fff}
 .db-pay .payin{background:#2e7d4f}
 .db-pay .payin:hover{background:#256742}
-.db-pay .payout{background:#9e2020}
-.db-pay .payout:hover{background:#831a1a}
-.db-pay .paybtn:disabled{opacity:.6;cursor:default}
+.db-pay .payout,.mgmtoff,.tidyoff{background:#9e2020}
+.db-pay .payout:hover,.mgmtoff:hover,.tidyoff:hover{background:#831a1a}
+.db-pay .paybtn:disabled,.db-mgmt .paybtn:disabled,.db-tidy .paybtn:disabled{opacity:.6;cursor:default}
+/* management time is blue and tidying amber, so each reads apart from the
+   green payroll day clock at a glance */
+.mgmton{background:#5b7ea8}
+.mgmton:hover{background:#4a6a90}
+.tidyon{background:#a8811f}
+.tidyon:hover{background:#8f6d19}
 .paymsg.err{color:#9e2020;font-size:12.5px;margin:4px 0}
 
 /* clock adjustments */
