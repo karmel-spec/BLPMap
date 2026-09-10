@@ -4570,7 +4570,10 @@ async function dayPunch(action) {
             try { renderClockChip(); } catch (e) {}
             try { renderDock(); } catch (e) {}
           }
-        } else if (CLOCK.open) {
+        } else {
+          // always ask the bridge to close the piano session — it finds it by
+          // name, so this works even when THIS device never saw the clock-in
+          // (Avery 9/10); "nothing was open" is a harmless reply
           try { await punch('clockout', null, '', 'day-out-auto'); } catch (e) {}
         }
       }
