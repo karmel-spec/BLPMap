@@ -3717,13 +3717,23 @@ async function punch(action, p, phase, source, endAt, ackNote) {
   // Only block on a CONFIRMED missing day punch — if payroll state can't be
   // fetched (bridge down), let the piano punch through rather than stall work.
   if (action === 'clockin') {
-    if (Date.now() - PAY.at > 90000) { try { await fetchPayroll(true); } catch (e) {} }
+    // Jacob 9/10 (request 091026mower16): this pre-check had no time limit,
+    // so a slow bridge stalled the punch before it even started. 6 s max —
+    // we only ever block on a CONFIRMED missing day punch anyway.
+    if (Date.now() - PAY.at > 90000) {
+      try { await Promise.race([fetchPayroll(true), new Promise(res => setTimeout(res, 6000))]); } catch (e) {}
+    }
     if (!PAY.open && PAY.at && Date.now() - PAY.at < 90000) {
       return {error: 'Clock in for the DAY first — 👤 My Dashboard → 💵 Payroll Clock → ▶ Clock in for the day. Piano time only counts inside a paid day.'};
     }
   }
   const body = {pin, action, source: source || 'card', ...authFields()};
-  if (p) { body.serial = p.serial; body.row = p.row; body.phase = phase || ''; }
+  if (p) {
+    body.serial = p.serial; body.row = p.row; body.phase = phase || '';
+    // the piano's name rides along so the bridge can skip reading the whole
+    // Piano Log on every clock-in (Jacob 9/10 — the 8 AM crowd)
+    body.pianoName = String(p.summary || '').slice(0, 80);
+  }
   if (ackNote) body.ackNote = String(ackNote).slice(0, 200);
   if (endAt) body.endAt = endAt;
   try {

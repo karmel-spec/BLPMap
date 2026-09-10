@@ -19,7 +19,7 @@ var APP_URL = 'https://blpstoremap.netlify.app';
 var REPORT_TO = 'info@brighamlarsonpianos.com';
 var PIANO_LOG_ID = '1ZunbPKygpQlcXfTyPowDHdUE9spJ3uV1XA4iX1eoKRc';
 var BRIDGE_SECRET = 'PASTE_SECRET_HERE';   // server-to-server auth (optional)
-var BRIDGE_REV = '2026-09-10.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-09-10.4';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = 'PASTE_PIN_HERE';           // what BLP team members type to move pianos
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -2932,8 +2932,11 @@ function clockInLocked_(req) {
   if (String(req.serial) === 'MGMT' && !(payrollAdmin_(req._g) || timelogAdmin_(req._g))) {
     return {error: 'Management time is for owners and managers (Google sign-in required).'};
   }
-  var summary = pseudo;
-  if (!pseudo) {
+  // Jacob 9/10 (request 091026mower16): the app sends the piano's name, so a
+  // normal clock-in no longer reads the whole Piano Log (two full columns)
+  // while holding the clock lock — most of each punch's time at 8 AM
+  var summary = pseudo || String(req.pianoName || '').trim().slice(0, 80);
+  if (!summary) {
     var psh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
     var f = findPiano_(psh, req.serial, req.row);
     summary = (f && f.summary) || '';
