@@ -4559,9 +4559,20 @@ async function dayPunch(action) {
       PAY.at = 0;
       fetchPayroll(true);
       // day OUT closes the piano clock too (Mark 9/3): nobody stays "on a
-      // piano" after their paid day ended
-      if (action === 'dayout' && CLOCK.open) {
-        try { await punch('clockout', null, '', 'day-out-auto'); } catch (e) {}
+      // piano" after their paid day ended. Since 9/10 (request 091026hales40)
+      // the bridge closes the piano session itself and reports it — Avery
+      // stayed on a piano because this device did not know about his session.
+      // An older bridge (no pianoClosed) still gets the client-side punch.
+      if (action === 'dayout') {
+        if (Array.isArray(j.pianoClosed)) {
+          if (CLOCK.open || j.pianoClosed.length) {
+            CLOCK.open = null; CLOCK.nudged = false;
+            try { renderClockChip(); } catch (e) {}
+            try { renderDock(); } catch (e) {}
+          }
+        } else if (CLOCK.open) {
+          try { await punch('clockout', null, '', 'day-out-auto'); } catch (e) {}
+        }
       }
     }
     return j;

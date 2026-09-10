@@ -19,7 +19,7 @@ var APP_URL = 'https://blpstoremap.netlify.app';
 var REPORT_TO = 'info@brighamlarsonpianos.com';
 var PIANO_LOG_ID = '1ZunbPKygpQlcXfTyPowDHdUE9spJ3uV1XA4iX1eoKRc';
 var BRIDGE_SECRET = 'PASTE_SECRET_HERE';   // server-to-server auth (optional)
-var BRIDGE_REV = '2026-09-10.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-09-10.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = 'PASTE_PIN_HERE';           // what BLP team members type to move pianos
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -3246,7 +3246,15 @@ function dayOut_(req) {
       gn ? (oldNote ? oldNote + ' · ' : '') + gn : '');
     var extra;   // double-punch leftovers
     while ((extra = openPayRow_(sh, tech))) closePayRow_(sh, extra, null, 'duplicate punch (auto)');
-    return {ok: true, closed: out};
+    // Mark 9/10 (request 091026hales40): the paid day ending ends the piano
+    // session too — done HERE so it holds even when the device that clocked
+    // out for the day never knew about the open piano (Avery, 9/10)
+    var pianoClosed = [];
+    try {
+      var tsh = timeLogSheet_(), ps;
+      while ((ps = openSessionRow_(tsh, tech))) pianoClosed.push(closeSession_(tsh, ps, 'day-out-auto', req.endAt));
+    } catch (eP) { /* piano clock is best-effort here — the day punch already closed */ }
+    return {ok: true, closed: out, pianoClosed: pianoClosed};
   });
 }
 function payrollState_() {
