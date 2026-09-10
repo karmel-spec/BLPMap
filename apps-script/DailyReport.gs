@@ -19,7 +19,7 @@ var APP_URL = 'https://blpstoremap.netlify.app';
 var REPORT_TO = 'info@brighamlarsonpianos.com';
 var PIANO_LOG_ID = '1ZunbPKygpQlcXfTyPowDHdUE9spJ3uV1XA4iX1eoKRc';
 var BRIDGE_SECRET = 'PASTE_SECRET_HERE';   // server-to-server auth (optional)
-var BRIDGE_REV = '2026-09-10.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-09-10.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = 'PASTE_PIN_HERE';           // what BLP team members type to move pianos
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -287,7 +287,13 @@ function doGet(e) {
   // Mac Roman garble — the team's texts read "‚Üí" for →. The app compares
   // this literal to detect a bad paste.
   // rev: bump on every change so a deploy can be confirmed from the ping
-  return json_({ok: true, service: 'BLP Store Map bridge', enc: '→ — 🛠', rev: BRIDGE_REV});
+  // drive: photo uploads need the Drive scope on the deploying account — Doris
+  // 9/10 saw "No accounts with permission to call DriveApp.Folder.createFile";
+  // the ping now says whether Drive is authorized so it can be checked after
+  // a re-authorization/redeploy without uploading a photo
+  var drive = 'ok';
+  try { DriveApp.getFolderById(PHOTOS_ROOT_ID).getName(); } catch (eD) { drive = String(eD && eD.message || eD).slice(0, 120); }
+  return json_({ok: true, service: 'BLP Store Map bridge', enc: '→ — 🛠', rev: BRIDGE_REV, drive: drive});
 }
 
 /**
