@@ -3283,7 +3283,7 @@ function openSuggestBox() {
             .map(a => `<option ${a === 'Store Map' ? 'selected' : ''}>${a}</option>`).join('')}</select></label>
         <label class="sgsellbl">Train an agent <select class="sgsel sgagent" title="optional — suggest training for one of the AI agents">
           <option value="">— none —</option>
-          ${['Arnold', 'Chris', 'Clara', 'Ivory', 'Lindsay', 'Marcus', 'Melody'].map(a => `<option>${a}</option>`).join('')}</select></label>
+          ${['Arnold', 'Chris', 'Clara', 'Ivory', 'Lindsay', 'Marcus', 'Melody'].map(a => `<option ${a === 'Chris' ? 'selected' : ''}>${a}</option>`).join('')}</select></label>
       </div>
       <textarea class="sgtext" maxlength="1500" placeholder="What's wrong / what would make it better? A sentence or two is plenty."></textarea>
       <div class="sgrow">
