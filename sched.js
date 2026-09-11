@@ -751,7 +751,7 @@ async function loadProposal(box){
     try{
       const j=await aiJob("bottleneck-resolve-background",
         {key:localStorage.getItem("blp.appkey")||"pianoman",items,
-          by:localStorage.getItem("blpmgr.name")||"Shop Manager"},
+          by:(typeof authUser==="function"&&authUser()&&authUser().name)||localStorage.getItem("blpmgr.name")||"Shop Manager"},
         s=>{ bna.textContent="Working… "+s+"s (usually 30–90s)"; });
       if(j.error) throw new Error(j.error);
       clearDrafts(".bnanswer");
@@ -819,7 +819,7 @@ async function loadProposal(box){
     try{
       const j=await aiJob("schedule-adjust-background",
         {key:localStorage.getItem("blp.appkey")||"pianoman",notes,global:globalTxt,
-          by:localStorage.getItem("blpmgr.name")||"Shop Manager"},
+          by:(typeof authUser==="function"&&authUser()&&authUser().name)||localStorage.getItem("blpmgr.name")||"Shop Manager"},
         s=>{ adj.textContent="Thinking… "+s+"s (usually 30–90s)"; });
       if(j.error) throw new Error(j.error);
       clearDrafts(".ptnotes textarea, #adjGlobal");
