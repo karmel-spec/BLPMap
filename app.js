@@ -347,7 +347,7 @@ async function boot() {
   if (!S.data.stale && S.data.pianos.length) writeCache();
   tryDeepLink();   // #piano=SERIAL from a scanned shop tag → open that card
   tryReportLink(); // #report=<id> from a shared link → open that report
-  tryCardLink();   // #card=<id> from a task-board notification text/email
+  tryCardLink(); tryBoardLink();   // #card=<id> from a task-board notification text/email
   tryFixClockLink(); // #fixclock from a late-clock text → the time-fix form
   setTimeout(loadInactive, 4000);   // sold/delivered history, off the critical path
   setInterval(async () => {
@@ -1228,6 +1228,32 @@ function tryCardLink() {
     openCardModal(c, tbNorm(c.owner) === tbNorm(tbMe()) || tbAdmin());
   })();
 }
+/* #board=<owner> deep link — the Sales Console's post-it notes open straight
+ * to that person's task board (e.g. #board=Melissa%20Terry). Same 10-minute
+ * stash as #card= so it survives the Google sign-in redirect. */
+let boardLinkDone = '';
+function tryBoardLink() {
+  const m = /[#&]board=([^&]+)/.exec(location.hash || '');
+  let who = m ? decodeURIComponent(m[1]) : '';
+  if (who) lsSet('blpTBL', who + '|' + Date.now());
+  else {
+    const st = (lsGet('blpTBL') || '').split('|');
+    if (st[0] && Date.now() - (+st[1] || 0) < 600000) who = st[0];
+  }
+  if (!who || who === boardLinkDone || !tbMe()) return;
+  boardLinkDone = who;
+  lsDel('blpTBL');
+  showView('tboard');
+  (async () => {
+    if (TB.rows === null && !TB.loading) tbFetch();
+    let t = 0;
+    while (TB.rows === null && t++ < 60) await new Promise(r => setTimeout(r, 250));
+    // Match the owner loosely (case/spacing), falling back to the name as given.
+    const owners = [...new Set((TB.rows || []).map(r => r.owner).filter(Boolean))];
+    TB.person = owners.find(o => tbNorm(o) === tbNorm(who)) || who;
+    renderTaskBoard();
+  })();
+}
 /* #fixclock deep link — the late-clock nudge text links straight to the
  * time-fix form. Survives the sign-in redirect via the same 10-min stash. */
 let fixLinkDone = false;
@@ -1241,7 +1267,7 @@ function tryFixClockLink() {
   lsDel('blpFC');
   clockFixModal();
 }
-window.addEventListener('hashchange', () => { deepLinkDone = ''; tryDeepLink(); tryReportLink(); tryCardLink(); tryFixClockLink(); });
+window.addEventListener('hashchange', () => { deepLinkDone = ''; tryDeepLink(); tryReportLink(); tryCardLink(); tryBoardLink(); tryFixClockLink(); });
 
 /* ---------- rendering ---------- */
 function renderAll() {
