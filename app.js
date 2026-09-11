@@ -12211,8 +12211,34 @@ const TB_ASK_KEY = 'askbrigham', TB_ASK_LABEL = 'Ask Brigham';
 const TB_ASK_BOARDS = ['melissa terry', 'mark hales', 'alisa miller', 'lisa litton', 'matthew wessman', 'jacob mower'];   // admins + managers
 const TB_FIRST_ALIAS = {};   // (Alisa = Alisa Miller, a separate admin from Lisa Litton — corrected 9/11)
 const tbIsBrigham = n => tbNorm(n) === 'brigham larson';
-const tbAskColKey = owner => 'ask:' + tbNorm(owner);
-const tbAskColLabel = owner => (TB_FIRST_ALIAS[tbNorm(owner)] || String(owner).split(/\s+/)[0]) + "'s Ask Brigham";
+/* Generalized (Brigham 9/11, Lisa's "Questions for Melissa"): ANY column
+ * titled "Ask X", "Questions for X", "Q's 4 X" (or "… X or Y") is a live
+ * mirror onto X's board — "<Owner>'s Ask Brigham" on Brigham's board,
+ * "<Owner>'s questions" on everyone else's. Same cards, no copies. */
+const TB_ASK_RE = /^(?:ask|questions?\s+(?:for|4)|q'?s\s+(?:for|4))\s+(.+)$/i;
+function tbAskTargets(label) {
+  const m = TB_ASK_RE.exec(String(label || '').trim());
+  if (!m) return [];
+  return m[1].split(/\s*(?:\bor\b|&|\band\b|\/|,)\s*/i).map(x => tbNorm(x).split(' ')[0]).filter(Boolean);
+}
+const tbOwnerFirst = o => { const f = String(o).trim().split(/\s+/)[0] || ''; return f.charAt(0).toUpperCase() + f.slice(1); };
+function tbColsOf(owner) {
+  return (TB.cols[tbNorm(owner)] || TB_COLS).map(c => Array.isArray(c) ? c : [c.key, c.label]);
+}
+// columns from OTHER boards that mirror onto `person`'s board
+function tbMirrorsFor(person) {
+  const first = tbNorm(person).split(' ')[0];
+  const out = [];
+  Object.keys(TB.cols || {}).forEach(o => {
+    if (tbNorm(o) === tbNorm(person)) return;
+    tbColsOf(o).forEach(([k, l]) => {
+      const targets = k === TB_ASK_KEY ? ['brigham'] : tbAskTargets(l);
+      if (targets.includes(first)) out.push({owner: o, key: k, vkey: 'mir:' + tbNorm(o) + ':' + k,
+        label: tbOwnerFirst(o) + (first === 'brigham' ? "'s Ask Brigham" : "'s questions")});
+    });
+  });
+  return out;
+}
 /* ---- locally-added cards survive the next refresh --------------------------
  * A new card is put on the board BEFORE the network answers (optimistic),
  * and remembered for 20 minutes so a refresh that reads a copy which does
@@ -12350,8 +12376,10 @@ function renderTaskBoard() {
     }).join('')}</div>` : '';
   const today = localDay();
   const isSnoozed = r => r.snooze && r.snooze > today && r.col !== 'done';
-  const brighamBoard = tbIsBrigham(TB.person);
-  const isAskCard = r => brighamBoard && r.col === TB_ASK_KEY && !tbIsBrigham(r.owner);
+  const mirrors = tbMirrorsFor(TB.person);
+  const mirrorMap = {};   // 'owner:col' → virtual column key on this board
+  mirrors.forEach(m => { mirrorMap[m.owner + ':' + m.key] = m.vkey; });
+  const isAskCard = r => !sameOwner(r.owner, TB.person) && !!mirrorMap[tbNorm(r.owner) + ':' + r.col];
   const allMine = TB.rows.filter(r => (sameOwner(r.owner, TB.person) || isAskCard(r)) && r.col !== 'archived');
   const snoozedN = allMine.filter(isSnoozed).length;
   // "unresponded" (Brigham 8/29): the newest note is someone else's — or the
@@ -12375,21 +12403,18 @@ function renderTaskBoard() {
   const boardCols = (TB.cols[tbNorm(TB.person)] || TB_COLS.map(([k, l]) => [k, l]))
     .map(c => Array.isArray(c) ? c : [c.key, c.label]);
   const personN = tbNorm(TB.person);
-  if (TB_ASK_BOARDS.includes(personN) && !boardCols.some(c => c[0] === TB_ASK_KEY)) {
+  const hasBrighamCol = boardCols.some(c => c[0] === TB_ASK_KEY || tbAskTargets(c[1]).includes('brigham'));
+  if (TB_ASK_BOARDS.includes(personN) && !hasBrighamCol) {
     boardCols.push([TB_ASK_KEY, TB_ASK_LABEL]);
     if (canEdit && !(TB.askPersisted || (TB.askPersisted = new Set())).has(personN)) {   // persist once
       TB.askPersisted.add(personN);
       tbSend({op: 'setcols', owner: TB.person, cols: boardCols.map(([k, l]) => [k, l])});
     }
   }
-  const askVirtual = [];   // Brigham's board: one live column per person with Ask Brigham cards
-  if (brighamBoard) {
-    [...new Set(TB.rows.filter(r => r.col === TB_ASK_KEY && !tbIsBrigham(r.owner)).map(r => r.owner))]
-      .sort((a, b) => a.localeCompare(b))
-      .forEach(o => { askVirtual.push(tbAskColKey(o)); boardCols.push([tbAskColKey(o), tbAskColLabel(o)]); });
-  }
+  // mirrored columns from other boards ("Melissa's Ask Brigham", "Lisa's questions"…)
+  mirrors.sort((a, b) => a.label.localeCompare(b.label)).forEach(m => boardCols.push([m.vkey, m.label]));
   const colKeys = boardCols.map(c => c[0]);
-  const homeCol = r => isAskCard(r) ? tbAskColKey(r.owner)
+  const homeCol = r => isAskCard(r) ? mirrorMap[tbNorm(r.owner) + ':' + r.col]
     : (colKeys.includes(r.col) ? r.col : (r.col === 'archived' ? 'archived' : colKeys[0]));
   const ordVal = r => (r.order === null || r.order === undefined || r.order === '')
     ? 1e9 - Date.parse(r.created || 0) / 1e6 : Number(r.order);
@@ -12397,12 +12422,12 @@ function renderTaskBoard() {
     const cards = mine.filter(r => homeCol(r) === key)
       .sort((a, b) => ordVal(a) - ordVal(b));
     return `<div class="kcol ${key === 'done' ? 'kdone' : ''}" data-col="${key}">
-      <h4><span>${esc(label)}${canEdit && !key.startsWith('ask:') ? ` <button class="kcolren" data-k="${esc(key)}" title="rename column">✎</button>` : ''}</span> <i>${cards.length}</i></h4>
+      <h4><span>${esc(label)}${canEdit && !key.startsWith('mir:') ? ` <button class="kcolren" data-k="${esc(key)}" title="rename column">✎</button>` : ''}</span> <i>${cards.length}</i></h4>
       ${cards.map(c => `<div class="kcard" draggable="${canEdit}" data-id="${esc(c.id)}">
         <b>${esc(c.text)}</b>
         <div class="chips">
           ${c.pending ? '<span class="chip c-dueok">saving…</span>' : ''}
-          ${key.startsWith('ask:') ? `<span class="chip c-dueok">asked by ${esc(String(c.owner).split(/\s+/)[0])}</span>` : ''}
+          ${key.startsWith('mir:') ? `<span class="chip c-dueok">asked by ${esc(String(c.owner).split(/\s+/)[0])}</span>` : ''}
           ${c.serial ? `<span class="chip c-piano" data-serial="${esc(c.serial)}">🎹 ${esc(c.serial)}</span>` : ''}
           ${tbDueChip(c.due, c.col)}
           ${c.from ? `<span class="chip c-from">from ${esc(c.from.split(/\s+/)[0])}</span>` : ''}
@@ -12786,7 +12811,7 @@ function renderTaskBoard() {
         else order = (prev + next) / 2;
         ph.remove();
         const newCol = colEl.dataset.col;
-        if (newCol.startsWith('ask:')) {   // Brigham's mirrored columns are views, not destinations
+        if (newCol.startsWith('mir:')) {   // mirrored columns are views, not destinations
           TB.dragJustHappened = true; setTimeout(() => { TB.dragJustHappened = false; }, 250);
           renderTaskBoard(); return;
         }
