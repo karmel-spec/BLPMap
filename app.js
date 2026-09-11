@@ -11403,6 +11403,13 @@ function renderDash() {
       </div>
     </div>
     ${payCard}
+    <div class="dlockers">
+      <div class="dlocker" data-h="#myweek"><span class="ic">📋</span><b>My Week</b><span>work items · carries into your report</span></div>
+      <div class="dlocker" data-h="#report"><span class="ic">📝</span><b>Weekly Report</b><span>due Thursday 6pm</span></div>
+      <div class="dlocker" data-audit="1"><span class="ic">🧪</span><b>Piano Card Audit</b><span>report vs. card discrepancies</span></div>
+      <div class="dlocker" data-h="#calendars"><span class="ic">📅</span><b>My Calendar</b><span>assigned vs. reported</span></div>
+      <div class="dlocker" data-pay="1"><span class="ic">💵</span><b>Paylogics ↗</b><span>paystubs · time off</span></div>
+    </div>
     ${isTimelogAdmin() ? (() => {
       // 🧑‍💼 management time (Brigham 9/3): managers clock time that isn't
       // attached to a piano, and toggle piano ↔ management in one tap.
@@ -11452,12 +11459,6 @@ function renderDash() {
       <div class="dline dim">Your queue for the week lives in <a class="dlink2" data-h="#myweek">📋 My Week ›</a></div>
     </div>
     ${myClockHistory()}
-    <div class="dlockers">
-      <div class="dlocker" data-h="#myweek"><span class="ic">📋</span><b>My Week</b><span>work items · carries into your report</span></div>
-      <div class="dlocker" data-h="#report"><span class="ic">📝</span><b>Weekly Report</b><span>due Thursday 6pm</span></div>
-      <div class="dlocker" data-h="#calendars"><span class="ic">📅</span><b>My Calendar</b><span>assigned vs. reported</span></div>
-      <div class="dlocker" data-pay="1"><span class="ic">💵</span><b>Paylogics ↗</b><span>paystubs · time off</span></div>
-    </div>
     ${prs ? `<div class="dbench db-recs">
       <h4>🏆 Personal records</h4>
       <div class="dline">Best day on the clock: <b>${prs.bestDayH} h</b>${prs.bestDayWhen ? ' (' + esc(prs.bestDayWhen.slice(5)) + ')' : ''}</div>
@@ -11544,6 +11545,8 @@ function renderDash() {
   });
   const pay = body.querySelector('[data-pay]');
   if (pay) pay.onclick = () => window.open('https://identity.myisolved.com', '_blank', 'noopener');
+  const aud = body.querySelector('[data-audit]');
+  if (aud) aud.onclick = () => { SCHED.tab = 'audit'; switchView('sched'); };
   const pt = body.querySelector('#dashPianos');
   if (pt) pt.onclick = () => {
     if (!d || !d.pianos) return;
@@ -12983,8 +12986,11 @@ const SCHED = {tab: 'planner'};
 function renderSched() {
   const el = $('#schedBody');
   if (!el) return;
-  if (!isTimelogAdmin()) { el.innerHTML = '<div class="empty">Managers &amp; owners only.</div>'; return; }
-  el.innerHTML = `<div class="teamtabs">${SCHED_TABS.map(([id, label]) =>
+  // whole-team mode (Brigham 9/11): non-managers get the Card Audit tab
+  // only — the report-vs-card discrepancy list everyone can act on
+  const tabs = isTimelogAdmin() ? SCHED_TABS : SCHED_TABS.filter(([id]) => id === 'audit');
+  if (!isTimelogAdmin()) SCHED.tab = 'audit';
+  el.innerHTML = `<div class="teamtabs">${tabs.map(([id, label]) =>
       `<button data-st="${id}" class="${SCHED.tab === id ? 'on' : ''}">${label}</button>`).join('')}</div>
     <div id="schedFrame"></div>`;
   el.querySelectorAll('[data-st]').forEach(b => b.onclick = () => {
@@ -13631,7 +13637,9 @@ async function renderUpdatesFeed() {
   });
 }
 function switchView(v) {
-  if (v === 'sched' && !isTimelogAdmin()) v = 'map';   // managers & owners only
+  // scheduling view: managers & owners get every tab; everyone else is
+  // allowed in but sees ONLY the Card Audit tab (Brigham 9/11)
+  if (v === 'sched' && !isTimelogAdmin()) SCHED.tab = 'audit';
   if ((v === 'team' || v === 'admdash') && !isTeamAdmin()) v = 'map';   // admin + managers + owners
   if (v === 'manager' && !isManagerConsole()) v = 'map';   // Brigham, Karmel & Mark only
   if (v === 'training') renderTraining();   // re-check gated rows for whoever is signed in NOW
