@@ -675,26 +675,33 @@ async function loadProposal(box){
   if(!box) return;
   box.innerHTML=`<div class="curmsg">Loading proposed week…</div>`;
   let got=null;
-  try{
-    const r=await fetch(CONFIG.STOREMAP_BRIDGE+"?fn=proposal",{redirect:"follow",signal:AbortSignal.timeout(25000)});
-    const j=await r.json();
-    if(j.ok) got=j;
-    // a double-encoded save leaves plan as a JSON string — parse, don't blank
-    if(got&&typeof got.plan==="string"){ try{got.plan=JSON.parse(got.plan);}catch(e2){got=null;} }
-  }catch(e){/* bridge not deployed yet — fall through */}
+  // The bridge can take 25 s+ under load (Karmel 9/11: "the current week shows
+  // about half the time") — the single 25 s try then fell back to the repo
+  // snapshot, which is the week of Aug 10. Now: up to three tries, 45 s each,
+  // with a note in the box; the snapshot is a last resort and says so.
+  for(let a=0;a<3&&!got;a++){
+    if(a) box.innerHTML=`<div class="curmsg">Still loading the proposed week — the Google bridge is slow right now (try ${a+1} of 3)…</div>`;
+    try{
+      const r=await fetch(CONFIG.STOREMAP_BRIDGE+"?fn=proposal&_="+Date.now(),{redirect:"follow",signal:AbortSignal.timeout(45000)});
+      const j=await r.json();
+      if(j.ok) got=j;
+      // a double-encoded save leaves plan as a JSON string — parse, don't blank
+      if(got&&typeof got.plan==="string"){ try{got.plan=JSON.parse(got.plan);}catch(e2){got=null;} }
+    }catch(e){/* timeout or bridge hiccup — try again */}
+  }
   if(!got){
     try{
       const r2=await fetch("https://blpshop.netlify.app/data/schedule-proposal.json?ts="+Date.now());
       if(r2.ok){ const plan=await r2.json(); got={ok:true,plan,meta:{week:plan.week,savedAt:plan.generatedAt||"",applied:false,fallback:true}}; }
     }catch(e){}
   }
-  if(!got){ box.innerHTML=`<div class="curmsg">No weekly proposal yet — the Saturday draft publishes here, or ask Claude to generate one.</div>`; return; }
+  if(!got){ box.innerHTML=`<div class="curmsg">Couldn't reach the Google bridge for the proposed week. <button class="applybtn ghost" id="propRetry">↻ Try again</button></div>`; const rb=box.querySelector("#propRetry"); if(rb) rb.onclick=()=>loadProposal(box); return; }
   const {plan,meta}=got;
   const colors=plan.colors||{};
   box.innerHTML=`<div class="propwrap">
     <div class="prophead">
       <h3>📅 Proposed Technician Week — ${esc(plan.week||"")}</h3>
-      <span class="meta">${meta.fallback?"from repo snapshot":"from the weekly proposal"} · saved ${esc(fmtDenver(meta.savedAt))}
+      <span class="meta">${meta.fallback?"⚠ OLD SNAPSHOT — the bridge did not answer; this is NOT the current plan. <button class=\"applybtn ghost\" id=\"propRetry\">↻ Try again</button>":"from the weekly proposal"} · saved ${esc(fmtDenver(meta.savedAt))}
         ${meta.applied?" · <b style='color:#7fc48f'>APPLIED "+esc((meta.appliedAt||"").slice(0,10))+"</b>":""}</span>
       <button class="applybtn" id="applySched" ${meta.applied||meta.fallback?"disabled":""}>
         ${meta.applied?"✓ Applied to calendars":meta.fallback?"Apply (needs bridge update)":(meta.appliedTechs&&meta.appliedTechs.length?"✅ Approve more — "+meta.appliedTechs.length+" of "+((plan&&plan.techs)||[]).length+" applied":"✅ Approve — apply to live tech calendars")}</button>
@@ -830,6 +837,7 @@ async function loadProposal(box){
     }
     adj.disabled=false; adj.textContent="🪄 Apply adjustments";
   };
+  const pr=box.querySelector("#propRetry"); if(pr) pr.onclick=()=>loadProposal(box);
   const ab=box.querySelector("#applySched");
   // prompt()/confirm() are blocked in embedded browsers (why the button
   // seemed dead) — inline confirm + PIN instead
