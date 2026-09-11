@@ -12166,7 +12166,7 @@ async function tbFetch() {
       const r = await fetch(BRIDGE_URL + '?fn=taskboard', {redirect: 'follow'});
       j = await r.json();
     }
-    TB.rows = j.rows || [];
+    TB.rows = tbMergeLocal(j.rows || []);
     TB.cols = j.cols || {};
   } catch (e) { TB.rows = TB.rows || []; }
   // owners' face strip: current team + anyone who already has cards
@@ -12183,6 +12183,55 @@ async function tbFetch() {
   // cache-first: next open paints instantly from the last-known board
   try { lsSet('blpTB1', JSON.stringify({rows: TB.rows, cols: TB.cols, faces: TB.faces, at: Date.now()})); } catch (e) {}
   renderTaskBoard();
+}
+/* ---- Ask Brigham columns (Brigham 9/11) ----------------------------------
+ * Every admin and manager board carries an "Ask Brigham" column; Brigham's
+ * own board shows each of those as a live mirrored column — "Melissa's Ask
+ * Brigham", "Mark's Ask Brigham", "Alisa's Ask Brigham"… The cards are the
+ * same records (no copies): Brigham marking one Done moves it into that
+ * person's DONE column, and their notes/answers show on both boards. */
+const TB_ASK_KEY = 'askbrigham', TB_ASK_LABEL = 'Ask Brigham';
+const TB_ASK_BOARDS = ['melissa terry', 'mark hales', 'lisa litton', 'matthew wessman', 'jacob mower'];
+const TB_FIRST_ALIAS = {'lisa litton': 'Alisa'};
+const tbIsBrigham = n => tbNorm(n) === 'brigham larson';
+const tbAskColKey = owner => 'ask:' + tbNorm(owner);
+const tbAskColLabel = owner => (TB_FIRST_ALIAS[tbNorm(owner)] || String(owner).split(/\s+/)[0]) + "'s Ask Brigham";
+/* ---- locally-added cards survive the next refresh --------------------------
+ * A new card is put on the board BEFORE the network answers (optimistic),
+ * and remembered for 20 minutes so a refresh that reads a copy which does
+ * not have it yet (proxy timeout → bridge path → sheet → reconciler ≤10 min)
+ * cannot make it "disappear" (Melissa 9/5–9/11). */
+const TB_LOCAL_KEY = 'blpTBlocal';
+function tbLocalList() {
+  try { return (JSON.parse(lsGet(TB_LOCAL_KEY) || '[]')).filter(x => x && x.card && Date.now() - (x.at || 0) < 20 * 60000); }
+  catch (e) { return []; }
+}
+function tbLocalRemember(card, oldId) {
+  const l = tbLocalList().filter(x => x.card.id !== card.id && x.card.id !== oldId);
+  l.push({card: {...card, pending: false}, at: Date.now()});
+  try { lsSet(TB_LOCAL_KEY, JSON.stringify(l)); } catch (e) {}
+}
+function tbLocalForget(id) { try { lsSet(TB_LOCAL_KEY, JSON.stringify(tbLocalList().filter(x => x.card.id !== id))); } catch (e) {} }
+function tbMergeLocal(rows) {
+  const have = new Set(rows.map(r => r.id));
+  for (const x of tbLocalList()) {
+    const c = x.card;
+    if (have.has(c.id) || rows.some(r => sameOwner(r.owner, c.owner) && r.text === c.text)) { tbLocalForget(c.id); continue; }
+    rows.push(c);
+  }
+  return rows;
+}
+// after a proxy timeout, did the add actually land? (avoid a duplicate via the bridge)
+async function tbFindRecentAdd(owner, text) {
+  try {
+    const h = {apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY};
+    const r = await fetchT(SB_URL + '/rest/v1/tb_cards?select=id,created&owner=eq.' + encodeURIComponent(owner)
+      + '&text=eq.' + encodeURIComponent(text) + '&order=created.desc&limit=1', {headers: h}, 8000);
+    const rows = await r.json();
+    const c = rows && rows[0];
+    if (c && Date.now() - Date.parse(c.created) < 5 * 60000) return c;
+  } catch (e) { /* not found / feed down → bridge path */ }
+  return null;
 }
 async function tbSend(body) {
   const wa = writeAuth();
@@ -12203,6 +12252,12 @@ async function tbSend(body) {
       if (pj && pj.ok) return pj;
     }
   } catch (e0) { /* fall through to the bridge */ }
+  // proxy timed out or errored on an ADD: the write may still have landed —
+  // check before creating a second copy through the bridge (9/11)
+  if (body.op === 'add') {
+    const dup = await tbFindRecentAdd(body.owner, body.text);
+    if (dup) return {ok: true, id: dup.id, existing: true};
+  }
   // the Apps Script bridge occasionally answers with an HTML error page
   // (over-capacity blip) — retry a couple of times before bothering anyone
   let lastErr = '';
@@ -12278,7 +12333,9 @@ function renderTaskBoard() {
     }).join('')}</div>` : '';
   const today = localDay();
   const isSnoozed = r => r.snooze && r.snooze > today && r.col !== 'done';
-  const allMine = TB.rows.filter(r => sameOwner(r.owner, TB.person) && r.col !== 'archived');
+  const brighamBoard = tbIsBrigham(TB.person);
+  const isAskCard = r => brighamBoard && r.col === TB_ASK_KEY && !tbIsBrigham(r.owner);
+  const allMine = TB.rows.filter(r => (sameOwner(r.owner, TB.person) || isAskCard(r)) && r.col !== 'archived');
   const snoozedN = allMine.filter(isSnoozed).length;
   // "unresponded" (Brigham 8/29): the newest note is someone else's — or the
   // card came from someone else and has no notes yet. Notes lines look like
@@ -12300,18 +12357,35 @@ function renderTaskBoard() {
   const canEdit = sameOwner(TB.person, me) || tbAdmin();
   const boardCols = (TB.cols[tbNorm(TB.person)] || TB_COLS.map(([k, l]) => [k, l]))
     .map(c => Array.isArray(c) ? c : [c.key, c.label]);
+  const personN = tbNorm(TB.person);
+  if (TB_ASK_BOARDS.includes(personN) && !boardCols.some(c => c[0] === TB_ASK_KEY)) {
+    boardCols.push([TB_ASK_KEY, TB_ASK_LABEL]);
+    if (canEdit && !(TB.askPersisted || (TB.askPersisted = new Set())).has(personN)) {   // persist once
+      TB.askPersisted.add(personN);
+      tbSend({op: 'setcols', owner: TB.person, cols: boardCols.map(([k, l]) => [k, l])});
+    }
+  }
+  const askVirtual = [];   // Brigham's board: one live column per person with Ask Brigham cards
+  if (brighamBoard) {
+    [...new Set(TB.rows.filter(r => r.col === TB_ASK_KEY && !tbIsBrigham(r.owner)).map(r => r.owner))]
+      .sort((a, b) => a.localeCompare(b))
+      .forEach(o => { askVirtual.push(tbAskColKey(o)); boardCols.push([tbAskColKey(o), tbAskColLabel(o)]); });
+  }
   const colKeys = boardCols.map(c => c[0]);
-  const homeCol = r => colKeys.includes(r.col) ? r.col : (r.col === 'archived' ? 'archived' : colKeys[0]);
+  const homeCol = r => isAskCard(r) ? tbAskColKey(r.owner)
+    : (colKeys.includes(r.col) ? r.col : (r.col === 'archived' ? 'archived' : colKeys[0]));
   const ordVal = r => (r.order === null || r.order === undefined || r.order === '')
     ? 1e9 - Date.parse(r.created || 0) / 1e6 : Number(r.order);
   const col = (key, label) => {
     const cards = mine.filter(r => homeCol(r) === key)
       .sort((a, b) => ordVal(a) - ordVal(b));
     return `<div class="kcol ${key === 'done' ? 'kdone' : ''}" data-col="${key}">
-      <h4><span>${esc(label)}${canEdit ? ` <button class="kcolren" data-k="${esc(key)}" title="rename column">✎</button>` : ''}</span> <i>${cards.length}</i></h4>
+      <h4><span>${esc(label)}${canEdit && !key.startsWith('ask:') ? ` <button class="kcolren" data-k="${esc(key)}" title="rename column">✎</button>` : ''}</span> <i>${cards.length}</i></h4>
       ${cards.map(c => `<div class="kcard" draggable="${canEdit}" data-id="${esc(c.id)}">
         <b>${esc(c.text)}</b>
         <div class="chips">
+          ${c.pending ? '<span class="chip c-dueok">saving…</span>' : ''}
+          ${key.startsWith('ask:') ? `<span class="chip c-dueok">asked by ${esc(String(c.owner).split(/\s+/)[0])}</span>` : ''}
           ${c.serial ? `<span class="chip c-piano" data-serial="${esc(c.serial)}">🎹 ${esc(c.serial)}</span>` : ''}
           ${tbDueChip(c.due, c.col)}
           ${c.from ? `<span class="chip c-from">from ${esc(c.from.split(/\s+/)[0])}</span>` : ''}
@@ -12405,10 +12479,24 @@ function renderTaskBoard() {
       gb.disabled = true; gb.textContent = 'Adding…';
       const minOrd = Math.min(0, ...mine.map(ordVal).filter(isFinite));
       const col2 = ov2.querySelector('.kc-col').value;
-      const j = await tbSend({op: 'add', owner: TB.person, text,
-        serial: ov2.querySelector('.kc-serial').value.trim(),
-        due: ov2.querySelector('.kc-due').value, order: minOrd - 1});
-      if (!j) { gb.disabled = false; gb.textContent = 'Add card'; return; }
+      const serialV = ov2.querySelector('.kc-serial').value.trim(), dueV = ov2.querySelector('.kc-due').value;
+      // optimistic (Melissa 9/11): the card is on the board NOW; the save
+      // happens behind it and the card is remembered until the server copy
+      // shows up, so no refresh can make it vanish
+      const tmp = {id: 'tmp' + Date.now().toString(36), owner: TB.person, col: col2 || boardCols[0][0], text,
+        serial: serialV, due: dueV, from: tbMe(), created: new Date().toISOString(), done: '',
+        order: minOrd - 1, notes: '', snooze: '', pending: true};
+      TB.rows.push(tmp); tbLocalRemember(tmp);
+      if (!photoFile && !videoFile) ov2.hidden = true;
+      renderTaskBoard();
+      const j = await tbSend({op: 'add', owner: TB.person, text, serial: serialV, due: dueV, order: minOrd - 1});
+      if (!j) {
+        TB.rows = TB.rows.filter(r => r !== tmp); tbLocalForget(tmp.id); renderTaskBoard();
+        ov2.hidden = false; gb.disabled = false; gb.textContent = 'Add card'; return;
+      }
+      const oldId = tmp.id;
+      if (j.id) tmp.id = j.id;
+      tmp.pending = false; tbLocalRemember(tmp, oldId);
       // cards are born in the first column — move if another was picked
       if (j.id && col2 && col2 !== boardCols[0][0]) {
         await tbSend({op: 'move', id: j.id, col: col2, order: minOrd - 1});
@@ -12446,7 +12534,8 @@ function renderTaskBoard() {
           if (j3.url) await tbSend({op: 'note', id: j.id, text: '🎬 ' + j3.url});
         } catch (e3) { /* best-effort */ }
       }
-      ov2.hidden = true; TB.rows = null; renderTaskBoard();
+      ov2.hidden = true; renderTaskBoard();
+      tbFetch();   // fresh server copy behind the scenes — the local card is kept until it appears there
     };
     ov2.querySelector('.kc-go').onclick = go;
     txtIn.onkeydown = ev2 => { if (ev2.key === 'Enter') go(); };
@@ -12680,6 +12769,10 @@ function renderTaskBoard() {
         else order = (prev + next) / 2;
         ph.remove();
         const newCol = colEl.dataset.col;
+        if (newCol.startsWith('ask:')) {   // Brigham's mirrored columns are views, not destinations
+          TB.dragJustHappened = true; setTimeout(() => { TB.dragJustHappened = false; }, 250);
+          renderTaskBoard(); return;
+        }
         const c = TB.rows.find(r => r.id === id);
         if (c) { c.col = newCol; c.order = order; }
         TB.dragJustHappened = true;
