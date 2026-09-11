@@ -841,13 +841,23 @@ async function loadProposal(box){
   const ab=box.querySelector("#applySched");
   // prompt()/confirm() are blocked in embedded browsers (why the button
   // seemed dead) — inline confirm + PIN instead
-  const doApply=async(pin,techs)=>{
+  // No typed PIN any more (Brigham 9/11): the Scheduling dashboard is already
+  // managers/owners only, and their Google sign-in rides along with the
+  // request (name for the activity log, token for the bridge's trust).
+  const schedAuth=()=>{
+    const a=(window.writeAuth?writeAuth():{pin:"pianoman",ok:true});
+    const nm=(typeof authUser==="function"&&authUser()&&authUser().name)||localStorage.getItem("blpmgr.name")||"Shop Manager";
+    return {ok:a.ok,body:{pin:a.pin||"pianoman",key:"pianoman",user:{name:nm+" (Shop Manager)"},...(window.authFields?authFields():{})}};
+  };
+  const doApply=async(techs)=>{
     ab.disabled=true; ab.textContent="Applying…";
     const out=box.querySelector("#applyOut");
     try{
+      const au=schedAuth();
+      if(!au.ok) throw new Error("Sign in with Google (☰ menu) first — the schedule is applied under your name.");
       const r=await fetch(CONFIG.STOREMAP_BRIDGE,{method:"POST",redirect:"follow",
         headers:{"content-type":"text/plain;charset=utf-8"},
-        body:JSON.stringify({action:"applyschedule",pin,techs,user:{name:(localStorage.getItem("blpmgr.name")||"Shop Manager")+" (Shop Manager)"}})});
+        body:JSON.stringify({action:"applyschedule",techs,...au.body})});
       const j=await r.json();
       if(j.error) throw new Error(j.error);
       out.className="applyout";
@@ -882,15 +892,14 @@ async function loadProposal(box){
           `<div style="margin-top:6px"><b>${esc(r.tech)}</b> on calendar:<ul style="margin:2px 0 0 18px;padding:0">`
           +r.events.map(ev=>`<li${ev.dup?' style="color:var(--red)"':''}>${esc(ev.start)}–${esc(ev.end)} ${esc(ev.title)}${ev.dup?" (duplicate)":""}</li>`).join("")+`</ul></div>`).join("")
         +(j.duplicates&&!j.dedupe?`<br><span style="display:inline-flex;gap:7px;margin-top:8px;align-items:center;flex-wrap:wrap">
-            <input id="dedupePin" type="password" placeholder="Team PIN" autocomplete="off"
-              style="border:1px solid #cfc9bf;border-radius:6px;padding:8px 11px;font:inherit;font-size:13.5px">
             <button class="abtn" id="dedupeGo">Remove ${j.duplicates} duplicate${j.duplicates===1?"":"s"}</button></span>`:"");
-      const dg=out.querySelector("#dedupeGo"), dp=out.querySelector("#dedupePin");
+      const dg=out.querySelector("#dedupeGo");
       if(dg) dg.onclick=async()=>{
-        if(!dp.value.trim()){ dp.focus(); return; }
+        const au=schedAuth();
+        if(!au.ok){ out.className="applyout err"; out.textContent="✗ Sign in with Google (☰ menu) first."; return; }
         dg.disabled=true; dg.textContent="Removing…";
         try{
-          const j2=await post({action:"dedupeschedule",pin:dp.value.trim(),user:{name:(localStorage.getItem("blpmgr.name")||"Shop Manager")+" (Shop Manager)"}});
+          const j2=await post({action:"dedupeschedule",...au.body});
           if(j2.error) throw new Error(j2.error);
           const j3=await post({action:"checkschedule",pin:localStorage.getItem("blp.appkey")||"pianoman"});
           if(j3.error) throw new Error(j3.error);
@@ -907,7 +916,7 @@ async function loadProposal(box){
   };
   if(ab&&!ab.disabled) ab.onclick=()=>{
     const out=box.querySelector("#applyOut");
-    if(box.querySelector("#applyPin")){ box.querySelector("#applyPin").focus(); return; }
+    if(box.querySelector("#applyGo2")) return;   // picker already open
     const appliedSet=new Set((meta.appliedTechs||[]).map(n=>n.toLowerCase()));
     out.className="applyout";
     out.innerHTML=`Pick who goes live — only checked technicians' proposed weeks are written to their REAL
@@ -922,28 +931,23 @@ async function loadProposal(box){
       <span style="display:inline-flex;gap:7px;margin-top:4px;align-items:center;flex-wrap:wrap">
         <button class="abtn" id="applyNone" style="background:none;border:1px solid var(--line)">none</button>
         <button class="abtn" id="applyAll" style="background:none;border:1px solid var(--line)">all</button>
-        <input id="applyPin" type="password" placeholder="Team PIN" autocomplete="off"
-          style="border:1px solid #cfc9bf;border-radius:6px;padding:8px 11px;font:inherit;font-size:13.5px">
         <button class="abtn" id="applyGo2">Apply selected</button>
         <button class="abtn" id="applyCancel" style="background:none;border:1px solid var(--line)">Cancel</button>
       </span>`;
-    const pin=box.querySelector("#applyPin");
     const picked=()=>[...box.querySelectorAll("#applyTechs input:checked")].map(c=>c.value);
     box.querySelector("#applyAll").onclick=()=>box.querySelectorAll("#applyTechs input").forEach(c=>c.checked=true);
     box.querySelector("#applyNone").onclick=()=>box.querySelectorAll("#applyTechs input").forEach(c=>c.checked=false);
     const go=()=>{
       const sel=picked();
       if(!sel.length){ out.insertAdjacentHTML("beforeend","<br><b style='color:var(--red)'>Check at least one technician.</b>"); return; }
-      if(!pin.value.trim()){ pin.focus(); return; }
       // one request per tap — a slow phone tapping "Apply selected" three
       // times used to fire three concurrent applies (9/6 triple-write)
       const g2=box.querySelector("#applyGo2");
       if(g2){ if(g2.disabled) return; g2.disabled=true; g2.textContent="Applying…"; }
-      doApply(pin.value.trim(),sel);
+      doApply(sel);
     };
     box.querySelector("#applyGo2").onclick=go;
     box.querySelector("#applyCancel").onclick=()=>{ out.innerHTML=""; };
-    pin.onkeydown=e=>{ if(e.key==="Enter") go(); };
   };
 }
 function renderPlanner(){
