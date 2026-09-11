@@ -3279,7 +3279,7 @@ function openSuggestBox() {
       </div>
       <div class="sgselrow">
         <label class="sgsellbl">App <select class="sgsel sgapp" title="which BLP app is this about?">
-          ${['Admin Training', 'Agent App', 'BLP Website', 'CRM', 'Piano Log', 'Price Tag Maker', 'Piano Technology Library', 'Sales App', 'Shop App', 'Store Map', 'US Sales Map', 'Other']
+          ${['Admin Training', 'Agent App', 'BLP Website', 'CRM', 'Piano Log', 'Piano Technology Library', 'Price Tag Maker', 'Sales App', 'Shop App', 'Store Map', 'US Sales Map', 'Other']
             .map(a => `<option ${a === 'Store Map' ? 'selected' : ''}>${a}</option>`).join('')}</select></label>
         <label class="sgsellbl">Train an agent <select class="sgsel sgagent" title="optional — suggest training for one of the AI agents">
           <option value="">— none —</option>
