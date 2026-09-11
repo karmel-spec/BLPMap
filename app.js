@@ -8476,12 +8476,15 @@ function initAuth() {
     google.accounts.id.initialize({
       client_id: GOOGLE_CLIENT_ID, callback: onGoogleCred,
       auto_select: true, use_fedcm_for_prompt: true, itp_support: true,
-      // full-page redirect instead of a popup: iOS Safari's tracking
-      // prevention breaks the popup flow (400 at accounts.google.com after
-      // a QR scan). Google form_posts the credential to gsi-callback, which
-      // stashes it and bounces home; boot() consumes it (blpGsiCred).
-      ux_mode: 'redirect',
-      login_uri: 'https://blpstoremap.netlify.app/.netlify/functions/gsi-callback',
+      // In-page (popup/FedCM) mode — Karmel 9/11: the hourly silent renewal
+      // below used ux_mode 'redirect', so every renewal form_posted to
+      // gsi-callback and RELOADED THE WHOLE APP about once an hour ("the
+      // store app randomly refreshes"). The visible sign-in controls never
+      // used GIS anyway (they call oidcLogin, a plain OAuth redirect that
+      // still works on iOS), so redirect mode only cost us the reload. A
+      // renewal now lands in onGoogleCred and the page stays put; if a
+      // browser blocks the silent renewal, the token simply lapses and the
+      // app already carries on (writeAuth) and shows "session expired".
     });
     renderAuth();
     // silently refresh the hourly token for already-signed-in users —
@@ -10006,11 +10009,25 @@ function adjExpired() {
   const u = authUser();
   return !!(u && !u.pinOnly && u.exp * 1000 < Date.now() + 30000);
 }
-function adjStashAndRenew(intent) {
+async function adjStashAndRenew(intent) {
   try { lsSet('adjResume', JSON.stringify({...intent, at: Date.now()})); } catch (e) {}
-  cfxToast('🔐 Your Google sign-in expired (Google renews it hourly). Renewing now — your edit comes right back, then press ' + (intent.add ? 'Add' : 'Save') + ' once more.');
+  const pressAgain = ' then press ' + (intent.add ? 'Add' : 'Save') + ' once more.';
+  cfxToast('🔐 Your Google sign-in expired (Google renews it hourly). Renewing it now…');
+  // Karmel 9/11: renew IN PAGE first — a full bounce through Google reloads
+  // the whole app. Ask GIS for a silent credential and give it 8 s; the
+  // moment the token is fresh, reopen the edit prefilled (no reload).
+  try { if (window.google && google.accounts && google.accounts.id) google.accounts.id.prompt(); } catch (e) {}
+  const fresh = () => { const u = authUser(); return !!(u && !u.pinOnly && u.exp * 1000 > Date.now() + 60000); };
+  for (let i = 0; i < 32 && !fresh(); i++) await new Promise(r => setTimeout(r, 250));
+  if (fresh()) {
+    cfxToast('✓ Sign-in renewed — your edit is back;' + pressAgain);
+    try { await resumeAdjIntent(); } catch (e) {}
+    return;
+  }
+  // silent renewal did not happen (blocked browser) — last resort: the bounce
+  cfxToast('🔐 Renewing through Google — your edit comes right back,' + pressAgain);
   const u = authUser();
-  setTimeout(() => oidcLogin(u ? u.email : ''), 1200);
+  setTimeout(() => oidcLogin(u ? u.email : ''), 800);
 }
 function adjFeedback(msgEl, j, okText) {
   if (j && !j.error) {
