@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Store Map — Brigham Larson Pianos</title>
 <link rel="icon" href="assets/blp-logo.png">
-<link rel="stylesheet" href="styles.css?v=202">
+<link rel="stylesheet" href="styles.css?v=203">
 </head>
 <body>
 
@@ -310,9 +310,10 @@
   </div>
 </div>
 
-<script src="app.js?v=375"></script>
+<script src="app.js?v=376"></script>
 <script src="sched.js?v=22"></script>
 <!-- Agent quick-links (Clara · Arnold · Cris): show only for Brigham (identity from localStorage blpUser) -->
-<script src="https://blpagents.netlify.app/assistant.js" defer data-app="Store Map" data-user-key="blpUser" data-agents="clara,arnold,chris"></script>
+<!-- Chris (shop agent) for every signed-in team member; Brigham & Karmel keep Clara + Arnold too (Brigham 9/11, Lisa 091126litton05) -->
+<script src="https://blpagents.netlify.app/assistant.js" defer data-app="Store Map" data-user-key="blpUser" data-always="1" data-agents="chris" data-agents-by-user="brigham:clara,arnold,chris|brighamlarson:clara,arnold,chris|karmel:clara,arnold,chris" data-labels="chris:Ask Chris a question — shop help"></script>
 </body>
 </html>

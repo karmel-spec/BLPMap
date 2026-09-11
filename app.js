@@ -3277,6 +3277,14 @@ function openSuggestBox() {
         <button class="sgdev" data-d="phone">📱 Phone</button>
         <button class="sgdev" data-d="computer">💻 Computer</button>
       </div>
+      <div class="sgselrow">
+        <label class="sgsellbl">App <select class="sgsel sgapp" title="which BLP app is this about?">
+          ${['Admin Training', 'Agent App', 'BLP Website', 'CRM', 'Piano Log', 'Price Tag Maker', 'Piano Technology Library', 'Sales App', 'Shop App', 'Store Map', 'US Sales Map', 'Other']
+            .map(a => `<option ${a === 'Store Map' ? 'selected' : ''}>${a}</option>`).join('')}</select></label>
+        <label class="sgsellbl">Train an agent <select class="sgsel sgagent" title="optional — suggest training for one of the AI agents">
+          <option value="">— none —</option>
+          ${['Arnold', 'Chris', 'Clara', 'Ivory', 'Lindsay', 'Marcus', 'Melody'].map(a => `<option>${a}</option>`).join('')}</select></label>
+      </div>
       <textarea class="sgtext" maxlength="1500" placeholder="What's wrong / what would make it better? A sentence or two is plenty."></textarea>
       <div class="sgrow">
         <label class="sgshot">📷 Attach screenshot<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden></label>
@@ -3352,9 +3360,15 @@ function openSuggestBox() {
     const sendWas = sendBtn.textContent;
     sendBtn.textContent = 'Sending…';
     msg.className = 'sgmsg'; msg.textContent = shotFile ? 'Uploading screenshot…' : 'Sending…';
-    const body = {pin, action: 'suggest', type, text,
+    // which app + optional agent-training target (Lisa 9/11, request 091126litton05):
+    // the same 💡 button is shared across the BLP apps, so say which one
+    const appName = (ov.querySelector('.sgapp') || {}).value || 'Store Map';
+    const agentName = (ov.querySelector('.sgagent') || {}).value || '';
+    const body = {pin, action: 'suggest', type, text, app: appName, agent: agentName,
       context: 'view:' + (S.view || 'map') + (openSerial ? ' · piano #' + openSerial : '')
-        + (device === 'phone' ? ' · 📱 phone' : ' · 💻 computer'),
+        + (device === 'phone' ? ' · 📱 phone' : ' · 💻 computer')
+        + (appName !== 'Store Map' ? ' · app: ' + appName : '')
+        + (agentName ? ' · 🤖 train ' + agentName : ''),
       ...authFields()};
     try {
       if (shotFile) {

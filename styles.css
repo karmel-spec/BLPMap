@@ -1949,3 +1949,13 @@ button.cfxres:hover{border-color:#2e7d4f;color:#2e7d4f}
 .kcolmv{border:none;background:none;cursor:pointer;font-size:10px;color:#8a929a;padding:0 2px;line-height:1}
 .kcolmv:hover{color:#9e2020}
 .kcol h4:not(:hover) .kcolmv{opacity:.35}
+
+/* 💡 suggest box: which app / which agent (Lisa 9/11) */
+.sgselrow{display:flex;gap:10px;flex-wrap:wrap;margin:2px 0 8px}
+.sgsellbl{display:flex;align-items:center;gap:6px;font-size:11.5px;color:#5a636b}
+.sgsel{font:inherit;font-size:12.5px;padding:5px 8px;border:1px solid #cfd6dc;border-radius:8px;background:#fff;color:#222;max-width:200px}
+
+/* Agent faces (blpagents assistant.js): keep Chris clear of the zoom controls and the work-clock dock */
+.blpa-stack{bottom:64px!important;right:14px!important}
+body:has(#mydock:not([hidden])) .blpa-stack{bottom:90px!important}
+@media(max-width:600px){.blpa-stack{bottom:70px!important;right:12px!important}body:has(#mydock:not([hidden])) .blpa-stack{bottom:150px!important}}
