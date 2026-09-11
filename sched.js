@@ -400,41 +400,42 @@ function buildPianoIndex(){
   });
 }
 
-/* ================= CALENDAR ================= */
-let calToken=null, CAL_MAP={}; // tech -> calendarId
-function connectCalendar(cb){
-  const s=document.createElement("script"); s.src="https://accounts.google.com/gsi/client"; s.async=true;
-  s.onload=()=>{
-    const tc=google.accounts.oauth2.initTokenClient({
-      client_id:"110628682621-v65mkaoanv87sp75ggdfcrglfr7bkr8p.apps.googleusercontent.com",
-      scope:"https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/calendar.events",
-      callback:async(resp)=>{ calToken=resp.access_token; await mapCalendars(); schedRerender(); if(cb)cb(); }
+/* ================= ASSIGNED COUNTS (from the saved proposal) =================
+   The old "Connect Google Calendar" button OAuth'd whoever was signed in and
+   name-matched THEIR calendar list — empty for Mark, mostly former staff for
+   brigham@ (removed 9/11, Brigham; same fix as the Shop app twin). The saved
+   schedule proposal — bridge fn=proposal, no sign-in — is what the Friday
+   flow reviews, so the "assigned" counts come from it. Calendar writes were
+   already server-side (Planner Approve → bridge applyschedule as karmel@). */
+let PROP_COUNTS=null, PROP_LOADING=false;
+async function refreshAssignCounts(){
+  if(PROP_COUNTS||PROP_LOADING) return;
+  PROP_LOADING=true;
+  try{
+    const r=await fetch(CONFIG.STOREMAP_BRIDGE+"?fn=proposal",{redirect:"follow"});
+    const j=await r.json();
+    const first=x=>String(x||"").toLowerCase().trim().split(/\s+/)[0];
+    const counts={};
+    ((j&&j.plan&&j.plan.techs)||[]).forEach(tp=>{
+      counts[String(tp.name||"").toLowerCase().trim()]=
+        (tp.days||[]).reduce((a,d)=>a+((d&&d.length)||0),0);
     });
-    tc.requestAccessToken();
-  };
-  document.head.appendChild(s);
-}
-async function gcal(path, opts){
-  const r=await fetch("https://www.googleapis.com/calendar/v3/"+path,{...(opts||{}),headers:{Authorization:"Bearer "+calToken,"Content-Type":"application/json",...((opts||{}).headers||{})}});
-  return r.json();
-}
-async function mapCalendars(){
-  const out=await gcal("users/me/calendarList?maxResults=250");
-  CAL_MAP={};
-  (out.items||[]).forEach(c=>{
-    const s=(c.summary||"").toLowerCase();
-    ROSTER.forEach(tech=>{ if(s.includes(tech.toLowerCase()) && !CAL_MAP[tech]) CAL_MAP[tech]=c.id; });
-  });
-}
-async function eventsFor(tech, from, to){
-  if(!CAL_MAP[tech]) return [];
-  const out=await gcal(`calendars/${encodeURIComponent(CAL_MAP[tech])}/events?singleEvents=true&orderBy=startTime&timeMin=${from.toISOString()}&timeMax=${to.toISOString()}&maxResults=100`);
-  return (out.items||[]).filter(e=>e.status!=="cancelled");
-}
-async function createEvent(tech, summary, dayISO){
-  if(!CAL_MAP[tech]) return null;
-  return gcal(`calendars/${encodeURIComponent(CAL_MAP[tech])}/events`,{method:"POST",
-    body:JSON.stringify({summary, start:{date:dayISO}, end:{date:dayISO}})});
+    PROP_COUNTS={weekStart:(j&&j.meta&&j.meta.weekStart)||"",counts};
+    // only trust counts that are actually about NEXT week's proposal
+    if(PROP_COUNTS.weekStart===iso(mondayOf(NEXT_FRI))){
+      const names=Object.keys(counts);
+      const st=reviewState();
+      ROSTER.forEach(tech=>{
+        const tl=String(tech).toLowerCase().trim();
+        let key=names.find(n=>n===tl);
+        if(!key){ const hits=names.filter(n=>first(n)===first(tl)); if(hits.length===1) key=hits[0]; }
+        if(key!=null) st[tech]={...(st[tech]||{}),autoEvents:counts[key]};
+      });
+      store.set(REV_KEY,st);
+    }
+  }catch(e){ PROP_COUNTS=null; }
+  PROP_LOADING=false;
+  schedRerender();
 }
 
 /* ================= STATE (per week) ================= */
@@ -459,18 +460,22 @@ function sumHours(text){
   while((m=re.exec(text))){ const v=parseFloat(m[1]); if(v>0&&v<200) s+=v; }
   return s;
 }
-const weekEntries=isoD=>REPORTS.entries.filter(e=>e.date===isoD);
+// week headers drift between Thursday (report due date) and Friday labels —
+// compare by WEEK (Monday key), never the exact day (9/11/26 lesson)
+const weekKeyOf=isoD=>{ if(!isoD)return null; const d=new Date(isoD+"T12:00:00");
+  if(isNaN(d))return null; d.setDate(d.getDate()-((d.getDay()+6)%7)); return iso(d); };
+const weekEntries=isoD=>{ const wk=weekKeyOf(isoD); return REPORTS.entries.filter(e=>weekKeyOf(e.date)===wk); };
 function fmtLong(d){ return d.toLocaleDateString(LANG==="es"?"es-MX":"en-US",{weekday:"long",month:"long",day:"numeric",year:"numeric"}); }
 function complianceHTML(){
   const weeks=[]; for(let i=0;i<12;i++){ const d=new Date(FRI); d.setDate(d.getDate()-7*i); weeks.push(iso(d)); }
-  return ROSTER.map(tc=>({tc,n:weeks.filter(w=>REPORTS.entries.some(e=>e.tech===tc&&e.date===w)).length}))
+  return ROSTER.map(tc=>({tc,n:weeks.filter(w=>REPORTS.entries.some(e=>e.tech===tc&&weekKeyOf(e.date)===weekKeyOf(w))).length}))
     .sort((a,b)=>b.n-a.n)
     .map(c=>`<div class="brow"><span>${esc(c.tc)}</span><div class="btrack"><i class="bfill ${c.n<6?"hot":""}" style="width:${Math.round(c.n/12*100)}%"></i></div><b class="num">${c.n}/12</b></div>`).join("");
 }
-function weekReports(){ return REPORTS.entries.filter(e=>e.date===FRI_ISO); }
+function weekReports(){ const wk=weekKeyOf(FRI_ISO); return REPORTS.entries.filter(e=>weekKeyOf(e.date)===wk); }
 function reviewState(){ return store.get(REV_KEY,{}); }
 /* ================= WEEKLY REVIEW ================= */
-let OPEN_TECH = null, BUMP_CACHE={};
+let OPEN_TECH = null;
 function carryLines(text){
   return String(text||"").split(/\n|(?<=\.)\s+/).filter(l=>
     /carry|next week|didn'?t|did not|not (yet )?(done|finished|complete)|waiting|still needs|unfinished|left off|to do|pendiente|esperando|falta/i.test(l) && l.trim().length>8).slice(0,6);
@@ -495,11 +500,10 @@ function renderReview(){
     ${open?revPanel(tech,rep,s):""}`;
   }).join("");
   el.innerHTML = `
-    <div class="row1"><div><h2 class="page">${t("review_title")}</h2><div class="sub">${t("review_sub")}</div></div>
-      <button class="btn2" id="calBtn">${calToken?("✓ "+t("cal_connected")):t("connect_cal")}</button></div>
+    <div class="row1"><div><h2 class="page">${t("review_title")}</h2><div class="sub">${t("review_sub")}</div></div></div>
     <div class="card">${rows}</div>`;
-  $("#calBtn").onclick=()=>{ if(!calToken) connectCalendar(refreshAssignCounts); };
-  document.querySelectorAll(".rev-row").forEach(r=>r.onclick=()=>{ OPEN_TECH = OPEN_TECH===r.dataset.tech?null:r.dataset.tech; schedRerender(); if(OPEN_TECH&&calToken) loadBumps(OPEN_TECH); });
+  refreshAssignCounts();   // assigned counts from the saved proposal — no sign-in
+  document.querySelectorAll(".rev-row").forEach(r=>r.onclick=()=>{ OPEN_TECH = OPEN_TECH===r.dataset.tech?null:r.dataset.tech; schedRerender(); });
   wireRevPanel();
 }
 function revPanel(tech, rep, s){
@@ -511,23 +515,17 @@ function revPanel(tech, rep, s){
   });
   const seqRow = seqRowFor(tech);
   const nextJobs = seqRow ? seqRow.slice(2).map(s=>s.trim()).filter(Boolean).slice(0,3) : [];
-  const bumps = BUMP_CACHE[tech];
   return `<div class="revpanel">
     <div>
       <h5>${t("this_week_report")} · ${fmtShort(FRI_ISO)}</h5>
       <div class="reptext">${rep?esc(rep.text):`<span style="color:var(--mut2)">${t("no_report")}</span>`}</div>
       <div class="rev-actions">
         <button class="btn" id="rvBtn">${s.reviewed?t("unmark"):t("mark_reviewed")}</button>
-        ${!calToken?`<button class="btn3" id="maBtn">${s.assignedManual?t("unmark"):t("mark_assigned")}</button>`:""}
+        <button class="btn3" id="maBtn">${s.assignedManual?t("unmark"):t("mark_assigned")}</button>
       </div>
     </div>
     <div>
-      ${calToken?`<h5>${t("bump_title")}</h5>
-        ${bumps===undefined?`<div class="item" style="color:var(--mut2)">…</div>`:
-          bumps.length?bumps.map((b,i)=>`<div class="item"><span class="src">${esc(b.when)}</span><br>${esc(b.summary)}<div class="rev-actions"><button class="btn3 bumpBtn" data-i="${i}" ${b.done?"disabled":""}>${b.done?t("bumped"):t("bump")}</button></div></div>`).join(""):
-          `<div class="item" style="color:var(--good)">✓</div>`}`
-        :`<h5>${t("bump_title")}</h5><div class="item" style="color:var(--mut2)">${t("bump_hint")}</div>`}
-      ${carries.length?`<h5 style="margin-top:12px">${t("carryovers")}</h5>${carries.map(c=>`<div class="item">${esc(c)}</div>`).join("")}`:""}
+      ${carries.length?`<h5>${t("carryovers")}</h5>${carries.map(c=>`<div class="item">${esc(c)}</div>`).join("")}`:""}
       ${walks.length?`<h5 style="margin-top:12px">${t("walk_notes_for")}</h5>${walks.map(w=>`<div class="item"><span class="src">${esc(w.cat)}</span><br>${esc((w.label?w.label+": ":"")+w.text)}</div>`).join("")}`:""}
       ${nextJobs.length?`<h5 style="margin-top:12px">${t("next_up")}</h5>${nextJobs.map(j=>`<div class="item">${esc(j)}</div>`).join("")}`:""}
     </div>
@@ -538,36 +536,6 @@ function wireRevPanel(){
   const st=reviewState();
   const rv=$("#rvBtn"); if(rv) rv.onclick=(e)=>{e.stopPropagation(); st[tech]={...(st[tech]||{}),reviewed:!(st[tech]||{}).reviewed}; store.set(REV_KEY,st); schedRerender();};
   const ma=$("#maBtn"); if(ma) ma.onclick=(e)=>{e.stopPropagation(); st[tech]={...(st[tech]||{}),assignedManual:!(st[tech]||{}).assignedManual}; store.set(REV_KEY,st); schedRerender();};
-  document.querySelectorAll(".bumpBtn").forEach(b=>b.onclick=async(e)=>{
-    e.stopPropagation();
-    const item=BUMP_CACHE[tech][+b.dataset.i];
-    const day=iso(new Date(mondayOf(NEXT_FRI)));
-    await createEvent(tech, item.summary, day);
-    item.done=true; refreshAssignCounts(); schedRerender();
-  });
-}
-async function loadBumps(tech){
-  if(BUMP_CACHE[tech]) { schedRerender(); return; }
-  const mon=mondayOf(FRI), sat=new Date(FRI); sat.setDate(sat.getDate()+1);
-  const evs=await eventsFor(tech, mon, sat);
-  const rep=weekReports().find(e=>e.tech===tech);
-  const reptext=(rep?rep.text:"").toLowerCase();
-  BUMP_CACHE[tech]=evs.filter(e=>{
-    const words=(e.summary||"").toLowerCase().split(/\W+/).filter(w=>w.length>3);
-    const mentioned=words.some(w=>reptext.includes(w));
-    return !mentioned;  // not mentioned in report -> candidate for bump
-  }).map(e=>({summary:e.summary||"(no title)", when:(e.start?.date||e.start?.dateTime||"").slice(0,10), done:false}));
-  schedRerender();
-}
-async function refreshAssignCounts(){
-  if(!calToken) return;
-  const st=reviewState();
-  const monN=mondayOf(NEXT_FRI), satN=new Date(NEXT_FRI); satN.setDate(satN.getDate()+1);
-  for(const tech of ROSTER){
-    try{ const evs=await eventsFor(tech, monN, satN); st[tech]={...(st[tech]||{}),autoEvents:evs.length,assigned:evs.length>0}; }
-    catch(e){}
-  }
-  store.set(REV_KEY,st); schedRerender();
 }
 
 /* ================= WALK-AROUND ================= */
@@ -1257,7 +1225,7 @@ function renderAudit(){
   const DONE_RE=/finish|finished|done|complete|completed|100\s*%|wrapped up|ready for/i;
   const techs=ROSTER.map(tc=>{
     const mine=REPORTS.entries.filter(e=>e.tech===tc&&e.date).sort((a,b)=>b.date.localeCompare(a.date));
-    const rep=mine.find(e=>e.date===FRI_ISO)||mine[0];
+    const rep=mine.find(e=>weekKeyOf(e.date)===weekKeyOf(FRI_ISO))||mine[0];
     const rows=[]; let flags=0;
     if(rep){
       const lines=String(rep.text||"").split(/\n|(?<=[.;!])\s+(?=[A-Z0-9])/).map(s=>s.trim()).filter(Boolean);
