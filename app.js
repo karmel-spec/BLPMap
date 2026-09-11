@@ -12456,7 +12456,7 @@ function renderTaskBoard() {
     const cards = mine.filter(r => homeCol(r) === key)
       .sort((a, b) => ordVal(a) - ordVal(b));
     return `<div class="kcol ${key === 'done' ? 'kdone' : ''}" data-col="${key}">
-      <h4><span>${esc(label)}${canEdit && !key.startsWith('mir:') ? ` <button class="kcolren" data-k="${esc(key)}" title="rename column">✎</button>` : ''}</span> <i>${cards.length}</i></h4>
+      <h4><span>${esc(label)}${canEdit && !key.startsWith('mir:') ? ` <button class="kcolren" data-k="${esc(key)}" title="rename column">✎</button><button class="kcolmv" data-k="${esc(key)}" data-d="-1" title="move column left">◀</button><button class="kcolmv" data-k="${esc(key)}" data-d="1" title="move column right">▶</button>` : ''}</span> <i>${cards.length}</i></h4>
       ${cards.map(c => `<div class="kcard" draggable="${canEdit}" data-id="${esc(c.id)}">
         <b>${esc(c.text)}</b>
         <div class="chips">
@@ -12656,6 +12656,15 @@ function renderTaskBoard() {
     colNameModal('＋ New column', '', label =>
       saveCols([...boardCols, ['c' + Date.now().toString(36), label]]));
   };
+  // ◀ ▶ reorder columns (Brigham 9/11): swap with the neighbour, persist the order
+  el.querySelectorAll('.kcolmv').forEach(b => b.onclick = ev2 => {
+    ev2.stopPropagation();
+    const real = boardCols.filter(c => !String(c[0]).startsWith('mir:'));
+    const i = real.findIndex(c => c[0] === b.dataset.k), j = i + (+b.dataset.d);
+    if (i < 0 || j < 0 || j >= real.length) return;
+    const next = real.slice(); [next[i], next[j]] = [next[j], next[i]];
+    saveCols(next);
+  });
   el.querySelectorAll('.kcolren').forEach(b => b.onclick = ev2 => {
     ev2.stopPropagation();
     const cur = boardCols.find(c => c[0] === b.dataset.k);
@@ -12974,6 +12983,9 @@ function openCardModal(c, canEdit) {
     <h3>🗒 Card${added ? ` <small class="cm-added">added ${new Date(added).toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'})}</small>` : ''}</h3>
     <textarea class="cm-text" maxlength="2000" rows="2" ${canEdit ? '' : 'readonly'}>${esc(c.text)}</textarea>
     <div class="cm-grid">
+      <div><label>Column</label><select class="cm-col" ${canEdit ? '' : 'disabled'}>
+        ${tbColsOf(c.owner).map(([k, l]) => `<option value="${esc(k)}" ${k === c.col ? 'selected' : ''}>${esc(l)}</option>`).join('')}
+        ${tbColsOf(c.owner).some(([k]) => k === c.col) ? '' : `<option value="${esc(c.col)}" selected>${esc(c.col)}</option>`}</select></div>
       <div><label>Due</label><input type="date" class="cm-due" value="${esc(c.due || '')}" ${canEdit ? '' : 'disabled'}></div>
       <div><label>Piano serial</label><input class="cm-serial" maxlength="20" list="serialList" value="${esc(c.serial || '')}" ${canEdit ? '' : 'disabled'}></div>
     </div>
@@ -13013,6 +13025,18 @@ function openCardModal(c, canEdit) {
     txt.oninput = () => { clearTimeout(t); t = setTimeout(() => save({text: txt.value.trim()}), 1200); };
     txt.onblur = () => { clearTimeout(t); if (txt.value.trim() !== c.text) save({text: txt.value.trim()}); };
     ov.querySelector('.cm-due').onchange = ev2 => save({due: ev2.target.value});
+    // move to another column from the edit dialog (Brigham 9/11) — instant,
+    // lands at the top of the chosen column, rolls back if the save fails
+    ov.querySelector('.cm-col').onchange = ev2 => {
+      const to = ev2.target.value, was = c.col, wasOrd = c.order;
+      if (!to || to === was) return;
+      c.col = to; c.order = -(Date.now() / 1e6);
+      msg.textContent = 'moving…'; renderTaskBoard();
+      tbSend({op: 'move', id: c.id, col: to, order: c.order}).then(j => {
+        if (j) { msg.textContent = '✓ moved'; setTimeout(() => { if (msg.isConnected) msg.textContent = ''; }, 1500); }
+        else { c.col = was; c.order = wasOrd; ev2.target.value = was; msg.textContent = ''; renderTaskBoard(); }
+      });
+    };
     ov.querySelector('.cm-serial').onchange = ev2 => save({serial: ev2.target.value.trim()});
     if (canEdit) attachSerialSuggest(ov.querySelector('.cm-serial'));
     ov.querySelectorAll('[data-sz]').forEach(b => b.onclick = () => {
