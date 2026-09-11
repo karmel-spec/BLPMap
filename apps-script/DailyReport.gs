@@ -19,7 +19,7 @@ var APP_URL = 'https://blpstoremap.netlify.app';
 var REPORT_TO = 'info@brighamlarsonpianos.com';
 var PIANO_LOG_ID = '1ZunbPKygpQlcXfTyPowDHdUE9spJ3uV1XA4iX1eoKRc';
 var BRIDGE_SECRET = 'PASTE_SECRET_HERE';   // server-to-server auth (optional)
-var BRIDGE_REV = '2026-09-11.5';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-09-11.6';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = 'PASTE_PIN_HERE';           // what BLP team members type to move pianos
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -261,6 +261,26 @@ function doGet(e) {
   if (e && e.parameter && e.parameter.fn === 'paperwork') {
     try { return json_(paperworkScan_(e.parameter.serial)); }
     catch (err) { return json_({error: String(err), files: []}); }
+  }
+  // Calendar read for the cloud scheduling routine (Brigham 9/11): the cloud
+  // agent has no Google login, so it reads tech / tuning / QC / moving
+  // calendars through here. Key-gated; read-only; 60-day window max.
+  if (e && e.parameter && e.parameter.fn === 'calevents') {
+    var ckey = String(e.parameter.key || '');
+    if (ckey !== TEAM_PIN && ckey.toLowerCase() !== 'pianoman') return json_({error: 'unauthorized'});
+    try {
+      var cid = String(e.parameter.cal || '');
+      var cfrom = new Date(String(e.parameter.from || '')), cto = new Date(String(e.parameter.to || ''));
+      if (!cid || isNaN(cfrom) || isNaN(cto) || cto - cfrom > 60 * 86400000) return json_({error: 'cal, from, to (≤60 days) required'});
+      var ccal = CalendarApp.getCalendarById(cid);
+      if (!ccal) return json_({error: 'calendar not found or not shared with the bridge account', cal: cid});
+      var cev = ccal.getEvents(cfrom, cto).slice(0, 400).map(function (ev) {
+        return {title: ev.getTitle(), start: ev.getStartTime().toISOString(), end: ev.getEndTime().toISOString(),
+          allDay: ev.isAllDayEvent(), location: String(ev.getLocation() || '').slice(0, 120),
+          description: String(ev.getDescription() || '').slice(0, 300)};
+      });
+      return json_({ok: true, cal: cid, name: ccal.getName(), events: cev});
+    } catch (errC) { return json_({error: String(errC).slice(0, 200)}); }
   }
   if (e && e.parameter && e.parameter.fn === 'schedulecheck') {
     try { return json_(scheduleCheck_({})); }
