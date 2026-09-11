@@ -12233,10 +12233,15 @@ function tbMirrorsFor(person) {
     if (tbNorm(o) === tbNorm(person)) return;
     tbColsOf(o).forEach(([k, l]) => {
       const targets = k === TB_ASK_KEY ? ['brigham'] : tbAskTargets(l);
-      if (targets.includes(first)) out.push({owner: o, key: k, vkey: 'mir:' + tbNorm(o) + ':' + k,
+      if (targets.includes(first)) out.push({owner: o, key: k, vkey: 'mir:' + tbNorm(o) + ':' + k, src: l,
         label: tbOwnerFirst(o) + (first === 'brigham' ? "'s Ask Brigham" : "'s questions")});
     });
   });
+  // one person with two columns aimed at the same board (Lisa: "Ask Brigham"
+  // + "Q's 4 Karmel or Brigham") → tell them apart by the source column name
+  const seen = {};
+  out.forEach(m => { seen[m.label] = (seen[m.label] || 0) + 1; });
+  out.forEach(m => { if (seen[m.label] > 1) m.label += ' · ' + m.src; });
   return out;
 }
 /* ---- locally-added cards survive the next refresh --------------------------
