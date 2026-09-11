@@ -66,3 +66,21 @@ otherwise; it happened 9/9).
 `python3 server.py` still works exactly as before (port 8641) and needs
 `config.json` for the calendar. The local 6 AM scheduler is now just a
 dev convenience — the cloud owns the real jobs.
+
+### ⚠️ Deploy FROM karmel@, and never with placeholder secrets (Sep 11 2026)
+Two outages came from paste-deploys that skipped these steps:
+1. **Secrets.** The repo file carries `PASTE_SECRET_HERE` / `PASTE_PIN_HERE` /
+   `PASTE_ICS_URL_HERE`. A paste that leaves them in place silently kills the
+   moving-calendar feed (`fn=events` → "DNS error: http://PASTE_ICS_URL_HERE"),
+   rejects the real team PIN, and breaks server-to-server calls. After pasting,
+   restore the three real lines (Project History → any karmel@ version has them),
+   and confirm the ping shows `"rev"` = `BRIDGE_REV` AND `fn=events` returns events.
+2. **Deploying account = executing account.** The web app is `executeAs:
+   USER_DEPLOYING`. Versions 136–142 (Sep 9) were created from brigham@, whose
+   authorization for this script predates the Drive photo feature — every photo
+   upload then failed with "You do not have permission to call
+   DriveApp.Folder.createFile". Create new versions signed in as
+   **karmel@brighamlarsonpianos.com**, and check `"drive":"ok"` in the ping.
+   (If a consent screen ever appears on deploy, stop and have Brigham/Karmel
+   approve it — that is an OAuth grant.)
+Version 143 (Sep 11, 5:38 PM, karmel@) restored all three.
