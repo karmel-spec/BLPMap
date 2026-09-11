@@ -6735,7 +6735,10 @@ async function checkPayMilestone(p, pop) {
   const milestone = Math.max(...crossed);
   const {pin, ok} = writeAuth();
   if (!ok) return;
-  const first = (ownerNameOf(p) || 'there').split(/\s+/)[0];
+  // proper-case the first name: the Piano Log stores owners in CAPS and
+  // "Hi STEPHEN," reads like shouting (Brigham 9/11)
+  const rawFirst = (ownerNameOf(p) || 'there').split(/\s+/)[0];
+  const first = rawFirst.charAt(0).toUpperCase() + rawFirst.slice(1).toLowerCase();
   const nmYr = [p.year, p.make, p.model].filter(Boolean).join(' ') || p.summary;
   const monthly = /^Monthly\b/i.test(p.payPlan);   // custom monthly amount: nothing extra falls due at a milestone
   const payAsk = p.payPlan === 'Pd in Full' ? ''
@@ -6747,7 +6750,7 @@ async function checkPayMilestone(p, pop) {
   const clientDraft = `Subject: Your ${nmYr} — ${milestone}% complete at Brigham Larson Pianos\n\n`
     + `Hi ${first},\n\nGreat news from the shop — your ${nmYr} has reached ${milestone}% completion. `
     + `The piano is currently in ${effectivePhase(p) || 'the shop'}, and the work is moving along beautifully.${payAsk}\n\n`
-    + `We'll keep the updates coming as we move into the next phase.\n\nWarmly,\nBrigham Larson Pianos\n(801) 763-7967`;
+    + `We'll keep the updates coming as we move into the next phase.\n\nWarmly,\nBrigham Larson Pianos`;   // no cell number — internal texting line only (Brigham 9/11)
   try {
     const r = await fetch(BRIDGE_URL, {
       method: 'POST', redirect: 'follow',
