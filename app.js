@@ -12208,8 +12208,8 @@ async function tbFetch() {
  * same records (no copies): Brigham marking one Done moves it into that
  * person's DONE column, and their notes/answers show on both boards. */
 const TB_ASK_KEY = 'askbrigham', TB_ASK_LABEL = 'Ask Brigham';
-const TB_ASK_BOARDS = ['melissa terry', 'mark hales', 'lisa litton', 'matthew wessman', 'jacob mower'];
-const TB_FIRST_ALIAS = {'lisa litton': 'Alisa'};
+const TB_ASK_BOARDS = ['melissa terry', 'mark hales', 'alisa miller', 'lisa litton', 'matthew wessman', 'jacob mower'];   // admins + managers
+const TB_FIRST_ALIAS = {};   // (Alisa = Alisa Miller, a separate admin from Lisa Litton — corrected 9/11)
 const tbIsBrigham = n => tbNorm(n) === 'brigham larson';
 const tbAskColKey = owner => 'ask:' + tbNorm(owner);
 const tbAskColLabel = owner => (TB_FIRST_ALIAS[tbNorm(owner)] || String(owner).split(/\s+/)[0]) + "'s Ask Brigham";
