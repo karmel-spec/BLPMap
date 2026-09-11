@@ -19,7 +19,7 @@ var APP_URL = 'https://blpstoremap.netlify.app';
 var REPORT_TO = 'info@brighamlarsonpianos.com';
 var PIANO_LOG_ID = '1ZunbPKygpQlcXfTyPowDHdUE9spJ3uV1XA4iX1eoKRc';
 var BRIDGE_SECRET = 'PASTE_SECRET_HERE';   // server-to-server auth (optional)
-var BRIDGE_REV = '2026-09-10.4';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-09-11.5';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = 'PASTE_PIN_HERE';           // what BLP team members type to move pianos
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -4170,6 +4170,15 @@ function saveProposal_(req) {
   var rows = [[JSON.stringify(meta)]];
   for (var i = 0; i < plan.length; i += PROPOSAL_CHUNK) rows.push([plan.substr(i, PROPOSAL_CHUNK)]);
   var sh = proposalSheet_();
+  // Guard (9/11): an OLDER week never overwrites a newer proposal — the
+  // Planner's adjust job, fed the Aug 10 snapshot by a slow bridge, saved it
+  // over the live Sep 14–18 plan. force:true is the deliberate override.
+  try {
+    var curMeta = JSON.parse(String(sh.getRange(1, 1).getValue() || '{}'));
+    if (!req.force && curMeta.weekStart && meta.weekStart && meta.weekStart < curMeta.weekStart) {
+      return {error: 'refusing to replace the ' + (curMeta.week || curMeta.weekStart) + ' proposal with an older week (' + (meta.week || meta.weekStart) + ') — nothing saved'};
+    }
+  } catch (eG) { /* unreadable meta — proceed */ }
   sh.clearContents();
   sh.getRange(1, 1, rows.length, 1).setValues(rows);
   return {ok: true, week: meta.week};
