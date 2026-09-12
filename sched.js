@@ -1271,8 +1271,10 @@ function renderAudit(){
                   :`<span class="pill ok">clean</span>`;
   const kindLabel={mismatch:"card says a different phase",stale:"reported done/finished — card phase unchanged",
     nocard:"worked on, but the card has no phase",ghost:"serial not found on the map (typo? sold?)"};
+  // Korban 9/11 (091126greenhalgh01): the piano name opens its data card;
+  // the serial keeps its Piano Log link
   const rowHTML=r=>`<div class="job" style="border-left:3px solid ${r.kind==="ghost"?"#b9b2a6":"#9e2020"};padding-left:9px;margin:7px 0">
-      <div><b>${r.p?linkSerials(esc((r.p.summary||"")+" "+r.tok)):esc("#"+r.tok)}</b>
+      <div><b ${r.p?`class="audcard" data-row="${r.p.row}" title="open this piano's data card" style="cursor:pointer;text-decoration:underline dotted #9e2020"`:""}>${r.p?linkSerials(esc((r.p.summary||"")+" "+r.tok)):esc("#"+r.tok)}</b>${r.p?` <button class="audcard abtn" data-row="${r.p.row}" style="font-size:11px;padding:2px 8px;margin-left:6px">🗂 card</button>`:""}
         ${r.card?`<span class="pill lvl">card: ${esc(r.card)}</span>`:""}
         ${r.claim?`<span class="pill lvl">report: ${esc(r.claim)}</span>`:""}</div>
       <div style="font-size:11.5px;color:var(--mut2);margin-top:3px">${esc(kindLabel[r.kind])}</div>
@@ -1288,6 +1290,17 @@ function renderAudit(){
           :(x.rep?`<div class="job" style="color:var(--mut2)">${t("aud_clean")}</div>`:"")}
       </div>`).join("")}
     </div>`;
+  // open the piano's data card on the map (same path the report chips use)
+  $("#sview-audit").querySelectorAll(".audcard").forEach(el=>el.onclick=ev=>{
+    if(ev.target.closest("a")) return;   // serial link → Piano Log, untouched
+    ev.preventDefault(); ev.stopPropagation();
+    const row=+el.dataset.row;
+    const p=(window.S&&S.data&&S.data.pianos||[]).find(x=>x.row===row)||(MAPD.pianos||[]).find(x=>x.row===row);
+    if(!p){ alert("This piano isn't in the live map data right now — try the serial link."); return; }
+    if(typeof switchView==="function"&&typeof focusPiano==="function"&&typeof openPop==="function"){
+      switchView("map"); focusPiano(p); openPop(p.row, window.S&&S.popAnchor, true);
+    } else window.open(CONFIG.PIANOLOG_URL+"?q="+encodeURIComponent(p.serial||""),"_blank");
+  });
 }
 
 /* ================= 🪜 SPECIALTIES — Skill Ladder + Versatility Matrix =====
