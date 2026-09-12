@@ -19,7 +19,7 @@ var APP_URL = 'https://blpstoremap.netlify.app';
 var REPORT_TO = 'info@brighamlarsonpianos.com';
 var PIANO_LOG_ID = '1ZunbPKygpQlcXfTyPowDHdUE9spJ3uV1XA4iX1eoKRc';
 var BRIDGE_SECRET = 'PASTE_SECRET_HERE';   // server-to-server auth (optional)
-var BRIDGE_REV = '2026-09-11.7';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-09-11.8';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = 'PASTE_PIN_HERE';           // what BLP team members type to move pianos
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -3683,7 +3683,8 @@ function addRequest_(req) {
   return {ok: true, id: id, screenshot: shot};
 }
 function setRequestStatus_(req) {
-  var STATUSES = ['Requested', 'In progress', 'Texted for info', 'Live', 'Tested', 'Resolved', 'Archived'];
+  // Duplicate (Brigham 9/11: lots of re-sent requests) + Declined (the Store Map offered it but this list rejected it)
+  var STATUSES = ['Requested', 'In progress', 'Texted for info', 'Live', 'Tested', 'Resolved', 'Archived', 'Declined', 'Duplicate'];
   if (STATUSES.indexOf(String(req.status)) < 0) return {error: 'bad status'};
   var sh = requestsSheet_();
   var vals = sh.getDataRange().getValues();

@@ -13268,7 +13268,7 @@ const ADMDASH_TABS = [
  * sign-in — every tab reads/writes the same sheets directly. The Shop App
  * is being sunset one page at a time. */
 const ADMDASH = {tab: 'requests', req: null, brig: null, curtis: null, busy: false};
-const REQ_STATES = ['Requested', 'In progress', 'Live', 'Tested', 'Declined'];
+const REQ_STATES = ['Requested', 'In progress', 'Live', 'Tested', 'Declined', 'Duplicate'];   // Duplicate: same ask already filed (Brigham 9/11)
 async function admFetchRequests() {
   try {
     const r = await fetch(BRIDGE_URL + '?fn=requests', {redirect: 'follow'});
@@ -13284,7 +13284,7 @@ function admRequestsHTML() {
   // away (status, team member, type, free text) for later reference.
   const f = ADMDASH.reqF || (ADMDASH.reqF = {st: 'open', who: '', type: '', q: ''});
   // Resolved / Archived: legacy statuses from the Shop Manager era — closed too
-  const isOpen = r => !['Live', 'Tested', 'Declined', 'Resolved', 'Archived'].includes(r.status);
+  const isOpen = r => !['Live', 'Tested', 'Declined', 'Duplicate', 'Resolved', 'Archived'].includes(r.status);
   const stOk = r => f.st === 'open' ? isOpen(r) : f.st === 'all' ? true : r.status === f.st;
   const q = f.q.trim().toLowerCase();
   const match = r => stOk(r) && (!f.who || r.who === f.who) && (!f.type || (r.type || 'edit') === f.type)
@@ -13297,7 +13297,7 @@ function admRequestsHTML() {
   const whos = [...new Set(ADMDASH.req.map(r => r.who).filter(Boolean))].sort((a, b) => a.localeCompare(b));
   const types = [...new Set(ADMDASH.req.map(r => r.type || 'edit'))].sort();
   const filtered = f.st !== 'open' || f.who || f.type || q;
-  const STATES = [['open', 'Open (Requested + In progress)'], ['Live', 'Live — shipped'], ['Tested', 'Tested — confirmed by requester'], ['Declined', 'Declined']]
+  const STATES = [['open', 'Open (Requested + In progress)'], ['Live', 'Live — shipped'], ['Tested', 'Tested — confirmed by requester'], ['Declined', 'Declined'], ['Duplicate', 'Duplicate — same ask already filed']]
     .concat(['Resolved', 'Archived'].filter(s => ADMDASH.req.some(r => r.status === s)).map(s => [s, s + ' (legacy)']))
     .concat([['all', 'All requests']]);
   const bar = `<div class="rfbar reqfbar">
