@@ -494,6 +494,12 @@ function tasksBox(p) {
         ${PLATE_STAGES.map(v =>
           `<option ${p.plateStatus === v ? 'selected' : ''}>${esc(v)}</option>`).join('')}
       </select></div><div class="platemsg phmsg"></div>
+    <div class="row phrow platehwrow" title="plate bolts, screws & hardware buffing (Korban's queue)">Plate hardware
+      <select class="platehwsel">
+        <option value="" ${!(p.plateHwStatus || '').trim() ? 'selected' : ''}>— not tracked —</option>
+        ${PLATE_HW_STAGES.map(v =>
+          `<option ${p.plateHwStatus === v ? 'selected' : ''}>${esc(v)}</option>`).join('')}
+      </select></div><div class="platehwmsg phmsg"></div>
     <div class="row phrow keystatrow">Keytops
       <select class="keystatsel">
         <option value="" ${!kt.state ? 'selected' : ''}>— not tracked —</option>
@@ -5366,6 +5372,26 @@ function wirePop(p) {
     } catch (e) { msg.textContent = '✗ ' + e.message; }
     plsel.disabled = false;
   };
+  const phwsel = pop.querySelector('.platehwsel');
+  if (phwsel) phwsel.onchange = async () => {
+    const msg = pop.querySelector('.platehwmsg');
+    const {pin, ok} = writeAuth();
+    if (!ok) { msg.textContent = 'Sign in first.'; return; }
+    phwsel.disabled = true; msg.textContent = 'Saving…';
+    try {
+      const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+        headers: {'content-type': 'text/plain;charset=utf-8'},
+        body: JSON.stringify({pin, action: 'setplatehw', serial: p.serial, row: p.row,
+          plateHwStatus: phwsel.value, ...authFields()})});
+      const j = await r.json();
+      if (j.error) throw new Error(j.error);
+      if (!j.ok) throw new Error('the bridge did not confirm the save — try again');
+      p.plateHwStatus = phwsel.value;
+      msg.textContent = '✓ saved';
+      setTimeout(() => { if (msg.isConnected) msg.textContent = ''; }, 1800);
+    } catch (e) { msg.textContent = '✗ ' + e.message; }
+    phwsel.disabled = false;
+  };
   // keytop status dropdown (+ queue position when "In Key Queue")
   const ksel = pop.querySelector('.keystatsel');
   const knum = pop.querySelector('.keyqnum');
@@ -9306,6 +9332,9 @@ function activityTable(rows) {
  * PLATE STATUS column, set from the card's Shop Progress section. */
 const PLATE_STAGES = ['In piano', 'Removed', 'Plate storage — BEFORE',
                       'At Curtis Harper', 'Plate storage — AFTER', 'Back in piano'];
+// plate bolts / screws / hardware buffing (Korban 9/11, request 091126greenhalgh06) —
+// mirrors the bridge's PLATE_HW_STATUSES; stored in PLATE HARDWARE STATUS
+const PLATE_HW_STAGES = ['Needs buffing', 'In buffing queue', 'Buffing', 'Buffed', 'Installed'];
 function plateBadge(v) {
   v = (v || '').trim();
   if (!v) return '<span class="lite" style="color:#8a929a">not tracked</span>';
@@ -9456,6 +9485,11 @@ const TQ_DEFS = [
   {key: 'plating', icon: '✨', title: 'PLATING TO ORDER + BUFFING',
    need: p => ['needed', 'noted'].includes(taskStatus(taskVal(p, 'plating'))),
    note: p => taskVal(p, 'plating')},
+  // 🪞 plate bolts / screws / hardware buffing — Korban's in-house queue,
+  // driven by the card's Plate hardware status (request 091126greenhalgh06)
+  {key: 'platehw', icon: '🪞', title: 'PLATE HARDWARE BUFFING — KORBAN',
+   need: p => ['Needs buffing', 'In buffing queue', 'Buffing'].includes((p.plateHwStatus || '').trim()),
+   note: p => p.plateHwStatus},
   {key: 'decals', icon: '🏷', title: 'DECALS TO ORDER',
    need: p => !taskAutoDone(p, 'decals') && ['needed', 'noted'].includes(taskStatus(taskVal(p, 'decals'))),
    note: p => taskVal(p, 'decals')},
@@ -10698,7 +10732,7 @@ const REPORT_DEFS = () => [
    html: tasksTable},
   {id: 'taskqueues', sec: 'shop', icon: '🎯', title: 'TASK QUEUES', count: (() => {
      try { return taskQueueLists().reduce((s, q) => s + q.list.length, 0); } catch (e) { return null; } })(),
-   desc: 'Seven ordered to-do queues — key service, plates to Curtis Harper, refinishing on deck, plating + buffing, decals, bass strings, and the showroom tuning queue for Korban (most-overdue first, from the tuning calendars). Each shows who’s NEXT and everyone behind them. Click any row to jump to the piano.',
+   desc: 'Eight ordered to-do queues — key service, plates to Curtis Harper, refinishing on deck, plating + buffing, plate hardware buffing (Korban), decals, bass strings, and the showroom tuning queue for Korban (most-overdue first, from the tuning calendars). Each shows who’s NEXT and everyone behind them. Click any row to jump to the piano.',
    html: taskQueuesTable},
   {id: 'stalled', sec: 'shop', icon: '🐢', title: 'SITTING TOO LONG', count: (() => {
      try { return stalledPianos().length; } catch (e) { return null; } })(),

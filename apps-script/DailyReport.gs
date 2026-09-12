@@ -19,7 +19,7 @@ var APP_URL = 'https://blpstoremap.netlify.app';
 var REPORT_TO = 'info@brighamlarsonpianos.com';
 var PIANO_LOG_ID = '1ZunbPKygpQlcXfTyPowDHdUE9spJ3uV1XA4iX1eoKRc';
 var BRIDGE_SECRET = 'PASTE_SECRET_HERE';   // server-to-server auth (optional)
-var BRIDGE_REV = '2026-09-11.6';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-09-11.7';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = 'PASTE_PIN_HERE';           // what BLP team members type to move pianos
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -1303,6 +1303,12 @@ function doPost(e) {
     }
     if (req.action === 'pianonote') {
       return json_(pianoNote_(req, who));
+    }
+    if (req.action === 'setplatehw') {
+      // 🪞 plate hardware buffing status (Korban 9/11, request 091126greenhalgh06)
+      var phw = setPlateHw_(req);
+      if (phw.ok) logAct_(who, 'Plate hardware', phw.summary || req.serial, phw.plateHwStatus || '(cleared)');
+      return json_(phw);
     }
     if (req.action === 'setplatestatus') {
       var pls = setPlateStatus_(req);
@@ -6963,6 +6969,25 @@ function setBenchNote_(req, who) {
   if (val && val !== prevVal) addPianoNote_(sh, found.row, who, 'Bench tag: ' + val);
   logAct_(who, 'Bench tag note', found.summary || req.serial, val || '(cleared)');
   return {ok: true, row: found.row, summary: found.summary, benchNote: val};
+}
+var PLATE_HW_STATUSES = ['', 'Needs buffing', 'In buffing queue', 'Buffing', 'Buffed', 'Installed'];
+// Plate bolts / screws / hardware buffing — a concurrent task on the card,
+// tracked in a header-created PLATE HARDWARE STATUS column (Korban 9/11).
+function setPlateHw_(req) {
+  var val = String(req.plateHwStatus == null ? '' : req.plateHwStatus).trim();
+  if (PLATE_HW_STATUSES.indexOf(val) < 0) return {error: 'bad plate hardware status: ' + val};
+  var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+  var found = findPiano_(sh, req.serial, req.row);
+  if (found.error) return found;
+  var last = sh.getLastColumn();
+  var hdr = sh.getRange(2, 1, 1, last).getValues()[0];
+  var col = -1;
+  for (var c = 0; c < hdr.length; c++) {
+    if (String(hdr[c] || '').trim().toUpperCase() === 'PLATE HARDWARE STATUS') { col = c + 1; break; }
+  }
+  if (col < 0) { sh.getRange(2, last + 1).setValue('PLATE HARDWARE STATUS'); col = last + 1; }
+  sh.getRange(found.row, col).setValue(val);
+  return {ok: true, row: found.row, summary: found.summary, plateHwStatus: val};
 }
 function setPlateStatus_(req) {
   var val = String(req.plateStatus == null ? '' : req.plateStatus).trim();
