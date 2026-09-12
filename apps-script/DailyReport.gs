@@ -19,7 +19,7 @@ var APP_URL = 'https://blpstoremap.netlify.app';
 var REPORT_TO = 'info@brighamlarsonpianos.com';
 var PIANO_LOG_ID = '1ZunbPKygpQlcXfTyPowDHdUE9spJ3uV1XA4iX1eoKRc';
 var BRIDGE_SECRET = 'PASTE_SECRET_HERE';   // server-to-server auth (optional)
-var BRIDGE_REV = '2026-09-11.8';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-09-11.9';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = 'PASTE_PIN_HERE';           // what BLP team members type to move pianos
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -1466,8 +1466,48 @@ function savePhoto_(req, who) {
   // wizard shots ask to be link-readable so the app can show the Before
   // thumbnail as a ghost while shooting the matching After
   if (req.share) { try { shareAnyoneWithLink_(file.getId()); } catch (e2) {} }
+  if (kind === 'before' || kind === 'after') notifyBaPhoto_(kind, serial, found, tech, who, req.stage);
   return {ok: true, saved: true, name: name, link: file.getUrl(),
           id: file.getId(), folder: tech.getName(), summary: found.summary};
+}
+
+/* 📸 Before/After photo email (Alisa 9/11, request 091126miller01): the
+ * first Before or After shot saved for a piano emails Alisa + Marcus with
+ * the folder link. Further shots of the same piano+kind within 45 minutes
+ * fold into that one email (CacheService debounce) — a 10-shot wizard run
+ * is one message, not ten. Never blocks the save. */
+var BA_PHOTO_TO = 'alisa@brighamlarsonpianos.com,marcus@brighamlarsonpianos.com';
+function notifyBaPhoto_(kind, serial, found, folder, who, stage) {
+  try {
+    var cache = CacheService.getScriptCache();
+    var ck = 'bamail_' + kind + '_' + serial;
+    if (cache.get(ck)) return;
+    cache.put(ck, '1', 2700);
+    var label = kind === 'before' ? 'Before' : 'After';
+    var piano = found.summary || ('SN ' + serial);
+    var when = Utilities.formatDate(new Date(), 'America/Denver', 'EEE MMM d, h:mm a');
+    var folderUrl = folder.getUrl();
+    var logUrl = 'https://pianologapp.netlify.app/#piano=' + encodeURIComponent(serial);
+    var byLine = (who || 'the team') + ' · ' + when + (stage ? ' · ' + stage : '');
+    MailApp.sendEmail({
+      to: BA_PHOTO_TO,
+      subject: '📸 ' + label + ' photos — ' + piano + ' — SN ' + serial,
+      htmlBody: '<div style="font-family:Helvetica,Arial,sans-serif;max-width:560px">'
+        + '<h2 style="margin:0 0 8px">' + label + ' photos are being filed</h2>'
+        + '<p style="font-size:15px;margin:6px 0"><b>' + esc_(piano) + '</b><br>Serial ' + esc_(serial)
+        + (found.location ? ' · Spot ' + esc_(found.location) : '') + '</p>'
+        + '<p style="font-size:14px;margin:6px 0">Taken by ' + esc_(byLine) + '</p>'
+        + '<p style="font-size:14px"><a href="' + folderUrl + '" style="color:#9e2020;font-weight:bold">Open the '
+        + esc_(folder.getName()) + ' folder ↗</a></p>'
+        + '<p style="font-size:12.5px;color:#555">More ' + label.toLowerCase() + ' shots of this piano over the next 45 minutes land in the same folder — this is the only email for that batch.</p>'
+        + '<p style="font-size:13px"><a href="' + APP_URL + '" style="color:#9e2020">Store Map</a> · '
+        + '<a href="' + logUrl + '" style="color:#9e2020">Piano Log</a></p></div>',
+      body: label + ' photos are being filed for ' + piano + ' (SN ' + serial + ')\nTaken by ' + byLine
+        + '\n\nFolder: ' + folderUrl + '\n\nMore ' + label.toLowerCase()
+        + ' shots of this piano over the next 45 minutes land in the same folder.',
+      name: 'BLP Store Map'
+    });
+  } catch (e) {}
 }
 
 // PHOTO LOG rows for one serial (When/Stage/File/Link → id), newest last.
