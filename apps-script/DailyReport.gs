@@ -19,7 +19,7 @@ var APP_URL = 'https://blpstoremap.netlify.app';
 var REPORT_TO = 'info@brighamlarsonpianos.com';
 var PIANO_LOG_ID = '1ZunbPKygpQlcXfTyPowDHdUE9spJ3uV1XA4iX1eoKRc';
 var BRIDGE_SECRET = 'PASTE_SECRET_HERE';   // server-to-server auth (optional)
-var BRIDGE_REV = '2026-09-11.9';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-09-11.10';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = 'PASTE_PIN_HERE';           // what BLP team members type to move pianos
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -2959,6 +2959,19 @@ function openSessionRow_(sh, tech) {
   }
   return null;
 }
+// the tech's newest CLOSED session (row + values A:F) — for the re-join rule
+function recentClosedRow_(sh, tech) {
+  var last = sh.getLastRow();
+  if (last < 2) return null;
+  var from = Math.max(2, last - 120);
+  var vals = sh.getRange(from, 1, last - from + 1, 6).getValues();
+  for (var i = vals.length - 1; i >= 0; i--) {
+    if (String(vals[i][0]).toLowerCase() === tech.toLowerCase() && vals[i][5]) {
+      return {row: from + i, v: vals[i]};
+    }
+  }
+  return null;
+}
 function closeSession_(sh, open, closedBy, endAt) {
   var end = endAt ? new Date(endAt) : new Date();
   var start = new Date(open.v[4]);
@@ -2989,6 +3002,22 @@ function clockInLocked_(req) {
       sh.getRange(open.row, 6, 1, 2).setValues([['', '']]);
       return {ok: true, closed: null,
               open: {tech: tech, serial: closed.serial, phase: closed.phase, start: closed.start}};
+    }
+  }
+  // Sadie 9/11 (request 091126erickson02): a double tap on the dashboard's
+  // tidying toggle (or out → straight back in on the same piano) left a trail
+  // of 1-minute fragments. If this tech's most recent session is the SAME
+  // serial + phase and ended under 2 minutes ago, re-open it instead of
+  // stacking a new row — the log reads as one session, as it was in reality.
+  if (!closed) {
+    var recent = recentClosedRow_(sh, tech);
+    if (recent && String(recent.v[1]) === String(req.serial)
+        && String(recent.v[3] || '') === String(req.phase || '')
+        && recent.v[5] && (new Date() - new Date(recent.v[5])) < 120000) {
+      sh.getRange(recent.row, 6, 1, 2).setValues([['', '']]);
+      sh.getRange(recent.row, 9).setValue('');
+      return {ok: true, closed: null, rejoined: true,
+              open: {tech: tech, serial: String(recent.v[1]), phase: String(recent.v[3] || ''), start: new Date(recent.v[4]).toISOString()}};
     }
   }
   // Management / Tidying time (pseudo-serials MGMT / TIDY): not pianos — skip
@@ -5612,6 +5641,22 @@ function adminBriefHtml_(R) {
     }
   } catch (e) { /* fix list is best-effort in the brief */ }
 
+  // 💡 new app requests / ideas / bug reports filed from the apps' Suggest
+  // box since the last brief (Brigham 9/11) — so admins see what the team
+  // is asking for without opening the Requests tab
+  try {
+    R.newRequests = newRequests_(R.refDate);
+    if (R.newRequests.length) {
+      sec('💡', 'New app requests & ideas', R.newRequests.length,
+        'Filed from the 💡 Suggest box in the last day. Status changes on Store Map → Reports → 📨 App Requests (Live texts the requester).');
+      ul(R.newRequests.slice(0, 20).map(function (q) {
+        return q.icon + ' <b>' + esc_(q.who) + '</b> · ' + esc_(q.type) + ' — ' + esc_(String(q.text || '').slice(0, 220))
+          + ' <span style="color:#8a847b">(' + esc_(q.when) + (q.status && q.status !== 'Requested' ? ' · ' + esc_(q.status) : '') + ')</span>'
+          + (q.shot ? ' <a href="' + q.shot + '">📎</a>' : '');
+      }));
+    }
+  } catch (eQ) { /* best-effort */ }
+
   if (R.noPlan.length || R.adminDrift.length) {
     sec('💰', 'Admin & payments', R.noPlan.length + R.adminDrift.length);
     var a = [];
@@ -5676,7 +5721,30 @@ function adminBriefHtml_(R) {
 }
 function adminAlerts_(R) {
   return R.noPlan.length + R.adminDrift.length + R.mediaBefore.length + R.exitBlocked.length
-    + R.noAddress.length + R.soldPending.length + R.missingArrivals.length;
+    + R.noAddress.length + R.soldPending.length + R.missingArrivals.length + (R.newRequests || []).length;
+}
+// Requests tab rows filed in the ~26 h before refDate (the brief runs ~6 AM,
+// so this is "since yesterday's brief"), newest first
+function newRequests_(refDate) {
+  var since = new Date((refDate ? new Date(refDate) : new Date()).getTime() - 26 * 3600000);
+  var sh = requestsSheet_();
+  var last = sh.getLastRow();
+  if (last < 2) return [];
+  var from = Math.max(2, last - 150);
+  var vals = sh.getRange(from, 1, last - from + 1, 10).getValues();
+  var ICON = {idea: '💡', edit: '✏️', bug: '🐞', question: '❓', training: '🎓', handbook: '📖'};
+  var out = [];
+  for (var i = vals.length - 1; i >= 0; i--) {
+    var d = new Date(vals[i][1]);
+    if (!(d > since)) continue;
+    var type = String(vals[i][3] || 'request');
+    out.push({id: String(vals[i][0]), who: String(vals[i][2] || ''), type: type,
+              icon: ICON[type.toLowerCase()] || '📨', text: String(vals[i][4] || ''),
+              shot: /^https?:/.test(String(vals[i][6] || '')) ? String(vals[i][6]) : '',
+              status: String(vals[i][7] || ''),
+              when: Utilities.formatDate(d, 'America/Denver', 'EEE h:mm a')});
+  }
+  return out;
 }
 
 /* Everything the Store Map's My Dashboard needs for one technician,

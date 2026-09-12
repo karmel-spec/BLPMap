@@ -3554,7 +3554,7 @@ setTimeout(() => {
  * bridge closes the previous one on every clockin and tells us what closed.
  * Phase selection is MANDATORY before clocking in ("Other" allows write-in). */
 const NUDGE_MIN = 15;             // quiet minutes before the dock asks "still on it?"
-const CLOCK = {open: null, all: [], today: {}, lastAct: Date.now(), nudged: false};
+const CLOCK = {open: null, all: [], today: {}, lastAct: Date.now(), nudged: false, punchedAt: 0};
 function clockName() { const u = authUser(); return u ? String(u.name || '').trim() : ''; }
 function clockElapsed(startIso) {
   const s = Math.max(0, Math.floor((Date.now() - new Date(startIso)) / 1000));
@@ -3800,7 +3800,7 @@ async function punch(action, p, phase, source, endAt, ackNote) {
       CLOCK.open = action === 'clockin'
         ? (j.open || {tech: clockName(), serial: p.serial, phase, start: new Date().toISOString()})
         : null;
-      CLOCK.nudged = false; CLOCK.lastAct = Date.now();
+      CLOCK.nudged = false; CLOCK.lastAct = Date.now(); CLOCK.punchedAt = Date.now();
       // the punch IS recorded at this point — a hiccup drawing the chip/dock
       // must not turn into "may not have recorded" (Jake 9/9, every clock-in)
       try { renderClockChip(); } catch (eR) { console.warn('clock chip render', eR); }
@@ -11566,6 +11566,7 @@ function renderDash() {
   loadMyClock(name);
   const mOn = body.querySelector('.mgmton'), mOff = body.querySelector('.mgmtoff');
   if (mOn) mOn.onclick = async () => {
+    if (Date.now() - CLOCK.punchedAt < 2000) return;   // Sadie 9/11: a double tap on the freshly re-rendered toggle must not punch straight back
     mOn.disabled = true; mOn.textContent = 'Clocking in…';
     const j = await punch('clockin', {serial: 'MGMT', row: ''}, 'Management', 'dash');
     const mm = body.querySelector('.mgmtmsg');
@@ -11573,6 +11574,7 @@ function renderDash() {
     else renderDash();
   };
   if (mOff) mOff.onclick = async () => {
+    if (Date.now() - CLOCK.punchedAt < 2000) return;   // Sadie 9/11: a double tap on the freshly re-rendered toggle must not punch straight back
     mOff.disabled = true; mOff.textContent = 'Clocking out…';
     const j = await punch('clockout', null, '', 'dash');
     const mm = body.querySelector('.mgmtmsg');
@@ -11581,6 +11583,7 @@ function renderDash() {
   };
   const tOn = body.querySelector('.tidyon'), tOff = body.querySelector('.tidyoff');
   if (tOn) tOn.onclick = async () => {
+    if (Date.now() - CLOCK.punchedAt < 2000) return;   // Sadie 9/11: a double tap on the freshly re-rendered toggle must not punch straight back
     tOn.disabled = true; tOn.textContent = 'Clocking in…';
     const j = await punch('clockin', {serial: 'TIDY', row: ''}, 'Shop Tidying', 'dash');
     const tm = body.querySelector('.tidymsg');
@@ -11588,6 +11591,7 @@ function renderDash() {
     else renderDash();
   };
   if (tOff) tOff.onclick = async () => {
+    if (Date.now() - CLOCK.punchedAt < 2000) return;   // Sadie 9/11: a double tap on the freshly re-rendered toggle must not punch straight back
     tOff.disabled = true; tOff.textContent = 'Clocking out…';
     const j = await punch('clockout', null, '', 'dash');
     const tm = body.querySelector('.tidymsg');
