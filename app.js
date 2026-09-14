@@ -4860,7 +4860,9 @@ function clockFixModal(prefill) {
   ov.querySelector('.dsx').onclick = () => ov.remove();
   const sel = ov.querySelector('.cf-clock'), ser = ov.querySelector('.cf-serial');
   sel.onchange = () => { ser.style.display = sel.value === 'piano' ? '' : 'none'; };
-  ov.querySelector('.cf-send').onclick = async () => {
+  ov.querySelector('.cf-send').onclick = async ev => {
+    const sendBtn = ev.currentTarget;
+    if (sendBtn.disabled) return;   // a second tap while the bridge is slow filed the request twice (Mark 9/14)
     const text = ov.querySelector('.cf-note').value.trim();
     const ymd = ov.querySelector('.cf-date').value, inT = ov.querySelector('.cf-in').value, outT = ov.querySelector('.cf-out').value;
     const msg = ov.querySelector('.cf-msg');
@@ -4868,10 +4870,11 @@ function clockFixModal(prefill) {
     if (inT && outT && outT <= inT) { msg.textContent = 'clock-out must be after clock-in'; return; }
     if (sel.value === 'piano' && !ser.value.trim()) { msg.textContent = 'which piano? enter its serial'; return; }
     const note = cfxComposeNote(ymd, inT, outT, text);
+    sendBtn.disabled = true; const sendWas = sendBtn.textContent; sendBtn.textContent = 'Sending…';
     msg.textContent = 'sending…';
     const j = await adjustPost({action: 'clockfix', clock: sel.value, serial: ser.value.trim(), note,
       date: ymd, inAt: inT, outAt: outT});
-    if (j.error) { msg.textContent = j.error; return; }
+    if (j.error) { msg.textContent = j.error; sendBtn.disabled = false; sendBtn.textContent = sendWas; return; }
     ov.querySelector('.dsheet').innerHTML =
       '<h3>✅ Request sent</h3><div class="dssub">It’s on the adjustments list — the fix will show on your dashboard once it’s made.</div>';
     setTimeout(() => ov.remove(), 2600);
@@ -10951,7 +10954,12 @@ function renderReport() {
     fx.serial = clock === 'pay' ? '' : serial;
     if (j && j.clockfix) cfxToast(`✓ request is now a ${fx.clock} fix${fx.serial ? ' for #' + fx.serial : ''} — ✎ Apply will look there`);
     else cfxToast('⚠ changed for this session only — the Google bridge needs its update before this saves to the sheet');
-    renderReport();
+    // patch the row in place — a full renderReport() here destroyed the serial
+    // box mid-typing, its blur saved the partial value, and the loop ran a
+    // dozen times (Mark 9/14: "35", then a blank serial on row 127)
+    const sel2 = body.querySelector(`.cfxclock[data-row="${row}"]`), ser2 = body.querySelector(`.cfxserial[data-row="${row}"]`);
+    if (sel2) sel2.value = clock;
+    if (ser2) { ser2.hidden = clock !== 'piano'; if (clock === 'piano') ser2.value = serial; }
   };
   body.querySelectorAll('.cfxclock').forEach(sel => sel.onchange = () => {
     const row = +sel.dataset.row;
@@ -10964,14 +10972,17 @@ function renderReport() {
   });
   body.querySelectorAll('.cfxserial').forEach(inp => {
     const save = () => {
+      if (!inp.isConnected) return;   // blur caused by a re-render, not by the manager
       const row = +inp.dataset.row, fx = (S.fixRows || []).find(r => r.row === row);
       const sel = body.querySelector(`.cfxclock[data-row="${row}"]`);
       if (!fx || !sel || sel.value !== 'piano') return;
-      if (inp.value.trim() === String(fx.serial || '') && /piano/i.test(fx.clock)) return;   // nothing changed
-      cfxSaveType(row, 'piano', inp.value.trim());
+      const v = inp.value.trim();
+      if (v === String(fx.serial || '') && /piano/i.test(fx.clock)) return;   // nothing changed
+      if (!v) { inp.value = fx.serial || ''; return; }   // never save a blank serial by accident — type it or leave it
+      cfxSaveType(row, 'piano', v);
     };
     inp.onblur = save;
-    inp.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); inp.blur(); } };
+    inp.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); save(); } };
   });
   body.querySelectorAll('.cfxres:not(.cfxapply)').forEach(b => b.onclick = async () => {
     const dup = b.classList.contains('cfxdup');
