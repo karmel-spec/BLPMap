@@ -19,7 +19,7 @@ var APP_URL = 'https://blpstoremap.netlify.app';
 var REPORT_TO = 'info@brighamlarsonpianos.com';
 var PIANO_LOG_ID = '1ZunbPKygpQlcXfTyPowDHdUE9spJ3uV1XA4iX1eoKRc';
 var BRIDGE_SECRET = 'PASTE_SECRET_HERE';   // server-to-server auth (optional)
-var BRIDGE_REV = '2026-09-14.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-09-14.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = 'PASTE_PIN_HERE';           // what BLP team members type to move pianos
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -1217,7 +1217,8 @@ function doPost(e) {
       return json_(stc);
     }
     if (req.action === 'purgeschedule') {
-      if (!(payrollAdmin_(req._g) || timelogAdmin_(req._g)) && req.secret !== BRIDGE_SECRET) return json_({error: 'purge needs an owner/manager Google sign-in'});
+      // Brigham 9/14 (approved in session): same gate as applyschedule — doPost already
+      // requires team PIN / Google sign-in / secret; purge is the undo of apply
       var pg = scheduleCheck_({purge: true});
       if (pg.ok) logAct_(who, 'Schedule events PURGED from tech calendars', pg.week, pg.removed + ' proposal-applied events removed');
       return json_(pg);
