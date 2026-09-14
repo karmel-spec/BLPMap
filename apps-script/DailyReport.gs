@@ -19,7 +19,7 @@ var APP_URL = 'https://blpstoremap.netlify.app';
 var REPORT_TO = 'info@brighamlarsonpianos.com';
 var PIANO_LOG_ID = '1ZunbPKygpQlcXfTyPowDHdUE9spJ3uV1XA4iX1eoKRc';
 var BRIDGE_SECRET = 'PASTE_SECRET_HERE';   // server-to-server auth (optional)
-var BRIDGE_REV = '2026-09-11.10';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-09-14.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = 'PASTE_PIN_HERE';           // what BLP team members type to move pianos
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -4374,7 +4374,12 @@ function applyScheduleLocked_(req) {
     var key = String(tch.name || '').toLowerCase();
     if (only && !only[key]) return;
     if (done[key] && !req.force) { results.push({tech: tch.name, skipped: 'already applied'}); return; }
-    var calId = map[key];
+    // Brigham 9/14: the Friday draft named "Jake Pulver" / "Hunter Rawlings"
+    // (full names, to keep Jake and Jacob apart) while the Tech Calendars tab
+    // said "Jake" / "Hunter" — both were silently skipped. Fall back to the
+    // first name, then to a map name that is the first word of the plan name.
+    var calId = map[key] || map[key.split(/\s+/)[0]]
+      || (function () { var hit = Object.keys(map).find(function (k) { return k.split(/\s+/)[0] === key.split(/\s+/)[0]; }); return hit ? map[hit] : ''; })();
     if (!calId) { results.push({tech: tch.name, skipped: 'no calendar mapped'}); return; }
     if (req.markOnly) { applied.push(tch.name); results.push({tech: tch.name, events: 0, marked: true}); return; }
     var cal;
