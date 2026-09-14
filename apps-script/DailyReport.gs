@@ -19,7 +19,7 @@ var APP_URL = 'https://blpstoremap.netlify.app';
 var REPORT_TO = 'info@brighamlarsonpianos.com';
 var PIANO_LOG_ID = '1ZunbPKygpQlcXfTyPowDHdUE9spJ3uV1XA4iX1eoKRc';
 var BRIDGE_SECRET = 'PASTE_SECRET_HERE';   // server-to-server auth (optional)
-var BRIDGE_REV = '2026-09-14.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-09-14.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = 'PASTE_PIN_HERE';           // what BLP team members type to move pianos
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -285,6 +285,10 @@ function doGet(e) {
   if (e && e.parameter && e.parameter.fn === 'schedulecheck') {
     try { return json_(scheduleCheck_({})); }
     catch (err) { return json_({error: String(err), techs: []}); }
+  }
+  if (e && e.parameter && e.parameter.fn === 'proposalhistory') {
+    if (String(e.parameter.key || '') !== 'pianoman' && e.parameter.key !== TEAM_PIN) return json_({error: 'unauthorized'});
+    return json_(proposalHistory_());
   }
   if (e && e.parameter && e.parameter.fn === 'proposal') {
     try { return json_(latestProposal_()); }
@@ -1211,6 +1215,12 @@ function doPost(e) {
       var stc = setTechCal_(req);
       if (stc.ok) logAct_(who, 'Tech calendar mapped', stc.tech, (stc.previous || '(none)') + ' → ' + (stc.calendarId || '(blank)'));
       return json_(stc);
+    }
+    if (req.action === 'purgeschedule') {
+      if (!(payrollAdmin_(req._g) || timelogAdmin_(req._g)) && req.secret !== BRIDGE_SECRET) return json_({error: 'purge needs an owner/manager Google sign-in'});
+      var pg = scheduleCheck_({purge: true});
+      if (pg.ok) logAct_(who, 'Schedule events PURGED from tech calendars', pg.week, pg.removed + ' proposal-applied events removed');
+      return json_(pg);
     }
     if (req.action === 'checkschedule' || req.action === 'dedupeschedule') {
       var sc = scheduleCheck_({dedupe: req.action === 'dedupeschedule'});
@@ -4261,23 +4271,75 @@ function saveProposal_(req) {
   var plan = String(req.plan || '');
   if (!plan || plan.length > 400000) return {error: 'plan missing or too large'};
   try { JSON.parse(plan); } catch (e) { return {error: 'plan is not valid JSON'}; }
+  var savedBy = String((req.user && req.user.name) || req.by || '').slice(0, 80);
   var meta = {week: String(req.week || ''), weekStart: String(req.weekStart || ''),
-              savedAt: new Date().toISOString(), store: 'sheet', applied: false};
+              savedAt: new Date().toISOString(), store: 'sheet', applied: false, savedBy: savedBy};
   var rows = [[JSON.stringify(meta)]];
   for (var i = 0; i < plan.length; i += PROPOSAL_CHUNK) rows.push([plan.substr(i, PROPOSAL_CHUNK)]);
   var sh = proposalSheet_();
   // Guard (9/11): an OLDER week never overwrites a newer proposal — the
   // Planner's adjust job, fed the Aug 10 snapshot by a slow bridge, saved it
   // over the live Sep 14–18 plan. force:true is the deliberate override.
+  var curMeta = {};
   try {
-    var curMeta = JSON.parse(String(sh.getRange(1, 1).getValue() || '{}'));
+    curMeta = JSON.parse(String(sh.getRange(1, 1).getValue() || '{}'));
     if (!req.force && curMeta.weekStart && meta.weekStart && meta.weekStart < curMeta.weekStart) {
       return {error: 'refusing to replace the ' + (curMeta.week || curMeta.weekStart) + ' proposal with an older week (' + (meta.week || meta.weekStart) + ') — nothing saved'};
     }
+    // Guard (Brigham 9/14): an AUTOMATED saver (cloud routine, scheduler,
+    // Claude draft) never overwrites a same-week proposal a HUMAN saved — the
+    // retired Saturday routine saved over Mark's Friday final and that draft
+    // went to 15 calendars. Humans may overwrite anything; force:true overrides.
+    if (!req.force && curMeta.weekStart && curMeta.weekStart === meta.weekStart
+        && PROPOSAL_BOT_RE.test(savedBy) && curMeta.savedBy != null && !PROPOSAL_BOT_RE.test(String(curMeta.savedBy))) {
+      return {error: 'a proposal for ' + (curMeta.week || curMeta.weekStart) + ' was already saved by ' + curMeta.savedBy + ' at ' + curMeta.savedAt + ' — automated drafts do not overwrite a human edit; nothing saved'};
+    }
+    // an applied plan is also protected from bots — the calendars already carry it
+    if (!req.force && curMeta.applied && curMeta.weekStart === meta.weekStart && PROPOSAL_BOT_RE.test(savedBy)) {
+      return {error: 'the ' + (curMeta.week || curMeta.weekStart) + ' proposal is already APPLIED to calendars — nothing saved'};
+    }
   } catch (eG) { /* unreadable meta — proceed */ }
+  // history (Brigham 9/14): every save first snapshots the store it replaces,
+  // so an overwrite is recoverable without Sheets version history
+  try { proposalHistoryPush_(sh, curMeta, savedBy); } catch (eH) {}
   sh.clearContents();
   sh.getRange(1, 1, rows.length, 1).setValues(rows);
   return {ok: true, week: meta.week};
+}
+// saver names that count as automation for the overwrite guard
+var PROPOSAL_BOT_RE = /claude|cloud|scheduler|routine|automation|bot\b|draft/i;
+var PROPOSAL_HISTORY_TAB = 'Proposal History';   // When | Saved by (old) | Replaced by | Meta | Plan (chunked in cols E..)
+function proposalHistoryPush_(sh, oldMeta, newBy) {
+  var vals = sh.getDataRange().getValues();
+  if (!vals.length || !String(vals[0][0] || '')) return;
+  var raw = '';
+  for (var i = 1; i < vals.length; i++) raw += String(vals[i][0] || '');
+  if (!raw) return;
+  var ss = SpreadsheetApp.openById('11RoeVRETag5rZYX6_tEH-rf6x8JL0JeZU0P5AT0WI-I');
+  var h = ss.getSheetByName(PROPOSAL_HISTORY_TAB);
+  if (!h) {
+    h = ss.insertSheet(PROPOSAL_HISTORY_TAB, ss.getSheets().length);
+    h.appendRow(['When', 'Saved by (this version)', 'Replaced by', 'Meta', 'Plan chunks →']);
+    h.setFrozenRows(1); h.hideSheet();
+  }
+  var row = [new Date(), String((oldMeta && oldMeta.savedBy) || ''), newBy || '', JSON.stringify(oldMeta || {})];
+  for (var j = 0; j < raw.length; j += PROPOSAL_CHUNK) row.push(raw.substr(j, PROPOSAL_CHUNK));
+  h.appendRow(row);
+  var last = h.getLastRow();
+  if (last > 61) h.deleteRows(2, last - 61);   // keep the newest 60 versions
+}
+// ?fn=proposalhistory (key-gated) → the saved versions, newest first, meta only
+function proposalHistory_() {
+  var ss = SpreadsheetApp.openById('11RoeVRETag5rZYX6_tEH-rf6x8JL0JeZU0P5AT0WI-I');
+  var h = ss.getSheetByName(PROPOSAL_HISTORY_TAB);
+  if (!h || h.getLastRow() < 2) return {ok: true, versions: []};
+  var vals = h.getRange(2, 1, h.getLastRow() - 1, 4).getValues();
+  var out = [];
+  for (var i = vals.length - 1; i >= 0; i--) {
+    out.push({row: i + 2, when: vals[i][0] instanceof Date ? vals[i][0].toISOString() : String(vals[i][0]),
+              savedBy: String(vals[i][1] || ''), replacedBy: String(vals[i][2] || ''), meta: String(vals[i][3] || '')});
+  }
+  return {ok: true, versions: out};
 }
 function latestProposal_() {
   var vals = proposalSheet_().getDataRange().getValues();
@@ -4491,6 +4553,9 @@ function scheduleCheck_(req) {
   var end = new Date(start); end.setDate(end.getDate() + 5);   // Mon 00:00 -> Sat 00:00
   var map = techCalMap_();
   var doDelete = !!(req && req.dedupe);
+  // purge (Brigham 9/14): delete EVERY proposal-applied event of the week so
+  // a wrong plan can be replaced — hand-made calendar entries untouched
+  var doPurge = !!(req && req.purge);
   var techs = [], dupExtra = 0, removed = 0;
   (plan.techs || []).forEach(function (tch) {
     var key = String(tch.name || '').toLowerCase();
@@ -4518,14 +4583,20 @@ function scheduleCheck_(req) {
         start: Utilities.formatDate(ev.getStartTime(), 'America/Denver', 'EEE M/d h:mm a'),
         end: Utilities.formatDate(ev.getEndTime(), 'America/Denver', 'h:mm a'),
         dup: !!seen[k]});
+      if (doPurge) { try { ev.deleteEvent(); row.removed++; } catch (e5) {} }
       if (!seen[k]) { seen[k] = true; row.unique++; return; }
       row.extra++;
-      if (doDelete) { try { ev.deleteEvent(); row.removed++; } catch (e4) {} }
+      if (doDelete && !doPurge) { try { ev.deleteEvent(); row.removed++; } catch (e4) {} }
     });
     dupExtra += row.extra; removed += row.removed;
     techs.push(row);
   });
-  return {ok: true, week: plan.week, weekStart: weekStart, dedupe: doDelete,
+  if (doPurge && removed > 0) {
+    // the calendars no longer carry this plan — let the next Apply through
+    try { got.meta.applied = false; got.meta.appliedTechs = []; got.meta.purgedAt = new Date().toISOString();
+          proposalSheet_().getRange(1, 1).setValue(JSON.stringify(got.meta)); } catch (e6) {}
+  }
+  return {ok: true, week: plan.week, weekStart: weekStart, dedupe: doDelete, purge: doPurge,
           duplicates: dupExtra, removed: removed, techs: techs};
 }
 
