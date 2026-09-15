@@ -4538,8 +4538,12 @@ function renderDock() {
       `<div class="ccfmrow">■ Clock OUT of <b>${esc(String(cur.piano || cur.serial || '').slice(0, 34))} · #${esc(cur.serial || '')}</b>
          <small>${cur.start ? clockElapsed(cur.start) + ' will be logged' : ''}</small></div>`);
     if (!okOut) return;
+    const ob = dock.querySelector('.dockout');
+    if (ob) { ob.disabled = true; ob.textContent = clockingText('out'); }
+    const slowD = punchSlow(ob, 'out');
     const j = await punch('clockout', null, '', 'dock');
-    if (j.error) alert(j.error);
+    clearTimeout(slowD);
+    if (j.error) { alert(j.error); if (ob && ob.isConnected) { ob.disabled = false; ob.textContent = '■ Out'; } }
   };
   menu.querySelectorAll('.dockopt[data-row]').forEach(el => el.onclick = () => {
     menu.hidden = true;
@@ -4588,6 +4592,20 @@ function punchGeo() {
       () => { clearTimeout(t); res('denied'); },
       {enableHighAccuracy: false, timeout: 5500, maximumAge: 120000});
   });
+}
+/* Clock punch feedback in the tech's language (Mark 9/15): Spanish when the
+ * app is set to Español, English otherwise. punchSlow() flips a button or
+ * message to "Still clocking in — Google is slow, keep this open…" after
+ * PUNCH_SLOW_MS while the bridge is still working; cancel it on reply. */
+let PUNCH_SLOW_MS = 8000;
+const es = () => lsGet('blpLang') === 'es';
+const tr = (en, sp) => es() ? sp : en;
+const clockingText = dir => dir === 'in' ? tr('Clocking in…', 'Registrando entrada…') : tr('Clocking out…', 'Registrando salida…');
+const slowText = dir => dir === 'in'
+  ? tr('Still clocking in — Google is slow, keep this open…', 'Todavía registrando la entrada — Google está lento, no cierres esto…')
+  : tr('Still clocking out — Google is slow, keep this open…', 'Todavía registrando la salida — Google está lento, no cierres esto…');
+function punchSlow(el, dir) {
+  return setTimeout(() => { if (el && el.isConnected) el.textContent = slowText(dir); }, PUNCH_SLOW_MS);
 }
 async function dayPunch(action) {
   const {pin, ok} = writeAuth();
@@ -5911,8 +5929,10 @@ function wirePop(p) {
       // \u2757 important-note acknowledgment when the note concerns this work
       const ack = await impNoteGate(p, ph);
       if (!ack.ok) { cmsg.className = 'clkmsg phmsg'; cmsg.textContent = ''; return; }
-      cmsg.className = 'clkmsg phmsg'; cmsg.textContent = 'Clocking in\u2026';
+      cmsg.className = 'clkmsg phmsg'; cmsg.textContent = clockingText('in');
+      const slowIn = punchSlow(cmsg, 'in');
       const j = await punch('clockin', p, ph, S.scanArrived === p.serial ? 'scan' : 'card', undefined, ack.note);
+      clearTimeout(slowIn);
       if (j.error) { cmsg.className = 'clkmsg phmsg err'; cmsg.textContent = '\u2717 ' + j.error; return; }
       S.scanArrived = null;
       openPop(p.row, S.popAnchor, true);
@@ -5928,8 +5948,10 @@ function wirePop(p) {
         `<div class="ccfmrow">\u25a0 Clock OUT of <b>${esc(String(cur.piano || cur.serial || p.serial).slice(0, 34))} \u00b7 #${esc(cur.serial || p.serial)}</b>
            <small>${cur.start ? clockElapsed(cur.start) + ' will be logged' : ''}</small></div>`);
       if (!okOut) return;
-      cmsg.className = 'clkmsg phmsg'; cmsg.textContent = 'Clocking out\u2026';
+      cmsg.className = 'clkmsg phmsg'; cmsg.textContent = clockingText('out');
+      const slowOut = punchSlow(cmsg, 'out');
       const j = await punch('clockout', null, '', 'card');
+      clearTimeout(slowOut);
       if (j.error) { cmsg.className = 'clkmsg phmsg err'; cmsg.textContent = '\u2717 ' + j.error; return; }
       openPop(p.row, S.popAnchor, true);
     };
@@ -11617,16 +11639,18 @@ function renderDash() {
   const mOn = body.querySelector('.mgmton'), mOff = body.querySelector('.mgmtoff');
   if (mOn) mOn.onclick = async () => {
     if (Date.now() - CLOCK.punchedAt < 2000) return;   // Sadie 9/11: a double tap on the freshly re-rendered toggle must not punch straight back
-    mOn.disabled = true; mOn.textContent = 'Clocking in…';
-    const j = await punch('clockin', {serial: 'MGMT', row: ''}, 'Management', 'dash');
+    mOn.disabled = true; mOn.textContent = clockingText('in');
+    const slow_mOn = punchSlow(mOn, 'in');
+    const j = await punch('clockin', {serial: 'MGMT', row: ''}, 'Management', 'dash'); clearTimeout(slow_mOn);
     const mm = body.querySelector('.mgmtmsg');
     if (j.error) { if (mm) { mm.className = 'mgmtmsg phmsg err'; mm.textContent = j.error; } mOn.disabled = false; mOn.textContent = '🧑‍💼 Management time'; }
     else renderDash();
   };
   if (mOff) mOff.onclick = async () => {
     if (Date.now() - CLOCK.punchedAt < 2000) return;   // Sadie 9/11: a double tap on the freshly re-rendered toggle must not punch straight back
-    mOff.disabled = true; mOff.textContent = 'Clocking out…';
-    const j = await punch('clockout', null, '', 'dash');
+    mOff.disabled = true; mOff.textContent = clockingText('out');
+    const slow_mOff = punchSlow(mOff, 'out');
+    const j = await punch('clockout', null, '', 'dash'); clearTimeout(slow_mOff);
     const mm = body.querySelector('.mgmtmsg');
     if (j.error) { if (mm) { mm.className = 'mgmtmsg phmsg err'; mm.textContent = j.error; } mOff.disabled = false; mOff.textContent = '■ End management time'; }
     else renderDash();
@@ -11634,16 +11658,18 @@ function renderDash() {
   const tOn = body.querySelector('.tidyon'), tOff = body.querySelector('.tidyoff');
   if (tOn) tOn.onclick = async () => {
     if (Date.now() - CLOCK.punchedAt < 2000) return;   // Sadie 9/11: a double tap on the freshly re-rendered toggle must not punch straight back
-    tOn.disabled = true; tOn.textContent = 'Clocking in…';
-    const j = await punch('clockin', {serial: 'TIDY', row: ''}, 'Shop Tidying', 'dash');
+    tOn.disabled = true; tOn.textContent = clockingText('in');
+    const slow_tOn = punchSlow(tOn, 'in');
+    const j = await punch('clockin', {serial: 'TIDY', row: ''}, 'Shop Tidying', 'dash'); clearTimeout(slow_tOn);
     const tm = body.querySelector('.tidymsg');
     if (j.error) { if (tm) { tm.className = 'tidymsg phmsg err'; tm.textContent = j.error; } tOn.disabled = false; tOn.textContent = '🧹 Shop tidying'; }
     else renderDash();
   };
   if (tOff) tOff.onclick = async () => {
     if (Date.now() - CLOCK.punchedAt < 2000) return;   // Sadie 9/11: a double tap on the freshly re-rendered toggle must not punch straight back
-    tOff.disabled = true; tOff.textContent = 'Clocking out…';
-    const j = await punch('clockout', null, '', 'dash');
+    tOff.disabled = true; tOff.textContent = clockingText('out');
+    const slow_tOff = punchSlow(tOff, 'out');
+    const j = await punch('clockout', null, '', 'dash'); clearTimeout(slow_tOff);
     const tm = body.querySelector('.tidymsg');
     if (j.error) { if (tm) { tm.className = 'tidymsg phmsg err'; tm.textContent = j.error; } tOff.disabled = false; tOff.textContent = '■ End tidying time'; }
     else renderDash();
@@ -11658,9 +11684,9 @@ function renderDash() {
     // movers verify today's calendar against the map before clocking out
     if (dirPeek === 'out' && await moverChecklistNeeded() && !(await moverChecklist())) return;
     pb.disabled = true;
-    pb.textContent = pb.classList.contains('payin') ? 'Clocking in…' : 'Clocking out…';
     const dir = dirPeek;
-    const slow = setTimeout(() => { if (pb.isConnected && pb.disabled) pb.textContent = (dir === 'in' ? 'Still clocking in' : 'Still clocking out') + ' — Google is slow, keep this open…'; }, 8000);
+    pb.textContent = clockingText(dir);
+    const slow = punchSlow(pb, dir);
     const j = await dayPunch(dir === 'in' ? 'dayin' : 'dayout');
     clearTimeout(slow);
     if (j && j.error === 'geofence') {
