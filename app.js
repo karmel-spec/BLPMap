@@ -103,7 +103,11 @@ function fetchT(url, opts, ms) {
   const t = setTimeout(() => ctrl.abort(), ms || 25000);
   return fetch(url, {...opts, signal: ctrl.signal}).finally(() => clearTimeout(t));
 }
-async function bridgeFetch(url, opts) {
+async function bridgeFetch(url, opts, budgetMs) {
+  // budgetMs (optional): a total deadline for all attempts — the clock
+  // punches pass 60 s (Mark 9/15) so a tech is told within a minute instead
+  // of ~2½. Other writes keep the default 4 × 25 s.
+  const deadline = budgetMs ? Date.now() + budgetMs : Infinity;
   // durable-relay branch: whitelisted piano-log writes
   try {
     const body = JSON.parse(opts && opts.body || '{}');
@@ -116,10 +120,12 @@ async function bridgeFetch(url, opts) {
     }
   } catch (e) { /* non-JSON body or relay down — use the bridge directly */ }
   for (let a = 0; a < 4; a++) {
+    const remaining = deadline - Date.now();
+    if (remaining < 3000) throw new Error('bridge budget exhausted');
     let r;
-    try { r = await fetchT(url, opts, 25000); }
+    try { r = await fetchT(url, opts, Math.min(25000, remaining)); }
     catch (e) {
-      if (a === 3) throw e;
+      if (a === 3 || deadline - Date.now() < 4000) throw e;
       await new Promise(res => setTimeout(res, 1000 * (a + 1)));
       continue;
     }
@@ -3787,9 +3793,12 @@ async function punch(action, p, phase, source, endAt, ackNote) {
     // Google occasionally misroutes a POST and answers the generic service
     // ping without running the action — the punch would silently vanish
     // from payroll (found 9/1). Retry through the glitch.
+    const punchDeadline = Date.now() + 60000;   // one minute, then the tech is told (Mark 9/15)
     for (let a = 0; a < 3; a++) {
+      const left = punchDeadline - Date.now();
+      if (left < 3000) break;
       const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
-        headers: {'content-type': 'text/plain;charset=utf-8'}, body: JSON.stringify(body)});
+        headers: {'content-type': 'text/plain;charset=utf-8'}, body: JSON.stringify(body)}, left);
       j = await r.json();
       if (!(j && j.service && !j.error)) break;
       await new Promise(res => setTimeout(res, 1200 * (a + 1)));
@@ -4619,11 +4628,13 @@ async function dayPunch(action) {
   const me = clockName().toLowerCase();
   const body = JSON.stringify({pin, action, source: 'dash', geo, ...authFields()});
   let j = null, lastErr = '';
+  const dayDeadline = Date.now() + 60000;   // one minute total (Mark 9/15), then the tech is told
   for (let a = 0; a < 3 && !j; a++) {
-    const t0 = Date.now();
+    const t0 = Date.now(), left = dayDeadline - t0;
+    if (left < 5000) break;
     try {
       const r = await fetchT(BRIDGE_URL, {method: 'POST', redirect: 'follow',
-        headers: {'content-type': 'text/plain;charset=utf-8'}, body}, 45000);
+        headers: {'content-type': 'text/plain;charset=utf-8'}, body}, Math.min(30000, left));
       const jj = await r.json();
       if (jj && jj.service && !jj.error) {   // only the bridge's ping reply carries `service`
         lastErr = 'the bridge answered its ping instead of the punch';   // action never ran — try again
@@ -4632,9 +4643,9 @@ async function dayPunch(action) {
       }
       j = jj;
     } catch (e) {
-      lastErr = (e && e.name === 'AbortError') ? 'timed out after 45 s' : 'no reply';
-      // the punch may well have landed — read the payroll sheet before retrying
-      try { await fetchPayroll(true); } catch (e2) {}
+      lastErr = (e && e.name === 'AbortError') ? 'timed out' : 'no reply';
+      // the punch may well have landed — read the payroll sheet (8 s max) before retrying
+      try { await Promise.race([fetchPayroll(true), new Promise(res => setTimeout(res, 8000))]); } catch (e2) {}
       if (PAY.at >= t0) {
         if (action === 'dayin' && PAY.open) j = {ok: true, open: PAY.open, verified: true};
         if (action === 'dayout' && !PAY.open) j = {ok: true, closed: true, verified: true};
@@ -4642,7 +4653,8 @@ async function dayPunch(action) {
       if (!j && a < 2) await new Promise(res => setTimeout(res, 1500 * (a + 1)));
     }
   }
-  if (!j) return {error: 'The Google bridge is not answering (' + lastErr + ') — the punch did NOT record. Wait a minute and tap once more.'};
+  if (!j) return {error: tr('The Google bridge did not answer within a minute (' + lastErr + ') — the punch did NOT record. Tap once more.',
+    'Google no respondió en un minuto (' + lastErr + ') — la marcación NO se registró. Toca una vez más.')};
   try {
     if (j.ok) {
       PAY.open = action === 'dayin'
