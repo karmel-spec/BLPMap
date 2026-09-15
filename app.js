@@ -4593,11 +4593,39 @@ async function dayPunch(action) {
   const {pin, ok} = writeAuth();
   if (!ok) return {error: 'Sign in first — payroll hours are logged under your name.'};
   const geo = await punchGeo();
+  // Avery 9/15: two of three day clock-in taps "did nothing". Unlike the piano
+  // punch, this path had no retry when the bridge answers its generic ping
+  // instead of running the action, and a timeout was reported as "not
+  // recorded" without checking. Now: 3 attempts, 45 s each, ping-imposter
+  // retry, and a payroll re-read before declaring failure.
+  const me = clockName().toLowerCase();
+  const body = JSON.stringify({pin, action, source: 'dash', geo, ...authFields()});
+  let j = null, lastErr = '';
+  for (let a = 0; a < 3 && !j; a++) {
+    const t0 = Date.now();
+    try {
+      const r = await fetchT(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+        headers: {'content-type': 'text/plain;charset=utf-8'}, body}, 45000);
+      const jj = await r.json();
+      if (jj && jj.service && !jj.error) {   // only the bridge's ping reply carries `service`
+        lastErr = 'the bridge answered its ping instead of the punch';   // action never ran — try again
+        await new Promise(res => setTimeout(res, 1200 * (a + 1)));
+        continue;
+      }
+      j = jj;
+    } catch (e) {
+      lastErr = (e && e.name === 'AbortError') ? 'timed out after 45 s' : 'no reply';
+      // the punch may well have landed — read the payroll sheet before retrying
+      try { await fetchPayroll(true); } catch (e2) {}
+      if (PAY.at >= t0) {
+        if (action === 'dayin' && PAY.open) j = {ok: true, open: PAY.open, verified: true};
+        if (action === 'dayout' && !PAY.open) j = {ok: true, closed: true, verified: true};
+      }
+      if (!j && a < 2) await new Promise(res => setTimeout(res, 1500 * (a + 1)));
+    }
+  }
+  if (!j) return {error: 'The Google bridge is not answering (' + lastErr + ') — the punch did NOT record. Wait a minute and tap once more.'};
   try {
-    const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
-      headers: {'content-type': 'text/plain;charset=utf-8'},
-      body: JSON.stringify({pin, action, source: 'dash', geo, ...authFields()})});
-    const j = await r.json();
     if (j.ok) {
       PAY.open = action === 'dayin'
         ? (j.open || {tech: clockName(), start: new Date().toISOString()}) : null;
@@ -4624,7 +4652,7 @@ async function dayPunch(action) {
       }
     }
     return j;
-  } catch (e) { return {error: 'offline — punch not recorded, try again'}; }
+  } catch (e) { return {error: 'something went wrong after the punch (' + (e && e.message || e) + ') — check the clock below'}; }
 }
 function payMins() {   // today's closed minutes + the open session so far
   let m = PAY.today.reduce((a, t) => a + (t.minutes || 0), 0);
@@ -11632,7 +11660,9 @@ function renderDash() {
     pb.disabled = true;
     pb.textContent = pb.classList.contains('payin') ? 'Clocking in…' : 'Clocking out…';
     const dir = dirPeek;
+    const slow = setTimeout(() => { if (pb.isConnected && pb.disabled) pb.textContent = (dir === 'in' ? 'Still clocking in' : 'Still clocking out') + ' — Google is slow, keep this open…'; }, 8000);
     const j = await dayPunch(dir === 'in' ? 'dayin' : 'dayout');
+    clearTimeout(slow);
     if (j && j.error === 'geofence') {
       // outside the fence with a confident GPS fix: the punch was refused —
       // offer the manager time-adjustment path instead (Brigham 8/26)
@@ -11656,7 +11686,17 @@ function renderDash() {
       if (pm) { pm.className = 'paymsg err'; pm.textContent = j.error; }
       pb.disabled = false;
       pb.textContent = dir === 'in' ? '▶ Clock in for the day' : '■ Clock out for the day';
-    } else renderDash();
+    } else if (j && j.ok) {
+      renderDash();
+      const pm2 = body.querySelector('.paymsg');
+      if (pm2 && j.verified) { pm2.className = 'paymsg ok'; pm2.textContent = '✓ punch confirmed on the payroll sheet'; }
+    } else {   // no ok, no error — never leave the tech guessing
+      const pm3 = body.querySelector('.paymsg');
+      if (pm3) { pm3.className = 'paymsg err'; pm3.textContent = 'No confirmation from the Google bridge — check the clock below; tap again if it still shows you out.'; }
+      pb.disabled = false;
+      pb.textContent = dir === 'in' ? '▶ Clock in for the day' : '■ Clock out for the day';
+      fetchPayroll(true);
+    }
   };
   body.querySelectorAll('.dlocker[data-h], .dlink2').forEach(el => el.onclick = () => {
     const h = el.dataset.h;
