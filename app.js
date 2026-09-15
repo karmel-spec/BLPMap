@@ -3572,7 +3572,7 @@ async function fetchClock() {
     const r = await fetch(BRIDGE_URL + '?fn=timeclock', {redirect: 'follow'});
     const j = await r.json();
     if (!j.open) return;
-    CLOCK.all = j.open; CLOCK.today = j.todayMinutes || {};
+    CLOCK.all = j.open; CLOCK.today = j.todayMinutes || {}; CLOCK.allAt = Date.now();
     const me = clockName().toLowerCase();
     const was = CLOCK.open && CLOCK.open.serial;
     CLOCK.open = j.open.find(o => (o.tech || '').toLowerCase() === me) || null;
@@ -12044,20 +12044,40 @@ async function teamFetchAll() {
   if (TEAM.loading) return;
   TEAM.loading = true;
   const j = async pr => { try { const r = await pr; return await r.json(); } catch (e) { return null; } };
+  // bridge feeds: 3 tries of 20 s, and a reply only counts when it carries
+  // the field we asked for (the bridge's ping reply has none of them).
+  // Mark 9/15: one failed timeclock read blanked every piano line on the
+  // board ("—") with no hint that the feed had failed.
+  const bridgeJson = async (fn, field) => {
+    for (let t = 0; t < 3; t++) {
+      try {
+        const r = await fetchT(BRIDGE_URL + '?fn=' + fn + '&_=' + Date.now(), {redirect: 'follow'}, 20000);
+        const jj = await r.json();
+        if (jj && jj[field] != null) return jj;
+      } catch (e) {}
+      if (t < 2) await new Promise(res => setTimeout(res, 1500 * (t + 1)));
+    }
+    return null;
+  };
   const key = '?key=' + encodeURIComponent('pianoman');
   const [ros, sch, clk, pay, whr] = await Promise.all([
     j(fetch(TEAM_ROSTER_API + key)),
     j(fetch(TEAM_SCHEDULE_API + key)),
-    j(fetch(BRIDGE_URL + '?fn=timeclock', {redirect: 'follow'})),
-    j(fetch(BRIDGE_URL + '?fn=payroll', {redirect: 'follow'})),
-    j(fetch(BRIDGE_URL + '?fn=whereis', {redirect: 'follow'})),
+    bridgeJson('timeclock', 'open'),
+    bridgeJson('payroll', 'open'),
+    bridgeJson('whereis', 'who'),
   ]);
   TEAM.roster = ros && ros.tabs ? ros.tabs : null;
   TEAM.sched = sch && sch.tabs ? sch.tabs['Team Schedule'] : null;
   try { lsSet('blpTeam1', JSON.stringify({roster: TEAM.roster, sched: TEAM.sched, at: Date.now()})); } catch (e) {}
-  TEAM.clock = clk && clk.open ? clk : {open: [], todayMinutes: {}};
-  TEAM.pay = pay && pay.open ? pay : {open: [], today: (pay && pay.today) || []};
-  TEAM.where = (whr && whr.who) || {};
+  // piano clock: the live feed, else the map's own copy (fetchClock, every
+  // 60 s) so the board never shows a wall of "—" for a bridge hiccup
+  TEAM.clockStale = TEAM.payStale = false;
+  if (clk && clk.open) TEAM.clock = clk;
+  else { TEAM.clock = {open: CLOCK.all || [], todayMinutes: CLOCK.today || {}}; TEAM.clockStale = CLOCK.allAt ? 'map' : 'none'; }
+  if (pay && pay.open) TEAM.pay = pay;
+  else { TEAM.pay = (TEAM.pay && TEAM.pay.open && TEAM.pay.open.length) ? TEAM.pay : {open: [], today: (pay && pay.today) || []}; TEAM.payStale = true; }
+  TEAM.where = (whr && whr.who) || TEAM.where || {};
   TEAM.loading = false;
   renderTeam();
 }
@@ -12135,7 +12155,13 @@ function teamBoardHTML() {
       ${shared}${flag}
     </div>`;
   };
-  return Object.entries(groups).filter(([, l]) => l.length).map(([g, l]) =>
+  const stale = [];
+  if (TEAM.clockStale === 'map') stale.push('the piano clock feed did not load — showing the map\u2019s copy from ' + teamClockFmt(new Date(CLOCK.allAt).toISOString()));
+  if (TEAM.clockStale === 'none') stale.push('the piano clock feed did not load — piano lines may be blank');
+  if (TEAM.payStale) stale.push('the day clock feed did not load');
+  const banner = stale.length
+    ? `<div class="teamwarn">⚠ ${esc(stale.join('; '))}. The Google bridge is slow — tap 🔄 Refresh in a moment.</div>` : '';
+  return banner + Object.entries(groups).filter(([, l]) => l.length).map(([g, l]) =>
     `<h4 class="tmsec">${g} <span class="pc">${l.length}</span></h4>
      <div class="tmgrid">${l.map(tile).join('')}</div>`).join('')
     || '<div class="empty">Roster unavailable.</div>';
