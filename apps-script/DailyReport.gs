@@ -19,7 +19,7 @@ var APP_URL = 'https://blpstoremap.netlify.app';
 var REPORT_TO = 'info@brighamlarsonpianos.com';
 var PIANO_LOG_ID = '1ZunbPKygpQlcXfTyPowDHdUE9spJ3uV1XA4iX1eoKRc';
 var BRIDGE_SECRET = 'PASTE_SECRET_HERE';   // server-to-server auth (optional)
-var BRIDGE_REV = '2026-09-15.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-09-15.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = 'PASTE_PIN_HERE';           // what BLP team members type to move pianos
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -6782,6 +6782,13 @@ function timeOffStatus_(req, who) {
   var d = function (x) { return (x instanceof Date)
     ? Utilities.formatDate(x, 'America/Denver', 'yyyy-MM-dd') : String(x || ''); };
   var tech = String(v[1]), span = d(v[2]) + (d(v[3]) && d(v[3]) !== d(v[2]) ? ' → ' + d(v[3]) : '');
+  // Idempotent (same lesson as clock fixes, 9/15): a request already decided
+  // or archived is left alone and NOT re-texted — a retried POST or a second
+  // click changes nothing
+  var curStatus = String(v[6] || 'requested').trim();
+  if (curStatus && curStatus !== 'requested') {
+    return {ok: true, tech: tech, span: span, status: curStatus, already: true, texted: false};
+  }
   // lane check (Brigham 9/1): Mark approves shop-side requests, Melissa
   // approves the admins'; the owners can approve either lane
   if (!isOwnerAcct) {
@@ -6800,12 +6807,43 @@ function timeOffStatus_(req, who) {
     return {ok: true, tech: tech, span: span, status: 'duplicate'};
   }
   sh.getRange(row, 7).setValue(stamp);
+  // Re-sent copies of the same request (same person, dates, times and note)
+  // are archived with the decision, silently: one request, one text.
+  var archived = 0;
   try {
-    notifyTeam_([tech], (status === 'approved' ? '✅ Time off APPROVED' : '❌ Time off DENIED')
-      + ' — ' + span + (v[4] ? ' (' + v[4] + ')' : '') + ' (' + first + '). '
-      + (status === 'approved' ? 'Enjoy!' : 'Talk to ' + first + ' if you have questions.'));
-  } catch (eN) { /* text best-effort */ }
-  return {ok: true, tech: tech, span: span, status: stamp};
+    var lastR = sh.getLastRow();
+    if (lastR >= 2) {
+      var all = sh.getRange(2, 1, lastR - 1, 7).getValues();
+      for (var i = 0; i < all.length; i++) {
+        var r2 = i + 2, w = all[i];
+        if (r2 === row || !w[1]) continue;
+        var st2 = String(w[6] || 'requested').trim();
+        if (st2 && st2 !== 'requested') continue;
+        if (String(w[1]) === tech && d(w[2]) === d(v[2]) && d(w[3]) === d(v[3])
+            && String(w[4] || '').trim() === String(v[4] || '').trim()
+            && String(w[5] || '').trim() === String(v[5] || '').trim()) {
+          sh.getRange(r2, 7).setValue('duplicate · ' + first + ' ' + Utilities.formatDate(new Date(), 'America/Denver', 'M/d'));
+          archived++;
+        }
+      }
+    }
+  } catch (eS) { /* best-effort */ }
+  // one text per decision per hour, whatever path delivers it
+  var texted = false;
+  var cache = CacheService.getScriptCache();
+  var tkey = ('totxt:' + tech + '|' + span + '|' + status).slice(0, 240);
+  var alreadyTexted = false;
+  try { alreadyTexted = !!cache.get(tkey); } catch (eC) {}
+  if (!alreadyTexted) {
+    try {
+      notifyTeam_([tech], (status === 'approved' ? '✅ Time off APPROVED' : '❌ Time off DENIED')
+        + ' — ' + span + (v[4] ? ' (' + v[4] + ')' : '') + ' (' + first + '). '
+        + (status === 'approved' ? 'Enjoy!' : 'Talk to ' + first + ' if you have questions.'));
+      texted = true;
+      try { cache.put(tkey, '1', 3600); } catch (eP) {}
+    } catch (eN) { /* text best-effort */ }
+  }
+  return {ok: true, tech: tech, span: span, status: stamp, texted: texted, archived: archived};
 }
 function timeOffRows_() {
   var sh = timeOffSheet_();

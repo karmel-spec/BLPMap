@@ -10209,6 +10209,23 @@ function cfxAutoLink(clock, row) {
  * archived as duplicates right away so nobody resolves them again later and
  * texts the person a second time. Works with today's bridge (status
  * 'duplicate' never texts); rev 2026-09-15.2 does the same server-side. */
+/* Time off: same one-request-one-text rule as clock fixes (9/15). Archives
+ * the person's other open copies with identical dates/times/note as
+ * duplicates. On today's bridge the duplicate status may be rejected
+ * (rev 2026-09-15.1+ accepts it) — failures are simply ignored. */
+async function toArchiveSiblings(row) {
+  const r0 = (TO.rows || []).find(r => r.row === +row);
+  if (!r0) return 0;
+  const key = r => [String(r.who || '').trim().toLowerCase(), r.start, r.end, String(r.times || '').trim(), String(r.note || '').trim()].join('|');
+  const k = key(r0);
+  const sibs = (TO.rows || []).filter(r => r.row !== r0.row && /^requested$|^$/.test(String(r.status || 'requested').trim()) && key(r) === k);
+  let n = 0;
+  for (const s of sibs) {
+    const j = await adjustPost({action: 'timeoffstatus', row: s.row, status: 'duplicate'});
+    if (j && !j.error) { s.status = 'duplicate'; n++; }
+  }
+  return n;
+}
 async function cfxArchiveSiblings(fixRow) {
   const fx = (S.fixRows || []).find(r => r.row === +fixRow);
   if (!fx) return 0;
@@ -10993,6 +11010,15 @@ function renderReport() {
     b.disabled = true; b.textContent = '…';
     const j = await adjustPost({action: 'timeoffstatus', row: +b.dataset.row, status: b.dataset.st});
     if (j.error) { alert(j.error); b.disabled = false; return; }
+    // one request, one text (Ricardo 9/15 ×3): after a decision, archive the
+    // person's identical open copies so nobody decides them again later
+    let extra = j.archived || 0;
+    if (b.dataset.st !== 'duplicate' && !extra) extra = await toArchiveSiblings(+b.dataset.row);
+    if (b.dataset.st !== 'duplicate') {
+      const first = String(j.tech || '').split(' ')[0];
+      cfxToast((j.already ? `✓ already decided — no new text` : j.texted === false ? `✓ ${b.dataset.st} — ${first} was already texted about this one` : `✓ ${b.dataset.st} — ${first} has been texted`)
+        + (extra ? ` · ${extra} re-sent cop${extra === 1 ? 'y' : 'ies'} archived` : ''));
+    }
     TO.rows = null; loadTimeOff();
   });
   body.querySelectorAll('.cfxapply').forEach(b => b.onclick = () => {
