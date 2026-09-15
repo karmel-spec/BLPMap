@@ -19,7 +19,7 @@ var APP_URL = 'https://blpstoremap.netlify.app';
 var REPORT_TO = 'info@brighamlarsonpianos.com';
 var PIANO_LOG_ID = '1ZunbPKygpQlcXfTyPowDHdUE9spJ3uV1XA4iX1eoKRc';
 var BRIDGE_SECRET = 'PASTE_SECRET_HERE';   // server-to-server auth (optional)
-var BRIDGE_REV = '2026-09-14.4';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-09-15.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = 'PASTE_PIN_HERE';           // what BLP team members type to move pianos
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -1255,18 +1255,19 @@ function doPost(e) {
     }
     if (req.action === 'timeoffstatus') {
       var tos = timeOffStatus_(req, who);
-      if (tos.ok) logAct_(who, 'Time off ' + (String(tos.status).indexOf('approved') === 0 ? 'APPROVED ✅' : 'DENIED ❌'), tos.tech, tos.span);
+      if (tos.ok) logAct_(who, 'Time off ' + (String(tos.status).indexOf('approved') === 0 ? 'APPROVED ✅'
+        : String(tos.status).indexOf('duplicate') === 0 ? 'copy archived ⧉' : 'DENIED ❌'), tos.tech, tos.span);
       return json_(tos);
     }
     if (req.action === 'timeoff') {
       var toa = timeOffAdd_(req, who);
-      if (toa.ok) logAct_(who, 'Time off requested', toa.tech,
+      if (toa.ok && !toa.duplicate) logAct_(who, 'Time off requested', toa.tech,
         toa.start + (toa.end !== toa.start ? ' → ' + toa.end : ''));
       return json_(toa);
     }
     if (req.action === 'trainreq') {
       var trq = trainReqAdd_(req, who);
-      if (trq.ok) logAct_(who, 'Training requested', trq.tech, trq.topic);
+      if (trq.ok && !trq.duplicate) logAct_(who, 'Training requested', trq.tech, trq.topic);
       return json_(trq);
     }
     if (req.action === 'shoprosterset') {
@@ -6673,7 +6674,24 @@ function timeOffAdd_(req, who) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(end)) end = start;
   var times = String(req.times || '').slice(0, 120);
   var note = String(req.note || '').slice(0, 500);
-  timeOffSheet_().appendRow([new Date().toISOString(), tech, start, end, times, note, 'requested']);
+  var tsh = timeOffSheet_();
+  // Ricardo 9/15 (3 copies of one request): an identical request from the
+  // same person within 10 minutes is a re-tap on Send, not a new request
+  try {
+    var lastT = tsh.getLastRow();
+    if (lastT >= 2) {
+      var fromT = Math.max(2, lastT - 40), recentT = tsh.getRange(fromT, 1, lastT - fromT + 1, 7).getValues();
+      var dd = function (x) { return (x instanceof Date) ? Utilities.formatDate(x, 'America/Denver', 'yyyy-MM-dd') : String(x || '').slice(0, 10); };
+      for (var ti = recentT.length - 1; ti >= 0; ti--) {
+        var tv = recentT[ti];
+        if (String(tv[1]) === tech && dd(tv[2]) === start && dd(tv[3]) === end && String(tv[4] || '') === times
+            && String(tv[5] || '') === note && (Date.now() - new Date(tv[0]).getTime()) < 600000) {
+          return {ok: true, duplicate: true, tech: tech, start: start, end: end, row: fromT + ti};
+        }
+      }
+    }
+  } catch (eD) { /* dedupe is best-effort */ }
+  tsh.appendRow([new Date().toISOString(), tech, start, end, times, note, 'requested']);
   var span = start === end ? start : start + ' → ' + end;
   var msg = 'Time off request — ' + tech + ': ' + span
     + (times ? ' (' + times + ')' : '') + (note ? ' — ' + note : '');
@@ -6723,8 +6741,9 @@ function timeOffStatus_(req, who) {
   var isOwnerAcct = email.indexOf('@brighamlarsonpianos.com') > 0
     && (email.indexOf('brigham@') === 0 || email.indexOf('karmel@') === 0);
   var row = Number(req.row) || 0;
-  var status = req.status === 'approved' ? 'approved' : req.status === 'denied' ? 'denied' : '';
-  if (!status) return {error: 'status must be approved or denied'};
+  var status = req.status === 'approved' ? 'approved' : req.status === 'denied' ? 'denied'
+    : req.status === 'duplicate' ? 'duplicate' : '';   // duplicate = archive a re-sent copy, no text
+  if (!status) return {error: 'status must be approved, denied or duplicate'};
   var sh = timeOffSheet_();
   if (row < 2 || row > sh.getLastRow()) return {error: 'no such request'};
   var v = sh.getRange(row, 1, 1, 7).getValues()[0];
@@ -6745,6 +6764,10 @@ function timeOffStatus_(req, who) {
   }
   var first = String(who || '').split(' ')[0] || 'a manager';
   var stamp = status + ' by ' + first + ' ' + Utilities.formatDate(new Date(), 'America/Denver', 'M/d');
+  if (status === 'duplicate') {   // Ricardo 9/15 ×3 — archive the copy silently
+    sh.getRange(row, 7).setValue('duplicate · ' + first + ' ' + Utilities.formatDate(new Date(), 'America/Denver', 'M/d'));
+    return {ok: true, tech: tech, span: span, status: 'duplicate'};
+  }
   sh.getRange(row, 7).setValue(stamp);
   try {
     notifyTeam_([tech], (status === 'approved' ? '✅ Time off APPROVED' : '❌ Time off DENIED')
@@ -6783,6 +6806,17 @@ function trainReqAdd_(req, who) {
     sh.getRange(1, 1, 1, 4).setValues([['Requested at', 'Who', 'Topic', 'Notes']]);
     sh.setFrozenRows(1);
   }
+  try {   // same dedupe as time off: identical request within 10 min = re-tap
+    var lastQ = sh.getLastRow();
+    if (lastQ >= 2) {
+      var fromQ = Math.max(2, lastQ - 40), recentQ = sh.getRange(fromQ, 1, lastQ - fromQ + 1, 4).getValues();
+      for (var qi = recentQ.length - 1; qi >= 0; qi--) {
+        var qv = recentQ[qi];
+        if (String(qv[1]) === tech && String(qv[2]) === topic && String(qv[3] || '') === note
+            && (Date.now() - new Date(qv[0]).getTime()) < 600000) return {ok: true, duplicate: true, tech: tech, topic: topic};
+      }
+    }
+  } catch (eD) { /* best-effort */ }
   sh.appendRow([new Date().toISOString(), tech, topic, note]);
   var msg = 'Training request — ' + tech + ' wants training on: ' + topic + (note ? ' — ' + note : '');
   if (!req.silent) {

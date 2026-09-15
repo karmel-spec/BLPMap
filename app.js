@@ -4751,6 +4751,18 @@ function tempSpotModal() {
     startTempPlace(chosen, floor);
   };
 }
+/* one send per tap: a second tap while the bridge is slow filed time-off,
+ * training and plate-spot requests twice (Ricardo 3× on 9/15, Mark 9/14).
+ * Disables the button until the handler resolves; re-enables on error. */
+function oneShot(btn, label, fn) {
+  return async ev => {
+    const b = (ev && ev.currentTarget) || btn;
+    if (b.disabled) return;
+    const was = b.textContent; b.disabled = true; b.textContent = label || 'Sending…';
+    let ok = false;
+    try { ok = await fn(); } finally { if (!ok) { b.disabled = false; b.textContent = was; } }
+  };
+}
 function timeOffModal() {
   const old = document.querySelector('.dsheetov'); if (old) old.remove();
   const ov = document.createElement('div');
@@ -4767,19 +4779,22 @@ function timeOffModal() {
   </div>`;
   document.body.appendChild(ov);
   ov.querySelector('.dsx').onclick = () => ov.remove();
-  ov.querySelector('.to-send').onclick = async () => {
+  const toBtn = ov.querySelector('.to-send');
+  toBtn.onclick = oneShot(toBtn, 'Sending…', async () => {
     const v = c => ov.querySelector(c).value.trim();
     const msg = ov.querySelector('.to-msg');
-    if (!v('.to-start')) { msg.textContent = 'pick the first day'; return; }
+    if (!v('.to-start')) { msg.textContent = 'pick the first day'; return false; }
     msg.textContent = 'sending…';
     const j = await adjustPost({action: 'timeoff', start: v('.to-start'),
       end: v('.to-end') || v('.to-start'), times: v('.to-times'), note: v('.to-note')});
-    if (j.error) { msg.textContent = j.error; return; }
+    if (j.error) { msg.textContent = j.error; return false; }
     TO.rows = null;
-    ov.querySelector('.dsheet').innerHTML =
-      '<h3>✅ Request sent</h3><div class="dssub">shop@ has it and Mark got a text — it also shows on your dashboard.</div>';
+    ov.querySelector('.dsheet').innerHTML = j.duplicate
+      ? '<h3>✅ Already sent</h3><div class="dssub">That request was filed a moment ago — no second copy was made.</div>'
+      : '<h3>✅ Request sent</h3><div class="dssub">shop@ has it and Mark got a text — it also shows on your dashboard.</div>';
     setTimeout(() => ov.remove(), 2600);
-  };
+    return true;
+  });
 }
 function trainReqModal() {
   const old = document.querySelector('.dsheetov'); if (old) old.remove();
@@ -4794,16 +4809,19 @@ function trainReqModal() {
   </div>`;
   document.body.appendChild(ov);
   ov.querySelector('.dsx').onclick = () => ov.remove();
-  ov.querySelector('.tr-send').onclick = async () => {
+  const trBtn = ov.querySelector('.tr-send');
+  trBtn.onclick = oneShot(trBtn, 'Sending…', async () => {
     const msg = ov.querySelector('.tr-msg');
     msg.textContent = 'sending…';
     const j = await adjustPost({action: 'trainreq',
       topic: ov.querySelector('.tr-topic').value, note: ov.querySelector('.tr-note').value.trim()});
-    if (j.error) { msg.textContent = j.error; return; }
-    ov.querySelector('.dsheet').innerHTML =
-      '<h3>✅ Request sent</h3><div class="dssub">Mark and Jacob got a text — they\u2019ll line it up in the morning meeting or your queue.</div>';
+    if (j.error) { msg.textContent = j.error; return false; }
+    ov.querySelector('.dsheet').innerHTML = j.duplicate
+      ? '<h3>✅ Already sent</h3><div class="dssub">That request was filed a moment ago — no second copy was made.</div>'
+      : '<h3>✅ Request sent</h3><div class="dssub">Mark and Jacob got a text — they\u2019ll line it up in the morning meeting or your queue.</div>';
     setTimeout(() => ov.remove(), 2600);
-  };
+    return true;
+  });
 }
 const TO = {rows: null, at: 0};
 async function loadTimeOff() {
@@ -10403,9 +10421,12 @@ function timeOffTable() {
         ? `<span style="background:#eaf5ec;color:#2f7d4f;border-radius:5px;padding:2px 8px;font-size:11px;font-weight:700">✓ ${esc(st)}</span>`
         : /^denied/i.test(st)
           ? `<span style="background:#fdecec;color:#9e2020;border-radius:5px;padding:2px 8px;font-size:11px;font-weight:700">✗ ${esc(st)}</span>`
+          : /^duplicate/i.test(st)
+            ? `<span style="background:#f1f1f1;color:#8a929a;border-radius:5px;padding:2px 8px;font-size:11px;font-weight:700">⧉ ${esc(st)}</span>`
           : canApproveTimeOff()
             ? `<button class="tobtn" data-row="${r.row}" data-st="approved" style="color:#2f7d4f">✓ Approve</button>
-               <button class="tobtn" data-row="${r.row}" data-st="denied" style="color:#9e2020">✗ Deny</button>`
+               <button class="tobtn" data-row="${r.row}" data-st="denied" style="color:#9e2020">✗ Deny</button>
+               <button class="tobtn" data-row="${r.row}" data-st="duplicate" title="a re-sent copy of a request already handled — archive it, no text to the team member" style="color:#8a929a">⧉ Duplicate</button>`
             : '<span style="color:#8a929a;font-size:11px">requested</span>';
       return `<tr${r.end >= today ? ' style="font-weight:600"' : ''}>
       <td>${esc(r.who)}</td>
@@ -10419,7 +10440,7 @@ function timeOffTable() {
 function myTimeOffLines() {
   if (!TO.rows) { if (Date.now() - TO.at > 60000) loadTimeOff(); return '<div class="dline dim">loading…</div>'; }
   const me = clockName().toLowerCase();
-  const mine = TO.rows.filter(r => r.who.toLowerCase() === me);
+  const mine = TO.rows.filter(r => r.who.toLowerCase() === me && !/^duplicate/i.test(r.status || ''));
   if (!mine.length) return '<div class="dline dim">None on file — request some from the 📨 Request menu.</div>';
   const today = new Date().toLocaleDateString('en-CA');
   const up = mine.filter(r => r.end >= today);
@@ -10756,7 +10777,7 @@ const REPORT_DEFS = () => [
    html: mediaTable},
   {id: 'timeoffrep', sec: 'admin', icon: '🏖', title: 'TIME OFF', count: (() => {
      try { const t = new Date().toLocaleDateString('en-CA');
-       return TO.rows ? TO.rows.filter(r => r.end >= t).length : null; } catch (e) { return null; } })(),
+       return TO.rows ? TO.rows.filter(r => r.end >= t && !/^duplicate/i.test(r.status || '')).length : null; } catch (e) { return null; } })(),
    desc: 'Every time-off request from the Request menu — filter by team member and date range. Mark, Melissa and the owners approve or deny right here; the requester gets a text with the decision. Upcoming time off counts on the badge; each person also sees their own on their dashboard.',
    html: timeOffTable},
   {id: 'shopwork', sec: 'admin', icon: '📍', title: 'SHOP WORK MAP — DELIVERY / ORIGIN', count: null,
@@ -10897,6 +10918,7 @@ function renderReport() {
     S.auRows = null; loadAppUpdates();
   };
   body.querySelectorAll('.tobtn').forEach(b => b.onclick = async () => {
+    if (b.dataset.st === 'duplicate' && !confirm('Archive this copy as a DUPLICATE? The team member gets no text.')) return;
     b.disabled = true; b.textContent = '…';
     const j = await adjustPost({action: 'timeoffstatus', row: +b.dataset.row, status: b.dataset.st});
     if (j.error) { alert(j.error); b.disabled = false; return; }
