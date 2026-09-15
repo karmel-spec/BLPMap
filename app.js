@@ -10204,6 +10204,24 @@ function cfxAutoLink(clock, row) {
   });
   return hits.length ? hits[0].row : null;
 }
+/* One fix, one text (Avery 9/15): when a request is resolved, its re-sent
+ * copies — same person, same wording, whichever clock they picked — are
+ * archived as duplicates right away so nobody resolves them again later and
+ * texts the person a second time. Works with today's bridge (status
+ * 'duplicate' never texts); rev 2026-09-15.2 does the same server-side. */
+async function cfxArchiveSiblings(fixRow) {
+  const fx = (S.fixRows || []).find(r => r.row === +fixRow);
+  if (!fx) return 0;
+  const key = r => cfxWho(r).toLowerCase() + '|' + String(r.note || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  const k = key(fx);
+  const sibs = (S.fixRows || []).filter(r => r.row !== fx.row && r.status === 'open' && key(r) === k);
+  let n = 0;
+  for (const s of sibs) {
+    const j = await adjustPost({action: 'resolveclockfix', row: s.row, status: 'duplicate'});
+    if (j && !j.error) { s.status = 'duplicate'; n++; }
+  }
+  return n;
+}
 async function adjResolveFrom(fixRow, msgEl) {
   if (!fixRow) { S.fixRows = null; loadClockFixes(); return; }
   const fx = (S.fixRows || []).find(r => r.row === +fixRow);
@@ -10211,7 +10229,9 @@ async function adjResolveFrom(fixRow, msgEl) {
   const j = await adjustPost({action: 'resolveclockfix', row: +fixRow, status: 'resolved'});
   const who = fx.who.replace(/<[^>]*>/g, '').trim().split(/\s+/)[0];
   if (j && !j.error) {
-    cfxToast(j.texted ? `✓ saved · ${who}'s request marked resolved and ${who} has been texted` : `✓ saved · ${who}'s request marked resolved`);
+    const extra = (j.archived || 0) + (j.archived ? 0 : await cfxArchiveSiblings(fixRow));
+    cfxToast((j.texted ? `✓ saved · ${who}'s request marked resolved and ${who} has been texted` : `✓ saved · ${who}'s request marked resolved`)
+      + (extra ? ` · ${extra} re-sent cop${extra === 1 ? 'y' : 'ies'} archived` : ''));
     if (msgEl) msgEl.textContent += ` · request resolved${j.texted ? ', ' + who + ' texted' : ''}`;
   } else if (msgEl) msgEl.textContent += ' · (could not auto-resolve the request: ' + ((j && j.error) || 'no reply') + ' — press Mark resolved above)';
   S.fixRows = null; loadClockFixes();
@@ -11064,7 +11084,10 @@ function renderReport() {
     b.disabled = true; b.textContent = dup ? 'archiving…' : 'resolving…';
     const j = await adjustPost({action: 'resolveclockfix', row: +b.dataset.row, status: dup ? 'duplicate' : 'resolved'});
     if (j.error) { cfxToast('⚠ ' + j.error); b.disabled = false; b.textContent = dup ? 'Duplicate' : 'Mark resolved'; return; }
-    if (!dup && j.who) cfxToast(j.texted ? `✓ resolved — ${j.who.split(' ')[0]} has been texted that their clock is fixed` : '✓ resolved');
+    let extra = j.archived || 0;
+    if (!dup && !extra) extra = await cfxArchiveSiblings(+b.dataset.row);
+    if (!dup && j.who) cfxToast((j.texted ? `✓ resolved — ${j.who.split(' ')[0]} has been texted that their clock is fixed` : (j.already ? '✓ already resolved — no new text' : '✓ resolved'))
+      + (extra ? ` · ${extra} re-sent cop${extra === 1 ? 'y' : 'ies'} archived` : ''));
     S.fixRows = null; loadClockFixes();
   });
   body.querySelectorAll('.adjedit').forEach(b => b.onclick = () => {

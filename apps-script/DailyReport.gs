@@ -19,7 +19,7 @@ var APP_URL = 'https://blpstoremap.netlify.app';
 var REPORT_TO = 'info@brighamlarsonpianos.com';
 var PIANO_LOG_ID = '1ZunbPKygpQlcXfTyPowDHdUE9spJ3uV1XA4iX1eoKRc';
 var BRIDGE_SECRET = 'PASTE_SECRET_HERE';   // server-to-server auth (optional)
-var BRIDGE_REV = '2026-09-15.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-09-15.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = 'PASTE_PIN_HERE';           // what BLP team members type to move pianos
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -3633,6 +3633,14 @@ function resolveClockFix_(req, who) {
   var by = (g.name || g.email) + ' ' + Utilities.formatDate(new Date(), 'America/Denver', 'M/d');
   var whoName = String(sh.getRange(row, 2).getValue() || '').replace(/\s*[(<].*$/, '').trim();
   var note = String(sh.getRange(row, 5).getValue() || '').trim();
+  var normNote = note.toLowerCase().replace(/\s+/g, ' ');
+  // Idempotent (Avery 9/15 got several texts for one fix): a row already
+  // resolved or archived is left alone and NOT re-texted — a retried POST or
+  // a second click changes nothing
+  var curStatus = String(sh.getRange(row, 6).getValue() || 'open');
+  if (curStatus !== 'open') {
+    return {ok: true, status: /^duplicate/.test(curStatus) ? 'duplicate' : 'resolved', already: true, texted: false, who: whoName};
+  }
   // Brigham 9/8: team members re-send the same request 2–3× when they are not
   // sure it went through → managers can archive the copies as duplicates
   // (no text — the original's resolve already told them).
@@ -3641,18 +3649,41 @@ function resolveClockFix_(req, who) {
     return {ok: true, status: 'duplicate'};
   }
   sh.getRange(row, 6).setValue('resolved by ' + by);
+  // Re-sent copies of the same fix (same person, same wording — whichever
+  // clock they picked) are archived with it, silently: one fix, one text.
+  var archived = 0;
+  try {
+    var lastR = sh.getLastRow();
+    if (lastR >= 2) {
+      var vals = sh.getRange(2, 1, lastR - 1, 6).getValues();
+      for (var i = 0; i < vals.length; i++) {
+        var r2 = i + 2;
+        if (r2 === row || String(vals[i][5] || 'open') !== 'open') continue;
+        var w2 = String(vals[i][1] || '').replace(/\s*[(<].*$/, '').trim();
+        if (w2 === whoName && String(vals[i][4] || '').trim().toLowerCase().replace(/\s+/g, ' ') === normNote) {
+          sh.getRange(r2, 6).setValue('duplicate — already applied · ' + by); archived++;
+        }
+      }
+    }
+  } catch (eS) { /* best-effort */ }
   // Brigham 9/8: tell the team member their clock is fixed so they can stop
   // wondering (and stop re-sending). Best-effort text via the sales-app relay.
+  // One text per fix per hour, whatever path resolves it (script cache).
   var texted = false;
-  if (whoName && !/^claude test/i.test(whoName)) {
+  var cache = CacheService.getScriptCache();
+  var tkey = ('cfxtxt:' + whoName + '|' + normNote).slice(0, 240);
+  var alreadyTexted = false;
+  try { alreadyTexted = !!cache.get(tkey); } catch (eC) {}
+  if (whoName && !/^claude test/i.test(whoName) && !alreadyTexted) {
     try {
       notifyTeam_([whoName], '✅ Your clock fix request has been applied — "' + note.slice(0, 110)
         + (note.length > 110 ? '…' : '') + '". Your time clock is correct now. '
         + 'If anything still looks off, check 👤 My Dashboard → Payroll Clock or send one new request (no need to re-send).');
       texted = true;
+      try { cache.put(tkey, '1', 3600); } catch (eP) {}
     } catch (eT) { /* text best-effort */ }
   }
-  return {ok: true, status: 'resolved', texted: texted, who: whoName};
+  return {ok: true, status: 'resolved', texted: texted, who: whoName, archived: archived};
 }
 function clockFixRows_() {
   var sh = clockFixSheet_();
