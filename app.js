@@ -3553,7 +3553,7 @@ setTimeout(() => {
  * all write the same bridge Time Log. One open session per tech — the
  * bridge closes the previous one on every clockin and tells us what closed.
  * Phase selection is MANDATORY before clocking in ("Other" allows write-in). */
-const NUDGE_MIN = 15;             // quiet minutes before the dock asks "still on it?"
+const NUDGE_MIN = 15;             // (idle nudge retired 9/15 — kept for the mini-dock rule below)
 const CLOCK = {open: null, all: [], today: {}, lastAct: Date.now(), nudged: false, punchedAt: 0};
 function clockName() { const u = authUser(); return u ? String(u.name || '').trim() : ''; }
 function clockElapsed(startIso) {
@@ -4497,9 +4497,6 @@ function renderDock() {
   const recents = (S.recentRows || []).map(r => S.data.pianos.find(x => x.row === r))
     .filter(x => x && x.serial && x.serial !== o.serial).slice(0, 4);
   dock.innerHTML = `
-    ${CLOCK.nudged ? `<div class="docknudge">😴 Quiet for ${NUDGE_MIN} min — still on <b>${esc(o.serial)}</b>?
-      <button class="dn-yes">Yes, working</button>
-      <button class="dn-out">Clock out at last activity</button></div>` : ''}
     <div class="dockrow">
       <div class="dockinfo"><small>${esc(clockName().split(/\s+/)[0] || 'You')} · ${esc(o.phase || 'working')}</small>
         <b>${esc(o.piano ? o.piano.slice(0, 30) : o.serial)} · #${esc(o.serial)}</b></div>
@@ -4549,20 +4546,12 @@ function renderDock() {
     const p = S.data.pianos.find(x => x.row === +el.dataset.row);
     if (p) { focusPiano(p); lsSet('sec_clock', 'open'); }
   });
-  const ny = dock.querySelector('.dn-yes');
-  if (ny) ny.onclick = () => { CLOCK.nudged = false; CLOCK.lastAct = Date.now(); renderDock(); };
-  const no = dock.querySelector('.dn-out');
-  if (no) no.onclick = async () => {
-    const j = await punch('clockout', null, '', 'dock', new Date(CLOCK.lastAct).toISOString());
-    if (j.error) alert(j.error); else CLOCK.nudged = false;
-  };
 }
-// live tickers + idle nudge
+// live tickers. (The 15-minute "still on it?" idle nudge was removed 9/15 —
+// Mark: real tasks run for hours; the 6 PM forgotten-clock sweep on the
+// bridge still catches anyone who never clocks out.)
 setInterval(() => {
   document.querySelectorAll('.cctime').forEach(el => { el.textContent = clockElapsed(el.dataset.start); });
-  if (CLOCK.open && !CLOCK.nudged && Date.now() - CLOCK.lastAct > NUDGE_MIN * 60000) {
-    CLOCK.nudged = true; renderDock();
-  }
 }, 1000);
 ['pointerdown', 'keydown'].forEach(ev =>
   addEventListener(ev, () => { CLOCK.lastAct = Date.now(); }, {passive: true}));
