@@ -62,6 +62,14 @@ change — it is the only reliable way to tell that a paste actually took
 (a skipped ⌘S or a deployment left on its old version looks identical
 otherwise; it happened 9/9).
 
+### Pending bridge paste (as of Tue Sep 15, 2026)
+Deployed: rev `2026-09-14.3`. Repo: `2026-09-15.3`. One paste ships: clock-fix
+request dedupe (.14.4); time-off/training dedupe + Time Off "duplicate" status
+(.15.1); idempotent clock-fix resolve, copies archived, one text per fix per
+hour (.15.2); the same for Time Off decisions (.15.3). Deploy from karmel@,
+restore the three secret lines, New version, then check the ping for
+`"rev":"2026-09-15.3"` and `"drive":"ok"`. Delete this section once done.
+
 ## Local dev
 `python3 server.py` still works exactly as before (port 8641) and needs
 `config.json` for the calendar. The local 6 AM scheduler is now just a
