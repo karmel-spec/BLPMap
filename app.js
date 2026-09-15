@@ -12742,7 +12742,7 @@ function renderTaskBoard() {
     const ov2 = modalShell('composemodal', `
       <span class="x">✕</span>
       <h3>＋ New card — ${esc(first)}'s board</h3>
-      <input class="kc-text" maxlength="2000" placeholder="what needs doing?">
+      <textarea class="kc-text" maxlength="2000" rows="2" placeholder="what needs doing?  (Enter adds the card · Shift+Enter for a new line)"></textarea>
       <div class="cm-grid">
         <div><label>Column</label><select class="kc-col">
           ${boardCols.map(([k2, l2], i2) => `<option value="${esc(k2)}" ${i2 === 0 ? 'selected' : ''}>${esc(l2)}</option>`).join('')}
@@ -12841,7 +12841,10 @@ function renderTaskBoard() {
       tbFetch();   // fresh server copy behind the scenes — the local card is kept until it appears there
     };
     ov2.querySelector('.kc-go').onclick = go;
-    txtIn.onkeydown = ev2 => { if (ev2.key === 'Enter') go(); };
+    // Melissa 9/15 (request 091526terry41): a whole paragraph fits — the box
+    // grows as you type and can be dragged taller; Enter still adds the card
+    txtIn.onkeydown = ev2 => { if (ev2.key === 'Enter' && !ev2.shiftKey) { ev2.preventDefault(); go(); } };
+    txtIn.oninput = () => taGrow(txtIn);
     txtIn.focus();
   };
 
@@ -13203,6 +13206,12 @@ function openCardTextModal(c) {
   });
   msgIn.focus();
 }
+// grow a textarea to fit its text (up to ~12 lines; the user can drag it taller)
+function taGrow(el) {
+  if (!el) return;
+  el.style.height = 'auto';
+  el.style.height = Math.min(340, Math.max(el.scrollHeight + 2, 52)) + 'px';
+}
 function openCardModal(c, canEdit) {
   const added = Date.parse(c.created || '');
   const ov = modalShell('cardmodal', `
@@ -13249,7 +13258,8 @@ function openCardModal(c, canEdit) {
   const txt = ov.querySelector('.cm-text');
   if (canEdit) {
     let t;
-    txt.oninput = () => { clearTimeout(t); t = setTimeout(() => save({text: txt.value.trim()}), 1200); };
+    txt.oninput = () => { taGrow(txt); clearTimeout(t); t = setTimeout(() => save({text: txt.value.trim()}), 1200); };
+    taGrow(txt);
     txt.onblur = () => { clearTimeout(t); if (txt.value.trim() !== c.text) save({text: txt.value.trim()}); };
     ov.querySelector('.cm-due').onchange = ev2 => save({due: ev2.target.value});
     // move to another column from the edit dialog (Brigham 9/11) — instant,
@@ -14126,6 +14136,8 @@ addEventListener('keydown', e => {
   } else pos = end ? v.length : 0;
   const anchor = e.shiftKey ? (end ? t.selectionStart : t.selectionEnd) : pos;
   t.setSelectionRange(Math.min(anchor, pos), Math.max(anchor, pos), end ? 'forward' : 'backward');
+  // a one-line input does not always scroll to the moved caret (Melissa 9/15)
+  if (!isTa) t.scrollLeft = end ? t.scrollWidth : 0;
 }, true);
 
 /* ---------- 🌐 language selector — Google page-translate, our menu ----------
