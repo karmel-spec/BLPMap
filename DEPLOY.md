@@ -62,6 +62,14 @@ change — it is the only reliable way to tell that a paste actually took
 (a skipped ⌘S or a deployment left on its old version looks identical
 otherwise; it happened 9/9).
 
+### Pending bridge paste (as of Wed Sep 16, 2026)
+Deployed: rev `2026-09-15.3` (V151, 9/15 from karmel@). Repo: `2026-09-16.1` —
+adds the 8 PM mover nudge (`lateClockNudge` books a one-shot 8 PM pass when a
+mover is still on the clock; the one-shot's id lives in script property
+`lateNudgeOneShot` and is cleared on the next run). Deploy from karmel@,
+restore the three secret lines, New version, then check the ping for
+`"rev":"2026-09-16.1"` and `"drive":"ok"`. Delete this section once done.
+
 ## Local dev
 `python3 server.py` still works exactly as before (port 8641) and needs
 `config.json` for the calendar. The local 6 AM scheduler is now just a
