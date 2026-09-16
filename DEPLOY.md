@@ -63,7 +63,7 @@ change — it is the only reliable way to tell that a paste actually took
 otherwise; it happened 9/9).
 
 ### Pending bridge paste (as of Wed Sep 16, 2026)
-Deployed: rev `2026-09-15.3` (V151, 9/15 from karmel@). Repo: `2026-09-16.5`.
+Deployed: rev `2026-09-15.3` (V151, 9/15 from karmel@). Repo: `2026-09-16.6`.
 One paste ships, in the order they were built:
 * **Voiding a punch** — a clock-in/clock-out a minute apart can now be struck
   from the ledger without deleting the row. A new **Void** column (Time Log J,
@@ -72,7 +72,9 @@ One paste ships, in the order they were built:
   still show in the 🛠 adjust report (struck through, with ↩ restore) but
   count toward no total, are not an open session, are not evidence for the
   forgotten-clock sweep, and can't be matched by a fix request's ✎ Apply.
-  Same permissions as adjusting the punch's times.
+  Same permissions as adjusting the punch's times. Voiding TEXTS the team
+  member (voiding only ever follows their own request), one text per punch
+  per hour; restoring texts them too.
 * **Phase reorder** — PRSB is now `PRSB - Downbearing` (4a) then
   `PRSB - Notching and Pins` (4b), with `Lacquer Soundboard` (5) after both.
   `PRSBb - Plate In` is retired; `PHASE_MIGRATE` maps the retired names and
@@ -84,7 +86,7 @@ One paste ships, in the order they were built:
   floor, never a trim) and the 8 PM mover nudge.
 
 Deploy from karmel@, restore the three secret lines, New version, then check
-the ping for `"rev":"2026-09-16.4"` and `"drive":"ok"`.
+the ping for `"rev":"2026-09-16.6"` and `"drive":"ok"`.
 
 **Then run the phase migration once** — POST `{action:'migratephases'}` to the
 bridge (or ask Claude to). It rewrites the CURRENT PHASE cells: the 9 pianos

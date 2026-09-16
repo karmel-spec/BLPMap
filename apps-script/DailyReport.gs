@@ -19,7 +19,7 @@ var APP_URL = 'https://blpstoremap.netlify.app';
 var REPORT_TO = 'info@brighamlarsonpianos.com';
 var PIANO_LOG_ID = '1ZunbPKygpQlcXfTyPowDHdUE9spJ3uV1XA4iX1eoKRc';
 var BRIDGE_SECRET = 'PASTE_SECRET_HERE';   // server-to-server auth (optional)
-var BRIDGE_REV = '2026-09-16.5';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-09-16.6';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = 'PASTE_PIN_HERE';           // what BLP team members type to move pianos
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -3699,6 +3699,45 @@ function clockEditGate_(req, isPay) {
 /* Void (or un-void) one punch. The row is never removed — voiding writes a
  * stamp into the Void column and every total, sweep and open-session lookup
  * skips it from then on. Same permissions as editing the punch's times. */
+/* "Wed 9/16, 7:49 AM \u2192 7:50 AM" for the text — the punch as the person
+ * would recognise it on their own timecard. */
+function voidWhen_(wide, isPay) {
+  var si = isPay ? 2 : 4, ei = isPay ? 3 : 5;
+  var fmt = function (v, withDay) {
+    if (!v) return '';
+    var d = (v instanceof Date) ? v : new Date(v);
+    if (isNaN(d.getTime())) return '';
+    return Utilities.formatDate(d, 'America/Denver', withDay ? 'EEE M/d, h:mm a' : 'h:mm a');
+  };
+  var a = fmt(wide[si], true), b = fmt(wide[ei], false);
+  if (!a) return '';
+  return a + (b ? ' \u2192 ' + b : ' (left open)');
+}
+
+/* Voiding is only ever done on someone's own request (Mark 9/16), so it tells
+ * them it happened — same shape as the clock-fix resolve text, and the same
+ * one-per-hour cache guard so a retried POST can't text twice. */
+function voidNotify_(tech, voided, when, piano, reason, row, isPay) {
+  if (!tech || /^claude test/i.test(tech)) return false;
+  var cache = CacheService.getScriptCache();
+  var tkey = ('voidtxt:' + (isPay ? 'pay' : 'piano') + row + '|' + voided).slice(0, 240);
+  try { if (cache.get(tkey)) return false; } catch (eC) {}
+  var what = when || 'a time clock entry';
+  var where = (!isPay && piano) ? ' (' + String(piano).slice(0, 40) + ')' : '';
+  var msg = voided
+    ? '\uD83D\uDEAB Removed from your time clock as you asked \u2014 ' + what + where + '.'
+      + (reason ? ' Reason: ' + reason + '.' : '')
+      + ' It no longer counts toward your hours. Check \uD83D\uDC64 My Dashboard'
+      + (isPay ? ' \u2192 Payroll Clock' : '') + ' \u2014 if that is not what you meant, send one new clock fix request.'
+    : '\u21A9 That time clock entry is back on your timecard \u2014 ' + what + where
+      + '. It counts toward your hours again.';
+  try {
+    notifyTeam_([tech], msg);
+    try { cache.put(tkey, '1', 3600); } catch (eP) {}
+    return true;
+  } catch (eT) { return false; }
+}
+
 function voidClock_(req) {
   return withClockLock_(function () {
     var isPay = req.clock === 'pay';
@@ -3713,18 +3752,21 @@ function voidClock_(req) {
     if (!tech) return {error: 'that row is empty'};
     var cur = String(wide[col - 1] || '');
     var cell = sh.getRange(row, col);
+    var when = voidWhen_(wide, isPay);
     if (req.undo) {
-      if (!cur) return {ok: true, voided: false, tech: tech, piano: piano, already: true};
+      if (!cur) return {ok: true, voided: false, tech: tech, piano: piano, already: true, texted: false};
       cell.setValue('');
-      return {ok: true, voided: false, tech: tech, piano: piano, was: cur};
+      return {ok: true, voided: false, tech: tech, piano: piano, was: cur,
+              texted: voidNotify_(tech, false, when, piano, '', row, isPay)};
     }
-    if (cur) return {ok: true, voided: true, tech: tech, piano: piano, already: true, note: cur};
+    if (cur) return {ok: true, voided: true, tech: tech, piano: piano, already: true, note: cur, texted: false};
     var g = req._g;
     var reason = String(req.reason || '').trim().slice(0, 120);
     var stamp = 'voided by ' + (g.name || g.email) + ' ' +
       Utilities.formatDate(new Date(), 'America/Denver', 'M/d h:mm a') + (reason ? ' \u2014 ' + reason : '');
     cell.setValue(stamp);
-    return {ok: true, voided: true, tech: tech, piano: piano, note: stamp};
+    return {ok: true, voided: true, tech: tech, piano: piano, note: stamp,
+            texted: voidNotify_(tech, true, when, piano, reason, row, isPay)};
   });
 }
 

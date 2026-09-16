@@ -11207,8 +11207,9 @@ function renderReport() {
       reason: reasonEl ? reasonEl.value.trim() : '', undo: undo});
     clearTimeout(slow);
     const who = (tr.children[1] && tr.children[1].textContent.trim().split('\n')[0]) || 'that punch';
-    if (!adjFeedback(msg, j, undo ? `restored — ${who} counts again`
-                                  : `voided — ${who} no longer counts toward hours`)) { b.disabled = false; return; }
+    const txt = j && j.texted ? ', texted' : '';
+    if (!adjFeedback(msg, j, undo ? `restored — ${who} counts again${txt}`
+                                  : `voided — ${who} no longer counts toward hours${txt}`)) { b.disabled = false; return; }
     const r = ((clock === 'pay' ? S.payRows : S.tlRows) || []).find(x => x.row === row);
     if (r) r.voided = undo ? '' : (j.note || 'voided just now');
     S.adjEdit = null;
