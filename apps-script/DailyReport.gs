@@ -19,7 +19,7 @@ var APP_URL = 'https://blpstoremap.netlify.app';
 var REPORT_TO = 'info@brighamlarsonpianos.com';
 var PIANO_LOG_ID = '1ZunbPKygpQlcXfTyPowDHdUE9spJ3uV1XA4iX1eoKRc';
 var BRIDGE_SECRET = 'PASTE_SECRET_HERE';   // server-to-server auth (optional)
-var BRIDGE_REV = '2026-09-16.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-09-16.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = 'PASTE_PIN_HERE';           // what BLP team members type to move pianos
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -759,6 +759,10 @@ function doPost(e) {
         'delivered — row relocated below the SOLD divider, off the map');
       if (ph.ok && ph.autoCompleted) logAct_(who, 'Phases auto-completed',
         ph.summary || req.serial, 'For Sale — all shop phases marked done');
+      if (ph.ok) {
+        var told = exitPrepNotify_(req, ph);
+        if (told) { ph.exitPrepTexted = told; logAct_(who, 'Exit Prep handoff texted', ph.summary || req.serial, told); }
+      }
       return json_(ph);
     }
     if (req.action === 'fixtabs') return json_(fixTabs_());
@@ -2268,6 +2272,43 @@ function phaseCol_(sh) {
   return last + 1;
 }
 
+/* Shop work is finished and the piano becomes admin's job. Nothing used to
+ * be sent at all (Mark 9/16) — a phase change only wrote to the sheet. Texts
+ * whoever the Settings page lists in `exit_prep_notify` (default Melissa;
+ * add Lisa there any time, no code change) with what admin still has to
+ * finish. Fires only on the move INTO Exit Prep - Admin, once per piano per
+ * 12 h, so a retried POST cannot text twice. */
+function exitPrepNotify_(req, ph) {
+  if (String(ph.phase || '') !== 'Exit Prep - Admin') return '';
+  if (String(ph.previous || '') === 'Exit Prep - Admin') return '';
+  var serial = String(req.serial || '').trim();
+  var cache = CacheService.getScriptCache();
+  var key = ('exitprep:' + serial).slice(0, 240);
+  try { if (cache.get(key)) return ''; } catch (eC) {}
+  var setting = String(appSetting_('exit_prep_notify', 'Melissa')).trim();
+  if (/^(off|none|no)$/i.test(setting)) return '';   // Settings can switch this off
+  var names = setting.split(',').map(function (n) { return n.trim(); }).filter(String);
+  if (!names.length) return '';
+  var owner = '', left = [];
+  try {
+    var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+    owner = String(sh.getRange(ph.row, 2).getValue() || '').split('\n')[0].trim();
+    var ac = pianoCol_(sh, 'ADMIN STEPS');
+    var done = String(sh.getRange(ph.row, ac).getValue() || '')
+      .split('|').map(function (x) { return x.trim(); });
+    left = SM_ADMIN_STEPS.filter(function (x) { return done.indexOf(x) < 0; });
+  } catch (eR) {}
+  var msg = '\ud83d\udccb Exit Prep \u2014 ' + (ph.summary || ('#' + serial))
+    + (serial ? ' (#' + serial + ')' : '') + (owner ? ' \u2014 ' + owner : '')
+    + ' is out of the shop and with admin now.'
+    + (left.length ? ' Still to do: ' + left.join(', ') + '.' : ' All admin steps are already ticked.')
+    + ' ' + APP_URL + '/#piano=' + encodeURIComponent(serial);
+  try {
+    notifyTeam_(names, msg.slice(0, 1100));
+    try { cache.put(key, '1', 43200); } catch (eP) {}
+    return names.join(', ');
+  } catch (eT) { return ''; }
+}
 function setPhase_(req) {
   var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
   var found = findPiano_(sh, req.serial, req.row);
@@ -5218,6 +5259,13 @@ function buildShopManagerReport_(dayOffset) {
     if (want.length) R.adminDrift.push({p: p, want: want});
   });
 
+  // shop work finished — these sit with admin now (Mark 9/16)
+  R.exitPrep = pianos.filter(function (p) {
+    return String(p.phase || '').trim() === 'Exit Prep - Admin';
+  }).map(function (p) {
+    var doneSteps = String(p.adminSteps || '').split('|').map(function (x) { return x.trim(); });
+    return {p: p, left: SM_ADMIN_STEPS.filter(function (x) { return doneSteps.indexOf(x) < 0; })};
+  });
   R.stalePhases = smStalePhases_(pianos);
   // temp pianos a team member added on the floor — awaiting admin approval
   R.tempEntries = pianos.filter(function (p) {
@@ -5522,6 +5570,16 @@ function shopManagerHtml_(R) {
   if (R.noCab.length) gaps.push('<b>' + R.noCab.length + '</b> past PRSB with <b>no cabinetry shelf</b> recorded:'
     + gapList_(R.noCab));
   if (gaps.length) { sec('⚠️', 'Data gaps', null, 'Small fixes that keep the map and reports honest.'); ul(gaps); }
+
+  if (R.exitPrep && R.exitPrep.length) {
+    sec('📋', 'Exit Prep — with admin now', R.exitPrep.length,
+      'Shop work is finished on these. They are waiting on admin to close out and schedule delivery.');
+    ul(R.exitPrep.map(function (x) {
+      return ref(x.p) + (x.left.length
+        ? ' <span style="font-size:12px;color:#9e2020">still to do: ' + x.left.join(', ') + '</span>'
+        : ' <span style="font-size:12px;color:#2f7d4f">all admin steps ticked</span>');
+    }));
+  }
 
   if (R.soldPending.length) {
     sec('✓', 'Sold / completed — awaiting delivery', R.soldPending.length,
