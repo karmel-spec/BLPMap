@@ -10014,12 +10014,20 @@ async function adjustPost(body) {
   }
   return {error: 'the Google bridge hiccuped and the change did NOT save — try again in a minute'};
 }
+// a punch the forgotten-clock sweep closed at 6:00 PM, not the person (Mark
+// 9/16): the end time is a guess, so say so until someone adjusts the row
+function adjAutoClosed(r) {
+  const n = String(r.note || '');
+  return /forgot to clock out/i.test(n) && !/adjusted by/i.test(n);
+}
 function adjRow(clock, r, label, sub, dateCell) {
   const ed = S.adjEdit && S.adjEdit.clock === clock && S.adjEdit.row === r.row;
   const dt = dateCell ? `<td style="white-space:nowrap">${dateCell}</td>` : '';
+  const auto = adjAutoClosed(r)
+    ? ' <span class="autochip" title="nobody clocked out, so the app stamped 6:00 PM — check the real finish time and adjust">⏰ auto 6 PM</span>' : '';
   if (!ed) {
-    return `<tr>${dt}<td>${label}</td><td>${sub}</td>
-      <td>${fmtT(r.start)} → ${r.end ? fmtT(r.end) : '<b style="color:#2e7d4f">open</b>'}</td>
+    return `<tr${auto ? ' class="autorow"' : ''}>${dt}<td>${label}</td><td>${sub}</td>
+      <td>${fmtT(r.start)} → ${r.end ? fmtT(r.end) : '<b style="color:#2e7d4f">open</b>'}${auto}</td>
       <td>${r.minutes ? fmtHM(r.minutes) : '—'}</td>
       <td><button class="adjedit" data-clock="${clock}" data-row="${r.row}">✎ adjust</button></td></tr>`;
   }
@@ -10409,11 +10417,18 @@ function clockAdjustTable() {
     // chronological, not sheet order (Melissa 9/8): added/adjusted punches
     // are appended to the sheet, so 9/4 could sit between 8/31 and 9/2.
     // The table scrolls in its own box so the column titles stay put.
-    const rows = S.payRows.filter(keep).sort((a, b) => new Date(a.start) - new Date(b.start));
+    const allPay = S.payRows.filter(keep).sort((a, b) => new Date(a.start) - new Date(b.start));
+    const autoN = allPay.filter(adjAutoClosed).length;
+    const rows = S.payAutoOnly ? allPay.filter(adjAutoClosed) : allPay;
+    const autoBand = autoN
+      ? `<div class="autoband">⏰ <b>${autoN}</b> punch${autoN === 1 ? '' : 'es'} in the last 14 days ${autoN === 1 ? 'was' : 'were'} closed automatically at <b>6:00 PM</b> because nobody clocked out — the real finish time may be later (movers especially). Adjust each one, or leave it if 6 PM is right.
+          <button class="cfxclear payautotog">${S.payAutoOnly ? 'show all punches' : 'show only these ' + autoN}</button></div>`
+      : '';
     pay = `<h4 class="bfhd">Payroll day punches — last 14 days (owners, Melissa & Mark)</h4>
+      ${autoBand}
       <div class="stickytbl"><table><tr><th>DATE</th><th>TEAM MEMBER</th><th>IN → OUT</th><th>HOURS</th><th></th></tr>
       ${rows.map(r => adjRow('pay', r, esc(r.date), esc(r.tech))).join('')
-       || '<tr><td colspan="5" class="empty">No punches yet.</td></tr>'}</table></div>`;
+       || `<tr><td colspan="5" class="empty">${S.payAutoOnly ? 'No auto-closed punches.' : 'No punches yet.'}</td></tr>`}</table></div>`;
     // at the top of the report (Mark 9/8): a forgotten day punch is the most
     // common fix and shouldn't need a scroll past every table to reach
     payAdd = `<div class="rfbar adjaddbar" data-clock="pay"><b>+ missed day punch:</b>
@@ -11059,6 +11074,9 @@ function renderReport() {
     }, 0);
   });
   body.querySelectorAll('.cfxclear').forEach(b => b.onclick = () => { S.cfxF = null; renderReport(); });
+  body.querySelectorAll('.payautotog').forEach(b => b.onclick = ev => {
+    ev.stopPropagation(); S.payAutoOnly = !S.payAutoOnly; renderReport();
+  });
   // clock-type editor on a fix request (Mark 9/8): Day ↔ Piano, plus the
   // serial for piano requests. Saves through the bridge; a bridge that
   // predates the action answers without `clockfix`, so the change is then
