@@ -10023,8 +10023,13 @@ function adjAutoClosed(r) {
 function adjRow(clock, r, label, sub, dateCell) {
   const ed = S.adjEdit && S.adjEdit.clock === clock && S.adjEdit.row === r.row;
   const dt = dateCell ? `<td style="white-space:nowrap">${dateCell}</td>` : '';
-  const auto = adjAutoClosed(r)
-    ? ' <span class="autochip" title="nobody clocked out, so the app stamped 6:00 PM — check the real finish time and adjust">⏰ auto 6 PM</span>' : '';
+  // the sweep now ends a forgotten punch at the person's last recorded
+  // activity when there is one, and falls back to 6:00 PM — say which
+  const byEvidence = adjAutoClosed(r) && /last activity/i.test(r.note || '');
+  const auto = !adjAutoClosed(r) ? ''
+    : byEvidence
+      ? ` <span class="autochip" title="${esc(String(r.note || ''))}">⏰ auto · last activity</span>`
+      : ' <span class="autochip" title="nobody clocked out and nothing else was recorded after 6 PM, so the app stamped 6:00 PM — check the real finish time and adjust">⏰ auto 6 PM</span>';
   if (!ed) {
     return `<tr${auto ? ' class="autorow"' : ''}>${dt}<td>${label}</td><td>${sub}</td>
       <td>${fmtT(r.start)} → ${r.end ? fmtT(r.end) : '<b style="color:#2e7d4f">open</b>'}${auto}</td>
@@ -10420,8 +10425,12 @@ function clockAdjustTable() {
     const allPay = S.payRows.filter(keep).sort((a, b) => new Date(a.start) - new Date(b.start));
     const autoN = allPay.filter(adjAutoClosed).length;
     const rows = S.payAutoOnly ? allPay.filter(adjAutoClosed) : allPay;
+    const autoEv = allPay.filter(r => adjAutoClosed(r) && /last activity/i.test(r.note || '')).length;
+    const autoSix = autoN - autoEv;
     const autoBand = autoN
-      ? `<div class="autoband">⏰ <b>${autoN}</b> punch${autoN === 1 ? '' : 'es'} in the last 14 days ${autoN === 1 ? 'was' : 'were'} closed automatically at <b>6:00 PM</b> because nobody clocked out — the real finish time may be later (movers especially). Adjust each one, or leave it if 6 PM is right.
+      ? `<div class="autoband">⏰ <b>${autoN}</b> punch${autoN === 1 ? '' : 'es'} in the last 14 days ${autoN === 1 ? 'was' : 'were'} closed automatically because nobody clocked out${
+          autoEv ? ` — <b>${autoEv}</b> ended at the person’s last recorded activity` : ''}${
+          autoSix ? `${autoEv ? ' and' : ' —'} <b>${autoSix}</b> stamped <b>6:00 PM</b> with nothing recorded after that, so the real finish time may be later (movers especially)` : ''}. Adjust any that are wrong.
           <button class="cfxclear payautotog">${S.payAutoOnly ? 'show all punches' : 'show only these ' + autoN}</button></div>`
       : '';
     pay = `<h4 class="bfhd">Payroll day punches — last 14 days (owners, Melissa & Mark)</h4>

@@ -19,7 +19,7 @@ var APP_URL = 'https://blpstoremap.netlify.app';
 var REPORT_TO = 'info@brighamlarsonpianos.com';
 var PIANO_LOG_ID = '1ZunbPKygpQlcXfTyPowDHdUE9spJ3uV1XA4iX1eoKRc';
 var BRIDGE_SECRET = 'PASTE_SECRET_HERE';   // server-to-server auth (optional)
-var BRIDGE_REV = '2026-09-16.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-09-16.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = 'PASTE_PIN_HERE';           // what BLP team members type to move pianos
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -3075,6 +3075,62 @@ function clockOutLocked_(req) {
 /* Forgotten sessions: anything still open from a PREVIOUS day gets closed
  * automatically — at 6 PM Denver on its start day (or +1h if it began after
  * 6 PM), capped at 10 hours. Runs opportunistically, at most every 10 min. */
+/* Last proof a person was actually working on a given day: their piano clock
+ * (session starts, and ends that a HUMAN recorded) plus the ACTIVITY LOG
+ * (moves, phase changes, photos, notes, queue changes). A forgotten punch is
+ * ended at this instead of a flat 6:00 PM (Mark 9/16 — movers work past 6 and
+ * were losing the hours). Evidence can only push an end time LATER than the
+ * 6 PM default: app silence is not proof that someone went home, so nobody's
+ * day is ever trimmed by this. Built once per sweep, and only when there is
+ * something to close. */
+function dayEvidenceIndex_(keys) {
+  var want = {}, i;
+  for (i = 0; i < keys.length; i++) want[keys[i]] = 1;
+  var best = {};
+  var norm = function (n) {
+    return String(n || '').replace(/<[^>]*>/g, '').replace(/\([^)]*\)/g, ' ')
+      .trim().toLowerCase().replace(/\s+/g, ' ');
+  };
+  var note = function (who, at, what) {
+    if (!at || isNaN(at.getTime())) return;
+    var k = norm(who) + '|' + Utilities.formatDate(at, 'America/Denver', 'yyyy-MM-dd');
+    if (!want[k]) return;
+    if (!best[k] || at > best[k].at) best[k] = {at: at, what: what};
+  };
+  try {
+    var tsh = timeLogSheet_(), lastT = tsh.getLastRow();
+    if (lastT >= 2) {
+      var fromT = Math.max(2, lastT - 600);
+      var tv = tsh.getRange(fromT, 1, lastT - fromT + 1, 9).getValues();
+      for (i = 0; i < tv.length; i++) {
+        if (!tv[i][0]) continue;
+        if (tv[i][4]) note(tv[i][0], new Date(tv[i][4]), 'piano clock-in');
+        // an end the sweep itself invented is not evidence
+        if (tv[i][5] && String(tv[i][8] || '').indexOf('auto:') < 0) note(tv[i][0], new Date(tv[i][5]), 'piano clock-out');
+      }
+    }
+  } catch (e1) {}
+  try {
+    var ash = SpreadsheetApp.openById(PIANO_LOG_ID).getSheetByName('ACTIVITY LOG');
+    var lastA = ash ? ash.getLastRow() : 0;
+    if (lastA >= 2) {
+      var fromA = Math.max(2, lastA - 800);
+      var av = ash.getRange(fromA, 1, lastA - fromA + 1, 3).getValues();
+      for (i = 0; i < av.length; i++) {
+        if (!av[i][0] || !av[i][1]) continue;
+        if (/\(auto\)|^store map/i.test(String(av[i][1]))) continue;   // the app's own entries
+        note(av[i][1], (av[i][0] instanceof Date) ? av[i][0] : new Date(av[i][0]),
+             String(av[i][2] || 'activity').toLowerCase());
+      }
+    }
+  } catch (e2) {}
+  return best;
+}
+function evidenceKey_(tech, when) {
+  return String(tech || '').replace(/<[^>]*>/g, '').replace(/\([^)]*\)/g, ' ')
+    .trim().toLowerCase().replace(/\s+/g, ' ')
+    + '|' + Utilities.formatDate(when, 'America/Denver', 'yyyy-MM-dd');
+}
 function sweepForgottenClocks_() {
   var cache = CacheService.getScriptCache();
   if (cache.get('clocksweep')) return 0;
@@ -3085,19 +3141,31 @@ function sweepForgottenClocks_() {
   var from = Math.max(2, last - 400);
   var vals = sh.getRange(from, 1, last - from + 1, 6).getValues();
   var todayStr = Utilities.formatDate(new Date(), 'America/Denver', 'yyyy-MM-dd');
-  var n = 0;
-  for (var i = 0; i < vals.length; i++) {
+  var todo = [], i;
+  for (i = 0; i < vals.length; i++) {
     if (!vals[i][0] || vals[i][5] || !vals[i][4]) continue;
-    var start = new Date(vals[i][4]);
-    if (Utilities.formatDate(start, 'America/Denver', 'yyyy-MM-dd') === todayStr) continue;
+    var st = new Date(vals[i][4]);
+    if (Utilities.formatDate(st, 'America/Denver', 'yyyy-MM-dd') === todayStr) continue;
+    todo.push({row: from + i, v: vals[i], start: st});
+  }
+  if (!todo.length) return 0;
+  var ev = dayEvidenceIndex_(todo.map(function (t) { return evidenceKey_(t.v[0], t.start); }));
+  todo.forEach(function (t) {
+    var start = t.start;
     var six = new Date(Utilities.formatDate(start, 'America/Denver', "yyyy-MM-dd'T'18:00:00XXX"));
     var end = six > start ? six : new Date(start.getTime() + 3600000);
-    if (end - start > 36000000) end = new Date(start.getTime() + 36000000);
-    closeSession_(sh, {row: from + i, v: vals[i]}, 'auto: forgot to clock out', end.toISOString());
-    n++;
-  }
-  return n;
+    var seen = ev[evidenceKey_(t.v[0], start)];
+    var used = null;
+    if (seen && seen.at > end) { end = seen.at; used = seen; }
+    var cap = used ? 50400000 : 36000000;   // 10 h normally; up to 14 h on evidence
+    if (end - start > cap) { end = new Date(start.getTime() + cap); }
+    closeSession_(sh, {row: t.row, v: t.v},
+      used ? 'auto: forgot to clock out (last activity ' + Utilities.formatDate(end, 'America/Denver', 'h:mm a') + ')'
+           : 'auto: forgot to clock out', end.toISOString());
+  });
+  return todo.length;
 }
+
 /* Every place a piano has lived, straight from the ACTIVITY LOG (moves,
  * attic bumps, SOLD relocation) plus its cabinetry-shelf changes. */
 function pianoHistory_(serial, rowOverride) {
@@ -3221,17 +3289,31 @@ function sweepForgottenPay_(sh) {
   var from = Math.max(2, last - 200);
   var vals = sh.getRange(from, 1, last - from + 1, 4).getValues();
   var todayStr = Utilities.formatDate(new Date(), 'America/Denver', 'yyyy-MM-dd');
-  for (var i = 0; i < vals.length; i++) {
+  var todo = [], i;
+  for (i = 0; i < vals.length; i++) {
     if (!vals[i][0] || !vals[i][2] || vals[i][3]) continue;
-    var start = new Date(vals[i][2]);
-    if (Utilities.formatDate(start, 'America/Denver', 'yyyy-MM-dd') === todayStr) continue;
+    var st = new Date(vals[i][2]);
+    if (Utilities.formatDate(st, 'America/Denver', 'yyyy-MM-dd') === todayStr) continue;
+    todo.push({row: from + i, v: vals[i], start: st});
+  }
+  if (!todo.length) return;   // the common case — no evidence reads at all
+  var ev = dayEvidenceIndex_(todo.map(function (t) { return evidenceKey_(t.v[0], t.start); }));
+  todo.forEach(function (t) {
+    var start = t.start;
     var six = new Date(Utilities.formatDate(start, 'America/Denver', "yyyy-MM-dd'T'18:00:00XXX"));
     var end = six > start ? six : new Date(start.getTime() + 3600000);
-    if (end - start > 43200000) end = new Date(start.getTime() + 43200000);
-    closePayRow_(sh, {row: from + i, v: vals[i]}, end.toISOString(),
-                 'auto: forgot to clock out — review before payroll');
-  }
+    var seen = ev[evidenceKey_(t.v[0], start)];
+    var used = null;
+    if (seen && seen.at > end) { end = seen.at; used = seen; }
+    var cap = used ? 57600000 : 43200000;   // 12 h normally; up to 16 h when evidence justifies it
+    if (end - start > cap) { end = new Date(start.getTime() + cap); used = used ? {at: end, what: used.what + ', capped'} : null; }
+    var when = Utilities.formatDate(end, 'America/Denver', 'h:mm a');
+    closePayRow_(sh, {row: t.row, v: t.v}, end.toISOString(), used
+      ? 'auto: forgot to clock out \u2014 ended at last activity ' + when + ' (' + used.what + ') \u2014 review before payroll'
+      : 'auto: forgot to clock out \u2014 stamped ' + when + ', no later activity found \u2014 review before payroll');
+  });
 }
+
 /* Geofence for payroll punches: the app sends the phone's location with
  * each punch. DAY clock-ins/outs from a confident GPS fix outside the fence
  * are BLOCKED (Brigham 8/26) — the app offers a manager time-adjustment
