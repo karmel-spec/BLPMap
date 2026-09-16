@@ -3874,13 +3874,17 @@ async function punchVerify(action, p, phase, fallbackMsg) {
  * techs. Advancing OUT of a checklist phase requires a manager mini-QC:
  * request → text to Mark (30-min escalation to Mark+Karmel) → C-rail
  * inspection → pass advances the phase, fail creates a 🔁 Rework card. */
-// phases whose advance is gated by a manager mini-QC. Downbearing MUST stay (plate
-// hides the work after); QC & Assembly = mini-QC of the QC (Brigham 9/4).
-// Post Sale QC — the pre-delivery final QC — is NOT gated (Mark 9/8, request
-// 090826hales35): the worksheet itself is the check, no second inspection.
-const QC_PHASES = ['CAP', 'PRSB - Downbearing', 'QC & Assembly'];
-// phases that carry a digital checklist (worksheet + progress pill)
-const CHECKLIST_PHASES = QC_PHASES.concat(['Post Sale QC']);
+// phases whose advance is gated by a manager mini-QC. Downbearing MUST stay:
+// the plate hides the work afterwards, so rework is off the table.
+const QC_PHASES = ['CAP', 'PRSB - Downbearing'];
+// phases that NEVER need a mini-QC to advance — the training-month catch-all
+// below does not apply to them either:
+//   Post Sale QC — the pre-delivery final QC is itself the check (Mark 9/8)
+//   Chip/1st/2nd Tuning, QC & Assembly — Mark 9/16
+const QC_NEVER = ['Post Sale QC', 'Chip Tuning', '1st Tuning', '2nd Tuning', 'QC & Assembly'];
+// phases that carry a digital checklist (worksheet + progress pill). QC &
+// Assembly keeps its worksheet even though it no longer gates.
+const CHECKLIST_PHASES = QC_PHASES.concat(['QC & Assembly', 'Post Sale QC']);
 // acronym school (Brigham 9/3): TRAINING mode spells acronyms out so newbies
 // learn them; trained techs see the acronyms alone everywhere else.
 const PHASE_LONG = {
@@ -3897,14 +3901,15 @@ function trainPhaseName(phase) {
   const long = PHASE_LONG[String(phase || '').trim()];
   return esc(phase) + (long ? ` <span style="font-weight:600;font-size:.72em;color:#6f6a63">(${esc(long)})</span>` : '');
 }
-// TRAINING MONTH (Brigham 9/3 → 10/3): EVERY real phase advance goes through
-// a Brigham-performed mini-QC (Karmel videos it for manager training). After
-// 10/3 the gate falls back to QC_PHASES. Waiting/queue/sale states never gate.
+// TRAINING MONTH (Brigham 9/3 → 10/3): every OTHER real phase advance goes
+// through a Brigham-performed mini-QC (Karmel videos it for manager
+// training). After 10/3 the gate falls back to QC_PHASES. Waiting/queue/sale
+// states never gate, and neither does anything in QC_NEVER.
 const QC_ALL_UNTIL = new Date('2026-10-04T00:00:00-06:00').getTime();
 function qcGated(was) {
   const w = String(was || '').trim();
   if (!w || /^(waiting|in queue|paused|for sale|sale pending|sold|delivered)/i.test(w)) return false;
-  if (w === 'Post Sale QC') return false;   // the final QC is the check itself (Mark 9/8) — training month included
+  if (QC_NEVER.includes(w)) return false;
   return QC_PHASES.includes(w) || Date.now() < QC_ALL_UNTIL;
 }
 const PHASEQC_URL = 'https://blpsalesapp.netlify.app/.netlify/functions/phase-qc';
