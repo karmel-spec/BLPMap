@@ -4952,8 +4952,10 @@ function clockFixModal(prefill) {
     const note = cfxComposeNote(ymd, inT, outT, text);
     sendBtn.disabled = true; const sendWas = sendBtn.textContent; sendBtn.textContent = 'Sending…';
     msg.textContent = 'sending…';
+    // file it in the language the app is set to, so the "your clock is fixed"
+    // text comes back in that language without anyone maintaining a list
     const j = await adjustPost({action: 'clockfix', clock: sel.value, serial: ser.value.trim(), note,
-      date: ymd, inAt: inT, outAt: outT});
+      date: ymd, inAt: inT, outAt: outT, lang: es() ? 'es' : 'en'});
     if (j.error) { msg.textContent = j.error; sendBtn.disabled = false; sendBtn.textContent = sendWas; return; }
     ov.querySelector('.dsheet').innerHTML =
       '<h3>✅ Request sent</h3><div class="dssub">It’s on the adjustments list — the fix will show on your dashboard once it’s made.</div>';

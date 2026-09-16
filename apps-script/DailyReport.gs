@@ -19,7 +19,7 @@ var APP_URL = 'https://blpstoremap.netlify.app';
 var REPORT_TO = 'info@brighamlarsonpianos.com';
 var PIANO_LOG_ID = '1ZunbPKygpQlcXfTyPowDHdUE9spJ3uV1XA4iX1eoKRc';
 var BRIDGE_SECRET = 'PASTE_SECRET_HERE';   // server-to-server auth (optional)
-var BRIDGE_REV = '2026-09-16.6';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-09-16.7';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = 'PASTE_PIN_HERE';           // what BLP team members type to move pianos
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -3007,7 +3007,7 @@ function timeLogSheet_() {
       'Clock In', 'Clock Out', 'Minutes', 'Source', 'Closed By', 'Void']]);
     sh.setFrozenRows(1);
   }
-  return ensureVoidCol_(sh, 10);
+  return ensureCol_(sh, 10, 'Void');
 }
 
 /* ===================== VOIDING A PUNCH (Mark 9/16) =====================
@@ -3018,14 +3018,14 @@ function timeLogSheet_() {
  * Column J (Time Log) / H (Payroll Clock) holds the stamp; empty = live.
  * Everything that counts minutes, finds an open session, or looks for
  * evidence of a working day skips a voided row. */
-function ensureVoidCol_(sh, col) {
-  var key = 'voidcol' + col + '_' + sh.getSheetId();
+function ensureCol_(sh, col, label) {
+  var key = 'col' + col + label + '_' + sh.getSheetId();
   var cache = CacheService.getScriptCache();
   if (cache.get(key)) return sh;              // one check an hour, not one per call
   try {
     var max = sh.getMaxColumns();
     if (max < col) sh.insertColumnsAfter(max, col - max);
-    if (!String(sh.getRange(1, col).getValue() || '').trim()) sh.getRange(1, col).setValue('Void');
+    if (!String(sh.getRange(1, col).getValue() || '').trim()) sh.getRange(1, col).setValue(label);
     cache.put(key, '1', 3600);
   } catch (e) {}
   return sh;
@@ -3338,7 +3338,7 @@ function payrollSheet_() {
       'Minutes', 'Source', 'Note', 'Void']]);
     sh.setFrozenRows(1);
   }
-  return ensureVoidCol_(sh, 8);
+  return ensureCol_(sh, 8, 'Void');
 }
 function openPayRow_(sh, tech) {
   var last = sh.getLastRow();
@@ -3701,17 +3701,20 @@ function clockEditGate_(req, isPay) {
  * skips it from then on. Same permissions as editing the punch's times. */
 /* "Wed 9/16, 7:49 AM \u2192 7:50 AM" for the text — the punch as the person
  * would recognise it on their own timecard. */
-function voidWhen_(wide, isPay) {
+var ES_DAYS = {Mon: 'lun', Tue: 'mar', Wed: 'mié', Thu: 'jue', Fri: 'vie', Sat: 'sáb', Sun: 'dom'};
+function voidWhen_(wide, isPay, lang) {
   var si = isPay ? 2 : 4, ei = isPay ? 3 : 5;
   var fmt = function (v, withDay) {
     if (!v) return '';
     var d = (v instanceof Date) ? v : new Date(v);
     if (isNaN(d.getTime())) return '';
-    return Utilities.formatDate(d, 'America/Denver', withDay ? 'EEE M/d, h:mm a' : 'h:mm a');
+    var out = Utilities.formatDate(d, 'America/Denver', withDay ? 'EEE M/d, h:mm a' : 'h:mm a');
+    if (withDay && lang === 'es') out = out.replace(/^(\w{3})/, function (m) { return ES_DAYS[m] || m; });
+    return out;
   };
   var a = fmt(wide[si], true), b = fmt(wide[ei], false);
   if (!a) return '';
-  return a + (b ? ' \u2192 ' + b : ' (left open)');
+  return a + (b ? ' \u2192 ' + b : t_(lang, ' (left open)', ' (quedó abierto)'));
 }
 
 /* Voiding is only ever done on someone's own request (Mark 9/16), so it tells
@@ -3722,15 +3725,23 @@ function voidNotify_(tech, voided, when, piano, reason, row, isPay) {
   var cache = CacheService.getScriptCache();
   var tkey = ('voidtxt:' + (isPay ? 'pay' : 'piano') + row + '|' + voided).slice(0, 240);
   try { if (cache.get(tkey)) return false; } catch (eC) {}
-  var what = when || 'a time clock entry';
+  var lang = teamLang_(tech, '');
+  var what = when || t_(lang, 'a time clock entry', 'un registro de tu reloj');
   var where = (!isPay && piano) ? ' (' + String(piano).slice(0, 40) + ')' : '';
+  var dash = ' \u2014 ';
   var msg = voided
-    ? '\uD83D\uDEAB Removed from your time clock as you asked \u2014 ' + what + where + '.'
-      + (reason ? ' Reason: ' + reason + '.' : '')
-      + ' It no longer counts toward your hours. Check \uD83D\uDC64 My Dashboard'
-      + (isPay ? ' \u2192 Payroll Clock' : '') + ' \u2014 if that is not what you meant, send one new clock fix request.'
-    : '\u21A9 That time clock entry is back on your timecard \u2014 ' + what + where
-      + '. It counts toward your hours again.';
+    ? t_(lang,
+        '\uD83D\uDEAB Removed from your time clock as you asked' + dash + what + where + '.'
+          + (reason ? ' Reason: ' + reason + '.' : '')
+          + ' It no longer counts toward your hours. Check \uD83D\uDC64 My Dashboard'
+          + (isPay ? ' \u2192 Payroll Clock' : '') + dash + 'if that is not what you meant, send one new clock fix request.',
+        '\uD83D\uDEAB Se quitó de tu reloj, como pediste' + dash + what + where + '.'
+          + (reason ? ' Motivo: ' + reason + '.' : '')
+          + ' Ya no cuenta para tus horas. Revisa \uD83D\uDC64 My Dashboard'
+          + (isPay ? ' \u2192 Payroll Clock' : '') + dash + 'si no era eso lo que querías, envía una sola solicitud nueva de corrección.')
+    : t_(lang,
+        '\u21A9 That time clock entry is back on your timecard' + dash + what + where + '. It counts toward your hours again.',
+        '\u21A9 Ese registro volvió a tu tarjeta de tiempo' + dash + what + where + '. Vuelve a contar para tus horas.');
   try {
     notifyTeam_([tech], msg);
     try { cache.put(tkey, '1', 3600); } catch (eP) {}
@@ -3752,7 +3763,7 @@ function voidClock_(req) {
     if (!tech) return {error: 'that row is empty'};
     var cur = String(wide[col - 1] || '');
     var cell = sh.getRange(row, col);
-    var when = voidWhen_(wide, isPay);
+    var when = voidWhen_(wide, isPay, teamLang_(tech, ''));
     if (req.undo) {
       if (!cur) return {ok: true, voided: false, tech: tech, piano: piano, already: true, texted: false};
       cell.setValue('');
@@ -3827,17 +3838,19 @@ function clockFixSheet_() {
   var sh = ss.getSheetByName(CLOCK_FIX_TAB);
   if (!sh) {
     sh = ss.insertSheet(CLOCK_FIX_TAB, ss.getSheets().length);
-    sh.getRange(1, 1, 1, 6).setValues([['When', 'Who', 'Clock', 'Piano serial', 'What needs fixing', 'Status']]);
+    sh.getRange(1, 1, 1, 7).setValues([['When', 'Who', 'Clock', 'Piano serial',
+      'What needs fixing', 'Status', 'Lang']]);
     sh.setFrozenRows(1);
   }
-  return sh;
+  return ensureCol_(sh, 7, 'Lang');
 }
 function clockFixRequest_(req, who) {
   var note = String(req.note || '').trim();
   if (!note) return {error: 'say what needs fixing (date + correct times helps)'};
   var sh = clockFixSheet_();
   sh.appendRow([new Date(), String(who || ''), req.clock === 'pay' ? 'Day clock' : 'Piano clock',
-                String(req.serial || ''), note.slice(0, 400), 'open']);
+                String(req.serial || ''), note.slice(0, 400), 'open',
+                String(req.lang || '').slice(0, 5)]);
   // routed by role (Brigham 9/1): shop side → Mark, admins → Melissa
   try {
     var whoName = String(who || '').replace(/\s*[(<].*$/, '').trim();
@@ -3922,9 +3935,13 @@ function resolveClockFix_(req, who) {
   try { alreadyTexted = !!cache.get(tkey); } catch (eC) {}
   if (whoName && !/^claude test/i.test(whoName) && !alreadyTexted) {
     try {
-      notifyTeam_([whoName], '✅ Your clock fix request has been applied — "' + note.slice(0, 110)
-        + (note.length > 110 ? '…' : '') + '". Your time clock is correct now. '
-        + 'If anything still looks off, check 👤 My Dashboard → Payroll Clock or send one new request (no need to re-send).');
+      var lang = teamLang_(whoName, sh.getRange(row, 7).getValue());
+      var quoted = '"' + note.slice(0, 110) + (note.length > 110 ? '…' : '') + '"';
+      notifyTeam_([whoName], t_(lang,
+        '✅ Your clock fix request has been applied — ' + quoted + '. Your time clock is correct now. '
+          + 'If anything still looks off, check 👤 My Dashboard → Payroll Clock or send one new request (no need to re-send).',
+        '✅ Ya se aplicó tu solicitud de corrección de reloj — ' + quoted + '. Tu reloj ya está correcto. '
+          + 'Si algo sigue mal, revisa 👤 My Dashboard → Payroll Clock o envía una sola solicitud nueva (no hace falta reenviarla).'));
       texted = true;
       try { cache.put(tkey, '1', 3600); } catch (eP) {}
     } catch (eT) { /* text best-effort */ }
@@ -6980,6 +6997,43 @@ function lateNudgesRecent_() {
   } catch (e) {}
   return out;
 }
+/* ===================== BILINGUAL TEAM TEXTS (Mark 9/16) =====================
+ * Two signals, cheapest first:
+ *   1. the language the person FILED in — the app sends `lang` with a clock
+ *      fix or time-off request and it is kept on the request row, so a
+ *      request written in Spanish is answered in Spanish with no list to
+ *      maintain and no new hire to remember;
+ *   2. the App Settings row `spanish_team` — comma-separated names, for
+ *      people who file in English but would rather read Spanish, and for
+ *      texts that have no request behind them (a voided punch). Edit it in
+ *      the sheet; no code change, same as `exit_prep_notify`.
+ * Anyone not matched gets English exactly as before. */
+var SPANISH_TEAM_DEFAULT = 'Doris Arancibia, Lupita Chavoya, Guadalupe Chavoya';
+/* "Doris Arancibia (Shop)" and "doris arancibia" must match, and so must
+ * "Lupita" against "Chavoya, Lupita" — accents stripped so a name typed
+ * either way in the Settings row still lines up. */
+function langNorm_(n) {
+  return String(n || '').replace(/<[^>]*>/g, '').replace(/\([^)]*\)/g, ' ')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .trim().toLowerCase().replace(/[^a-z\s]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+function teamLang_(name, hint) {
+  if (String(hint || '').toLowerCase().indexOf('es') === 0) return 'es';
+  if (String(hint || '').toLowerCase().indexOf('en') === 0) return 'en';
+  var who = langNorm_(name);
+  if (!who) return 'en';
+  var sorted = function (x) { return x.split(' ').sort().join(' '); };   // "Chavoya, Lupita" == "Lupita Chavoya"
+  var first = who.split(' ')[0], whoSorted = sorted(who);
+  var list = String(appSetting_('spanish_team', SPANISH_TEAM_DEFAULT) || '').split(',');
+  for (var i = 0; i < list.length; i++) {
+    var n = langNorm_(list[i]);
+    if (!n) continue;
+    if (n === who || sorted(n) === whoSorted || n.split(' ')[0] === first) return 'es';
+  }
+  return 'en';
+}
+function t_(lang, en, es) { return lang === 'es' ? es : en; }
+
 function notifyTeam_(names, message) {
   for (var i = 0; i < names.length; i++) {
     try {
@@ -7140,9 +7194,13 @@ function timeOffStatus_(req, who) {
   try { alreadyTexted = !!cache.get(tkey); } catch (eC) {}
   if (!alreadyTexted) {
     try {
-      notifyTeam_([tech], (status === 'approved' ? '✅ Time off APPROVED' : '❌ Time off DENIED')
-        + ' — ' + span + (v[4] ? ' (' + v[4] + ')' : '') + ' (' + first + '). '
-        + (status === 'approved' ? 'Enjoy!' : 'Talk to ' + first + ' if you have questions.'));
+      var toLang = teamLang_(tech, '');
+      var detail = ' — ' + span + (v[4] ? ' (' + v[4] + ')' : '') + ' (' + first + '). ';
+      notifyTeam_([tech], t_(toLang,
+        (status === 'approved' ? '✅ Time off APPROVED' : '❌ Time off DENIED') + detail
+          + (status === 'approved' ? 'Enjoy!' : 'Talk to ' + first + ' if you have questions.'),
+        (status === 'approved' ? '✅ Tiempo libre APROBADO' : '❌ Tiempo libre DENEGADO') + detail
+          + (status === 'approved' ? '¡Que lo disfrutes!' : 'Habla con ' + first + ' si tienes preguntas.')));
       texted = true;
       try { cache.put(tkey, '1', 3600); } catch (eP) {}
     } catch (eN) { /* text best-effort */ }
