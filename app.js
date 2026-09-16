@@ -77,9 +77,11 @@ function phaseLabels(phase, p) {
   if (phase === 'Post Sale QC') return {full: '$QC', short: '$'};
   if (phase === 'Sold') return {full: '$', short: '$'};
   if (phase === 'Delivered' || phase === 'For Sale') return null;
+  // a retired name (PRSBa/PRSBb) is no longer in PHASES but still has a
+  // number, so a sheet cell that has not migrated yet keeps its icon (9/16)
   const i = PHASES.indexOf(phase);
-  if (i < 0) return null;
-  const num = PHASE_NUMS[phase] || String(i + 1);
+  const num = PHASE_NUMS[phase] || (i >= 0 ? String(i + 1) : '');
+  if (!num) return null;
   return {full: num + (PHASE_ABBR[phase] || ''), short: num};
 }
 // Apps Script bridge for piano moves. The URL is public; writes require
