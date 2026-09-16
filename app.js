@@ -13,13 +13,13 @@ const BRIGHAM_API = 'https://blpsalesapp.netlify.app/.netlify/functions/brigham-
 // shop pipeline phases (shared with the BLP Shop app via the Piano Log's
 // CURRENT PHASE column). Q/P are the parking states. Brigham's July 2026
 // rework — 14 phases.
-// 9/4: PRSB split in two — the mini-QC must inspect PRSB work BEFORE the
-// plate goes back in (once installed it hides the work and rework is off
-// the table). 4a = up to plate-ready; 4b = plate back in, finish out.
-// Lacquer Soundboard sits BETWEEN the PRSB halves (Brigham 9/4): the
-// soundboard gets lacquered while the plate is still out.
+// 9/16 (Mark): PRSB is split into the two steps the shop actually works —
+// 4a Downbearing, then 4b Notching and Pins — and Lacquer Soundboard now
+// follows BOTH of them instead of sitting between them. The mini-QC gates
+// 4a. The retired names (PRSBa - Pre-Plate, PRSBb - Plate In) are still
+// accepted and migrate to the new ones.
 const PHASES = ['New Arrival - Admin', 'Assessment', 'CAP',
-  'PRSBa - Pre-Plate', 'Lacquer Soundboard', 'PRSBb - Plate In', 'Restringing',
+  'PRSB - Downbearing', 'PRSB - Notching and Pins', 'Lacquer Soundboard', 'Restringing',
   'Chip Tuning', 'DHRT', '1st Tuning', 'Refinishing', 'QC & Assembly',
   '2nd Tuning', 'Exit Prep - Admin', 'Delivered'];
 // keep the team's phase NUMBERS stable (training doc says DHRT is 8):
@@ -27,13 +27,17 @@ const PHASES = ['New Arrival - Admin', 'Assessment', 'CAP',
 const PHASE_NUMS = (() => {
   const m = {}; let n = 0, prsbN = 0;
   PHASES.forEach(ph => {
-    if (ph === 'PRSBb - Plate In') { m[ph] = prsbN + 'b'; return; }
+    if (ph === 'PRSB - Notching and Pins') { m[ph] = prsbN + 'b'; return; }
     n += 1;
-    if (ph === 'PRSBa - Pre-Plate') { prsbN = n; m[ph] = n + 'a'; }
+    if (ph === 'PRSB - Downbearing') { prsbN = n; m[ph] = n + 'a'; }
     else m[ph] = String(n);
   });
   return m;
 })();
+// retired 9/16 — kept here (not in PHASES) so a piano whose sheet cell has
+// not migrated yet still draws its icon instead of losing it
+PHASE_NUMS['PRSBa - Pre-Plate'] = PHASE_NUMS['PRSB - Downbearing'];
+PHASE_NUMS['PRSBb - Plate In'] = PHASE_NUMS['PRSB - Notching and Pins'];
 const PHASE_STATES = ['In Queue', 'Paused', 'For Sale', 'Sale Pending', 'Sold', 'Post Sale QC',
   'Waiting on Brigham', 'Waiting on Curtis Harper', 'Waiting on Customer', 'Waiting on OTHER'];
 // work tracks (multi-select, stored comma-separated in the TRACK column)
@@ -50,7 +54,8 @@ const ADMIN_STEPS = ['$1000 Queue Payment', 'Selections Made (Google Form)', 'We
 // icon letter for each numbered phase (QC & Assembly gets two letters)
 const PHASE_ABBR = {
   'New Arrival - Admin': 'N', 'Assessment': 'A', 'CAP': 'C',
-  'PRSBa - Pre-Plate': 'P', 'PRSBb - Plate In': 'P', 'Lacquer Soundboard': 'L',
+  'PRSB - Downbearing': 'P', 'PRSB - Notching and Pins': 'P', 'Lacquer Soundboard': 'L',
+  'PRSBa - Pre-Plate': 'P', 'PRSBb - Plate In': 'P',   // retired 9/16, still drawn
   'Restringing': 'R', 'Chip Tuning': 'C', 'DHRT': 'D', '1st Tuning': 'T',
   'Refinishing': 'R', 'QC & Assembly': 'QC', '2nd Tuning': 'T',
   'Exit Prep - Admin': 'E',
@@ -400,8 +405,9 @@ function normTrackPhase(s) {
   if (t.includes('chip tuning')) return 'Chip Tuning';
   if (t.includes('string')) return 'Restringing';
   if (t.includes('cap')) return 'CAP';
-  if (t.includes('prsbb') || (t.includes('prsb') && t.includes('plate in'))) return 'PRSBb - Plate In';
-  if (t.includes('prsb')) return 'PRSBa - Pre-Plate';
+  if (t.includes('notch') || t.includes('bridge pin') || t.includes('prsbb')
+      || (t.includes('prsb') && t.includes('plate in'))) return 'PRSB - Notching and Pins';
+  if (t.includes('downbearing') || t.includes('prsb')) return 'PRSB - Downbearing';
   if (t.includes('lacquer')) return 'Lacquer Soundboard';
   if (t.includes('dhrt')) return 'DHRT';
   if (t.includes('1st tuning')) return '1st Tuning';
@@ -441,12 +447,11 @@ function pianoPhases(p) {
       anchor += 1;
     }
   }
-  // track sheets say "PRSB" (→ PRSBa); the plate-in half follows it, AFTER
-  // Lacquer Soundboard when the track lacquers (plate stays out for lacquer)
-  const ai = seq.indexOf('PRSBa - Pre-Plate');
-  if (ai >= 0 && !seq.includes('PRSBb - Plate In')) {
-    const at = seq[ai + 1] === 'Lacquer Soundboard' ? ai + 2 : ai + 1;
-    seq.splice(at, 0, 'PRSBb - Plate In');
+  // track sheets have one "PRSB" step (→ Downbearing); the shop runs two, so
+  // Notching and Pins follows it directly — Lacquer comes after both (9/16)
+  const ai = seq.indexOf('PRSB - Downbearing');
+  if (ai >= 0 && !seq.includes('PRSB - Notching and Pins')) {
+    seq.splice(ai + 1, 0, 'PRSB - Notching and Pins');
   }
   return seq;
 }
@@ -770,7 +775,8 @@ function openKeytopQ() {
 }
 /* ---- tech specialties: who to assign for the current phase ---- */
 const PHASE_TO_AREA = {
-  'CAP': 'CAP', 'PRSBa - Pre-Plate': 'PRSB', 'PRSBb - Plate In': 'PRSB', 'Lacquer Soundboard': 'lacquer soundboard',
+  'CAP': 'CAP', 'PRSB - Downbearing': 'PRSB', 'PRSB - Notching and Pins': 'PRSB',
+  'PRSBa - Pre-Plate': 'PRSB', 'PRSBb - Plate In': 'PRSB', 'Lacquer Soundboard': 'lacquer soundboard',
   'Restringing': 'restringing', 'Chip Tuning': 'chip tuning', '1st Tuning': 'tuning',
   '2nd Tuning': 'tuning', 'Refinishing': 'refinishing', 'QC & Assembly': 'QC and assembly',
   'Key service': 'keys', 'Refurb checklist': 'refurbishing', 'Repair work': 'repairs',
@@ -3866,19 +3872,21 @@ async function punchVerify(action, p, phase, fallbackMsg) {
  * techs. Advancing OUT of a checklist phase requires a manager mini-QC:
  * request → text to Mark (30-min escalation to Mark+Karmel) → C-rail
  * inspection → pass advances the phase, fail creates a 🔁 Rework card. */
-// phases whose advance is gated by a manager mini-QC. PRSBa MUST stay (plate
+// phases whose advance is gated by a manager mini-QC. Downbearing MUST stay (plate
 // hides the work after); QC & Assembly = mini-QC of the QC (Brigham 9/4).
 // Post Sale QC — the pre-delivery final QC — is NOT gated (Mark 9/8, request
 // 090826hales35): the worksheet itself is the check, no second inspection.
-const QC_PHASES = ['CAP', 'PRSBa - Pre-Plate', 'QC & Assembly'];
+const QC_PHASES = ['CAP', 'PRSB - Downbearing', 'QC & Assembly'];
 // phases that carry a digital checklist (worksheet + progress pill)
 const CHECKLIST_PHASES = QC_PHASES.concat(['Post Sale QC']);
 // acronym school (Brigham 9/3): TRAINING mode spells acronyms out so newbies
 // learn them; trained techs see the acronyms alone everywhere else.
 const PHASE_LONG = {
   'CAP': 'Cleaning & Action Prep',
-  'PRSBa - Pre-Plate': 'Perimeter, Ribs, Soundboard & Bridges — everything BEFORE the plate goes back in (mini-QC happens here)',
-  'PRSBb - Plate In': 'Plate back in the piano — finish out the PRSB work',
+  'PRSB - Downbearing': 'Perimeter, Ribs, Soundboard & Bridges — setting the downbearing (mini-QC happens here)',
+  'PRSB - Notching and Pins': 'Bridge notching and bridge pins',
+  'PRSBa - Pre-Plate': 'Perimeter, Ribs, Soundboard & Bridges (retired — now Downbearing)',
+  'PRSBb - Plate In': 'Plate back in the piano (retired — now Notching and Pins)',
   'PRSB': 'Perimeter, Ribs, Soundboard & Bridges',
   'DHRT': 'Dampers, Hammers, Regulation & Trapwork',
   'QC & Assembly': 'Quality Control & Assembly',
@@ -9642,7 +9650,7 @@ function taskQueuesTable() {
 /* 🐢 sitting longer than the standard — mirrors the (retired) briefing
  * section: days in the building vs 2× the typical span for the phase. */
 const STALL_DAYS = {
-  'CAP': 21, 'PRSBa - Pre-Plate': 21, 'PRSBb - Plate In': 7, 'Lacquer Soundboard': 10,
+  'CAP': 21, 'PRSB - Downbearing': 21, 'PRSB - Notching and Pins': 7, 'Lacquer Soundboard': 10,
   'Restringing': 14, 'Chip Tuning': 5, 'DHRT': 30, '1st Tuning': 5,
   'Refinishing': 30, 'QC & Assembly': 10, '2nd Tuning': 5,
   'Exit Prep - Admin': 7, 'Assessment': 7, 'New Arrival - Admin': 5,
@@ -10649,7 +10657,7 @@ function appUpdatesTable() {
  * by under-punching. Standards come from the Aug 2026 job-costing
  * analysis (expert midpoints; recalibrates as clock data grows). */
 const SC_STD = {'New Arrival - Admin': 3, 'Assessment': 3, 'CAP': 40,
-  'PRSBa - Pre-Plate': 32, 'PRSBb - Plate In': 8, 'Lacquer Soundboard': 12, 'Restringing': 40,
+  'PRSB - Downbearing': 32, 'PRSB - Notching and Pins': 8, 'Lacquer Soundboard': 12, 'Restringing': 40,
   'Chip Tuning': 2, 'DHRT': 48, 'Refinishing': 62, 'QC & Assembly': 17,
   '1st Tuning': 2, '2nd Tuning': 2, 'Key service': 22, 'Full key set': 22,
   'Refurb checklist': 48, 'Exit Prep - Admin': 3};
@@ -14340,7 +14348,7 @@ const LEGEND_LISTS = {
 };
 // the 13 working phases share one pattern — key ph0..ph12
 [['1N', 'New Arrival - Admin'], ['2A', 'Assessment'], ['3C', 'CAP'],
- ['4aP', 'PRSBa - Pre-Plate'], ['5L', 'Lacquer Soundboard'], ['4bP', 'PRSBb - Plate In'], ['6R', 'Restringing'],
+ ['4aP', 'PRSB - Downbearing'], ['4bP', 'PRSB - Notching and Pins'], ['5L', 'Lacquer Soundboard'], ['6R', 'Restringing'],
  ['7C', 'Chip Tuning'], ['8D', 'DHRT'], ['9T', '1st Tuning'], ['10R', 'Refinishing'],
  ['11QC', 'QC & Assembly'], ['12T', '2nd Tuning'], ['13E', 'Exit Prep - Admin']]
   .forEach(([code, name], i) => {

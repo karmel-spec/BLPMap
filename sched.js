@@ -1114,9 +1114,9 @@ const PHASES=[
   {id:"INTAKE",   ph:"New Arrival - Admin",      en:"New Arrival",        es:"Recién llegado",      code:"", hb:["Storing Cabinetry"]},
   {id:"ASSESS",   ph:"Assessment",               en:"Assessment",         es:"Evaluación",          code:"", hb:["Tear-down Sheet (§16)","Upright Teardown: Cleaning & Prep","Grand Teardown: Cleaning & Prep","Storing Cabinetry (§14)"]},
   {id:"CAP",      ph:"CAP",                      en:"CAP",                es:"CAP",                 code:"Cleaning · Action Prep", hb:["Cleaning and Prep","Action Prep","Reshape Hammers","Hammer Prep & Hanging","Keys (§13)"]},
-  {id:"PRSBA",    ph:"PRSBa - Pre-Plate",        en:"PRSBa · Pre-Plate",  es:"PRSBa · sin placa",   code:"Perimeter · Ribs · Soundboard · Bridge — mini-QC before the plate", hb:["Find Proper Downbearing: Targets","How to Chisel a Bridge"]},
+  {id:"PRSBA",    ph:"PRSB - Downbearing",       en:"PRSB · Downbearing", es:"PRSB · asiento",      code:"Perimeter · Ribs · Soundboard · Bridge — downbearing set, mini-QC here", hb:["Find Proper Downbearing: Targets"]},
+  {id:"PRSBB",    ph:"PRSB - Notching and Pins", en:"PRSB · Notching and Pins", es:"PRSB · muescas y clavijas", code:"Bridge notching and bridge pins", hb:["How to Chisel a Bridge"]},
   {id:"LACQUER",  ph:"Lacquer Soundboard",       en:"Lacquer Soundboard", es:"Laca de tabla",       code:"", hb:[]},
-  {id:"PRSBB",    ph:"PRSBb - Plate In",         en:"PRSBb · Plate In",   es:"PRSBb · placa puesta",code:"Plate back in — finish out", hb:[]},
   {id:"RESTRING", ph:"Restringing",              en:"Restringing",        es:"Encordado",           code:"", hb:["Restringing (§12)","Removing Tuning Pins"]},
   {id:"CHIPTUNE", ph:"Chip Tuning",              en:"Chip Tuning",        es:"Afinación de asiento",code:"", hb:[]},
   {id:"DHRT",     ph:"DHRT",                     en:"DHRT",               es:"DHRT",                code:"Dampers · Hammers · Regulation · Trapwork", hb:["Upright Regulation","Grand Piano Regulation Theory","Key Leveling","Tricks for Let Off Regulation","Aligning Backchecks","Damper Lift","Damper Spoon Regulation","Spring Strength, Drop, and Dip"]},
@@ -1211,7 +1211,7 @@ const AUD_STEMS=[
   ["Tuning",/tun(e|ed|ing)/],
   ["Exit Prep - Admin",/exit prep/],
 ];
-const PH_ORDER=["New Arrival - Admin","Assessment","CAP","PRSBa - Pre-Plate","Lacquer Soundboard","PRSBb - Plate In",
+const PH_ORDER=["New Arrival - Admin","Assessment","CAP","PRSB - Downbearing","PRSB - Notching and Pins","Lacquer Soundboard",
   "Restringing","Chip Tuning","DHRT","1st Tuning","Refinishing",
   "QC & Assembly","2nd Tuning","Exit Prep - Admin"];
 const AUD_FAMILY=ph=>{
@@ -1323,8 +1323,8 @@ const SPEC_CELL=["—","🎓","✅","💪","🛡","⭐","🏆"];
 const SPEC_STDH={CAP:40,PRSB:40,"lacquer soundboard":12,restringing:40,"chip tuning":2,
   tuning:2,"DHRT for uprights":48,"DHRT for grands":48,refurbishing:48,repairs:8,
   "QC and assembly":17,keys:22,refinishing:62};
-const SPEC_PH2SK={"CAP":"CAP","PRSB & Plate Refinishing":"PRSB","PRSBa - Pre-Plate":"PRSB",
-  "PRSBb - Plate In":"PRSB","Lacquer Soundboard":"lacquer soundboard","Restringing":"restringing",
+const SPEC_PH2SK={"CAP":"CAP","PRSB & Plate Refinishing":"PRSB","PRSB - Downbearing":"PRSB",
+  "PRSB - Notching and Pins":"PRSB","PRSBa - Pre-Plate":"PRSB","PRSBb - Plate In":"PRSB","Lacquer Soundboard":"lacquer soundboard","Restringing":"restringing",
   "Chip Tuning":"chip tuning","1st Tuning":"tuning","2nd Tuning":"tuning","DHRT":"DHRT for uprights",
   "Refinishing":"refinishing","QC & Assembly":"QC and assembly","Key Service":"keys",
   "Refurb checklist":"refurbishing","Repair Work":"repairs"};

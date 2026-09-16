@@ -19,7 +19,7 @@ var APP_URL = 'https://blpstoremap.netlify.app';
 var REPORT_TO = 'info@brighamlarsonpianos.com';
 var PIANO_LOG_ID = '1ZunbPKygpQlcXfTyPowDHdUE9spJ3uV1XA4iX1eoKRc';
 var BRIDGE_SECRET = 'PASTE_SECRET_HERE';   // server-to-server auth (optional)
-var BRIDGE_REV = '2026-09-16.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-09-16.4';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = 'PASTE_PIN_HERE';           // what BLP team members type to move pianos
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -1860,10 +1860,11 @@ function authorizeCalendar() {
  */
 var PHASE_HEADER = 'CURRENT PHASE';
 var PHASE_VALUES = ['New Arrival - Admin', 'Assessment', 'CAP',
-  // 9/4 PRSB split: mini-QC inspects PRSB work BEFORE the plate hides it.
-  // The old combined name stays accepted so stale clients don't error.
-  'PRSBa - Pre-Plate', 'PRSBb - Plate In',
-  'PRSB & Plate Refinishing', 'Lacquer Soundboard', 'Restringing',
+  // 9/16 (Mark): PRSB runs as Downbearing then Notching and Pins, and
+  // Lacquer Soundboard follows both. Retired names are normalised on the way
+  // in by PHASE_MIGRATE, so stale clients and old sheet cells still work.
+  'PRSB - Downbearing', 'PRSB - Notching and Pins',
+  'Lacquer Soundboard', 'Restringing',
   'Chip Tuning', 'DHRT', '1st Tuning', 'Refinishing', 'QC & Assembly',
   '2nd Tuning', 'Exit Prep - Admin', 'Delivered',
   'In Queue', 'Paused', 'For Sale', 'Sale Pending', 'Sold', 'Post Sale QC',
@@ -1879,8 +1880,10 @@ var PHASE_VALUES = ['New Arrival - Admin', 'Assessment', 'CAP',
 var PHASE_MIGRATE = {
   'New Arrival': 'New Arrival - Admin',
   'Teardown': 'CAP',
-  'PRSB': 'PRSBa - Pre-Plate',
-  'PRSB & Plate Refinishing': 'PRSBa - Pre-Plate',
+  'PRSB': 'PRSB - Downbearing',
+  'PRSB & Plate Refinishing': 'PRSB - Downbearing',
+  'PRSBa - Pre-Plate': 'PRSB - Downbearing',      // retired 9/16
+  'PRSBb - Plate In': 'PRSB - Notching and Pins', // retired 9/16
   'Final Assembly': 'QC & Assembly',
   'Tuning': '1st Tuning',
   'QC': 'QC & Assembly',
@@ -2314,6 +2317,9 @@ function setPhase_(req) {
   var found = findPiano_(sh, req.serial, req.row);
   if (found.error) return found;
   var phase = String(req.phase == null ? '' : req.phase).trim();
+  // a retired name from a stale client (or an old track sheet) is normalised
+  // rather than rejected — it lands as the phase that replaced it (9/16)
+  if (phase && PHASE_MIGRATE[phase]) phase = PHASE_MIGRATE[phase];
   if (phase && PHASE_VALUES.indexOf(phase) < 0) return {error: 'unknown phase: ' + phase};
   var col = phaseCol_(sh);
   var prev = String(sh.getRange(found.row, col).getValue() || '');
@@ -4120,7 +4126,7 @@ var TASKS_URL = 'https://blpsalesapp.netlify.app/.netlify/functions/piano-tasks'
 // phase -> the specialty area that staffs it (mirrors the Store Map card)
 var SM_PHASE_AREA = {
   'CAP': 'CAP', 'PRSB & Plate Refinishing': 'PRSB',
-  'PRSBa - Pre-Plate': 'PRSB', 'PRSBb - Plate In': 'PRSB', 'Restringing': 'Restringing',
+  'PRSB - Downbearing': 'PRSB', 'PRSB - Notching and Pins': 'PRSB', 'Restringing': 'Restringing',
   'Refinishing': 'Refinishing', 'QC & Assembly': 'QC', '1st Tuning': 'Tuning',
   '2nd Tuning': 'Tuning', 'Chip Tuning': 'Tuning'
 };
@@ -4128,7 +4134,7 @@ var SM_PHASE_AREA = {
 // into "this is taking too long" day thresholds
 var SM_PHASE_DAYS = {
   'CAP': 21, 'PRSB & Plate Refinishing': 21,
-  'PRSBa - Pre-Plate': 21, 'PRSBb - Plate In': 7, 'Lacquer Soundboard': 10,
+  'PRSB - Downbearing': 21, 'PRSB - Notching and Pins': 7, 'Lacquer Soundboard': 10,
   'Restringing': 14, 'Chip Tuning': 5, 'DHRT': 30, '1st Tuning': 5,
   'Refinishing': 30, 'QC & Assembly': 10, '2nd Tuning': 5,
   'Exit Prep - Admin': 7, 'Assessment': 7, 'New Arrival - Admin': 5
@@ -4258,8 +4264,9 @@ function smNormPhase_(s) {
   if (t.indexOf('chip tuning') >= 0) return 'Chip Tuning';
   if (t.indexOf('string') >= 0) return 'Restringing';
   if (t.indexOf('cap') >= 0) return 'CAP';
-  if (t.indexOf('prsbb') >= 0 || (t.indexOf('prsb') >= 0 && t.indexOf('plate in') >= 0)) return 'PRSBb - Plate In';
-  if (t.indexOf('prsb') >= 0) return 'PRSBa - Pre-Plate';
+  if (t.indexOf('notch') >= 0 || t.indexOf('bridge pin') >= 0 || t.indexOf('prsbb') >= 0
+      || (t.indexOf('prsb') >= 0 && t.indexOf('plate in') >= 0)) return 'PRSB - Notching and Pins';
+  if (t.indexOf('downbearing') >= 0 || t.indexOf('prsb') >= 0) return 'PRSB - Downbearing';
   if (t.indexOf('lacquer') >= 0) return 'Lacquer Soundboard';
   if (t.indexOf('dhrt') >= 0) return 'DHRT';
   if (t.indexOf('1st tuning') >= 0) return '1st Tuning';
@@ -4306,8 +4313,8 @@ var SM_PHASE_STEMS = {
   '1st Tuning': ['tun'], '2nd Tuning': ['tun'],
   'CAP': ['cap'],
   'PRSB & Plate Refinishing': ['prsb', 'plate'],
-  'PRSBa - Pre-Plate': ['prsb', 'plate'],
-  'PRSBb - Plate In': ['prsb', 'plate'],
+  'PRSB - Downbearing': ['prsb', 'downbearing', 'plate'],
+  'PRSB - Notching and Pins': ['prsb', 'notch', 'pin'],
   'Lacquer Soundboard': ['lacquer', 'soundboard'],
   'Refinishing': ['refinish', 'spray', 'sanded', 'sanding'],
   'DHRT': ['dhrt', 'regulat', 'voicing', 'voice'],
