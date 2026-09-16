@@ -990,6 +990,14 @@ tr.jcp td{border-top:2px solid #e3e6e9;padding-top:9px}
   border:1px solid #d7dbdf;border-radius:8px;padding:5px 9px;cursor:pointer}
 .adjedit:hover,.cfxclear:hover{border-color:#c9a0a0}
 tr.adjediting td{background:#fdf8ee}
+/* a voided punch — still listed, plainly struck through, never counted */
+.adjvoidbtn{font:600 11px/1.2 inherit;font-family:inherit;color:#7a7a7a;background:#fff;
+  border:1px solid #d7dbdf;border-radius:8px;padding:5px 9px;cursor:pointer;margin-left:4px}
+.adjvoidbtn:hover{border-color:#b98d8d;color:#9e2020}
+.voidchip{background:#f1f1f1;color:#6a6a6a;border:1px solid #d9d9d9;border-radius:6px;
+  padding:1px 6px;font-size:10.5px;font-weight:700;white-space:nowrap}
+tr.adjvoided td{background:#fafafa;color:#8c8c8c;text-decoration:line-through}
+tr.adjvoided td:last-child,tr.adjvoided .voidchip{text-decoration:none}
 button.cfxapply{color:#9e2020;border-color:#e2c4c4;margin-right:4px}
 button.cfxdup{color:#6f7a84;margin-left:4px}
 button.cfxdup:hover{border-color:#6f7a84;color:#2b2f33}

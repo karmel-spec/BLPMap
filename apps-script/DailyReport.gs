@@ -19,7 +19,7 @@ var APP_URL = 'https://blpstoremap.netlify.app';
 var REPORT_TO = 'info@brighamlarsonpianos.com';
 var PIANO_LOG_ID = '1ZunbPKygpQlcXfTyPowDHdUE9spJ3uV1XA4iX1eoKRc';
 var BRIDGE_SECRET = 'PASTE_SECRET_HERE';   // server-to-server auth (optional)
-var BRIDGE_REV = '2026-09-16.4';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-09-16.5';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = 'PASTE_PIN_HERE';           // what BLP team members type to move pianos
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -1177,6 +1177,13 @@ function doPost(e) {
         (req.clock === 'pay' ? 'payroll' : 'piano') + (req.add ? ' session added' : ' row ' + req.row) +
         ' → ' + String(req.start || '').slice(0, 16) + ' – ' + String(req.end || '').slice(0, 16));
       return json_(adj);
+    }
+    if (req.action === 'voidclock') {
+      var vd = voidClock_(req);
+      if (vd.ok && !vd.already) logAct_(who, vd.voided ? 'Clock punch voided' : 'Clock void undone',
+        vd.piano || vd.tech || '', (req.clock === 'pay' ? 'payroll' : 'piano') + ' row ' + req.row +
+        (vd.voided ? (String(req.reason || '') ? ' \u2014 ' + String(req.reason).slice(0, 80) : '') : ' \u2014 restored'));
+      return json_(vd);
     }
     if (req.action === 'clockfix') {
       var cfx = clockFixRequest_(req, who);
@@ -2996,10 +3003,31 @@ function timeLogSheet_() {
   var sh = ss.getSheetByName(TIME_LOG_TAB);
   if (!sh) {
     sh = ss.insertSheet(TIME_LOG_TAB, ss.getSheets().length);
-    sh.getRange(1, 1, 1, 9).setValues([['Tech', 'Serial', 'Piano', 'Phase',
-      'Clock In', 'Clock Out', 'Minutes', 'Source', 'Closed By']]);
+    sh.getRange(1, 1, 1, 10).setValues([['Tech', 'Serial', 'Piano', 'Phase',
+      'Clock In', 'Clock Out', 'Minutes', 'Source', 'Closed By', 'Void']]);
     sh.setFrozenRows(1);
   }
+  return ensureVoidCol_(sh, 10);
+}
+
+/* ===================== VOIDING A PUNCH (Mark 9/16) =====================
+ * A punch that should never have existed — the classic is a clock-in and a
+ * clock-out a minute apart — is VOIDED, not deleted: the row stays, struck
+ * through, carrying who voided it and why. Payroll questions surface weeks
+ * later, and "the row Melissa removed" is an answer nobody can check.
+ * Column J (Time Log) / H (Payroll Clock) holds the stamp; empty = live.
+ * Everything that counts minutes, finds an open session, or looks for
+ * evidence of a working day skips a voided row. */
+function ensureVoidCol_(sh, col) {
+  var key = 'voidcol' + col + '_' + sh.getSheetId();
+  var cache = CacheService.getScriptCache();
+  if (cache.get(key)) return sh;              // one check an hour, not one per call
+  try {
+    var max = sh.getMaxColumns();
+    if (max < col) sh.insertColumnsAfter(max, col - max);
+    if (!String(sh.getRange(1, col).getValue() || '').trim()) sh.getRange(1, col).setValue('Void');
+    cache.put(key, '1', 3600);
+  } catch (e) {}
   return sh;
 }
 function clockTech_(req) {
@@ -3010,8 +3038,9 @@ function openSessionRow_(sh, tech) {
   var last = sh.getLastRow();
   if (last < 2) return null;
   var from = Math.max(2, last - 400);   // open rows are always near the bottom
-  var vals = sh.getRange(from, 1, last - from + 1, 6).getValues();
+  var vals = sh.getRange(from, 1, last - from + 1, 10).getValues();
   for (var i = vals.length - 1; i >= 0; i--) {
+    if (vals[i][9]) continue;   // a voided punch is not the tech's open session
     if (String(vals[i][0]).toLowerCase() === tech.toLowerCase() && !vals[i][5]) {
       return {row: from + i, v: vals[i]};
     }
@@ -3023,8 +3052,9 @@ function recentClosedRow_(sh, tech) {
   var last = sh.getLastRow();
   if (last < 2) return null;
   var from = Math.max(2, last - 120);
-  var vals = sh.getRange(from, 1, last - from + 1, 6).getValues();
+  var vals = sh.getRange(from, 1, last - from + 1, 10).getValues();
   for (var i = vals.length - 1; i >= 0; i--) {
+    if (vals[i][9]) continue;   // never re-join a voided session
     if (String(vals[i][0]).toLowerCase() === tech.toLowerCase() && vals[i][5]) {
       return {row: from + i, v: vals[i]};
     }
@@ -3148,9 +3178,9 @@ function dayEvidenceIndex_(keys) {
     var tsh = timeLogSheet_(), lastT = tsh.getLastRow();
     if (lastT >= 2) {
       var fromT = Math.max(2, lastT - 600);
-      var tv = tsh.getRange(fromT, 1, lastT - fromT + 1, 9).getValues();
+      var tv = tsh.getRange(fromT, 1, lastT - fromT + 1, 10).getValues();
       for (i = 0; i < tv.length; i++) {
-        if (!tv[i][0]) continue;
+        if (!tv[i][0] || tv[i][9]) continue;   // a voided punch is not evidence of a working day
         if (tv[i][4]) note(tv[i][0], new Date(tv[i][4]), 'piano clock-in');
         // an end the sweep itself invented is not evidence
         if (tv[i][5] && String(tv[i][8] || '').indexOf('auto:') < 0) note(tv[i][0], new Date(tv[i][5]), 'piano clock-out');
@@ -3186,11 +3216,11 @@ function sweepForgottenClocks_() {
   var last = sh.getLastRow();
   if (last < 2) return 0;
   var from = Math.max(2, last - 400);
-  var vals = sh.getRange(from, 1, last - from + 1, 6).getValues();
+  var vals = sh.getRange(from, 1, last - from + 1, 10).getValues();
   var todayStr = Utilities.formatDate(new Date(), 'America/Denver', 'yyyy-MM-dd');
   var todo = [], i;
   for (i = 0; i < vals.length; i++) {
-    if (!vals[i][0] || vals[i][5] || !vals[i][4]) continue;
+    if (!vals[i][0] || vals[i][5] || !vals[i][4] || vals[i][9]) continue;
     var st = new Date(vals[i][4]);
     if (Utilities.formatDate(st, 'America/Denver', 'yyyy-MM-dd') === todayStr) continue;
     todo.push({row: from + i, v: vals[i], start: st});
@@ -3250,11 +3280,11 @@ function timeClockState_() {
   var openList = [], today = {};
   if (last >= 2) {
     var from = Math.max(2, last - 600);
-    var vals = sh.getRange(from, 1, last - from + 1, 8).getValues();
+    var vals = sh.getRange(from, 1, last - from + 1, 10).getValues();
     var midnight = new Date(); midnight.setHours(0, 0, 0, 0);
     for (var i = 0; i < vals.length; i++) {
       var v = vals[i];
-      if (!v[0]) continue;
+      if (!v[0] || v[9]) continue;   // voided punches count toward nobody's day
       var tech = String(v[0]);
       if (!v[5]) {
         openList.push({tech: tech, serial: String(v[1]), piano: String(v[2]),
@@ -3277,7 +3307,7 @@ function timeLogRows_(days) {
   var last = sh.getLastRow();
   var out = [];
   if (last >= 2) {
-    var vals = sh.getRange(2, 1, last - 1, 8).getValues();
+    var vals = sh.getRange(2, 1, last - 1, 10).getValues();
     var cutoff = Date.now() - Math.min(days, 730) * 86400000;
     for (var i = 0; i < vals.length && out.length < 8000; i++) {
       var v = vals[i];
@@ -3285,7 +3315,8 @@ function timeLogRows_(days) {
       if (new Date(v[4]).getTime() < cutoff) continue;
       out.push({row: i + 2, tech: String(v[0]), serial: String(v[1]), piano: String(v[2]),
                 phase: String(v[3]), start: String(v[4]), end: String(v[5] || ''),
-                minutes: Number(v[6]) || 0, source: String(v[7] || '')});
+                minutes: Number(v[6]) || 0, source: String(v[7] || ''),
+                voided: String(v[9] || '')});
     }
   }
   return {ok: true, rows: out, days: days};
@@ -3303,17 +3334,19 @@ function payrollSheet_() {
   var sh = ss.getSheetByName(PAYROLL_TAB);
   if (!sh) {
     sh = ss.insertSheet(PAYROLL_TAB, ss.getSheets().length);
-    sh.getRange(1, 1, 1, 7).setValues([['Tech', 'Date', 'Clock In', 'Clock Out', 'Minutes', 'Source', 'Note']]);
+    sh.getRange(1, 1, 1, 8).setValues([['Tech', 'Date', 'Clock In', 'Clock Out',
+      'Minutes', 'Source', 'Note', 'Void']]);
     sh.setFrozenRows(1);
   }
-  return sh;
+  return ensureVoidCol_(sh, 8);
 }
 function openPayRow_(sh, tech) {
   var last = sh.getLastRow();
   if (last < 2) return null;
   var from = Math.max(2, last - 200);
-  var vals = sh.getRange(from, 1, last - from + 1, 4).getValues();
+  var vals = sh.getRange(from, 1, last - from + 1, 8).getValues();
   for (var i = vals.length - 1; i >= 0; i--) {
+    if (vals[i][7]) continue;   // a voided day punch is not the tech's open day
     if (String(vals[i][0]).toLowerCase() === tech.toLowerCase() && vals[i][2] && !vals[i][3]) {
       return {row: from + i, v: vals[i]};
     }
@@ -3334,11 +3367,11 @@ function sweepForgottenPay_(sh) {
   var last = sh.getLastRow();
   if (last < 2) return;
   var from = Math.max(2, last - 200);
-  var vals = sh.getRange(from, 1, last - from + 1, 4).getValues();
+  var vals = sh.getRange(from, 1, last - from + 1, 8).getValues();
   var todayStr = Utilities.formatDate(new Date(), 'America/Denver', 'yyyy-MM-dd');
   var todo = [], i;
   for (i = 0; i < vals.length; i++) {
-    if (!vals[i][0] || !vals[i][2] || vals[i][3]) continue;
+    if (!vals[i][0] || !vals[i][2] || vals[i][3] || vals[i][7]) continue;
     var st = new Date(vals[i][2]);
     if (Utilities.formatDate(st, 'America/Denver', 'yyyy-MM-dd') === todayStr) continue;
     todo.push({row: from + i, v: vals[i], start: st});
@@ -3523,7 +3556,7 @@ function payrollRows_(days) {
   var last = sh.getLastRow();
   var out = [];
   if (last >= 2) {
-    var vals = sh.getRange(2, 1, last - 1, 7).getValues();
+    var vals = sh.getRange(2, 1, last - 1, 8).getValues();
     var cutoff = Date.now() - Math.min(days, 730) * 86400000;
     for (var i = 0; i < vals.length && out.length < 8000; i++) {
       var v = vals[i];
@@ -3532,7 +3565,8 @@ function payrollRows_(days) {
       var d = (v[1] instanceof Date)
         ? Utilities.formatDate(v[1], 'America/Denver', 'yyyy-MM-dd') : String(v[1]);
       out.push({row: i + 2, tech: String(v[0]), date: d, start: String(v[2]), end: String(v[3] || ''),
-                minutes: Number(v[4]) || 0, source: String(v[5] || ''), note: String(v[6] || '')});
+                minutes: Number(v[4]) || 0, source: String(v[5] || ''), note: String(v[6] || ''),
+                voided: String(v[7] || '')});
     }
   }
   return {ok: true, rows: out, days: days};
@@ -3635,30 +3669,71 @@ function timelogAdmin_(g) {
 }
 /* Edit an existing punch's start/end (row = sheet row from the rows
  * endpoints) or, with add:true, append a missed session outright. */
+/* Who may change a punch — shared by adjustClock_ and voidClock_ so the two
+ * can never drift apart. Returns an {error} object, or null when allowed. */
+function clockEditGate_(req, isPay) {
+  var g = req._g;
+  // Lead-manager lane (Mark 9/2, approved by Brigham 9/4): shop-side clock
+  // fix requests route to Mark, so Mark can also FIX shop-side DAY punches
+  // — never admins' rows and never his own. Melissa + owners unchanged.
+  var leadPayOk = false;
+  var shopPayGrant = permHas_(g, 'payroll_edit_shop');
+  if (shopPayGrant === null) shopPayGrant = !!(g && String(g.email || '').toLowerCase() === 'markhales.blp@gmail.com');
+  if (isPay && !payrollAdmin_(g) && shopPayGrant) {
+    var whoTech = String(req.tech || '');
+    if (!whoTech && Number(req.row) >= 2) {
+      try { whoTech = String(payrollSheet_().getRange(Number(req.row), 1).getValue() || ''); } catch (eL) {}
+    }
+    // Brigham 9/4: Mark may fix his OWN punches too — only admins' rows
+    // stay out of his lane (Melissa's; she can already fix her own)
+    leadPayOk = !!whoTech && roleSide_(whoTech) !== 'admin';
+  }
+  if (isPay ? (!payrollAdmin_(g) && !leadPayOk) : !timelogAdmin_(g)) {
+    return {error: isPay
+      ? 'Only owners, Melissa — or Mark for shop-side techs — can adjust payroll punches (Google sign-in required).'
+      : 'Only owners and the shop managers can adjust piano clock times (Google sign-in required).'};
+  }
+  return null;
+}
+
+/* Void (or un-void) one punch. The row is never removed — voiding writes a
+ * stamp into the Void column and every total, sweep and open-session lookup
+ * skips it from then on. Same permissions as editing the punch's times. */
+function voidClock_(req) {
+  return withClockLock_(function () {
+    var isPay = req.clock === 'pay';
+    var denied = clockEditGate_(req, isPay);
+    if (denied) return denied;
+    var sh = isPay ? payrollSheet_() : timeLogSheet_();
+    var col = isPay ? 8 : 10;
+    var row = Number(req.row);
+    if (!(row >= 2) || row > sh.getLastRow()) return {error: 'bad row'};
+    var wide = sh.getRange(row, 1, 1, col).getValues()[0];
+    var tech = String(wide[0] || ''), piano = isPay ? '' : String(wide[2] || '');
+    if (!tech) return {error: 'that row is empty'};
+    var cur = String(wide[col - 1] || '');
+    var cell = sh.getRange(row, col);
+    if (req.undo) {
+      if (!cur) return {ok: true, voided: false, tech: tech, piano: piano, already: true};
+      cell.setValue('');
+      return {ok: true, voided: false, tech: tech, piano: piano, was: cur};
+    }
+    if (cur) return {ok: true, voided: true, tech: tech, piano: piano, already: true, note: cur};
+    var g = req._g;
+    var reason = String(req.reason || '').trim().slice(0, 120);
+    var stamp = 'voided by ' + (g.name || g.email) + ' ' +
+      Utilities.formatDate(new Date(), 'America/Denver', 'M/d h:mm a') + (reason ? ' \u2014 ' + reason : '');
+    cell.setValue(stamp);
+    return {ok: true, voided: true, tech: tech, piano: piano, note: stamp};
+  });
+}
+
 function adjustClock_(req) {
   return withClockLock_(function () {
     var g = req._g;
     var isPay = req.clock === 'pay';
-    // Lead-manager lane (Mark 9/2, approved by Brigham 9/4): shop-side clock
-    // fix requests route to Mark, so Mark can also FIX shop-side DAY punches
-    // — never admins' rows and never his own. Melissa + owners unchanged.
-    var leadPayOk = false;
-    var shopPayGrant = permHas_(g, 'payroll_edit_shop');
-    if (shopPayGrant === null) shopPayGrant = !!(g && String(g.email || '').toLowerCase() === 'markhales.blp@gmail.com');
-    if (isPay && !payrollAdmin_(g) && shopPayGrant) {
-      var whoTech = String(req.tech || '');
-      if (!whoTech && Number(req.row) >= 2) {
-        try { whoTech = String(payrollSheet_().getRange(Number(req.row), 1).getValue() || ''); } catch (eL) {}
-      }
-      // Brigham 9/4: Mark may fix his OWN punches too — only admins' rows
-      // stay out of his lane (Melissa's; she can already fix her own)
-      leadPayOk = !!whoTech && roleSide_(whoTech) !== 'admin';
-    }
-    if (isPay ? (!payrollAdmin_(g) && !leadPayOk) : !timelogAdmin_(g)) {
-      return {error: isPay
-        ? 'Only owners, Melissa — or Mark for shop-side techs — can adjust payroll punches (Google sign-in required).'
-        : 'Only owners and the shop managers can adjust piano clock times (Google sign-in required).'};
-    }
+    var denied = clockEditGate_(req, isPay);
+    if (denied) return denied;
     var start = new Date(req.start), end = req.end ? new Date(req.end) : null;
     if (isNaN(start)) return {error: 'bad start time'};
     if (end && !(end > start)) return {error: 'end must be after start'};

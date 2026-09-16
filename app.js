@@ -9703,7 +9703,7 @@ function queueTable() {
     if (live) return `<td><span class="qulive">● ${esc((live.tech || '').split(/\s+/)[0] || live.tech)} now</span></td>`;
     if (!S.tlRows) return '<td>…</td>';
     let last = null;
-    S.tlRows.forEach(r => {
+    unvoided(S.tlRows).forEach(r => {
       if (r.serial === p.serial && r.tech && (!last || new Date(r.start) > new Date(last.start))) last = r;
     });
     return last ? `<td><span class="qurecent">recent: ${esc(last.tech)}</span></td>` : '<td>—</td>';
@@ -9835,10 +9835,10 @@ function payTimeTable() {
   if (f.detail === undefined) f.detail = seesDetail ? 'all' : 'day';
   if (f.cat === undefined) f.cat = '';
   const techs = [...new Set([...S.payRows.map(r => r.tech), ...S.tlRows.map(r => r.tech)])].sort();
-  const rows = S.payRows.filter(r =>
+  const rows = unvoided(S.payRows).filter(r =>
     (!f.who || r.tech === f.who) && inRange(r.date, f));
   // Work Clock sessions, same member + range (+ category when chosen)
-  const tlAll = S.tlRows.filter(r =>
+  const tlAll = unvoided(S.tlRows).filter(r =>
     (!f.who || r.tech === f.who) && inRange(denverDay(r.start), f));
   const cats = [...new Set(tlAll.map(r => r.phase || '(no phase)'))].sort();
   const tl = f.cat ? tlAll.filter(r => (r.phase || '(no phase)') === f.cat) : tlAll;
@@ -9943,7 +9943,7 @@ function jobCostTable() {
   const techs = [...new Set(S.tlRows.map(r => r.tech))].sort();
   const phases = [...new Set(S.tlRows.map(r => r.phase).filter(Boolean))].sort();
   const q = f.q.trim().toLowerCase();
-  const rows = S.tlRows.filter(r =>
+  const rows = unvoided(S.tlRows).filter(r =>
     (!q || (r.serial + ' ' + r.piano).toLowerCase().includes(q))
     && (!f.tech || r.tech === f.tech)
     && (!f.phase || r.phase === f.phase)
@@ -10035,6 +10035,12 @@ function adjAutoClosed(r) {
   const n = String(r.note || '');
   return /forgot to clock out/i.test(n) && !/adjusted by/i.test(n);
 }
+/* A voided punch (Mark 9/16) stays in the ledger and stays visible in the 🛠
+ * adjust report — struck through, with who voided it and why — but it counts
+ * toward nothing: no hours, no job costing, no scorecard. Deleting the row
+ * outright would leave no answer when someone questions their hours later. */
+function unvoided(rows) { return (rows || []).filter(r => !r.voided); }
+
 function adjRow(clock, r, label, sub, dateCell) {
   const ed = S.adjEdit && S.adjEdit.clock === clock && S.adjEdit.row === r.row;
   const dt = dateCell ? `<td style="white-space:nowrap">${dateCell}</td>` : '';
@@ -10045,11 +10051,29 @@ function adjRow(clock, r, label, sub, dateCell) {
     : byEvidence
       ? ` <span class="autochip" title="${esc(String(r.note || ''))}">⏰ auto · last activity</span>`
       : ' <span class="autochip" title="nobody clocked out and nothing else was recorded after 6 PM, so the app stamped 6:00 PM — check the real finish time and adjust">⏰ auto 6 PM</span>';
+  const voided = String(r.voided || '');
+  if (voided) {
+    return `<tr class="adjvoided">${dt}<td>${label}</td><td>${sub}</td>
+      <td>${fmtT(r.start)} → ${r.end ? fmtT(r.end) : 'open'}
+        <span class="voidchip" title="${esc(voided)}">🚫 voided</span></td>
+      <td>—</td>
+      <td><button class="adjedit adjunvoid" data-clock="${clock}" data-row="${r.row}">↩ restore</button>
+        <span class="adjmsg phmsg"></span></td></tr>`;
+  }
   if (!ed) {
     return `<tr${auto ? ' class="autorow"' : ''}>${dt}<td>${label}</td><td>${sub}</td>
       <td>${fmtT(r.start)} → ${r.end ? fmtT(r.end) : '<b style="color:#2e7d4f">open</b>'}${auto}</td>
       <td>${r.minutes ? fmtHM(r.minutes) : '—'}</td>
-      <td><button class="adjedit" data-clock="${clock}" data-row="${r.row}">✎ adjust</button></td></tr>`;
+      <td style="white-space:nowrap"><button class="adjedit" data-clock="${clock}" data-row="${r.row}">✎ adjust</button>
+        <button class="adjvoidbtn" data-clock="${clock}" data-row="${r.row}" title="for a punch that should never have existed — a clock-in and clock-out a minute apart. The row stays, struck through, and stops counting.">🚫 void</button></td></tr>`;
+  }
+  if (S.adjEdit.mode === 'void') {
+    return `<tr class="adjediting">${dt}<td>${label}</td><td>${sub}</td>
+      <td colspan="3"><div class="lite" style="font-size:11.5px;margin-bottom:6px;white-space:normal">Voiding ${fmtT(r.start)} → ${r.end ? fmtT(r.end) : 'open'}${r.minutes ? ' (' + fmtHM(r.minutes) + ')' : ''}. The row stays in the sheet, struck through, and stops counting toward anyone's hours. You can restore it later.</div>
+        <span class="rfd">why <input class="adjreason" maxlength="120" style="min-width:230px" placeholder="clocked in by mistake"></span>
+        <button class="csvbtn adjvoidsave" data-clock="${clock}" data-row="${r.row}">🚫 Void this punch</button>
+        <button class="adjedit adjcancel">cancel</button>
+        <span class="adjmsg phmsg"></span></td></tr>`;
   }
   const hint = S.adjEdit.hint ? `<div class="lite" style="font-size:11.5px;margin-bottom:6px;white-space:normal">📎 ${esc(S.adjEdit.hint)}</div>` : '';
   return `<tr class="adjediting">${dt}<td>${label}</td><td>${sub}</td>
@@ -10146,7 +10170,7 @@ function cfxMatch(fx) {
   const serial = String(fx.serial || '').trim();
   const {named, filed} = cfxDates(fx);
   const times = cfxTimes(fx.note);
-  let rows = (clock === 'pay' ? S.payRows : S.tlRows) || [];
+  let rows = unvoided(clock === 'pay' ? S.payRows : S.tlRows);
   rows = rows.filter(r => sameWho(r.tech));
   if (clock === 'piano' && serial) {
     const bySerial = rows.filter(r => String(r.serial).trim() === serial);
@@ -10688,14 +10712,14 @@ function scorecardTable() {
   if (!S.tlRows || !S.payRows || !S.qcRows || !S.slRows) return '<div class="empty">Crunching the clock, QC, payroll and snapshot ledgers…</div>';
   const cut = Date.now() - 30 * 86400000;
   const inWin = iso => iso && new Date(iso).getTime() >= cut;
-  const tl = S.tlRows.filter(r => inWin(r.start) && !/test/i.test(r.phase) && !/FAKE/.test(r.serial || ''));
+  const tl = unvoided(S.tlRows).filter(r => inWin(r.start) && !/test/i.test(r.phase) && !/FAKE/.test(r.serial || ''));
   const mins = rows => rows.reduce((a, r) => a + (r.minutes || 0), 0);
   const pianoRows = tl.filter(r => !/^(Moving|Admin \/ Misc|Management|Shop Tidying)/.test(r.phase)
     && r.serial !== 'MGMT' && r.serial !== 'TIDY');
   const trainRows = tl.filter(r => /^Training/.test(r.phase));
   const reworkRows = tl.filter(r => /^Rework|re-?do|fix(ing)? (earlier|previous)/i.test(r.phase));
   const workH = mins(pianoRows) / 60, trainH = mins(trainRows) / 60, reworkH = mins(reworkRows) / 60;
-  const payMin = (S.payRows || []).filter(r => inWin(r.date || r.start)).reduce((a, r) => a + (r.minutes || 0), 0);
+  const payMin = unvoided(S.payRows).filter(r => inWin(r.date || r.start)).reduce((a, r) => a + (r.minutes || 0), 0);
   const coverage = payMin ? Math.min(100, Math.round(100 * mins(tl) / payMin)) : null;
   // mini-QC first pass
   const qc = (S.qcRows || []).filter(r => inWin(r.when));
@@ -10708,7 +10732,7 @@ function scorecardTable() {
     const [sn, ph] = k.split('|');
     const std = SC_STD[ph];
     if (!std) return;
-    const spent = mins((S.tlRows || []).filter(r => r.serial === sn && r.phase === ph)) / 60;
+    const spent = mins(unvoided(S.tlRows).filter(r => r.serial === sn && r.phase === ph)) / 60;
     if (spent < 1) return;   // phase never clocked — no basis to score it
     earned += std; actual += spent; phasesDone++;
   });
@@ -11162,6 +11186,34 @@ function renderReport() {
     S.adjEdit = b.classList.contains('adjcancel') ? null
       : {clock: b.dataset.clock, row: +b.dataset.row};
     renderReport();
+  });
+  body.querySelectorAll('.adjvoidbtn').forEach(b => b.onclick = () => {
+    S.adjEdit = {clock: b.dataset.clock, row: +b.dataset.row, mode: 'void'};
+    renderReport();
+  });
+  body.querySelectorAll('.adjvoidsave, .adjunvoid').forEach(b => b.onclick = async () => {
+    const undo = b.classList.contains('adjunvoid');
+    const tr = b.closest('tr'), msg = tr.querySelector('.adjmsg');
+    const reasonEl = tr.querySelector('.adjreason');
+    const clock = b.dataset.clock, row = +b.dataset.row;
+    if (adjExpired()) {   // renew first — a redirect mid-save would lose this
+      adjStashAndRenew({adjEdit: {clock, row, mode: undo ? '' : 'void'}});
+      return;
+    }
+    b.disabled = true; msg.classList.remove('adjerr');
+    msg.textContent = undo ? 'restoring…' : 'voiding…';
+    const slow = adjSlowNotice(msg, undo ? 'restoring' : 'voiding');
+    const j = await adjustPost({action: 'voidclock', clock, row,
+      reason: reasonEl ? reasonEl.value.trim() : '', undo: undo});
+    clearTimeout(slow);
+    const who = (tr.children[1] && tr.children[1].textContent.trim().split('\n')[0]) || 'that punch';
+    if (!adjFeedback(msg, j, undo ? `restored — ${who} counts again`
+                                  : `voided — ${who} no longer counts toward hours`)) { b.disabled = false; return; }
+    const r = ((clock === 'pay' ? S.payRows : S.tlRows) || []).find(x => x.row === row);
+    if (r) r.voided = undo ? '' : (j.note || 'voided just now');
+    S.adjEdit = null;
+    renderReport();
+    refreshClocksQuiet();
   });
   body.querySelectorAll('.adjsave').forEach(b => b.onclick = async () => {
     const tr = b.closest('tr');
