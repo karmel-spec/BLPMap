@@ -18,12 +18,43 @@
 var APP_URL = 'https://blpstoremap.netlify.app';
 var REPORT_TO = 'info@brighamlarsonpianos.com';
 var PIANO_LOG_ID = '1ZunbPKygpQlcXfTyPowDHdUE9spJ3uV1XA4iX1eoKRc';
-var BRIDGE_SECRET = 'PASTE_SECRET_HERE';   // server-to-server auth (optional)
-var BRIDGE_REV = '2026-09-17.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
-var TEAM_PIN = 'PASTE_PIN_HERE';           // what BLP team members type to move pianos
+/* ===================== SECRETS LIVE IN SCRIPT PROPERTIES =====================
+ * NOT in this file (Walter 9/17). They used to be placeholder constants that
+ * every paste overwrote and a human had to restore by hand — missed on two
+ * consecutive deploys on 9/17, which put PASTE_ICS_URL_HERE into production
+ * (moving calendar dead) and made PASTE_PIN_HERE a working team PIN.
+ * Script Properties are attached to the project and a code paste cannot touch
+ * them, so there is nothing left to forget.
+ * Set them at Project Settings → Script properties:
+ *     BRIDGE_SECRET   server-to-server auth (optional)
+ *     TEAM_PIN        what BLP team members type to move pianos
+ *     MOVING_ICS      the moving calendar's SECRET iCal address
+ * The ping reports `secrets` so a missing one is visible in one request
+ * instead of surfacing days later as "the moving calendar is broken". */
+var SCRIPT_SECRETS_ = (function () {
+  try { return PropertiesService.getScriptProperties().getProperties() || {}; }
+  catch (e) { return {}; }      // one fetch per execution, not one per key
+})();
+function secret_(key) {
+  var v = SCRIPT_SECRETS_[key];
+  v = (v === null || v === undefined) ? '' : String(v).trim();
+  return /^PASTE_.*_HERE$/.test(v) ? '' : v;   // an old placeholder counts as unset
+}
+/* 'NOT SET: …' for the ping. BRIDGE_SECRET is optional — server-to-server
+ * callers can use the PIN — so it is reported but never called a problem. */
+function secretsState_() {
+  var missing = [];
+  if (!TEAM_PIN) missing.push('TEAM_PIN');
+  if (!MOVING_ICS) missing.push('MOVING_ICS');
+  if (missing.length) return 'NOT SET: ' + missing.join(', ');
+  return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
+}
+var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
+var BRIDGE_REV = '2026-09-17.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
-var MOVING_ICS = 'PASTE_ICS_URL_HERE';     // the moving calendar's SECRET iCal address
+var MOVING_ICS = secret_('MOVING_ICS');
 var TUNING_CAL = 'korbangreenhalgh.blp@gmail.com';  // 09-Korban Greenhalgh
 // master record of every tuning in the store — every request lands here
 // in addition to the assigned technician's own calendar
@@ -317,7 +348,8 @@ function doGet(e) {
   // a re-authorization/redeploy without uploading a photo
   var drive = 'ok';
   try { DriveApp.getFolderById(PHOTOS_ROOT_ID).getName(); } catch (eD) { drive = String(eD && eD.message || eD).slice(0, 120); }
-  return json_({ok: true, service: 'BLP Store Map bridge', enc: '→ — 🛠', rev: BRIDGE_REV, drive: drive});
+  return json_({ok: true, service: 'BLP Store Map bridge', enc: '→ — 🛠', rev: BRIDGE_REV,
+                drive: drive, secrets: secretsState_()});
 }
 
 /**
@@ -731,8 +763,12 @@ function doPost(e) {
     // the shop apps' shared password doubles as a team PIN here so the
     // Shop Manager's bridge calls (App Requests etc.) work for
     // password-gate users too — same team, same trust level
-    var pinOk = req.pin === TEAM_PIN || String(req.pin || '').trim().toLowerCase() === 'pianoman';
-    if (req.secret !== BRIDGE_SECRET && !pinOk && !gOk) {
+    // !!TEAM_PIN / !!BRIDGE_SECRET: an UNSET secret is empty, and without these
+    // guards a caller posting pin:'' or secret:'' would match it and be let in
+    var pinOk = (!!TEAM_PIN && req.pin === TEAM_PIN)
+      || String(req.pin || '').trim().toLowerCase() === 'pianoman';
+    var secretOk = !!BRIDGE_SECRET && req.secret === BRIDGE_SECRET;
+    if (!secretOk && !pinOk && !gOk) {
       return json_({error: 'unauthorized'});
     }
     req._g = g || null;   // verified Google identity for permission-gated actions

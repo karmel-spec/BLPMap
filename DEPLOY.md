@@ -87,12 +87,19 @@ dev convenience — the cloud owns the real jobs.
 
 ### ⚠️ Deploy FROM karmel@, and never with placeholder secrets (Sep 11 2026)
 Two outages came from paste-deploys that skipped these steps:
-1. **Secrets.** The repo file carries `PASTE_SECRET_HERE` / `PASTE_PIN_HERE` /
-   `PASTE_ICS_URL_HERE`. A paste that leaves them in place silently kills the
-   moving-calendar feed (`fn=events` → "DNS error: http://PASTE_ICS_URL_HERE"),
-   rejects the real team PIN, and breaks server-to-server calls. After pasting,
-   restore the three real lines (Project History → any karmel@ version has them),
-   and confirm the ping shows `"rev"` = `BRIDGE_REV` AND `fn=events` returns events.
+1. **Secrets — FIXED as of rev `2026-09-17.3`, no restore step any more.**
+   `BRIDGE_SECRET`, `TEAM_PIN` and `MOVING_ICS` now live in **Script
+   Properties** (Project Settings → Script properties), which a code paste
+   cannot touch. The repo file holds no secret values at all.
+   *History:* they used to be `PASTE_..._HERE` constants that had to be restored
+   by hand after every paste. That was missed on two consecutive deploys on
+   9/17 — the first shipped `PASTE_ICS_URL_HERE` to production (moving calendar
+   dead, `fn=events` → "DNS error") and made `PASTE_PIN_HERE` a working team PIN.
+   *Moving an existing project over:* run `apps-script/one-time-stash-secrets.gs`
+   once while the OLD Code.gs still has the constants, THEN paste the new file —
+   that order means no downtime and nobody ever copies a secret by hand.
+   *Checking:* the ping now reports `"secrets"` — `ok`, or `NOT SET: TEAM_PIN,
+   MOVING_ICS`. Still confirm `fn=events` returns real events.
 2. **Deploying account = executing account.** The web app is `executeAs:
    USER_DEPLOYING`. Versions 136–142 (Sep 9) were created from brigham@, whose
    authorization for this script predates the Drive photo feature — every photo
