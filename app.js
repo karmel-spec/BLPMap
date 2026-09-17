@@ -10123,6 +10123,13 @@ function weekKey(day) {   // Monday of that week
 function monthKey(day) { return day.slice(0, 7); }
 function hDec(mins) { return (mins / 60).toFixed(2); }
 function inRange(day, f) { return (!f.from || day >= f.from) && (!f.to || day <= f.to); }
+// ISO → value for a <input type=datetime-local>, in Denver time
+function dayLocal(iso) {
+  if (!iso) return '';
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', {timeZone: 'America/Denver', hourCycle: 'h23',
+    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'}).formatToParts(new Date(iso)).map(x => [x.type, x.value]));
+  return `${p.year}-${p.month}-${p.day}T${p.hour === '24' ? '00' : p.hour}:${p.minute}`;
+}
 function fmtT(iso) {
   return iso ? new Date(iso).toLocaleTimeString('en-US',
     {hour: 'numeric', minute: '2-digit', timeZone: 'America/Denver'}) : '—';
@@ -10846,6 +10853,53 @@ function clockAdjustTable() {
       <div class="stickytbl"><table><tr><th>DATE</th><th>TEAM MEMBER</th><th>IN → OUT</th><th>HOURS</th><th></th></tr>
       ${rows.map(r => adjRow('pay', r, esc(r.date), esc(r.tech))).join('')
        || `<tr><td colspan="5" class="empty">${S.payAutoOnly ? 'No auto-closed punches.' : 'No punches yet.'}</td></tr>`}</table></div>`;
+    // 📅 DAY VIEW (Melissa 9/15, request 091526terry42): one date at a time —
+    // every team member's in → out, a missing clock-out in red with an inline
+    // "Save clock out", people with no punch that day in grey with a + add.
+    const todayYmd = new Date().toLocaleDateString('en-CA', {timeZone: 'America/Denver'});
+    if (!S.payDay) S.payDay = todayYmd;
+    const isPast = S.payDay < todayYmd;
+    const dayList = S.payRows.filter(r => r.date === S.payDay && !String(r.voided || ''))
+      .sort((x, y) => String(x.tech).localeCompare(String(y.tech)) || new Date(x.start) - new Date(y.start));
+    const knownTechs = [...new Set(S.payRows.filter(r => new Date(r.start) >= Date.now() - 30 * 86400000).map(r => r.tech))].sort();
+    const punched = new Set(dayList.map(r => r.tech));
+    const noPunch = knownTechs.filter(t => !punched.has(t));
+    const dayIssues = dayList.filter(r => (!r.end && isPast) || adjAutoClosed(r));
+    const dayRow = r => {
+      const open = !r.end, auto = adjAutoClosed(r);
+      const fixable = (open && isPast) || auto;
+      const issue = open && isPast ? '<span class="dayissue">Missing clock out</span>'
+        : auto ? `<span class="dayissue" title="${esc(String(r.note || ''))}">⏰ auto-closed — confirm the real clock out</span>`
+        : open ? '<span class="dayok">on the clock</span>' : '';
+      return `<tr${fixable ? ' class="dayflag"' : ''}><td><b>${esc(r.tech)}</b></td>
+        <td style="white-space:nowrap">${fmtT(r.start)} → ${r.end ? fmtT(r.end) : '<b style="color:#9e2020">--:--</b>'}</td>
+        <td>${r.minutes ? fmtHM(r.minutes) : '—'}</td><td>${issue}</td>
+        <td style="white-space:nowrap">${fixable ? `<span class="rfd">out <input type="datetime-local" class="dayout" value="${esc(dayLocal(r.end || r.start))}"></span>
+            <button class="csvbtn dayoutsave" data-row="${r.row}" data-start="${esc(r.start)}">Save clock out</button>` : ''}
+          <button class="adjedit dayedit" data-row="${r.row}" title="full edit — change the clock-in too, or void">✎</button><span class="adjmsg phmsg"></span></td></tr>`;
+    };
+    const dayLabel = new Date(S.payDay + 'T12:00:00').toLocaleDateString('en-US', {weekday: 'long', month: 'short', day: 'numeric', year: 'numeric'});
+    const dayHtml = `<div class="rfbar daynav">
+        <button class="cfxclear paydaynav" data-d="-1" title="previous day">◀</button>
+        <input type="date" class="paydaydate" value="${esc(S.payDay)}" max="${todayYmd}">
+        <button class="cfxclear paydaynav" data-d="1" title="next day" ${S.payDay >= todayYmd ? 'disabled' : ''}>▶</button>
+        <b>${esc(dayLabel)}</b>
+        <span class="${dayIssues.length ? 'dayissue' : 'dayok'}">${dayIssues.length ? `⚠ ${dayIssues.length} issue${dayIssues.length === 1 ? '' : 's'} to resolve` : (isPast ? '✓ no issues' : 'today — open punches are normal')}</span></div>
+      <div class="stickytbl"><table><tr><th>TEAM MEMBER</th><th>IN → OUT</th><th>HOURS</th><th>ISSUE</th><th></th></tr>
+      ${dayList.map(dayRow).join('') || '<tr><td colspan="5" class="empty">No day punches on this date.</td></tr>'}
+      ${noPunch.map(t => `<tr class="daynone"><td>${esc(t)}</td><td class="lite">no punch</td><td>—</td><td></td>
+        <td><button class="adjedit dayadd" data-tech="${esc(t)}" title="add a missed day punch for ${esc(t)} on this date">+ add punch</button></td></tr>`).join('')}
+      </table></div>`;
+    // punches from EARLIER days still open (the 6 PM sweep hasn't closed them
+    // yet, or it ran before the person clocked in) — the case Melissa hit
+    const openPast = allPay.filter(r => !r.end && r.date < todayYmd && !String(r.voided || ''));
+    const openBand = openPast.length ? `<div class="autoband openband">🔴 <b>${openPast.length}</b> day punch${openPast.length === 1 ? '' : 'es'} from a previous day ${openPast.length === 1 ? 'is' : 'are'} still open — no clock out recorded:
+        ${openPast.map(r => `<button class="cfxclear dayjump" data-day="${esc(r.date)}">${esc(String(r.tech).split(' ')[0])} · ${esc(r.date.slice(5))}</button>`).join(' ')}</div>` : '';
+    const viewTog = `<div class="rfbar payviews"><span class="lite">View:</span>
+        <button class="payviewtog ${S.payDayView ? '' : 'on'}" data-v="list">List — last 14 days</button>
+        <button class="payviewtog ${S.payDayView ? 'on' : ''}" data-v="day">📅 Day view</button></div>`;
+    pay = `<h4 class="bfhd">Payroll day punches (owners, Melissa & Mark)</h4>${openBand}${viewTog}`
+      + (S.payDayView ? dayHtml : pay.replace(/^<h4[^>]*>[^<]*<\/h4>/, ''));
     // at the top of the report (Mark 9/8): a forgotten day punch is the most
     // common fix and shouldn't need a scroll past every table to reach
     payAdd = `<div class="rfbar adjaddbar" data-clock="pay"><b>+ missed day punch:</b>
@@ -11497,6 +11551,42 @@ function renderReport() {
   body.querySelectorAll('.cfxclear').forEach(b => b.onclick = () => { S.cfxF = null; renderReport(); });
   body.querySelectorAll('.payautotog').forEach(b => b.onclick = ev => {
     ev.stopPropagation(); S.payAutoOnly = !S.payAutoOnly; renderReport();
+  });
+  // 📅 day view controls (Melissa 9/15)
+  body.querySelectorAll('.payviewtog').forEach(b => b.onclick = () => { S.payDayView = b.dataset.v === 'day'; renderReport(); });
+  body.querySelectorAll('.paydaynav').forEach(b => b.onclick = () => {
+    const d = new Date((S.payDay || new Date().toLocaleDateString('en-CA', {timeZone: 'America/Denver'})) + 'T12:00:00');
+    d.setDate(d.getDate() + (+b.dataset.d)); S.payDay = d.toLocaleDateString('en-CA'); renderReport();
+  });
+  const pdd = body.querySelector('.paydaydate'); if (pdd) pdd.onchange = () => { if (pdd.value) { S.payDay = pdd.value; renderReport(); } };
+  body.querySelectorAll('.dayjump').forEach(b => b.onclick = () => { S.payDay = b.dataset.day; S.payDayView = true; renderReport(); });
+  body.querySelectorAll('.dayedit').forEach(b => b.onclick = () => { S.adjEdit = {clock: 'pay', row: +b.dataset.row}; S.payDayView = false; renderReport(); });
+  body.querySelectorAll('.dayadd').forEach(b => b.onclick = () => {
+    S.payDayView = false; renderReport();
+    const bar = document.querySelector('.rpt[data-r="clockadjust"] .adjaddbar[data-clock="pay"]');
+    if (!bar) return;
+    bar.querySelector('.a-tech').value = b.dataset.tech; bar.querySelector('.a-start').value = S.payDay + 'T08:00';
+    bar.querySelector('.a-end').value = S.payDay + 'T16:00'; bar.scrollIntoView({behavior: 'smooth', block: 'center'}); bar.querySelector('.a-end').focus();
+  });
+  body.querySelectorAll('.dayoutsave').forEach(b => b.onclick = async () => {
+    const tr = b.closest('tr'), msg = tr.querySelector('.adjmsg'), inp = tr.querySelector('.dayout');
+    const endLocal = inp && inp.value; const startIso = b.dataset.start;
+    if (!endLocal) { msg.textContent = 'pick the clock-out time'; return; }
+    const endIso = new Date(endLocal).toISOString();
+    if (!(new Date(endIso) > new Date(startIso))) { msg.className = 'adjmsg phmsg adjerr'; msg.textContent = 'clock out must be after the clock in'; return; }
+    if (adjExpired()) { adjStashAndRenew({adjEdit: {clock: 'pay', row: +b.dataset.row, pre: {start: dayLocal(startIso), end: endLocal}}}); return; }
+    const who = tr.children[0].textContent.trim();
+    if (!adjSanity(dayLocal(startIso), endLocal, who)) return;
+    b.disabled = true; msg.className = 'adjmsg phmsg'; msg.textContent = 'saving…';
+    const slow = adjSlowNotice(msg, 'saving');
+    const j = await adjustPost({action: 'adjustclock', clock: 'pay', row: +b.dataset.row, start: startIso, end: endIso});
+    clearTimeout(slow);
+    if (!adjFeedback(msg, j, `saved — ${who}: ${fmtT(startIso)} → ${fmtT(endIso)}`)) { b.disabled = false; return; }
+    const fromFix = cfxAutoLink('pay', +b.dataset.row);
+    adjPatchLocal('pay', +b.dataset.row, startIso, endIso, {note: 'adjusted just now — syncing…'});
+    renderReport();
+    adjResolveFrom(fromFix, null);
+    refreshClocksQuiet();
   });
   // clock-type editor on a fix request (Mark 9/8): Day ↔ Piano, plus the
   // serial for piano requests. Saves through the bridge; a bridge that
