@@ -4500,17 +4500,17 @@ async function openQcRail(id) {
         <b style="font-size:12px;color:#274b6d">📝 The tech's notes on checklist items:</b>
         ${workItems.filter(it => st.notes.has(it.i)).map(it => `<div style="font-size:12px;margin-top:4px">• ${esc(it.text.slice(0, 90))}<br>
           <span style="color:#274b6d">↳ ${esc(st.notes.get(it.i))}</span></div>`).join('')}</div>` : ''}
-      ${canJudge && !settled ? `<div class="qchelp">✓ = this item passes · ✗ = needs rework (say what) · 📝 = add a note to a pass. Every ✓ unlocks <b>Approve</b>; any ✗ unlocks <b>Send back</b>, which puts a 🔁 Rework card on the tech's board and texts them.</div>` : ''}
+      ${canJudge && !settled ? `<div class="qchelp"><b>Pass</b> = this item meets standard · <b>Rework</b> = it doesn't — say what to fix · <b>Note</b> = attach a comment to a pass. When every item is a Pass, <b>Approve</b> advances the phase; any Rework unlocks <b>Send back</b>, which puts a 🔁 Rework card on the tech's board and texts them.</div>` : ''}
       ${items.map(it => {
         const vd = v[it.text];
         const open = noteOpen.has(it.text);
         return `<div style="padding:9px 2px;border-top:1px solid #f0ece5" data-item="${esc(it.text)}">
-          <div style="display:flex;gap:8px;align-items:flex-start">
-            <div style="flex:1"><span style="font-size:10px;letter-spacing:1px;color:#8a847b;text-transform:uppercase">${esc(it.section)}</span><br>${esc(it.text)}</div>
-            ${canJudge && !settled ? `<button class="qcp" data-t="${esc(it.text)}" title="passes" style="border:1.5px solid ${vd && vd.verdict === 'pass' ? '#2f7d4f' : '#cfc9bf'};background:${vd && vd.verdict === 'pass' ? '#eaf5ec' : '#fff'};border-radius:8px;padding:5px 9px;color:#2f7d4f;font-weight:700">✓</button>
-              <button class="qcf" data-t="${esc(it.text)}" title="needs rework" style="border:1.5px solid ${vd && vd.verdict === 'fail' ? '#9e2020' : '#cfc9bf'};background:${vd && vd.verdict === 'fail' ? '#fdecec' : '#fff'};border-radius:8px;padding:5px 9px;color:#9e2020;font-weight:700">✗</button>
-              <button class="qcn" data-t="${esc(it.text)}" title="add a note" style="border:1.5px solid #cfc9bf;background:${open ? '#f2f6fb' : '#fff'};border-radius:8px;padding:5px 7px;color:#274b6d">📝</button>`
-              : vd ? `<b style="color:${vd.verdict === 'pass' ? '#2f7d4f' : '#9e2020'}">${vd.verdict === 'pass' ? '✓' : '✗'}</b>` : '<span style="color:#c9c2b6">·</span>'}
+          <div style="display:flex;gap:6px;align-items:flex-start;flex-wrap:wrap">
+            <div style="flex:1;min-width:140px"><span style="font-size:10px;letter-spacing:1px;color:#8a847b;text-transform:uppercase">${esc(it.section)}</span><br>${esc(it.text)}</div>
+            ${canJudge && !settled ? `<button class="qcp" data-t="${esc(it.text)}" title="passes" style="border:1.5px solid ${vd && vd.verdict === 'pass' ? '#2f7d4f' : '#cfc9bf'};background:${vd && vd.verdict === 'pass' ? '#eaf5ec' : '#fff'};border-radius:8px;padding:5px 9px;color:#2f7d4f;font-weight:700;white-space:nowrap">✓ Pass</button>
+              <button class="qcf" data-t="${esc(it.text)}" title="needs rework" style="border:1.5px solid ${vd && vd.verdict === 'fail' ? '#9e2020' : '#cfc9bf'};background:${vd && vd.verdict === 'fail' ? '#fdecec' : '#fff'};border-radius:8px;padding:5px 9px;color:#9e2020;font-weight:700;white-space:nowrap">✗ Rework</button>
+              <button class="qcn" data-t="${esc(it.text)}" title="add a note" style="border:1.5px solid #cfc9bf;background:${open ? '#f2f6fb' : '#fff'};border-radius:8px;padding:5px 8px;color:#274b6d;white-space:nowrap">📝 Note</button>`
+              : vd ? `<b style="color:${vd.verdict === 'pass' ? '#2f7d4f' : '#9e2020'};white-space:nowrap">${vd.verdict === 'pass' ? '✓ Pass' : '✗ Rework'}</b>` : '<span style="color:#c9c2b6">·</span>'}
           </div>
           ${vd && vd.note ? `<div style="font-size:11.5px;color:${vd.verdict === 'fail' ? '#9e2020' : '#274b6d'};margin:3px 0 0 2px">↳ ${esc(vd.note)}${vd.by ? ` <span style="color:#8a847b">— ${esc(String(vd.by).split(' ')[0])}</span>` : ''}</div>` : ''}
           ${open ? `<div class="qcnotebox" data-t="${esc(it.text)}">
