@@ -4485,6 +4485,20 @@ async function openQcRail(id) {
   // who is performing this mini-QC (Brigham 9/17): defaults to the signed-in
   // name, editable — Brigham often inspects on a tech's phone during training
   let inspector = clockName() || '';
+  // Brigham 9/17: items that ask about photos/video link straight to the
+  // piano's Drive folders so the inspector can check the shots in one tap
+  const qcLinks = text => {
+    const t = String(text || '');
+    if (!/\b(pics?|photos?|pictures?|video|drive folder|folder)\b/i.test(t)) return '';
+    const L = [];
+    if (/before/i.test(t) && p.bphotoUrl) L.push(`<a href="${esc(p.bphotoUrl)}" target="_blank" rel="noopener">📷 Before photos</a>`);
+    if (/after/i.test(t) && p.aphotoUrl) L.push(`<a href="${esc(p.aphotoUrl)}" target="_blank" rel="noopener">📷 After photos</a>`);
+    if (/video/i.test(t) && p.bvideoUrl) L.push(`<a href="${esc(p.bvideoUrl)}" target="_blank" rel="noopener">🎬 Before video</a>`);
+    if (/video/i.test(t) && /after/i.test(t) && p.avideoUrl) L.push(`<a href="${esc(p.avideoUrl)}" target="_blank" rel="noopener">🎬 After video</a>`);
+    if (/tech|progress|felt/i.test(t) || !L.length) L.push(`<a href="#" class="qctech" data-serial="${esc(p.serial || '')}">🔧 Tech folder</a>`);
+    if (p.mainFolder) L.push(`<a href="${esc(p.mainFolder)}" target="_blank" rel="noopener">📁 Main folder</a>`);
+    return `<div class="qclinks">${L.join('')}</div>`;
+  };
   const WHO_SUGGEST = ['Brigham Larson', 'Karmel Larson', 'Mark Hales', 'Matthew Wessman', 'Jacob Mower', 'Melissa Terry'];
   const close = () => { clearInterval(poll); ov.remove(); };
   const render = () => {
@@ -4520,6 +4534,7 @@ async function openQcRail(id) {
               <button class="qcn" data-t="${esc(it.text)}" title="add a note" style="border:1.5px solid #cfc9bf;background:${open ? '#f2f6fb' : '#fff'};border-radius:8px;padding:5px 8px;color:#274b6d;white-space:nowrap">📝 Note</button>`
               : vd ? `<b style="color:${vd.verdict === 'pass' ? '#2f7d4f' : '#9e2020'};white-space:nowrap">${vd.verdict === 'pass' ? '✓ Pass' : '✗ Rework'}</b>` : '<span style="color:#c9c2b6">·</span>'}
           </div>
+          ${qcLinks(it.text)}
           ${vd && vd.note ? `<div style="font-size:11.5px;color:${vd.verdict === 'fail' ? '#9e2020' : '#274b6d'};margin:3px 0 0 2px">↳ ${esc(vd.note)}${vd.by ? ` <span style="color:#8a847b">— ${esc(String(vd.by).split(' ')[0])}</span>` : ''}</div>` : ''}
           ${open ? `<div class="qcnotebox" data-t="${esc(it.text)}">
               <textarea class="qcnotetxt" maxlength="300" rows="2" placeholder="${noteMode.get(it.text) === 'fail' ? 'What needs rework on this item? (required)' : 'Note on this item (optional)'}">${esc(noteDraft.get(it.text) || (vd && vd.note) || '')}</textarea>
@@ -4539,6 +4554,7 @@ async function openQcRail(id) {
         ${!all && !anyFail ? '<div class="dssub" style="margin-top:6px">Judge every item first — Approve needs all ✓, Send back needs at least one ✗.</div>' : ''}</div>` : ''}
       ${!canJudge && !settled ? '<div class="dssub" style="margin-top:10px">Waiting on a manager — this updates live.</div>' : ''}`;
     ov.querySelector('.dsx').onclick = close;
+    ov.querySelectorAll('.qctech').forEach(t => t.onclick = ev => { ev.preventDefault(); openTechFolder(t.dataset.serial, t); });
     if (!canJudge || settled) return;
     // ✗ opens an inline note box (prompt() is suppressed in the installed
     // app — a silent ✗ was the "how do we assign rework?" confusion, 9/17)
