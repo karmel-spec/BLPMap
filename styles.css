@@ -1981,3 +1981,17 @@ tr.autorow td{background:#fffdf8}
 .kcol.kcollift{opacity:.35}
 .kcol.kcolbefore{box-shadow:-5px 0 0 #9e2020}
 .kcol.kcolafter{box-shadow:5px 0 0 #9e2020}
+/* mini-QC waiting: pulsing yellow halo on the map + legend sample (Brigham 9/17) */
+.qcglow{fill:rgba(244,194,13,.38);stroke:#f4c20d;stroke-width:2.5;pointer-events:none;transform-box:fill-box;transform-origin:center;
+  filter:drop-shadow(0 0 6px rgba(244,194,13,.95));animation:qcpulse 1.5s ease-in-out infinite}
+@keyframes qcpulse{0%,100%{transform:scale(1);opacity:.95}50%{transform:scale(1.45);opacity:.45}}
+.dot.qcdot{background:#f4c20d;box-shadow:0 0 0 3px rgba(244,194,13,.35),0 0 8px 2px rgba(244,194,13,.9);animation:qcdotpulse 1.5s ease-in-out infinite}
+@keyframes qcdotpulse{0%,100%{box-shadow:0 0 0 2px rgba(244,194,13,.3),0 0 6px 1px rgba(244,194,13,.8)}50%{box-shadow:0 0 0 5px rgba(244,194,13,.15),0 0 12px 4px rgba(244,194,13,1)}}
+.qcsum{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:2px 0 10px;font-size:13px}
+.qcrefresh{border:1px solid #d8d2c8;background:#fff;border-radius:6px;padding:2px 8px;cursor:pointer;font-size:12px}
+.qcesc{background:#fdecec;color:#9e2020;border-radius:5px;padding:1px 7px;font-size:11px;font-weight:700}
+.qcpass{background:#eaf5ec;color:#2f7d4f;border-radius:5px;padding:2px 8px;font-size:11px;font-weight:700}
+.qcfail{background:#fff3d6;color:#9a5b13;border-radius:5px;padding:2px 8px;font-size:11px;font-weight:700}
+.qcopen{border:1px solid #2c5d96;background:#fff;color:#2c5d96;border-radius:7px;padding:4px 10px;font-weight:700;font-size:12px;cursor:pointer}
+.qcopen:hover{background:#2c5d96;color:#fff}
+.qch4{font-size:11px;letter-spacing:1.5px;color:#6f6a63;margin:18px 0 6px}

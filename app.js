@@ -1291,6 +1291,7 @@ window.addEventListener('hashchange', () => { deepLinkDone = ''; tryDeepLink(); 
 
 /* ---------- rendering ---------- */
 function renderAll() {
+  if (!QCQ.rows ? Date.now() - QCQ.at > 60000 : Date.now() - QCQ.at > 300000) loadQcQueue();
   renderTabs(); renderKpis(); renderCrew(); renderMoves();
   renderMap(); renderReport(); renderBoard(); renderCal(); renderMedia(); showView(S.view); syncFeed();
 }
@@ -2905,7 +2906,7 @@ function renderMap() {
           const hl = S.focusRow === p.row || (q && matches(p, q));
           s += `<g class="piano ${finClass(p)} ${soldClass(p)} ${st} own-${ownerClass(p)} ${q && !matches(p, q) ? 'dim' : ''} ${hl ? 'hl' : ''}"
                 data-slot="${esc(sl.id)}" data-row="${p.row}">
-                <g transform="rotate(90 ${cx} ${cy})">${glyph(p.type, cx, cy, sc)}</g>${phaseText(p, cx, cy, sc)}${mediaBadge(p, cx, cy, sc)}${priceText(p, cx, cy, sc, sl)}${finBadge(p, cx, cy, sc)}${soldBadge(p, cx, cy, sc)}${tempBadge(p, cx, cy, sc)}${ghostBadge(p, cx, cy, sc)}${serialText(p, cx, cy, sc, sl)}</g>`;
+                ${qcGlow(p, cx, cy, sc)}<g transform="rotate(90 ${cx} ${cy})">${glyph(p.type, cx, cy, sc)}</g>${phaseText(p, cx, cy, sc)}${mediaBadge(p, cx, cy, sc)}${priceText(p, cx, cy, sc, sl)}${finBadge(p, cx, cy, sc)}${soldBadge(p, cx, cy, sc)}${tempBadge(p, cx, cy, sc)}${ghostBadge(p, cx, cy, sc)}${serialText(p, cx, cy, sc, sl)}</g>`;
         });
       } else {
         const pfs = Math.max(10, Math.min(20, sl.w * 0.4));
@@ -2943,7 +2944,7 @@ function renderMap() {
           const cy = sl.y + sl.h / 2;
           const hl = S.focusRow === p.row || (q && matches(p, q));
           s += `<g class="piano ${finClass(p)} ${soldClass(p)} ${st} own-${ownerClass(p)} ${q && !matches(p, q) ? 'dim' : ''} ${hl ? 'hl' : ''}"
-                data-slot="${esc(sl.id)}" data-row="${p.row}">${glyph(p.type, cx, cy, sc)}${phaseText(p, cx, cy, sc)}${mediaBadge(p, cx, cy, sc)}${priceText(p, cx, cy, sc, sl)}${finBadge(p, cx, cy, sc)}${soldBadge(p, cx, cy, sc)}${tempBadge(p, cx, cy, sc)}${ghostBadge(p, cx, cy, sc)}${serialText(p, cx, cy, sc, sl)}</g>`;
+                data-slot="${esc(sl.id)}" data-row="${p.row}">${qcGlow(p, cx, cy, sc)}${glyph(p.type, cx, cy, sc)}${phaseText(p, cx, cy, sc)}${mediaBadge(p, cx, cy, sc)}${priceText(p, cx, cy, sc, sl)}${finBadge(p, cx, cy, sc)}${soldBadge(p, cx, cy, sc)}${tempBadge(p, cx, cy, sc)}${ghostBadge(p, cx, cy, sc)}${serialText(p, cx, cy, sc, sl)}</g>`;
         });
       } else if (!thin) {
         const pfs = Math.max(9, Math.min(20, sl.h * 0.45));
@@ -3913,6 +3914,83 @@ function qcGated(was) {
   return QC_PHASES.includes(w) || Date.now() < QC_ALL_UNTIL;
 }
 const PHASEQC_URL = 'https://blpsalesapp.netlify.app/.netlify/functions/phase-qc';
+
+/* ========= 🔍 MINI-QC QUEUE (Brigham 9/17) =========
+ * Every mini-QC a tech has requested that nobody has passed or failed yet.
+ * Feeds the report, the legend list and the pulsing yellow glow on the map. */
+const QCQ = {rows: null, at: 0, pending: new Set()};
+async function loadQcQueue() {
+  QCQ.at = Date.now();
+  try {
+    const K = 'sb_publishable_MamcjSX0CHTdYlpKDWSkmQ_-nbuQ1z-';
+    const since = new Date(Date.now() - 14 * 86400000).toISOString();
+    const r = await fetch(`https://ismacawxfvvllfinibbf.supabase.co/rest/v1/qc_requests?or=(status.eq.pending,updated.gte.${encodeURIComponent(since)})`
+      + `&select=id,serial,piano,phase,next_phase,requested_by,status,verdicts,manager,escalated,created,updated&order=created.asc`,
+      {headers: {apikey: K, Authorization: 'Bearer ' + K}});
+    const rows = await r.json();
+    QCQ.rows = Array.isArray(rows) ? rows : [];
+  } catch (e) { QCQ.rows = QCQ.rows || []; }
+  QCQ.pending = new Set(QCQ.rows.filter(x => x.status === 'pending').map(x => String(x.serial || '')));
+  if (S.view === 'map') { try { renderMap(); } catch (e2) {} }
+  if (S.view === 'report') { try { renderReport(); } catch (e3) {} }
+}
+// yellow pulsing halo behind a piano whose mini-QC is waiting
+function qcGlow(p, cx, cy, sc) {
+  if (!p || !QCQ.pending.has(String(p.serial || ''))) return '';
+  return `<circle class="qcglow" cx="${cx}" cy="${cy}" r="${(15 * sc).toFixed(1)}"/>`;
+}
+function qcWait(iso) {
+  const m = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+  if (m < 60) return m + ' min';
+  const h = Math.floor(m / 60);
+  if (h < 24) return h + ' h ' + (m % 60) + ' min';
+  return Math.floor(h / 24) + ' d ' + (h % 24) + ' h';
+}
+function qcWhen(iso) {
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-US', {weekday: 'short', month: 'numeric', day: 'numeric'}) + ' '
+    + d.toLocaleTimeString('en-US', {hour: 'numeric', minute: '2-digit'});
+}
+function qcQueueTable() {
+  if (!QCQ.rows) { if (Date.now() - QCQ.at > 60000) loadQcQueue(); return '<div class="empty">Loading mini-QC requests…</div>'; }
+  const canJudge = isOwner() || isTimelogAdmin();
+  const pianoOf = s => (S.data.pianos || []).find(x => String(x.serial) === String(s));
+  const first = n => String(n || '').split(/\s+/)[0];
+  const judged = r => Object.keys(r.verdicts || {}).length;
+  const pending = QCQ.rows.filter(r => r.status === 'pending');
+  const recent = QCQ.rows.filter(r => r.status !== 'pending')
+    .sort((x, y) => String(y.updated || '').localeCompare(String(x.updated || ''))).slice(0, 25);
+  const inspector = (S.settings && S.settings.qc_inspector) || '';
+  const row = r => {
+    const p = pianoOf(r.serial);
+    return `<tr class="mrow" data-row="${p ? p.row : ''}">
+      <td><b>${esc(r.piano || (p && p.summary) || '#' + r.serial)}</b><br><small>#${esc(r.serial)}${p && p.location ? ' · spot ' + esc(p.location) : ''}</small></td>
+      <td>${esc(r.phase)}${r.next_phase ? `<br><small>→ ${esc(r.next_phase)}</small>` : ''}</td>
+      <td>${esc(r.requested_by || '')}</td>
+      <td>${esc(qcWhen(r.created))}<br><b style="color:${r.escalated ? '#9e2020' : '#2b2f33'}">${qcWait(r.created)}</b>${r.escalated ? ' <span class="qcesc">⏰ escalated</span>' : ''}</td>
+      <td>${judged(r) ? `${judged(r)} item${judged(r) > 1 ? 's' : ''} judged${r.manager ? ' by ' + esc(first(r.manager)) : ''}` : '<span class="dim">not started</span>'}</td>
+      <td>${canJudge ? `<button class="qcopen" data-id="${r.id}">🔍 Inspect</button>` : ''}</td></tr>`;
+  };
+  const decided = r => {
+    const p = pianoOf(r.serial);
+    const pass = r.status === 'passed';
+    return `<tr class="mrow" data-row="${p ? p.row : ''}">
+      <td><b>${esc(r.piano || (p && p.summary) || '#' + r.serial)}</b><br><small>#${esc(r.serial)}</small></td>
+      <td>${esc(r.phase)}</td><td>${esc(r.requested_by || '')}</td>
+      <td>${esc(qcWhen(r.updated || r.created))}</td>
+      <td>${pass ? '<span class="qcpass">✓ passed</span>' : '<span class="qcfail">🔁 rework</span>'}${r.manager ? ' <small>by ' + esc(first(r.manager)) + '</small>' : ''}</td>
+      <td>${canJudge ? `<button class="qcopen" data-id="${r.id}">view</button>` : ''}</td></tr>`;
+  };
+  return `<div class="qcsum">${pending.length
+      ? `<b>${pending.length}</b> mini-QC${pending.length === 1 ? '' : 's'} waiting${inspector ? ` · inspector on duty: <b>${esc(inspector)}</b>` : ''}${pending.some(r => r.escalated) ? ` · <span class="qcesc">⏰ ${pending.filter(r => r.escalated).length} past the escalation window</span>` : ''}`
+      : 'Nothing waiting — every requested mini-QC has a verdict. 🎉'}
+      <button class="qcrefresh" title="refresh">↻</button></div>
+    <table><tr><th>PIANO</th><th>PHASE → NEXT</th><th>REQUESTED BY</th><th>WAITING SINCE</th><th>PROGRESS</th><th></th></tr>
+    ${pending.map(row).join('') || '<tr><td colspan="6" class="empty">No open requests.</td></tr>'}</table>
+    <h4 class="qch4">Decided in the last 14 days</h4>
+    <table><tr><th>PIANO</th><th>PHASE</th><th>REQUESTED BY</th><th>DECIDED</th><th>OUTCOME</th><th></th></tr>
+    ${recent.map(decided).join('') || '<tr><td colspan="6" class="empty">None yet.</td></tr>'}</table>`;
+}
 const CL = {cache: {}};   // (serial|phase) -> {items, checks:Set, request}
 async function clFetch(serial, phase, force) {
   const k = serial + '|' + phase;
@@ -10950,6 +11028,10 @@ const REPORT_DEFS = () => [
      catch (e) { return null; } })(),
    desc: 'Hardware and order tasks per piano, in queue order. Pick a category (keytops, plating, bass strings…) and a status — "needs attention" is the to-do list, top of the queue first. The count badge tracks the selected category.',
    html: tasksTable},
+  {id: 'qcqueue', sec: 'shop', icon: '🔍', title: 'MINI-QC QUEUE', count: (() => {
+     try { return QCQ.rows ? QCQ.rows.filter(r => r.status === 'pending').length : null; } catch (e) { return null; } })(),
+   desc: 'Every mini-QC a technician has requested that nobody has passed or failed yet — oldest first, with how long it has waited and who asked. Brigham (during the training month) or the shop managers press 🔍 Inspect to judge the checklist; ⏰ marks requests past the escalation window. These pianos also pulse yellow on the map. Decisions from the last two weeks are listed below.',
+   html: qcQueueTable},
   {id: 'taskqueues', sec: 'shop', icon: '🎯', title: 'TASK QUEUES', count: (() => {
      try { return taskQueueLists().reduce((s, q) => s + q.list.length, 0); } catch (e) { return null; } })(),
    desc: 'Eight ordered to-do queues — key service, plates to Curtis Harper, refinishing on deck, plating + buffing, plate hardware buffing (Korban), decals, bass strings, and the showroom tuning queue for Korban (most-overdue first, from the tuning calendars). Each shows who’s NEXT and everyone behind them. Click any row to jump to the piano.',
@@ -11429,6 +11511,9 @@ function renderReport() {
     const p = S.data.pianos.find(x => x.row === +tr.dataset.row);
     if (p) focusPiano(p);
   });
+  body.querySelectorAll('.qcopen').forEach(b => b.onclick = ev => { ev.stopPropagation(); openQcRail(+b.dataset.id); });
+  const qcr = body.querySelector('.qcrefresh');
+  if (qcr) qcr.onclick = () => { QCQ.rows = null; QCQ.at = 0; loadQcQueue(); renderReport(); };
   body.querySelectorAll('.mdsecbtn').forEach(b => b.onclick = ev => {
     if (ev.target.closest('.mdsecprint')) return;
     const key = b.closest('.mdsec').dataset.cat;
@@ -14512,6 +14597,7 @@ $('#legendBtn').onclick = () => { const p = $('#legendPanel'); p.hidden = !p.hid
 /* Legend items are clickable (Brigham 8/25): each opens the list of pianos in
  * that state, same predicates the map paints with; a row jumps to the piano. */
 const LEGEND_LISTS = {
+  qc:       {t: '🔍 Mini-QC waiting for Brigham / a manager', f: p => QCQ.pending.has(String(p.serial || ''))},
   photos:   {t: '📷 Needs photos',   f: p => !notYetArrived(p) && mediaNeeds(p).photo},
   video:    {t: '🎥 Needs video',    f: p => !notYetArrived(p) && mediaNeeds(p).video},
   sched:    {t: '🟣 Move scheduled', f: p => pianoStatus(p) === 'sched'},
