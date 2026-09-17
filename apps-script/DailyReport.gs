@@ -50,7 +50,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-09-17.6';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-09-17.7';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -913,6 +913,11 @@ function doPost(e) {
       var sks = setKeyService_(req);
       if (sks.ok) logAct_(who, 'Key service', sks.summary || req.serial, sks.keys || '(cleared)');
       return json_(sks);
+    }
+    if (req.action === 'prequeuemark') {
+      var pqm = preQueueMark_(req);
+      if (pqm.ok && !pqm.already) logAct_(who, 'Marked PRE-QUEUE', pqm.summary || req.serial, 'deposit pending — no work approved');
+      return json_(pqm);
     }
     if (req.action === 'prequeueapprove') {
       var pqa = preQueueApprove_(req);
@@ -2622,7 +2627,7 @@ function scheduleService_(req) {
     encodeURIComponent(req.serial);
   if (!req.dryrun) {
     master.createEvent(title, slot.start, slot.end,
-      {description: desc, guests: techId, sendInvites: true});
+      {description: desc, location: String(found.location || ''), guests: techId, sendInvites: true});   // spot in Location (Melissa 9/12)
   }
   return {ok: true, scheduled: true, dryrun: !!req.dryrun, tech: techName,
           minutes: minutes,
@@ -2680,7 +2685,7 @@ function scheduleServiceAsap_(req) {
     encodeURIComponent(req.serial);
 
   if (!req.dryrun) {
-    master.createEvent(title, start, end, {description: desc, guests: techId, sendInvites: true});
+    master.createEvent(title, start, end, {description: desc, location: String(found.location || ''), guests: techId, sendInvites: true});
   }
   return {ok: true, scheduled: true, asap: true, dryrun: !!req.dryrun, tech: techName,
           minutes: minutes,
@@ -4079,6 +4084,24 @@ var PQ_ADMINS = ['markhales.blp@gmail.com',   // Mark — lead manager, full per
   'melissa@brighamlarsonpianos.com', 'brigham@brighamlarsonpianos.com',
   'karmel@brighamlarsonpianos.com', 'alisa@brighamlarsonpianos.com',
   'susie@brighamlarsonpianos.com', 'walter@brighamlarsonpianos.com'];
+// 🚫 mark a piano PRE-QUEUE from the card (Brigham 9/17): appends Pre-Queue to
+// the status and drops any earlier "Queue Approved" stamp. Approve reverses it.
+function preQueueMark_(req) {
+  var email = String((req.user && req.user.email) || '').toLowerCase();
+  if (PQ_ADMINS.indexOf(email) < 0) {
+    return {error: 'Only admins/managers can mark a piano pre-queue (Google sign-in required).'};
+  }
+  var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+  var found = findPiano_(sh, req.serial, req.row);
+  if (found.error) return found;
+  var COL_S = 19;
+  var cur = String(sh.getRange(found.row, COL_S).getValue() || '');
+  if (/pre[\s-]?queue/i.test(cur)) return {ok: true, row: found.row, summary: found.summary, status: cur, already: true};
+  var next = cur.replace(/,?\s*queue approved[^,]*/i, '').replace(/^\s*,\s*/, '').trim();
+  next = (next ? next + ', ' : '') + 'Pre-Queue';
+  sh.getRange(found.row, COL_S).setValue(next);
+  return {ok: true, row: found.row, summary: found.summary, status: next};
+}
 function preQueueApprove_(req) {
   var email = String((req.user && req.user.email) || '').toLowerCase();
   if (PQ_ADMINS.indexOf(email) < 0) {

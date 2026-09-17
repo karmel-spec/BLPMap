@@ -5434,7 +5434,7 @@ function popHTML(p) {
     <div class="typemsg phmsg"></div>
     ${preQueue(p) ? `<div class="pqwarn">⚠️ <b>PRE-QUEUE</b> — deposit not received. No work is approved on this piano yet.
       ${isAdminUser() ? `<button class="pqapprove">✅ Approve for queue</button>` : `<i>admin / manager approval required to start work</i>`}
-      <span class="pqmsg"></span></div>` : ''}
+      <span class="pqmsg"></span></div>` : (isAdminUser() && p.serial && /shopwork/i.test(String(p.section || '')) && !/queue approved/i.test(String(p.status || ''))) ? `<div class="pqmarkrow"><button class="pqmark" title="deposit not in yet — mark this piano PRE-QUEUE: 🚫 badge on the map, no work approved until an admin approves it">🚫 Mark Pre-Queue</button> <span class="pqmsg lite"></span></div>` : ''}
     ${(p.tempEntry || '').trim() ? `<div class="tempbanner">🆕 <b>TEMP ENTRY</b> — ${esc(p.tempEntry)} · awaiting admin approval
       ${(isPayrollAdmin() || isTimelogAdmin()) ? `<span class="tempbtns">
         <button class="tempok">✅ Approve</button>
@@ -6361,6 +6361,27 @@ function wirePop(p) {
       lhb.textContent = '🕘 Location history';
       out.innerHTML = '<div class="lhnone">history unavailable — try again</div>';
     }
+  };
+  // 🚫 mark pre-queue from the card (Brigham 9/17)
+  const pqmk = pop.querySelector('.pqmark');
+  if (pqmk) pqmk.onclick = async ev => {
+    ev.stopPropagation(); popPinned = true;
+    if (!isAdminUser()) return;
+    if (!confirm('Mark ' + (p.serial || 'this piano') + ' PRE-QUEUE?\n\nThe deposit is not in yet — the 🚫 no-work sign goes on the map and techs cannot clock into it until an admin approves it for the queue.')) return;
+    const pqm = pop.querySelector('.pqmsg');
+    if (pqm) pqm.textContent = ' marking…';
+    const {pin, ok} = writeAuth();
+    if (!ok) return;
+    try {
+      const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+        headers: {'content-type': 'text/plain;charset=utf-8'},
+        body: JSON.stringify({pin, action: 'prequeuemark', serial: p.serial, row: p.row, ...authFields()})});
+      const j = await r.json();
+      if (!j.ok) throw new Error(j.error || 'failed');
+      p.status = j.status;
+      renderMap();
+      openPop(p.row, S.popAnchor, true);
+    } catch (e) { if (pqm) pqm.textContent = ' ✗ ' + e.message; }
   };
   const pqa = pop.querySelector('.pqapprove');
   if (pqa) pqa.onclick = async ev => {

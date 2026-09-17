@@ -2028,3 +2028,6 @@ tr.dayflag td{background:#fff5f5}
 tr.daynone td{color:#9aa2ab}
 .openband{background:#fdecec;color:#7a1f1f;border-color:#f0b9b9}
 .openband .cfxclear{margin:2px 2px 0 0}
+.pqmarkrow{margin:6px 0 2px}
+.pqmark{border:1.5px solid #9e2020;background:#fff;color:#9e2020;border-radius:8px;padding:5px 11px;font-weight:700;font-size:12px;cursor:pointer}
+.pqmark:hover{background:#9e2020;color:#fff}
