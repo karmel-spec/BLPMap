@@ -4480,6 +4480,8 @@ async function openQcRail(id) {
   document.body.appendChild(ov);
   let live = q;
   let poll = null;
+  const noteOpen = new Set(), noteDraft = new Map(), noteMode = new Map();   // inline per-item note boxes
+  let genNote = '';
   const close = () => { clearInterval(poll); ov.remove(); };
   const render = () => {
     const v = live.verdicts || {};
@@ -4498,37 +4500,68 @@ async function openQcRail(id) {
         <b style="font-size:12px;color:#274b6d">📝 The tech's notes on checklist items:</b>
         ${workItems.filter(it => st.notes.has(it.i)).map(it => `<div style="font-size:12px;margin-top:4px">• ${esc(it.text.slice(0, 90))}<br>
           <span style="color:#274b6d">↳ ${esc(st.notes.get(it.i))}</span></div>`).join('')}</div>` : ''}
+      ${canJudge && !settled ? `<div class="qchelp">✓ = this item passes · ✗ = needs rework (say what) · 📝 = add a note to a pass. Every ✓ unlocks <b>Approve</b>; any ✗ unlocks <b>Send back</b>, which puts a 🔁 Rework card on the tech's board and texts them.</div>` : ''}
       ${items.map(it => {
         const vd = v[it.text];
-        return `<div style="padding:9px 2px;border-top:1px solid #f0ece5">
+        const open = noteOpen.has(it.text);
+        return `<div style="padding:9px 2px;border-top:1px solid #f0ece5" data-item="${esc(it.text)}">
           <div style="display:flex;gap:8px;align-items:flex-start">
             <div style="flex:1"><span style="font-size:10px;letter-spacing:1px;color:#8a847b;text-transform:uppercase">${esc(it.section)}</span><br>${esc(it.text)}</div>
-            ${canJudge && !settled ? `<button class="qcp" data-t="${esc(it.text)}" style="border:1.5px solid ${vd && vd.verdict === 'pass' ? '#2f7d4f' : '#cfc9bf'};background:${vd && vd.verdict === 'pass' ? '#eaf5ec' : '#fff'};border-radius:8px;padding:5px 9px;color:#2f7d4f;font-weight:700">✓</button>
-              <button class="qcf" data-t="${esc(it.text)}" style="border:1.5px solid ${vd && vd.verdict === 'fail' ? '#9e2020' : '#cfc9bf'};background:${vd && vd.verdict === 'fail' ? '#fdecec' : '#fff'};border-radius:8px;padding:5px 9px;color:#9e2020;font-weight:700">✗</button>`
+            ${canJudge && !settled ? `<button class="qcp" data-t="${esc(it.text)}" title="passes" style="border:1.5px solid ${vd && vd.verdict === 'pass' ? '#2f7d4f' : '#cfc9bf'};background:${vd && vd.verdict === 'pass' ? '#eaf5ec' : '#fff'};border-radius:8px;padding:5px 9px;color:#2f7d4f;font-weight:700">✓</button>
+              <button class="qcf" data-t="${esc(it.text)}" title="needs rework" style="border:1.5px solid ${vd && vd.verdict === 'fail' ? '#9e2020' : '#cfc9bf'};background:${vd && vd.verdict === 'fail' ? '#fdecec' : '#fff'};border-radius:8px;padding:5px 9px;color:#9e2020;font-weight:700">✗</button>
+              <button class="qcn" data-t="${esc(it.text)}" title="add a note" style="border:1.5px solid #cfc9bf;background:${open ? '#f2f6fb' : '#fff'};border-radius:8px;padding:5px 7px;color:#274b6d">📝</button>`
               : vd ? `<b style="color:${vd.verdict === 'pass' ? '#2f7d4f' : '#9e2020'}">${vd.verdict === 'pass' ? '✓' : '✗'}</b>` : '<span style="color:#c9c2b6">·</span>'}
           </div>
-          ${vd && vd.note ? `<div style="font-size:11.5px;color:#9e2020;margin:3px 0 0 2px">↳ ${esc(vd.note)}</div>` : ''}</div>`;
+          ${vd && vd.note ? `<div style="font-size:11.5px;color:${vd.verdict === 'fail' ? '#9e2020' : '#274b6d'};margin:3px 0 0 2px">↳ ${esc(vd.note)}${vd.by ? ` <span style="color:#8a847b">— ${esc(String(vd.by).split(' ')[0])}</span>` : ''}</div>` : ''}
+          ${open ? `<div class="qcnotebox" data-t="${esc(it.text)}">
+              <textarea class="qcnotetxt" maxlength="300" rows="2" placeholder="${noteMode.get(it.text) === 'fail' ? 'What needs rework on this item? (required)' : 'Note on this item (optional)'}">${esc(noteDraft.get(it.text) || (vd && vd.note) || '')}</textarea>
+              <div style="display:flex;gap:6px;margin-top:5px">
+                ${noteMode.get(it.text) === 'fail'
+                  ? `<button class="qcnsave" data-v="fail" style="background:#9e2020;color:#fff;border:0;border-radius:7px;padding:5px 10px;font-weight:700">Save ✗ needs rework</button>`
+                  : `<button class="qcnsave" data-v="pass" style="background:#2f7d4f;color:#fff;border:0;border-radius:7px;padding:5px 10px;font-weight:700">Save ✓ with note</button>
+                     <button class="qcnsave" data-v="fail" style="background:#fff;color:#9e2020;border:1.5px solid #9e2020;border-radius:7px;padding:5px 10px;font-weight:700">Save ✗</button>`}
+                <button class="qcncancel" style="background:none;border:0;color:#8a847b">cancel</button></div></div>` : ''}</div>`;
       }).join('')}
-      ${canJudge && !settled ? `<div style="display:flex;gap:8px;margin-top:14px">
+      ${canJudge && !settled ? `<div style="margin-top:14px">
+        <label style="font-size:11px;letter-spacing:1px;color:#8a847b;text-transform:uppercase">📝 Note to the tech (optional)</label>
+        <textarea class="qcgen" maxlength="400" rows="2" placeholder="Goes on the rework card and in the text — praise, context, what to watch next time…">${esc(genNote)}</textarea>
+        <div style="display:flex;gap:8px;margin-top:8px">
         <button class="csvbtn qcpass" ${all ? '' : 'disabled style="opacity:.45"'}>✅ Approve — advance to ${esc(q.next_phase)}</button>
-        <button class="csvbtn qcback" ${anyFail ? '' : 'disabled'} style="background:#9e2020;${anyFail ? '' : 'opacity:.45'}">🔁 Send back</button></div>` : ''}
+        <button class="csvbtn qcback" ${anyFail ? '' : 'disabled'} style="background:#9e2020;${anyFail ? '' : 'opacity:.45'}">🔁 Send back</button></div>
+        ${!all && !anyFail ? '<div class="dssub" style="margin-top:6px">Judge every item first — Approve needs all ✓, Send back needs at least one ✗.</div>' : ''}</div>` : ''}
       ${!canJudge && !settled ? '<div class="dssub" style="margin-top:10px">Waiting on a manager — this updates live.</div>' : ''}`;
     ov.querySelector('.dsx').onclick = close;
     if (!canJudge || settled) return;
-    const sendVerdict = async (item, verdict) => {
-      let note = '';
-      if (verdict === 'fail') { note = prompt('What needs rework on: ' + item) || ''; if (!note.trim()) return; }
+    // ✗ opens an inline note box (prompt() is suppressed in the installed
+    // app — a silent ✗ was the "how do we assign rework?" confusion, 9/17)
+    const sendVerdict = async (item, verdict, note) => {
       const r = await fetch(PHASEQC_URL, {method: 'POST', headers: {'content-type': 'application/json'},
-        body: JSON.stringify({key: 'pianoman', op: 'verdict', id: q.id, item, verdict, note, manager: clockName()})});
+        body: JSON.stringify({key: 'pianoman', op: 'verdict', id: q.id, item, verdict, note: String(note || '').slice(0, 300), manager: clockName()})});
       const j = await r.json();
+      noteOpen.delete(item); noteDraft.delete(item); noteMode.delete(item);
       if (j.verdicts) { live.verdicts = j.verdicts; render(); }
     };
-    ov.querySelectorAll('.qcp').forEach(b => b.onclick = () => sendVerdict(b.dataset.t, 'pass'));
-    ov.querySelectorAll('.qcf').forEach(b => b.onclick = () => sendVerdict(b.dataset.t, 'fail'));
+    const keepGen = () => { const g = ov.querySelector('.qcgen'); if (g) genNote = g.value; };
+    const openNote = (item, mode) => { keepGen(); noteOpen.add(item); noteMode.set(item, mode); render();
+      const ta = ov.querySelector(`.qcnotebox[data-t="${CSS.escape(item)}"] .qcnotetxt`); if (ta) ta.focus(); };
+    ov.querySelectorAll('.qcp').forEach(b => b.onclick = () => { keepGen(); sendVerdict(b.dataset.t, 'pass', (live.verdicts || {})[b.dataset.t] && live.verdicts[b.dataset.t].note); });
+    ov.querySelectorAll('.qcf').forEach(b => b.onclick = () => openNote(b.dataset.t, 'fail'));
+    ov.querySelectorAll('.qcn').forEach(b => b.onclick = () => noteOpen.has(b.dataset.t) ? (noteOpen.delete(b.dataset.t), keepGen(), render()) : openNote(b.dataset.t, 'note'));
+    ov.querySelectorAll('.qcnotebox').forEach(box => {
+      const item = box.dataset.t, ta = box.querySelector('.qcnotetxt');
+      ta.oninput = () => noteDraft.set(item, ta.value);
+      box.querySelectorAll('.qcnsave').forEach(sb => sb.onclick = () => {
+        const note = ta.value.trim();
+        if (sb.dataset.v === 'fail' && !note) { ta.focus(); ta.style.borderColor = '#9e2020'; return; }
+        keepGen(); sendVerdict(item, sb.dataset.v, note);
+      });
+      box.querySelector('.qcncancel').onclick = () => { noteOpen.delete(item); noteDraft.delete(item); keepGen(); render(); };
+    });
     const fp = ov.querySelector('.qcpass'), fb = ov.querySelector('.qcback');
     const finalize = async outcome => {
+      keepGen();
       const r = await fetch(PHASEQC_URL, {method: 'POST', headers: {'content-type': 'application/json'},
-        body: JSON.stringify({key: 'pianoman', op: 'finalize', id: q.id, outcome, manager: clockName(), pin: writeAuth().pin || 'pianoman'})});
+        body: JSON.stringify({key: 'pianoman', op: 'finalize', id: q.id, outcome, note: String(genNote || '').slice(0, 400), manager: clockName(), pin: writeAuth().pin || 'pianoman'})});
       const j = await r.json();
       if (j.ok) { live.status = j.status; render(); setTimeout(() => { close(); location.reload(); }, 1600); }
     };
