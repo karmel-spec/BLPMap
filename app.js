@@ -4575,7 +4575,7 @@ async function openQcRail(id) {
     const settled = live.status !== 'pending';
     ov.innerHTML = `<div class="dsheet" style="max-height:86vh;overflow:auto"><button class="dsx">✕</button>
       <h3>🔍 Mini-QC — ${esc(q.phase)}</h3>
-      <div class="dssub">${esc(q.piano || '#' + q.serial)} · requested by ${esc((q.requested_by || '').split(' ')[0])}
+      <div class="dssub">${esc(q.piano || 'Piano')} · <b>#${esc(q.serial)}</b>${p && p.location ? ` · spot ${esc(p.location)}` : ''} · requested by ${esc((q.requested_by || '').split(' ')[0])}
         ${settled ? ` · <b style="color:${live.status === 'passed' ? '#2f7d4f' : '#9e2020'}">${live.status.toUpperCase()}</b>` : ''}</div>
       ${settled ? `<div class="qcwho-row"><b>🧑‍🔧 Inspected by:</b> ${esc(live.manager || '—')}</div>`
         : canJudge && !inspecting ? `<div class="qcstart">
