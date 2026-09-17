@@ -4079,7 +4079,7 @@ async function updateClPill() {
     const pp = S.data.pianos.find(x => x.serial === o.serial);
     ph = pp ? String(pp.phase || '').trim() : '';
   }
-  const active = o && o.serial && o.serial !== 'MGMT' && o.serial !== 'TIDY' && CHECKLIST_PHASES.includes(ph || o.phase) ? (ph || o.phase) : null;
+  const active = o && o.serial && o.serial !== 'MGMT' && o.serial !== 'TIDY' && o.serial !== 'MAINT' && CHECKLIST_PHASES.includes(ph || o.phase) ? (ph || o.phase) : null;
   if (!active) { if (pill) pill.hidden = true; return; }
   const st = await clFetch(o.serial, active);
   const work = clVariantItems(st.items, S.data.pianos.find(x => x.serial === o.serial) || {}, 'work');
@@ -5474,6 +5474,7 @@ function popHTML(p) {
             <option value="__other__">✏️ Other — write it in…</option>
             <option value="Admin / Misc">📋 Admin / Misc</option>
             <option value="Moving">🚚 Moving</option>
+            <option value="Buffing — plate hardware">🪞 Buffing — plate hardware</option>
             <option value="Rework">🔁 Rework — fixing earlier work</option>
             <option value="" disabled>— shop phases —</option>
             ${opts.map(ph => `<option value="${esc(ph)}">${esc(ph)}</option>`).join('')}
@@ -11066,8 +11067,8 @@ function scorecardTable() {
   const inWin = iso => iso && new Date(iso).getTime() >= cut;
   const tl = unvoided(S.tlRows).filter(r => inWin(r.start) && !/test/i.test(r.phase) && !/FAKE/.test(r.serial || ''));
   const mins = rows => rows.reduce((a, r) => a + (r.minutes || 0), 0);
-  const pianoRows = tl.filter(r => !/^(Moving|Admin \/ Misc|Management|Shop Tidying)/.test(r.phase)
-    && r.serial !== 'MGMT' && r.serial !== 'TIDY');
+  const pianoRows = tl.filter(r => !/^(Moving|Admin \/ Misc|Management|Shop Tidying|Building Maintenance)/.test(r.phase)
+    && r.serial !== 'MGMT' && r.serial !== 'TIDY' && r.serial !== 'MAINT');
   const trainRows = tl.filter(r => /^Training/.test(r.phase));
   const reworkRows = tl.filter(r => /^Rework|re-?do|fix(ing)? (earlier|previous)/i.test(r.phase));
   const workH = mins(pianoRows) / 60, trainH = mins(trainRows) / 60, reworkH = mins(reworkRows) / 60;
@@ -12127,6 +12128,23 @@ function renderDash() {
         <div class="tidymsg phmsg"></div>
       </div>`;
     })()}
+    ${(() => {
+      // 🔧 building maintenance (Korban via Melissa 9/16, request 091626terry43):
+      // lightbulbs, sheetrock, painting — not tidying, not a piano. Pseudo-serial MAINT.
+      const onMaint = o && o.serial === 'MAINT';
+      return `<div class="dbench db-maint">
+        <h4>🔧 Building maintenance</h4>
+        ${onMaint ? `<div class="dline now"><b>On building maintenance</b> since ${fmtT(o.start)} —
+              <span class="cctime" data-start="${esc(o.start)}">${clockElapsed(o.start)}</span></div>
+            <button class="paybtn maintoff">■ End maintenance time</button>
+            <div class="dline dim">Opening a piano card and clocking in there switches you back to piano time automatically.</div>`
+          : o && o.serial !== 'MGMT' ? `<div class="dline">You're on <b>#${esc(o.serial)}</b> — one tap moves you to maintenance and closes that session.</div>
+            <button class="paybtn mainton">🔧 Switch to building maintenance</button>`
+          : `<button class="paybtn mainton">▶ Clock into building maintenance</button>
+            <div class="dline dim">Repairs to the building itself — lightbulbs, sheetrock, painting, plumbing, fixtures.</div>`}
+        <div class="maintmsg phmsg"></div>
+      </div>`;
+    })()}
     ${myWeekCard()}
     <div class="dbench db-timeoff">
       <h4>🏖 Time off</h4>
@@ -12187,6 +12205,25 @@ function renderDash() {
     const j = await punch('clockout', null, '', 'dash'); clearTimeout(slow_tOff);
     const tm = body.querySelector('.tidymsg');
     if (j.error) { if (tm) { tm.className = 'tidymsg phmsg err'; tm.textContent = j.error; } tOff.disabled = false; tOff.textContent = '■ End tidying time'; }
+    else renderDash();
+  };
+  const bOn = body.querySelector('.mainton'), bOff = body.querySelector('.maintoff');
+  if (bOn) bOn.onclick = async () => {
+    if (Date.now() - CLOCK.punchedAt < 2000) return;
+    bOn.disabled = true; bOn.textContent = clockingText('in');
+    const slow_bOn = punchSlow(bOn, 'in');
+    const j = await punch('clockin', {serial: 'MAINT', row: ''}, 'Building Maintenance', 'dash'); clearTimeout(slow_bOn);
+    const bm = body.querySelector('.maintmsg');
+    if (j.error) { if (bm) { bm.className = 'maintmsg phmsg err'; bm.textContent = j.error; } bOn.disabled = false; bOn.textContent = '🔧 Building maintenance'; }
+    else renderDash();
+  };
+  if (bOff) bOff.onclick = async () => {
+    if (Date.now() - CLOCK.punchedAt < 2000) return;
+    bOff.disabled = true; bOff.textContent = clockingText('out');
+    const slow_bOff = punchSlow(bOff, 'out');
+    const j = await punch('clockout', null, '', 'dash'); clearTimeout(slow_bOff);
+    const bm = body.querySelector('.maintmsg');
+    if (j.error) { if (bm) { bm.className = 'maintmsg phmsg err'; bm.textContent = j.error; } bOff.disabled = false; bOff.textContent = '■ End maintenance time'; }
     else renderDash();
   };
   const cfx2 = body.querySelector('.cfixlink2');

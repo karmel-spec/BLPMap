@@ -50,7 +50,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-09-17.4';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-09-17.5';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -3158,7 +3158,7 @@ function clockInLocked_(req) {
   // Management / Tidying time (pseudo-serials MGMT / TIDY): not pianos — skip
   // the Piano Log lookup and label the session plainly so reports can tell
   // them apart. MGMT mirrors the app's manager-only card (isTimelogAdmin).
-  var pseudo = {MGMT: 'Management', TIDY: 'Shop tidying'}[String(req.serial)] || '';
+  var pseudo = {MGMT: 'Management', TIDY: 'Shop tidying', MAINT: 'Building maintenance'}[String(req.serial)] || '';
   if (String(req.serial) === 'MGMT' && !(payrollAdmin_(req._g) || timelogAdmin_(req._g))) {
     return {error: 'Management time is for owners and managers (Google sign-in required).'};
   }
@@ -6247,7 +6247,7 @@ function techDash_(name) {
   // per-piano rollup, newest first
   var byPiano = {}, order = [];
   rows.forEach(function (r) {
-    if (!r.serial || r.serial === 'MGMT' || r.serial === 'TIDY') return;   // pseudo-serials aren't pianos
+    if (!r.serial || r.serial === 'MGMT' || r.serial === 'TIDY' || r.serial === 'MAINT') return;   // pseudo-serials aren't pianos
     if (!byPiano[r.serial]) { byPiano[r.serial] = {serial: r.serial, piano: r.piano, phases: {}, minutes: 0, last: ''}; order.push(r.serial); }
     var b = byPiano[r.serial];
     b.minutes += r.minutes;
@@ -6267,7 +6267,7 @@ function techDash_(name) {
     var w = Utilities.formatDate(new Date(r.start), 'America/Denver', 'YYYY-ww');
     perDay[d] = (perDay[d] || 0) + r.minutes;
     perWeek[w] = (perWeek[w] || 0) + r.minutes;
-    if (r.serial !== 'MGMT' && r.serial !== 'TIDY') (weekPianos[w] = weekPianos[w] || {})[r.serial] = true;
+    if (r.serial !== 'MGMT' && r.serial !== 'TIDY' && r.serial !== 'MAINT') (weekPianos[w] = weekPianos[w] || {})[r.serial] = true;
     if (!longest || r.minutes > longest.minutes) longest = r;
   });
   function best(map) {
@@ -7023,7 +7023,7 @@ function lateClockNudge(e) {
   };
   try {
     (timeClockState_().open || []).forEach(function (o) {
-      add(o.tech, (o.serial === 'MGMT' ? '\ud83e\uddd1\u200d\ud83d\udcbc ' : o.serial === 'TIDY' ? '\ud83e\uddf9 ' : '\ud83c\udfb9 ')
+      add(o.tech, (o.serial === 'MGMT' ? '\ud83e\uddd1\u200d\ud83d\udcbc ' : o.serial === 'TIDY' ? '\ud83e\uddf9 ' : o.serial === 'MAINT' ? '\ud83d\udd27 ' : '\ud83c\udfb9 ')
         + (o.piano || o.serial) + (o.phase ? ' (' + o.phase + ')' : ''));
     });
   } catch (e1) {}
