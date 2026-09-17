@@ -1234,12 +1234,28 @@ function tryDeepLink() {
   setTimeout(() => focusPiano(p), 250);
 }
 /* #report=<id> deep link — a shared report link opens straight to that report */
+// the data a report needs, fetched on open — shared by the in-app click and
+// the #report= deep link (a shared Time Clock Adjustments link sat on
+// "Loading clocks…" forever because only the click path loaded, 9/17)
+function preloadReport(id) {
+  if (id === 'activity' && !S.activityRows) loadActivity();
+  if ((id === 'briefs' || id === 'adminbriefs') && !S.briefRows) loadBriefs();
+  if (id === 'paytime' && !S.payRows) loadPayroll();
+  if (id === 'jobcost' && !S.tlRows) loadTimeLog();
+  if (id === 'queue' && !S.tlRows) loadTimeLog();   // ASSIGNED TO column
+  if (id === 'appupdates' && !S.auRows) loadAppUpdates();
+  if (id === 'spotlight' && !S.spotData) loadSpotlight();
+  if (id === 'clockadjust') {
+    if (!S.fixRows) loadClockFixes();
+    if (!S.payRows) loadPayroll();
+    if (!S.tlRows) loadTimeLog();
+  }
+}
 function tryReportLink() {
   const m = /[#&]report=([a-z]+)/.exec(location.hash || '');
   if (!m || !REPORT_DEFS().some(r => r.id === m[1])) return;
   S.openReport = m[1];
-  if (m[1] === 'activity' && !S.activityRows) loadActivity();
-  if (m[1] === 'briefs' && !S.briefRows) loadBriefs();
+  preloadReport(m[1]);
   switchView('report');
   renderReport();
 }
@@ -11456,18 +11472,7 @@ function renderReport() {
   body.querySelectorAll('.rptbtn').forEach(b => b.onclick = () => {
     const id = b.closest('.rpt').dataset.r;
     S.openReport = id;
-    if (S.openReport === 'activity' && !S.activityRows) loadActivity();
-    if ((S.openReport === 'briefs' || S.openReport === 'adminbriefs') && !S.briefRows) loadBriefs();
-    if (S.openReport === 'paytime' && !S.payRows) loadPayroll();
-    if (S.openReport === 'jobcost' && !S.tlRows) loadTimeLog();
-    if (S.openReport === 'queue' && !S.tlRows) loadTimeLog();   // ASSIGNED TO column
-    if (S.openReport === 'appupdates' && !S.auRows) loadAppUpdates();
-    if (S.openReport === 'spotlight' && !S.spotData) loadSpotlight();
-    if (S.openReport === 'clockadjust') {
-      if (!S.fixRows) loadClockFixes();
-      if (!S.payRows) loadPayroll();
-      if (!S.tlRows) loadTimeLog();
-    }
+    preloadReport(id);
     renderReport();
     const v = $('#view-report'); if (v) v.scrollTop = 0;
   });
