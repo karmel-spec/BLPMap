@@ -50,7 +50,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-09-17.8';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-09-17.9';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -1674,7 +1674,7 @@ function editQueue_(hours) {
   var ss = SpreadsheetApp.openById(PIANO_LOG_ID);
   var log = ss.getSheetByName(PHOTO_LOG_TAB);
   if (!log || log.getLastRow() < 2) return {ok: true, items: []};
-  var since = Date.now() - Math.max(1, Math.min(240, Number(hours) || 48)) * 3600000;
+  var since = Date.now() - Math.max(1, Math.min(720, Number(hours) || 48)) * 3600000;   // up to 30 days for backfills
   var last = log.getLastRow(), from = Math.max(2, last - 300);
   var vals = log.getRange(from, 1, last - from + 1, 7).getValues();
   var sh = pianoSheet_(ss);
