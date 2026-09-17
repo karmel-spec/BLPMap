@@ -4482,6 +4482,10 @@ async function openQcRail(id) {
   let poll = null;
   const noteOpen = new Set(), noteDraft = new Map(), noteMode = new Map();   // inline per-item note boxes
   let genNote = '';
+  // who is performing this mini-QC (Brigham 9/17): defaults to the signed-in
+  // name, editable — Brigham often inspects on a tech's phone during training
+  let inspector = clockName() || '';
+  const WHO_SUGGEST = ['Brigham Larson', 'Karmel Larson', 'Mark Hales', 'Matthew Wessman', 'Jacob Mower', 'Melissa Terry'];
   const close = () => { clearInterval(poll); ov.remove(); };
   const render = () => {
     const v = live.verdicts || {};
@@ -4492,6 +4496,10 @@ async function openQcRail(id) {
       <h3>🔍 Mini-QC — ${esc(q.phase)}</h3>
       <div class="dssub">${esc(q.piano || '#' + q.serial)} · requested by ${esc((q.requested_by || '').split(' ')[0])}
         ${settled ? ` · <b style="color:${live.status === 'passed' ? '#2f7d4f' : '#9e2020'}">${live.status.toUpperCase()}</b>` : ''}</div>
+      ${settled ? `<div class="qcwho-row"><b>🧑‍🔧 Inspected by:</b> ${esc(live.manager || '—')}</div>`
+        : canJudge ? `<div class="qcwho-row"><label for="qcWho">🧑‍🔧 Inspected by</label>
+            <input id="qcWho" class="qcwho" list="qcWhoList" maxlength="40" value="${esc(inspector)}" placeholder="who is performing this mini-QC">
+            <datalist id="qcWhoList">${[...new Set(WHO_SUGGEST.concat(clockName() ? [clockName()] : []))].map(n => `<option value="${esc(n)}">`).join('')}</datalist></div>` : ''}
       ${skippedWork.length ? `<div style="background:#fdf6e3;border-radius:10px;padding:8px 10px;margin:8px 0">
         <b style="font-size:12px;color:#9a5b13">⏭ Skipped work steps — check the reasons hold up:</b>
         ${skippedWork.map(it => `<div style="font-size:12px;margin-top:4px">• ${esc(it.text)}<br>
@@ -4535,13 +4543,17 @@ async function openQcRail(id) {
     // ✗ opens an inline note box (prompt() is suppressed in the installed
     // app — a silent ✗ was the "how do we assign rework?" confusion, 9/17)
     const sendVerdict = async (item, verdict, note) => {
+      if (!needWho()) return;
       const r = await fetch(PHASEQC_URL, {method: 'POST', headers: {'content-type': 'application/json'},
-        body: JSON.stringify({key: 'pianoman', op: 'verdict', id: q.id, item, verdict, note: String(note || '').slice(0, 300), manager: clockName()})});
+        body: JSON.stringify({key: 'pianoman', op: 'verdict', id: q.id, item, verdict, note: String(note || '').slice(0, 300), manager: inspector || clockName()})});
       const j = await r.json();
       noteOpen.delete(item); noteDraft.delete(item); noteMode.delete(item);
       if (j.verdicts) { live.verdicts = j.verdicts; render(); }
     };
     const keepGen = () => { const g = ov.querySelector('.qcgen'); if (g) genNote = g.value; };
+    const who = ov.querySelector('.qcwho');
+    if (who) who.oninput = () => { inspector = who.value.trim(); };
+    const needWho = () => { if (inspector) return true; if (who) { who.focus(); who.style.borderColor = '#9e2020'; } return false; };
     const openNote = (item, mode) => { keepGen(); noteOpen.add(item); noteMode.set(item, mode); render();
       const ta = ov.querySelector(`.qcnotebox[data-t="${CSS.escape(item)}"] .qcnotetxt`); if (ta) ta.focus(); };
     ov.querySelectorAll('.qcp').forEach(b => b.onclick = () => { keepGen(); sendVerdict(b.dataset.t, 'pass', (live.verdicts || {})[b.dataset.t] && live.verdicts[b.dataset.t].note); });
@@ -4560,8 +4572,9 @@ async function openQcRail(id) {
     const fp = ov.querySelector('.qcpass'), fb = ov.querySelector('.qcback');
     const finalize = async outcome => {
       keepGen();
+      if (!needWho()) return;
       const r = await fetch(PHASEQC_URL, {method: 'POST', headers: {'content-type': 'application/json'},
-        body: JSON.stringify({key: 'pianoman', op: 'finalize', id: q.id, outcome, note: String(genNote || '').slice(0, 400), manager: clockName(), pin: writeAuth().pin || 'pianoman'})});
+        body: JSON.stringify({key: 'pianoman', op: 'finalize', id: q.id, outcome, note: String(genNote || '').slice(0, 400), manager: inspector || clockName(), pin: writeAuth().pin || 'pianoman'})});
       const j = await r.json();
       if (j.ok) { live.status = j.status; render(); setTimeout(() => { close(); location.reload(); }, 1600); }
     };
