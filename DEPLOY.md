@@ -63,7 +63,7 @@ change — it is the only reliable way to tell that a paste actually took
 otherwise; it happened 9/9).
 
 ### Pending bridge paste (as of Wed Sep 16, 2026)
-Deployed: rev `2026-09-15.3` (V151, 9/15 from karmel@). Repo: `2026-09-16.7`.
+Deployed: rev `2026-09-15.3` (V151, 9/15 from karmel@). Repo: `2026-09-17.1`.
 One paste ships, in the order they were built:
 * **Voiding a punch** — a clock-in/clock-out a minute apart can now be struck
   from the ledger without deleting the row. A new **Void** column (Time Log J,
@@ -75,6 +75,13 @@ One paste ships, in the order they were built:
   Same permissions as adjusting the punch's times. Voiding TEXTS the team
   member (voiding only ever follows their own request), one text per punch
   per hour; restoring texts them too.
+* **Clock fix filing deduped** — Time Off has been deduped since 9/15; the
+  clock fix filing path never was, so one request could land twice (Avery and
+  Myrrhanda, 9/17). Two guards: a `reqId` the app keeps stable across its own
+  retries (kills the retried-POST pair), and an identical request from the
+  same person that is still OPEN (kills the "I re-sent it hours later"
+  pair). Once a request is resolved, an identical one files normally — that
+  means the fix did not take.
 * **Bilingual team texts** — clock fix applied, punch voided/restored, and
   time off approved/denied now go out in Spanish for whoever needs it.
   Two signals: the language the request was FILED in (the app sends it; new
@@ -94,7 +101,7 @@ One paste ships, in the order they were built:
   floor, never a trim) and the 8 PM mover nudge.
 
 Deploy from karmel@, restore the three secret lines, New version, then check
-the ping for `"rev":"2026-09-16.7"` and `"drive":"ok"`.
+the ping for `"rev":"2026-09-17.1"` and `"drive":"ok"`.
 
 **Then run the phase migration once** — POST `{action:'migratephases'}` to the
 bridge (or ask Claude to). It rewrites the CURRENT PHASE cells: the 9 pianos

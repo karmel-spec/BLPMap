@@ -19,7 +19,7 @@ var APP_URL = 'https://blpstoremap.netlify.app';
 var REPORT_TO = 'info@brighamlarsonpianos.com';
 var PIANO_LOG_ID = '1ZunbPKygpQlcXfTyPowDHdUE9spJ3uV1XA4iX1eoKRc';
 var BRIDGE_SECRET = 'PASTE_SECRET_HERE';   // server-to-server auth (optional)
-var BRIDGE_REV = '2026-09-16.7';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-09-17.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = 'PASTE_PIN_HERE';           // what BLP team members type to move pianos
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -3844,13 +3844,62 @@ function clockFixSheet_() {
   }
   return ensureCol_(sh, 7, 'Lang');
 }
+/* "Myrrhanda Lamping (session expired — unverified)" and "myrrhanda lamping"
+ * are the same person filing. */
+function cfxWho_(x) { return String(x || '').replace(/\s*[(<].*$/, '').trim().toLowerCase(); }
+
 function clockFixRequest_(req, who) {
   var note = String(req.note || '').trim();
   if (!note) return {error: 'say what needs fixing (date + correct times helps)'};
   var sh = clockFixSheet_();
-  sh.appendRow([new Date(), String(who || ''), req.clock === 'pay' ? 'Day clock' : 'Piano clock',
-                String(req.serial || ''), note.slice(0, 400), 'open',
+  var clockLabel = req.clock === 'pay' ? 'Day clock' : 'Piano clock';
+  var serial = String(req.serial || '');
+  // Avery + Myrrhanda 9/17: one request, two rows on the list. Time off has
+  // been deduped since 9/15; this path never was. Two distinct causes:
+  //
+  // (1) A RETRIED POST. adjustPost retries when Google answers with its
+  //     generic service ping or the connection drops — but the write may
+  //     already have landed, so the retry files it again (Avery's pair, same
+  //     minute). The app now sends a reqId that stays the same across its own
+  //     retries, so a retry is recognised exactly rather than guessed at.
+  var cache = CacheService.getScriptCache();
+  var ridKey = req.reqId ? ('cfxreq:' + String(req.reqId)).slice(0, 240) : '';
+  if (ridKey) {
+    try {
+      var seenRow = cache.get(ridKey);
+      if (seenRow) return {ok: true, duplicate: true, row: Number(seenRow)};
+    } catch (eR) { /* cache is best-effort */ }
+  }
+  // (2) THE PERSON RE-SENDING, hours later, because they are not sure it went
+  //     through (Myrrhanda's 4:12 PM and 11:41 PM rows — no time window
+  //     catches that). If their identical request is still OPEN there is
+  //     nothing new to file. Once it has been resolved an identical request
+  //     IS meaningful — it means the fix did not take — so only open rows
+  //     count as duplicates.
+  var dupRow = 0;
+  try {
+    var last = sh.getLastRow();
+    if (last >= 2) {
+      var from = Math.max(2, last - 80);
+      var vals = sh.getRange(from, 1, last - from + 1, 6).getValues();
+      var norm = function (x) { return String(x || '').trim().toLowerCase().replace(/\s+/g, ' '); };
+      for (var i = vals.length - 1; i >= 0 && !dupRow; i--) {
+        if (String(vals[i][5] || 'open') !== 'open') continue;
+        if (cfxWho_(vals[i][1]) !== cfxWho_(who)) continue;
+        if (String(vals[i][2] || '') !== clockLabel) continue;
+        if (String(vals[i][3] || '') !== serial) continue;
+        if (norm(vals[i][4]) === norm(note.slice(0, 400))) dupRow = from + i;
+      }
+    }
+  } catch (eD) { /* dedupe is best-effort — never block a real request */ }
+  if (dupRow) {
+    if (ridKey) { try { cache.put(ridKey, String(dupRow), 21600); } catch (eP) {} }
+    return {ok: true, duplicate: true, row: dupRow};
+  }
+  sh.appendRow([new Date(), String(who || ''), clockLabel,
+                serial, note.slice(0, 400), 'open',
                 String(req.lang || '').slice(0, 5)]);
+  if (ridKey) { try { cache.put(ridKey, String(sh.getLastRow()), 21600); } catch (eP2) {} }
   // routed by role (Brigham 9/1): shop side → Mark, admins → Melissa
   try {
     var whoName = String(who || '').replace(/\s*[(<].*$/, '').trim();

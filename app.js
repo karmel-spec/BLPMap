@@ -4954,11 +4954,12 @@ function clockFixModal(prefill) {
     msg.textContent = 'sending…';
     // file it in the language the app is set to, so the "your clock is fixed"
     // text comes back in that language without anyone maintaining a list
-    const j = await adjustPost({action: 'clockfix', clock: sel.value, serial: ser.value.trim(), note,
+    const j = await clockFixPost({action: 'clockfix', clock: sel.value, serial: ser.value.trim(), note,
       date: ymd, inAt: inT, outAt: outT, lang: es() ? 'es' : 'en'});
     if (j.error) { msg.textContent = j.error; sendBtn.disabled = false; sendBtn.textContent = sendWas; return; }
-    ov.querySelector('.dsheet').innerHTML =
-      '<h3>✅ Request sent</h3><div class="dssub">It’s on the adjustments list — the fix will show on your dashboard once it’s made.</div>';
+    ov.querySelector('.dsheet').innerHTML = j.duplicate
+      ? '<h3>✅ Already on the list</h3><div class="dssub">You had already sent this one — it hasn’t been filed twice. The fix will show on your dashboard once it’s made.</div>'
+      : '<h3>✅ Request sent</h3><div class="dssub">It’s on the adjustments list — the fix will show on your dashboard once it’s made.</div>';
     setTimeout(() => ov.remove(), 2600);
   };
 }
@@ -10006,6 +10007,48 @@ function toLocalInput(iso) {
   const d = new Date(iso), p = n => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
 }
+/* Filing a clock fix is the one bridge write where a blind retry creates a
+ * second row on the managers' list (Avery and Myrrhanda, 9/17): the write may
+ * already have landed and only the answer was lost, so adjustPost's retry
+ * files it a second time. Two guards, and the first needs no bridge deploy —
+ *   · before retrying, re-read the list and look for the row we just filed;
+ *   · reqId stays the same across our retries, so a bridge that knows about
+ *     it recognises the retry exactly instead of guessing from the wording. */
+async function clockFixPost(body) {
+  const {pin, ok} = writeAuth();
+  if (!ok) return {error: 'Sign in first.'};
+  const reqId = 'cfx-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
+  const bare = x => String(x || '').replace(/\s*[(<].*$/, '').trim().toLowerCase().replace(/\s+/g, ' ');
+  const note = String(body.note || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  const alreadyFiled = async () => {
+    try {
+      const r = await fetch(BRIDGE_URL + '?fn=clockfixes', {redirect: 'follow'});
+      const rows = (await r.json()).rows || [];
+      const me = bare(clockName());
+      return rows.some(x => x.status === 'open' && bare(x.who) === me
+        && String(x.note || '').trim().toLowerCase().replace(/\s+/g, ' ') === note);
+    } catch (e) { return false; }   // can't tell → fall through and retry
+  };
+  for (let a = 0; a < 3; a++) {
+    try {
+      const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+        headers: {'content-type': 'text/plain;charset=utf-8'},
+        body: JSON.stringify({pin, ...authFields(), ...body, reqId})});
+      const j = await r.json();
+      if (j && j.service && !j.error) {   // ping imposter — the action may or may not have run
+        if (await alreadyFiled()) return {ok: true, duplicate: true};
+        await new Promise(res => setTimeout(res, 1200 * (a + 1)));
+        continue;
+      }
+      return j;
+    } catch (e) {
+      if (await alreadyFiled()) return {ok: true, duplicate: true};
+      await new Promise(res => setTimeout(res, 1200 * (a + 1)));
+    }
+  }
+  return {error: 'the Google bridge hiccuped and your request did NOT send — try again in a minute'};
+}
+
 async function adjustPost(body) {
   const {pin, ok} = writeAuth();
   if (!ok) return {error: 'Sign in first.'};
