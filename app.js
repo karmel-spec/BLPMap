@@ -13286,7 +13286,7 @@ function renderTaskBoard() {
       .sort((a, b) => ordVal(a) - ordVal(b));
     return `<div class="kcol ${key === 'done' ? 'kdone' : ''}" data-col="${key}">
       <h4><span>${esc(label)}${canEdit && !key.startsWith('mir:') ? ` <button class="kcolren" data-k="${esc(key)}" title="rename column">✎</button><button class="kcolmv" data-k="${esc(key)}" data-d="-1" title="move column left">◀</button><button class="kcolmv" data-k="${esc(key)}" data-d="1" title="move column right">▶</button>` : ''}</span> <i>${cards.length}</i></h4>
-      ${cards.map(c => `<div class="kcard" draggable="${canEdit}" data-id="${esc(c.id)}">
+      ${cards.map(c => `<div class="kcard" draggable="false" data-id="${esc(c.id)}">
         <b>${esc(c.text)}</b>
         <div class="chips">
           ${c.pending ? '<span class="chip c-dueok">saving…</span>' : ''}
@@ -13660,6 +13660,11 @@ function renderTaskBoard() {
   // a moving thumb scrolls the column instead of grabbing the card
   // (Brigham 8/28); the ⠿ handle still drags instantly.
   if (canEdit) el.querySelectorAll('.kcard').forEach(card => {
+    // Melissa 9/14 (request 091426terry39): on a desktop mouse the browser's
+    // NATIVE drag (draggable=true) started after ~4 px and fired pointercancel
+    // before our 8 px lift — the card ghosted and dropped nowhere. The pointer
+    // drag below handles mouse and touch alike, so native drag is off.
+    card.addEventListener('dragstart', e => e.preventDefault());
     card.addEventListener('pointerdown', ev => {
       if (ev.target.closest('button, .chip')) return;
       const id = card.dataset.id;
