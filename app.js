@@ -13035,6 +13035,90 @@ function renderTaskBoard() {
     const next = real.slice(); [next[i], next[j]] = [next[j], next[i]];
     saveCols(next);
   });
+  // drag whole COLUMNS by their header (Brigham 9/17): mouse drags at once,
+  // touch needs a 350 ms hold (a moving thumb still scrolls the board). The
+  // drop lands left or right of the column under the pointer; mirrored
+  // question columns stay where the renderer puts them.
+  if (canEdit) el.querySelectorAll('.kcol > h4').forEach(h => {
+    const colEl = h.parentElement, key = String(colEl.dataset.col || '');
+    if (key.startsWith('mir:')) return;
+    h.classList.add('kgrabbable');
+    h.addEventListener('pointerdown', ev => {
+      if (ev.target.closest('button')) return;
+      const startX = ev.clientX, startY = ev.clientY, isTouch = ev.pointerType !== 'mouse';
+      let dragging = false, ghost = null, holdT = null, armed = !isTouch, lastPt = null, scrollRAF = null, target = null;
+      const clearMarks = () => el.querySelectorAll('.kcol').forEach(c2 => c2.classList.remove('kcolbefore', 'kcolafter'));
+      const lift = (x, y) => {
+        dragging = true;
+        document.body.classList.add('kdragging');
+        ghost = colEl.cloneNode(true);
+        ghost.className = 'kcol kcolghost';
+        ghost.style.width = colEl.offsetWidth + 'px';
+        ghost.style.height = Math.min(colEl.offsetHeight, 240) + 'px';
+        document.body.appendChild(ghost);
+        ghost.style.left = (x - 40) + 'px'; ghost.style.top = (y - 16) + 'px';
+        colEl.classList.add('kcollift');
+        if (navigator.vibrate) try { navigator.vibrate(15); } catch (e2) {}
+      };
+      const blockScroll = e => { if (dragging) e.preventDefault(); };
+      if (isTouch) addEventListener('touchmove', blockScroll, {passive: false});
+      if (isTouch) holdT = setTimeout(() => { armed = true; lift(startX, startY); }, 350);
+      const autoScroll = () => {
+        if (!dragging || !lastPt) { scrollRAF = null; return; }
+        const kan = el.querySelector('.kan');
+        if (kan) {
+          const kr = kan.getBoundingClientRect();
+          if (lastPt.x < kr.left + 56) kan.scrollLeft -= 13;
+          else if (lastPt.x > kr.right - 56) kan.scrollLeft += 13;
+        }
+        scrollRAF = requestAnimationFrame(autoScroll);
+      };
+      const stop = () => {
+        clearTimeout(holdT);
+        if (scrollRAF) { cancelAnimationFrame(scrollRAF); scrollRAF = null; }
+        removeEventListener('pointermove', move); removeEventListener('pointerup', up);
+        removeEventListener('pointercancel', up); removeEventListener('touchmove', blockScroll);
+      };
+      const move = e => {
+        if (!dragging) {
+          if (!armed) { if (Math.hypot(e.clientX - startX, e.clientY - startY) > 10) stop(); return; }
+          if (Math.hypot(e.clientX - startX, e.clientY - startY) < 8) return;
+          lift(e.clientX, e.clientY);
+        }
+        e.preventDefault();
+        lastPt = {x: e.clientX, y: e.clientY};
+        if (!scrollRAF) scrollRAF = requestAnimationFrame(autoScroll);
+        ghost.style.left = (e.clientX - 40) + 'px'; ghost.style.top = (e.clientY - 16) + 'px';
+        const over = document.elementsFromPoint(e.clientX, e.clientY)
+          .find(n => n.classList && n.classList.contains('kcol') && n !== colEl && n !== ghost && !String(n.dataset.col || '').startsWith('mir:'));
+        clearMarks(); target = null;
+        if (over) {
+          const r = over.getBoundingClientRect();
+          const before = e.clientX < r.left + r.width / 2;
+          over.classList.add(before ? 'kcolbefore' : 'kcolafter');
+          target = {key: String(over.dataset.col), before};
+        }
+      };
+      const up = () => {
+        stop();
+        document.body.classList.remove('kdragging');
+        clearMarks();
+        if (!dragging) return;
+        if (ghost) ghost.remove();
+        colEl.classList.remove('kcollift');
+        if (!target) return;
+        const real = boardCols.filter(c => !String(c[0]).startsWith('mir:'));
+        const from = real.findIndex(c => c[0] === key);
+        if (from < 0 || !real.some(c => c[0] === target.key)) return;
+        const next = real.slice(); const [item] = next.splice(from, 1);
+        let to = next.findIndex(c => c[0] === target.key); if (!target.before) to++;
+        next.splice(to, 0, item);
+        if (next.map(c => c[0]).join('|') === real.map(c => c[0]).join('|')) return;
+        saveCols(next);
+      };
+      addEventListener('pointermove', move); addEventListener('pointerup', up); addEventListener('pointercancel', up);
+    });
+  });
   el.querySelectorAll('.kcolren').forEach(b => b.onclick = ev2 => {
     ev2.stopPropagation();
     const cur = boardCols.find(c => c[0] === b.dataset.k);

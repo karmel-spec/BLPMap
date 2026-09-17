@@ -1975,3 +1975,9 @@ body:has(#mydock:not([hidden])) .blpa-stack{bottom:90px!important}
 .autoband .cfxclear{margin-left:6px}
 .autochip{background:#fdf3e3;color:#8a5a12;border:1px solid #e8cfae;border-radius:6px;padding:1px 6px;font-size:10.5px;font-weight:700;white-space:nowrap}
 tr.autorow td{background:#fffdf8}
+/* column drag (Brigham 9/17) */
+.kcol h4.kgrabbable{cursor:grab;user-select:none;-webkit-user-select:none}
+.kcolghost{position:fixed;z-index:400;pointer-events:none;opacity:.88;transform:rotate(1.5deg);box-shadow:0 14px 34px rgba(0,0,0,.28);overflow:hidden}
+.kcol.kcollift{opacity:.35}
+.kcol.kcolbefore{box-shadow:-5px 0 0 #9e2020}
+.kcol.kcolafter{box-shadow:5px 0 0 #9e2020}
