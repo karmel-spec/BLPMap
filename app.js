@@ -1043,8 +1043,15 @@ function soldBadge(p, cx, cy, sc) {
 }
 // Pre-Queue: piano is AT BLP for shopwork but the $1,000 queue deposit
 // hasn't been received — verbal commitment only, NO work may start.
-// Source of truth: "Pre-Queue" in the Piano Log's status column (S).
-function preQueue(p) { return /pre[\s-]?queue/i.test(p.status || ''); }
+// Source of truth: "Pre-Queue" in the Piano Log's status column (S) — OR the
+// row sitting in the PENDING SHOPWORK section (Melissa 9/12, request
+// 091226terry35: dragging the row there is the natural gesture and should be
+// enough). "Queue Approved" in the status wins either way.
+function preQueue(p) {
+  const st = String(p.status || '');
+  if (/queue approved/i.test(st)) return false;
+  return /pre[\s-]?queue/i.test(st) || /^pending shopwork$/i.test(String(p.section || '').trim());
+}
 /* Manager tier — granted ONLY through Google sign-in with these exact BLP
  * gmails; a typed PIN name never elevates anyone.
  *   Mark (lead manager): FULL — everything the admins can do here.
