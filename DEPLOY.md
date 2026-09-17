@@ -52,8 +52,14 @@ From a terminal, copy with the locale set and verify before pasting:
 
 ```sh
 LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 pbcopy < apps-script/DailyReport.gs
-pbpaste | cmp - apps-script/DailyReport.gs && echo ok
+LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 pbpaste | cmp - apps-script/DailyReport.gs && echo ok
 ```
+
+**Both lines need the locale.** `pbpaste` without it converts the readback to
+Mac Roman on the way out, so a perfectly good clipboard fails the `cmp` with
+"differ: char 22, line 2" (the em dash in the header comment). That is the
+CHECK being wrong, not the copy — it cost a false alarm on 9/17. If the
+locale-set version above passes, the clipboard is genuinely fine.
 
 After deploying, open the bridge URL: the ping must show `"enc":"→ — 🛠"`
 intact (if it shows garble, the paste was bad — redo it) and `"rev"` equal
