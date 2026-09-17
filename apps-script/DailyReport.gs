@@ -50,7 +50,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-09-17.7';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-09-17.8';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -187,6 +187,10 @@ function doGet(e) {
     catch (err) { return json_({error: String(err), rows: []}); }
   }
   // Tech photo folder for one piano — the Store Map's Media section links here
+  if (e && e.parameter && e.parameter.fn === 'editqueue') {
+    if (String(e.parameter.key || '') !== 'pianoman' && e.parameter.key !== TEAM_PIN) return json_({error: 'unauthorized'});
+    try { return json_(editQueue_(e.parameter.hours)); } catch (errQ) { return json_({error: String(errQ)}); }
+  }
   if (e && e.parameter && e.parameter.fn === 'techfolder') {
     try {
       var tsh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
@@ -1502,9 +1506,13 @@ function savePhoto_(req, who) {
   var found = findPiano_(sh, req.serial, req.row);
   if (found.error) return found;
   var serial = String(req.serial || '').trim();
-  var kind = String(req.kind || 'tech').toLowerCase();   // tech | before | after
+  var kind = String(req.kind || 'tech').toLowerCase();   // tech | before | after | before-edited | after-edited
   var tech;
-  if (kind === 'before' || kind === 'after') {
+  if (kind === 'before-edited' || kind === 'after-edited') {
+    // Stage 1 photo editing (Alisa 9/11, request 091126miller02): finished
+    // edits live in an "Edited" subfolder inside the Before / After folder
+    tech = editedFolderFor_(sh, found.row, serial, kind.replace('-edited', ''));
+  } else if (kind === 'before' || kind === 'after') {
     tech = mediaFolderFor_(sh, found.row, serial, kind);
   } else if (kind === 'paperwork') {
     tech = paperworkFolderFor_(sh, found.row, serial);
@@ -1537,6 +1545,7 @@ function savePhoto_(req, who) {
   // thumbnail as a ghost while shooting the matching After
   if (req.share) { try { shareAnyoneWithLink_(file.getId()); } catch (e2) {} }
   if (kind === 'before' || kind === 'after') notifyBaPhoto_(kind, serial, found, tech, who, req.stage);
+  if (kind === 'before-edited' || kind === 'after-edited') { try { shareAnyoneWithLink_(file.getId()); } catch (e3) {} }
   return {ok: true, saved: true, name: name, link: file.getUrl(),
           id: file.getId(), folder: tech.getName(), summary: found.summary};
 }
@@ -1641,6 +1650,67 @@ function paperworkFolderFor_(sh, row, serial) {
 
 // READ-ONLY twin of mediaFolderFor_: resolve the piano's Before/After photo
 // folder without ever creating one (listing must never mutate Drive).
+// "Edited" subfolder inside the piano's Before / After folder (Alisa 9/11):
+// originals stay where they are; finished edits go here and the folder link
+// lands in a header-created "BEFORE PHOTOS (EDITED)" / "AFTER PHOTOS (EDITED)"
+// column so the Piano Log (and later Shopify) can point at the clean set.
+function editedFolderFor_(sh, row, serial, kind) {
+  var base = mediaFolderFor_(sh, row, serial, kind);
+  if (!base) return null;
+  var folder = null, it = base.getFoldersByName('Edited');
+  if (it.hasNext()) folder = it.next(); else folder = base.createFolder('Edited');
+  try {
+    var col = pianoCol_(sh, kind === 'before' ? 'BEFORE PHOTOS (EDITED)' : 'AFTER PHOTOS (EDITED)');
+    var cur = String(sh.getRange(row, col).getValue() || '');
+    if (!/folders\//.test(cur)) sh.getRange(row, col).setValue(folder.getUrl());
+  } catch (e) {}
+  return folder;
+}
+/* ?fn=editqueue&key=…&hours=48 — Before/After ORIGINALS filed in the last N
+ * hours (from the PHOTO LOG) that the photo-editing cron should process:
+ * kind comes from the file's parent folder name, and each item carries the
+ * Edited folder id (created on demand). The cron keeps its own "done" list. */
+function editQueue_(hours) {
+  var ss = SpreadsheetApp.openById(PIANO_LOG_ID);
+  var log = ss.getSheetByName(PHOTO_LOG_TAB);
+  if (!log || log.getLastRow() < 2) return {ok: true, items: []};
+  var since = Date.now() - Math.max(1, Math.min(240, Number(hours) || 48)) * 3600000;
+  var last = log.getLastRow(), from = Math.max(2, last - 300);
+  var vals = log.getRange(from, 1, last - from + 1, 7).getValues();
+  var sh = pianoSheet_(ss);
+  var out = [], cache = {};
+  for (var i = vals.length - 1; i >= 0 && out.length < 40; i--) {
+    var when = vals[i][0] instanceof Date ? vals[i][0] : new Date(vals[i][0]);
+    if (isNaN(when) || when.getTime() < since) continue;
+    var stage = String(vals[i][3] || '');
+    if (/edited/i.test(stage)) continue;
+    var link = String(vals[i][6] || '');
+    var m = /\/d\/([-\w]+)/.exec(link) || /[?&]id=([-\w]+)/.exec(link);
+    if (!m) continue;
+    var kind = '', parentName = '';
+    try {
+      var f = DriveApp.getFileById(m[1]);
+      var ps = f.getParents();
+      if (ps.hasNext()) parentName = ps.next().getName();
+      if (!/^image\//.test(String(f.getMimeType()))) continue;
+    } catch (e) { continue; }
+    if (/edited|tech|paperwork/i.test(parentName)) continue;
+    if (/before/i.test(parentName)) kind = 'before'; else if (/after/i.test(parentName)) kind = 'after'; else continue;
+    var serial = String(vals[i][1] || '').trim();
+    var key = serial + '|' + kind, edited = cache[key];
+    if (!edited) {
+      try {
+        var found = findPiano_(sh, serial, '');
+        if (!found.error) { var ef = editedFolderFor_(sh, found.row, serial, kind); edited = cache[key] = {id: ef ? ef.getId() : '', row: found.row, location: found.location || '', summary: found.summary || ''}; }
+      } catch (e2) {}
+      if (!edited) edited = cache[key] = {id: '', row: '', location: '', summary: ''};
+    }
+    out.push({when: when.toISOString(), serial: serial, piano: String(vals[i][2] || edited.summary || ''), stage: stage,
+              by: String(vals[i][4] || ''), file: String(vals[i][5] || ''), fileId: m[1], kind: kind,
+              editedFolderId: edited.id, row: edited.row, location: edited.location});
+  }
+  return {ok: true, items: out};
+}
 function mediaFolderRead_(sh, row, serial, kind) {
   var col = mediaCol_(sh, kind === 'before' ? 'bphoto' : 'aphoto');
   var cell = String(sh.getRange(row, col).getValue() || '');
