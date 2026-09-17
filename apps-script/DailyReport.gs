@@ -50,7 +50,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-09-17.9';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-09-17.10';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -755,6 +755,7 @@ function fetchEvents_() {
 }
 
 function doPost(e) {
+  var t0 = Date.now();   // clock replies report how long the bridge took (ms)
   try {
     var req = JSON.parse(e.postData.contents);
     // three ways in: the team PIN, the server-to-server secret, or a
@@ -1204,17 +1205,17 @@ function doPost(e) {
     }
     if (req.action === 'clockin') {
       var cin = clockIn_(req);
-      return json_(cin);
+      return json_(timed_(cin, t0));
     }
     if (req.action === 'clockout') {
       var cout = clockOut_(req);
-      return json_(cout);
+      return json_(timed_(cout, t0));
     }
     if (req.action === 'dayin') {
-      return json_(dayIn_(req));
+      return json_(timed_(dayIn_(req), t0));
     }
     if (req.action === 'dayout') {
-      return json_(dayOut_(req));
+      return json_(timed_(dayOut_(req), t0));
     }
     if (req.action === 'adjustclock') {
       var adj = adjustClock_(req);
@@ -3204,11 +3205,26 @@ function withClockLock_(fn) {
   lock.waitLock(10000);
   try { return fn(); } finally { lock.releaseLock(); }
 }
+// clock replies carry the bridge's own time in ms — the app shows it on the
+// dashboard so "Google is slow" is a number, not a feeling (Jacob 9/10)
+function timed_(o, t0) { if (o && typeof o === 'object') o.ms = Date.now() - t0; return o; }
 function clockIn_(req) { return withClockLock_(function () { return clockInLocked_(req); }); }
 function clockInLocked_(req) {
   var tech = clockTech_(req);
   if (!tech) return {error: 'no name on this session — sign in first'};
   if (!req.serial) return {error: 'serial required'};
+  // Jacob 9/10 (request 091026mower13): the app used to READ the payroll
+  // state itself before every piano clock-in — a second bridge round trip
+  // (3–6 s at 8 AM) before the punch even started. The paid-day gate (Mark
+  // 9/3: piano time only counts inside a paid day) now runs HERE, inside the
+  // one call: no open day → 'dayfirst', nothing written, and the app shows
+  // the "clock in for the day first" message. Mini-QC inspections (source
+  // 'qc') are exempt — an owner/manager inspecting is not paid tech time.
+  if (req.dayGate && String(req.source || '') !== 'qc') {
+    try {
+      if (!openPayRow_(payrollSheet_(), tech)) return {error: 'dayfirst'};
+    } catch (eG) { /* payroll unreadable — let the punch through, as the app always did */ }
+  }
   var sh = timeLogSheet_();
   var closed = null;
   var open;

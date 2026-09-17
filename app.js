@@ -3815,24 +3815,23 @@ function impNoteGate(p, ph) {
     ov.onclick = ev => { ev.stopPropagation(); if (ev.target === ov) done({ok: false}); };
   });
 }
+const DAY_FIRST_MSG = () => tr('Clock in for the DAY first — 👤 My Dashboard → 💵 Payroll Clock → ▶ Clock in for the day. Piano time only counts inside a paid day.',
+  'Primero marca la entrada del DÍA — 👤 Mi Panel → 💵 Reloj de Nómina → ▶ Marcar entrada del día. El tiempo en piano solo cuenta dentro de un día pagado.');
 async function punch(action, p, phase, source, endAt, ackNote) {
+  const tPunch = Date.now();
   const {pin, ok} = writeAuth();
   if (!ok) return {error: 'Sign in first — hours are logged under your name.'};
   // day clock first (Mark 9/3): piano time only counts inside a paid day.
-  // Only block on a CONFIRMED missing day punch — if payroll state can't be
-  // fetched (bridge down), let the piano punch through rather than stall work.
-  if (action === 'clockin') {
-    // Jacob 9/10 (request 091026mower16): this pre-check had no time limit,
-    // so a slow bridge stalled the punch before it even started. 6 s max —
-    // we only ever block on a CONFIRMED missing day punch anyway.
-    if (Date.now() - PAY.at > 90000) {
-      try { await Promise.race([fetchPayroll(true), new Promise(res => setTimeout(res, 6000))]); } catch (e) {}
-    }
-    if (!PAY.open && PAY.at && Date.now() - PAY.at < 90000) {
-      return {error: 'Clock in for the DAY first — 👤 My Dashboard → 💵 Payroll Clock → ▶ Clock in for the day. Piano time only counts inside a paid day.'};
-    }
-  }
+  // Jacob 9/10 (requests 091026mower13/16): this used to READ the payroll
+  // state first — a whole extra bridge round trip (3–6 s at 8 AM) before the
+  // punch even left the phone. Now a fresh cached answer still blocks
+  // instantly; otherwise the punch goes straight out with dayGate:1 and the
+  // bridge checks the paid day inside the same call ('dayfirst' comes back,
+  // nothing is written). Mini-QC inspections ('qc') are exempt.
+  const gated = action === 'clockin' && source !== 'qc';
+  if (gated && !PAY.open && PAY.at && Date.now() - PAY.at < 90000) return {error: DAY_FIRST_MSG()};
   const body = {pin, action, source: source || 'card', ...authFields()};
+  if (gated) body.dayGate = 1;
   if (p) {
     body.serial = p.serial; body.row = p.row; body.phase = phase || '';
     // the piano's name rides along so the bridge can skip reading the whole
@@ -3858,7 +3857,9 @@ async function punch(action, p, phase, source, endAt, ackNote) {
     }
     if (j && j.service && !j.error) return punchVerify(action, p, phase,
       'the Google bridge hiccuped — the punch did NOT record; try again in a minute');
+    if (j && j.error === 'dayfirst') { fetchPayroll(true); return {error: DAY_FIRST_MSG()}; }
     if (j && j.ok) {
+      punchStat(action, Date.now() - tPunch, j.ms);
       CLOCK.open = action === 'clockin'
         ? (j.open || {tech: clockName(), serial: p.serial, phase, start: new Date().toISOString()})
         : null;
@@ -4884,6 +4885,24 @@ setTimeout(fetchClock, 2500);
  * bridge keeps a "Payroll Clock" tab; the dashboard card is the only punch
  * surface. State refreshes when the dashboard opens and after every punch. */
 const PAY = {open: null, today: [], at: 0};
+// punch timing (Jacob 9/10): how long the last punches took on THIS device —
+// shown on the dashboard so "Google is slow" is a number, not a feeling
+function punchStat(action, totalMs, bridgeMs) {
+  try {
+    const L = JSON.parse(lsGet('blpPunchMs') || '[]');
+    L.push({at: Date.now(), action, ms: totalMs, bridge: Number(bridgeMs) || 0});
+    lsSet('blpPunchMs', JSON.stringify(L.slice(-12)));
+  } catch (e) {}
+}
+function lastPunchLine() {
+  try {
+    const L = JSON.parse(lsGet('blpPunchMs') || '[]');
+    if (!L.length) return '';
+    const l = L[L.length - 1];
+    const secs = ms => String(Math.round(ms / 100) / 10).replace(/\.0$/, '');
+    return `<div class="dline dim" style="font-size:11.5px">⏱ ${tr('last punch took', 'la última marcación tardó')} <b>${secs(l.ms)} s</b>${l.bridge ? ` (${tr('Google\'s part', 'parte de Google')} ${secs(l.bridge)} s)` : ''} · ${fmtT(new Date(l.at).toISOString())}</div>`;
+  } catch (e) { return ''; }
+}
 async function fetchPayroll(force) {
   if (!force && Date.now() - PAY.at < 60000) return;
   try {
@@ -4925,6 +4944,7 @@ function punchSlow(el, dir) {
   return setTimeout(() => { if (el && el.isConnected) el.textContent = slowText(dir); }, PUNCH_SLOW_MS);
 }
 async function dayPunch(action) {
+  const tDay = Date.now();
   const {pin, ok} = writeAuth();
   if (!ok) return {error: 'Sign in first — payroll hours are logged under your name.'};
   const geo = await punchGeo();
@@ -4965,6 +4985,7 @@ async function dayPunch(action) {
     'Google no respondió en un minuto (' + lastErr + ') — la marcación NO se registró. Toca una vez más.')};
   try {
     if (j.ok) {
+      punchStat(action, Date.now() - tDay, j.ms);
       PAY.open = action === 'dayin'
         ? (j.open || {tech: clockName(), start: new Date().toISOString()}) : null;
       PAY.at = 0;
@@ -12190,11 +12211,15 @@ function renderDash() {
       ${po ? `<button class="paybtn payout">■ Clock out for the day</button>`
            : `<button class="paybtn payin">▶ Clock in for the day</button>`}
       <div class="paymsg"></div>
+      ${lastPunchLine()}
       <div class="dline"><a class="tact cfixlink" href="#">🛠 Request a time fix</a>
         <span class="dim" style="font-size:11.5px">— forgot a punch, or a time is wrong (day clock or piano clock)</span></div>
       <div class="dline dim">Arrival-to-exit for payroll — separate from the per-piano ⏱ Work Clock.
         Punches note your location, so clock in at the store.</div>
     </div>`;
+  // pre-warm the phone's location while the dashboard is open, so the day
+  // punch doesn't wait up to 6 s for GPS when the button is tapped (Jacob 9/10)
+  try { if (!po && Date.now() - (S.geoWarmAt || 0) > 100000) { S.geoWarmAt = Date.now(); punchGeo(); } } catch (e) {}
   const d = (S.dashData && S.dashData.forName === name) ? S.dashData : null;
   const prs = d ? d.prs : null;
   const anniv = d ? d.anniv : null;
