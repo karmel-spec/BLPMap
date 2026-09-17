@@ -4196,6 +4196,8 @@ async function openWorkChecklist(serial, phase) {
   if (!coach) {
     // A · bench sheet — the whole list, tap to check, ⏭ to skip with a reason
     const render = () => {
+      // Curtis 9/17 (request 091726biggs04): re-rendering reset the sheet to the top on every tap — keep the scroll position
+      const _ps = ov.querySelector('.dsheet'); const _keep = _ps ? _ps.scrollTop : 0;
       const doneN = work.filter(it => st.done.has(it.i) || st.skips.has(it.i)).length;
       ov.innerHTML = `<div class="dsheet" style="max-height:82vh;overflow:auto"><button class="dsx">✕</button>
         <h3>📋 ${esc(phase)} — ${esc(p.summary || '#' + serial)}</h3>
@@ -4261,6 +4263,7 @@ async function openWorkChecklist(serial, phase) {
           </div>` : ''}
           </div>`;
         }).join('')}`;
+      { const _ns = ov.querySelector('.dsheet'); if (_ns && _keep) _ns.scrollTop = _keep; }
       ov.querySelector('.dsx').onclick = close;
       ov.onclick = ev => { if (ev.target === ov) close(); };
       ov.querySelectorAll('.clstep').forEach(el => el.onclick = () => {
@@ -4563,6 +4566,8 @@ async function openQcRail(id) {
   const WHO_SUGGEST = ['Brigham Larson', 'Karmel Larson', 'Mark Hales', 'Matthew Wessman', 'Jacob Mower', 'Melissa Terry'];
   const close = () => { clearInterval(poll); ov.remove(); if (inspecting && live.status === 'pending') endInspection(); };
   const render = () => {
+      // Curtis 9/17 (request 091726biggs04): re-rendering reset the sheet to the top on every tap — keep the scroll position
+      const _ps = ov.querySelector('.dsheet'); const _keep = _ps ? _ps.scrollTop : 0;
     const v = live.verdicts || {};
     // miscellaneous items (Brigham 9/17): anything typed in the bottom row
     // becomes its own verdict line — judged verdicts plus ones still being noted
@@ -4632,6 +4637,7 @@ async function openQcRail(id) {
         <button class="csvbtn qcback" ${anyFail ? '' : 'disabled'} style="background:#9e2020;${anyFail ? '' : 'opacity:.45'}">🔁 Send back</button></div>
         ${!all && !anyFail ? '<div class="dssub" style="margin-top:6px">Judge every item first — Approve needs all ✓, Send back needs at least one ✗.</div>' : ''}</div>` : ''}
       ${!canJudge && !settled ? '<div class="dssub" style="margin-top:10px">Waiting on a manager — this updates live.</div>' : ''}`;
+      { const _ns = ov.querySelector('.dsheet'); if (_ns && _keep) _ns.scrollTop = _keep; }
     ov.querySelector('.dsx').onclick = close;
     ov.querySelectorAll('.qctech').forEach(t => t.onclick = ev => { ev.preventDefault(); openTechFolder(t.dataset.serial, t); });
     ov.querySelectorAll('.qcpw').forEach(t => t.onclick = ev => {
