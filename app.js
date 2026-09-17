@@ -4486,6 +4486,49 @@ async function openQcRail(id) {
   // name, editable — Brigham often inspects on a tech's phone during training
   let inspector = clockName() || '';
   const miscItems = [];   // typed-in extra items awaiting their first verdict
+  // Brigham 9/17: the inspection is a clocked piano session. Start clocks the
+  // inspector into this piano (under THEIR name, even on a tech's phone);
+  // Approve / Send back — or closing the rail — clocks them out again.
+  let inspecting = false, clockedByRail = false, qcStartAt = '', startMsg = '', startErr = false;
+  const qcPhase = 'Mini-QC: ' + q.phase;
+  const qcClock = async action => {
+    const same = inspector && clockName() && inspector.toLowerCase() === clockName().toLowerCase();
+    if (same) {
+      const j = await punch(action, action === 'clockin' ? p : null, action === 'clockin' ? qcPhase : '', 'qc');
+      return j || {error: 'no reply'};
+    }
+    // a different inspector than the signed-in account: punch directly under their name
+    const wa = writeAuth();
+    const body = {pin: wa.pin || 'pianoman', action, source: 'qc', user: {name: inspector, email: ''}};
+    if (action === 'clockin') { body.serial = p.serial; body.row = p.row; body.phase = qcPhase; body.pianoName = String(p.summary || '').slice(0, 80); }
+    try {
+      for (let t = 0; t < 3; t++) {
+        const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow', headers: {'content-type': 'text/plain;charset=utf-8'}, body: JSON.stringify(body)});
+        const j = await r.json();
+        if (!(j && j.service && !j.error)) return j;
+        await new Promise(res => setTimeout(res, 1200 * (t + 1)));
+      }
+      return {error: 'the Google bridge hiccuped — try again'};
+    } catch (e) { return {error: 'clock unreachable'}; }
+  };
+  const startInspection = async () => {
+    if (!inspector) return;
+    startMsg = '⏱ Clocking ' + inspector + ' into ' + (q.piano || '#' + q.serial) + '…'; startErr = false; render();
+    const j = await qcClock('clockin');
+    if (j && j.ok) {
+      inspecting = true; clockedByRail = true;
+      qcStartAt = new Date().toLocaleTimeString('en-US', {hour: 'numeric', minute: '2-digit'});
+    } else {
+      startMsg = '✗ ' + ((j && j.error) || 'could not clock in') + ' — fix the clock, or continue without clocking.'; startErr = true;
+    }
+    render();
+  };
+  const endInspection = async () => {
+    if (!clockedByRail) return;
+    clockedByRail = false;
+    try { await qcClock('clockout'); } catch (e) {}
+    try { fetchClock(); } catch (e2) {}
+  };
   // Brigham 9/17: items that ask about photos/video link straight to the
   // piano's Drive folders so the inspector can check the shots in one tap
   const qcLinks = text => {
@@ -4518,7 +4561,7 @@ async function openQcRail(id) {
     return L.length ? `<div class="qclinks">${L.join('')}</div>` : '';
   };
   const WHO_SUGGEST = ['Brigham Larson', 'Karmel Larson', 'Mark Hales', 'Matthew Wessman', 'Jacob Mower', 'Melissa Terry'];
-  const close = () => { clearInterval(poll); ov.remove(); };
+  const close = () => { clearInterval(poll); ov.remove(); if (inspecting && live.status === 'pending') endInspection(); };
   const render = () => {
     const v = live.verdicts || {};
     // miscellaneous items (Brigham 9/17): anything typed in the bottom row
@@ -4535,9 +4578,15 @@ async function openQcRail(id) {
       <div class="dssub">${esc(q.piano || '#' + q.serial)} · requested by ${esc((q.requested_by || '').split(' ')[0])}
         ${settled ? ` · <b style="color:${live.status === 'passed' ? '#2f7d4f' : '#9e2020'}">${live.status.toUpperCase()}</b>` : ''}</div>
       ${settled ? `<div class="qcwho-row"><b>🧑‍🔧 Inspected by:</b> ${esc(live.manager || '—')}</div>`
-        : canJudge ? `<div class="qcwho-row"><label for="qcWho">🧑‍🔧 Inspected by</label>
-            <input id="qcWho" class="qcwho" list="qcWhoList" maxlength="40" value="${esc(inspector)}" placeholder="who is performing this mini-QC">
-            <datalist id="qcWhoList">${[...new Set(WHO_SUGGEST.concat(clockName() ? [clockName()] : []))].map(n => `<option value="${esc(n)}">`).join('')}</datalist></div>` : ''}
+        : canJudge && !inspecting ? `<div class="qcstart">
+            <div class="qcwho-row"><label for="qcWho">🧑‍🔧 Inspected by</label>
+            <input id="qcWho" class="qcwho" list="qcWhoList" maxlength="40" value="${esc(inspector)}" placeholder="who is performing this mini-QC — required">
+            <datalist id="qcWhoList">${[...new Set(WHO_SUGGEST.concat(clockName() ? [clockName()] : []))].map(n => `<option value="${esc(n)}">`).join('')}</datalist></div>
+            <button class="csvbtn qcstartbtn" ${inspector ? '' : 'disabled style="opacity:.45"'}>▶ Start inspection — clocks ${esc(inspector || 'the inspector')} into this piano</button>
+            <div class="dssub qcstartmsg">${startMsg || 'Pass / Rework buttons unlock when the inspection starts. Approve or Send back clocks the inspector out again.'}</div>
+            ${startErr ? `<button class="qcskipclock" style="background:none;border:1px solid #cfc9bf;border-radius:7px;padding:4px 10px;font-size:12px;margin-top:4px">Continue without clocking in</button>` : ''}
+          </div>`
+        : canJudge ? `<div class="qcwho-row"><b>🧑‍🔧 Inspected by:</b> ${esc(inspector)}${clockedByRail ? ` · <span style="color:#2f7d4f">⏱ clocked into this piano since ${esc(qcStartAt)}</span>` : ' · <span class="dim">not clocked</span>'}</div>` : ''}
       ${skippedWork.length ? `<div style="background:#fdf6e3;border-radius:10px;padding:8px 10px;margin:8px 0">
         <b style="font-size:12px;color:#9a5b13">⏭ Skipped work steps — check the reasons hold up:</b>
         ${skippedWork.map(it => `<div style="font-size:12px;margin-top:4px">• ${esc(it.text)}<br>
@@ -4553,9 +4602,9 @@ async function openQcRail(id) {
         return `<div style="padding:9px 2px;border-top:1px solid #f0ece5" data-item="${esc(it.text)}">
           <div style="display:flex;gap:6px;align-items:flex-start;flex-wrap:wrap">
             <div style="flex:1;min-width:140px"><span style="font-size:10px;letter-spacing:1px;color:#8a847b;text-transform:uppercase">${esc(it.section)}</span><br>${esc(it.text)}</div>
-            ${canJudge && !settled ? `<button class="qcp" data-t="${esc(it.text)}" title="passes" style="border:1.5px solid ${vd && vd.verdict === 'pass' ? '#2f7d4f' : '#cfc9bf'};background:${vd && vd.verdict === 'pass' ? '#eaf5ec' : '#fff'};border-radius:8px;padding:5px 9px;color:#2f7d4f;font-weight:700;white-space:nowrap">✓ Pass</button>
-              <button class="qcf" data-t="${esc(it.text)}" title="needs rework" style="border:1.5px solid ${vd && vd.verdict === 'fail' ? '#9e2020' : '#cfc9bf'};background:${vd && vd.verdict === 'fail' ? '#fdecec' : '#fff'};border-radius:8px;padding:5px 9px;color:#9e2020;font-weight:700;white-space:nowrap">✗ Rework</button>
-              <button class="qcn" data-t="${esc(it.text)}" title="add a note" style="border:1.5px solid #cfc9bf;background:${open ? '#f2f6fb' : '#fff'};border-radius:8px;padding:5px 8px;color:#274b6d;white-space:nowrap">📝 Note</button>`
+            ${canJudge && !settled ? `<button class="qcp" data-t="${esc(it.text)}" title="passes" ${inspecting ? '' : 'disabled'} style="${inspecting ? '' : 'opacity:.4;'}border:1.5px solid ${vd && vd.verdict === 'pass' ? '#2f7d4f' : '#cfc9bf'};background:${vd && vd.verdict === 'pass' ? '#eaf5ec' : '#fff'};border-radius:8px;padding:5px 9px;color:#2f7d4f;font-weight:700;white-space:nowrap">✓ Pass</button>
+              <button class="qcf" data-t="${esc(it.text)}" title="needs rework" ${inspecting ? '' : 'disabled'} style="${inspecting ? '' : 'opacity:.4;'}border:1.5px solid ${vd && vd.verdict === 'fail' ? '#9e2020' : '#cfc9bf'};background:${vd && vd.verdict === 'fail' ? '#fdecec' : '#fff'};border-radius:8px;padding:5px 9px;color:#9e2020;font-weight:700;white-space:nowrap">✗ Rework</button>
+              <button class="qcn" data-t="${esc(it.text)}" title="add a note" ${inspecting ? '' : 'disabled'} style="${inspecting ? '' : 'opacity:.4;'}border:1.5px solid #cfc9bf;background:${open ? '#f2f6fb' : '#fff'};border-radius:8px;padding:5px 8px;color:#274b6d;white-space:nowrap">📝 Note</button>`
               : vd ? `<b style="color:${vd.verdict === 'pass' ? '#2f7d4f' : '#9e2020'};white-space:nowrap">${vd.verdict === 'pass' ? '✓ Pass' : '✗ Rework'}</b>` : '<span style="color:#c9c2b6">·</span>'}
           </div>
           ${qcLinks(it.text)}${qcPaper(it.text)}
@@ -4572,9 +4621,9 @@ async function openQcRail(id) {
       ${canJudge && !settled ? `<div class="qcmisc">
         <span style="font-size:10px;letter-spacing:1px;color:#8a847b;text-transform:uppercase">Miscellaneous</span>
         <div class="qcmiscrow">
-          <input class="qcmisctxt" maxlength="160" placeholder="anything out of the ordinary — e.g. cracked key slip, missing caster…">
-          <button class="qcmiscp" title="passes">✓ Pass</button>
-          <button class="qcmiscf" title="needs rework">✗ Rework</button></div></div>` : ''}
+          <input class="qcmisctxt" maxlength="160" ${inspecting ? '' : 'disabled'} placeholder="anything out of the ordinary — e.g. cracked key slip, missing caster…">
+          <button class="qcmiscp" title="passes" ${inspecting ? '' : 'disabled style="opacity:.4"'}>✓ Pass</button>
+          <button class="qcmiscf" title="needs rework" ${inspecting ? '' : 'disabled style="opacity:.4"'}>✗ Rework</button></div></div>` : ''}
       ${canJudge && !settled ? `<div style="margin-top:14px">
         <label style="font-size:11px;letter-spacing:1px;color:#8a847b;text-transform:uppercase">📝 Note to the tech (optional)</label>
         <textarea class="qcgen" maxlength="400" rows="2" placeholder="Goes on the rework card and in the text — praise, context, what to watch next time…">${esc(genNote)}</textarea>
@@ -4595,7 +4644,7 @@ async function openQcRail(id) {
     // ✗ opens an inline note box (prompt() is suppressed in the installed
     // app — a silent ✗ was the "how do we assign rework?" confusion, 9/17)
     const sendVerdict = async (item, verdict, note) => {
-      if (!needWho()) return;
+      if (!inspecting || !needWho()) return;
       const r = await fetch(PHASEQC_URL, {method: 'POST', headers: {'content-type': 'application/json'},
         body: JSON.stringify({key: 'pianoman', op: 'verdict', id: q.id, item, verdict, note: String(note || '').slice(0, 300), manager: inspector || clockName()})});
       const j = await r.json();
@@ -4618,7 +4667,9 @@ async function openQcRail(id) {
       ov.querySelector('.qcmiscf').onclick = () => miscGo('fail');
     }
     const who = ov.querySelector('.qcwho');
-    if (who) who.oninput = () => { inspector = who.value.trim(); };
+    if (who) who.oninput = () => { inspector = who.value.trim(); const sb = ov.querySelector('.qcstartbtn'); if (sb) { sb.disabled = !inspector; sb.style.opacity = inspector ? '' : '.45'; sb.textContent = '▶ Start inspection — clocks ' + (inspector || 'the inspector') + ' into this piano'; } };
+    const sbtn = ov.querySelector('.qcstartbtn'); if (sbtn) sbtn.onclick = startInspection;
+    const skip = ov.querySelector('.qcskipclock'); if (skip) skip.onclick = () => { inspecting = true; clockedByRail = false; render(); };
     const needWho = () => { if (inspector) return true; if (who) { who.focus(); who.style.borderColor = '#9e2020'; } return false; };
     const openNote = (item, mode) => { keepGen(); noteOpen.add(item); noteMode.set(item, mode); render();
       const ta = ov.querySelector(`.qcnotebox[data-t="${CSS.escape(item)}"] .qcnotetxt`); if (ta) ta.focus(); };
@@ -4642,7 +4693,7 @@ async function openQcRail(id) {
       const r = await fetch(PHASEQC_URL, {method: 'POST', headers: {'content-type': 'application/json'},
         body: JSON.stringify({key: 'pianoman', op: 'finalize', id: q.id, outcome, note: String(genNote || '').slice(0, 400), manager: inspector || clockName(), pin: writeAuth().pin || 'pianoman'})});
       const j = await r.json();
-      if (j.ok) { live.status = j.status; render(); setTimeout(() => { close(); location.reload(); }, 1600); }
+      if (j.ok) { live.status = j.status; await endInspection(); render(); setTimeout(() => { close(); location.reload(); }, 1600); }
     };
     if (fp && all) fp.onclick = () => finalize('pass');
     if (fb && anyFail) fb.onclick = () => finalize('rework');

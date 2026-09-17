@@ -2009,3 +2009,6 @@ tr.autorow td{background:#fffdf8}
 .qcmisctxt{flex:1;min-width:200px;border:1.5px solid #cfc9bf;border-radius:8px;padding:7px 9px;font:500 13px/1.3 inherit}
 .qcmiscp,.qcmiscf{border:1.5px solid #cfc9bf;background:#fff;border-radius:8px;padding:6px 10px;font-weight:700;white-space:nowrap;cursor:pointer}
 .qcmiscp{color:#2f7d4f}.qcmiscf{color:#9e2020}
+.qcstart{background:#f2f6fb;border:1.5px solid #cfdcef;border-radius:10px;padding:10px 12px;margin:8px 0}
+.qcstartbtn{width:100%;margin-top:8px}
+.qcstartmsg{margin-top:6px}
