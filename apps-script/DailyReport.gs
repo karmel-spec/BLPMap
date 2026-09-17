@@ -50,7 +50,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-09-17.5';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-09-17.6';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -1637,7 +1637,7 @@ function paperworkFolderFor_(sh, row, serial) {
 // READ-ONLY twin of mediaFolderFor_: resolve the piano's Before/After photo
 // folder without ever creating one (listing must never mutate Drive).
 function mediaFolderRead_(sh, row, serial, kind) {
-  var col = kind === 'before' ? 14 : 16;   // 1-based: N=14, P=16
+  var col = mediaCol_(sh, kind === 'before' ? 'bphoto' : 'aphoto');
   var cell = String(sh.getRange(row, col).getValue() || '');
   var m = /folders\/([A-Za-z0-9_-]+)/.exec(cell);
   if (m) { try { return DriveApp.getFolderById(m[1]); } catch (e) {} }
@@ -1662,7 +1662,7 @@ function mediaFolderRead_(sh, row, serial, kind) {
  * a "Before Photos"/"After Photos" subfolder beside Tech and write its link
  * back into the cell — which also flips the card's media state to done. */
 function mediaFolderFor_(sh, row, serial, kind) {
-  var col = kind === 'before' ? 14 : 16;   // 1-based: N=14, P=16
+  var col = mediaCol_(sh, kind === 'before' ? 'bphoto' : 'aphoto');   // by header — the columns moved (9/14)
   var cell = String(sh.getRange(row, col).getValue() || '');
   var m = /folders\/([A-Za-z0-9_-]+)/.exec(cell);
   if (m) { try { return DriveApp.getFolderById(m[1]); } catch (e) {} }
@@ -2555,14 +2555,21 @@ function activity_() {
  * One-way on purpose: it never overwrites a non-empty cell (those often
  * hold real links), so un-marking is done in the spreadsheet itself.
  */
-var MEDIA_COLS = {bphoto: 14, aphoto: 16, bvideo: 17, avideo: 18};
+// Alisa 9/14 (request 091426miller06): these used to be fixed column numbers
+// (N/P/Q/R) from before Alisa re-ordered the media columns — marks and folder
+// links landed one column off. Resolve by HEADER NAME on every call.
+var MEDIA_HEADERS = {bphoto: 'BEFORE PHOTOS', bvideo: 'BEFORE VIDEO', aphoto: 'AFTER PHOTOS', avideo: 'AFTER VIDEO'};
+function mediaCol_(sh, field) {
+  var h = MEDIA_HEADERS[field];
+  return h ? pianoCol_(sh, h) : 0;
+}
 var MEDIA_NAMES = {bphoto: 'before photos', aphoto: 'after photos',
                    bvideo: 'before video', avideo: 'after video'};
 
 function setMedia_(req, who) {
-  var col = MEDIA_COLS[req.field];
-  if (!col) return {error: 'unknown media field: ' + req.field};
+  if (!MEDIA_HEADERS[req.field]) return {error: 'unknown media field: ' + req.field};
   var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+  var col = mediaCol_(sh, req.field);
   var found = findPiano_(sh, req.serial, req.row);
   if (found.error) return found;
   var cell = sh.getRange(found.row, col);
