@@ -119,6 +119,10 @@ function parsePianos(text) {
     ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'PLATE TEMP SPOT') : -1;
   const plateHwStatusIdx = rows[1]
     ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'PLATE HARDWARE STATUS') : -1;
+  const plateFinishIdx = rows[1]
+    ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'PLATE HARDWARE FINISH') : -1;
+  const keytopMatIdx = rows[1]
+    ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'KEYTOP MATERIAL') : -1;
   const scopeNotesIdx = rows[1]
     ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'SCOPE NOTES') : -1;
   const keytopIdx = rows[1]
@@ -206,6 +210,8 @@ function parsePianos(text) {
       plateHw: plateHwIdx >= 0 ? col(plateHwIdx).slice(0, 80) : '',
       plateTemp: plateTempIdx >= 0 ? col(plateTempIdx).slice(0, 90) : '',
       plateHwStatus: plateHwStatusIdx >= 0 ? col(plateHwStatusIdx).slice(0, 40) : '',
+      plateFinish: plateFinishIdx >= 0 ? col(plateFinishIdx).slice(0, 30) : '',
+      keytopMaterial: keytopMatIdx >= 0 ? col(keytopMatIdx).slice(0, 30) : '',
       scopeNotes: scopeNotesIdx >= 0 ? col(scopeNotesIdx).slice(0, 500) : '',
       keytopStatus: keytopIdx >= 0 ? col(keytopIdx).slice(0, 40) : '',
       importantNote: impNoteIdx >= 0 ? col(impNoteIdx).slice(0, 200) : '',

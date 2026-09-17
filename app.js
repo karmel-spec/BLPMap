@@ -513,6 +513,11 @@ function tasksBox(p) {
         ${PLATE_HW_STAGES.map(v =>
           `<option ${p.plateHwStatus === v ? 'selected' : ''}>${esc(v)}</option>`).join('')}
       </select></div><div class="platehwmsg phmsg"></div>
+    <div class="row phrow cfrow" title="the finish the plating shop should do — Korban orders by this">↳ Plating finish
+      <select class="cfsel" data-f="plateFinish">
+        <option value="" ${!(p.plateFinish || '').trim() ? 'selected' : ''}>— not set —</option>
+        ${CARD_FIELD_OPTS.plateFinish.map(v => `<option ${p.plateFinish === v ? 'selected' : ''}>${esc(v)}</option>`).join('')}
+      </select></div>${cfSuggest(p, 'plateFinish')}<div class="cfmsg-plateFinish phmsg"></div>
     <div class="row phrow keystatrow">Keytops
       <select class="keystatsel">
         <option value="" ${!kt.state ? 'selected' : ''}>— not tracked —</option>
@@ -522,6 +527,11 @@ function tasksBox(p) {
       <input class="keyqnum" type="number" min="1" max="99" placeholder="#"
         title="place in the key queue" value="${esc(kt.num)}" ${kt.state === 'In Key Queue' ? '' : 'hidden'}>
     </div><div class="keystatmsg phmsg"></div>
+    <div class="row phrow cfrow" title="what Marcelo should fit — from the scope of work or the client's choice">↳ Keytop material
+      <select class="cfsel" data-f="keytopMaterial">
+        <option value="" ${!(p.keytopMaterial || '').trim() ? 'selected' : ''}>— not set —</option>
+        ${CARD_FIELD_OPTS.keytopMaterial.map(v => `<option ${p.keytopMaterial === v ? 'selected' : ''}>${esc(v)}</option>`).join('')}
+      </select></div>${cfSuggest(p, 'keytopMaterial')}<div class="cfmsg-keytopMaterial phmsg"></div>
     ${orderChipsRow(p, 'bass', 'Bass strings')}
     ${decalsRow(p)}
     ${trackKeysFor(p).length ? '<div class="taskbody">loading…</div>' : ''}</div>`;
@@ -5705,6 +5715,30 @@ function wirePop(p) {
     } catch (e) { msg.textContent = '✗ ' + e.message; }
     plsel.disabled = false;
   };
+  // 🎨 plating finish / keytop material selects + the ✨ suggestion chips
+  const saveCardField = async (f, value) => {
+    const msg = pop.querySelector('.cfmsg-' + f);
+    const {pin, ok} = writeAuth();
+    if (!ok) { if (msg) msg.textContent = 'Sign in first.'; return; }
+    const sel = pop.querySelector(`.cfsel[data-f="${f}"]`);
+    if (sel) sel.disabled = true;
+    if (msg) msg.textContent = 'Saving…';
+    try {
+      const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+        headers: {'content-type': 'text/plain;charset=utf-8'},
+        body: JSON.stringify({pin, action: 'setcardfield', field: f, value, serial: p.serial, row: p.row, ...authFields()})});
+      const j = await r.json();
+      if (j.error) throw new Error(j.error);
+      if (!j.ok) throw new Error('the bridge did not confirm the save — try again');
+      p[f] = value;
+      openPop(p.row, S.popAnchor, true);
+    } catch (e) {
+      if (msg) { msg.className = 'phmsg err cfmsg-' + f; msg.textContent = '✗ ' + e.message; }
+      if (sel) sel.disabled = false;
+    }
+  };
+  pop.querySelectorAll('.cfsel').forEach(sel => sel.onchange = () => saveCardField(sel.dataset.f, sel.value));
+  pop.querySelectorAll('.cfsuguse').forEach(b => b.onclick = ev => { ev.stopPropagation(); const box = b.closest('.cfsug'); saveCardField(box.dataset.f, box.dataset.v); });
   const phwsel = pop.querySelector('.platehwsel');
   if (phwsel) phwsel.onchange = async () => {
     const msg = pop.querySelector('.platehwmsg');
@@ -9672,6 +9706,32 @@ const PLATE_STAGES = ['In piano', 'Removed', 'Plate storage — BEFORE',
 // plate bolts / screws / hardware buffing (Korban 9/11, request 091126greenhalgh06) —
 // mirrors the bridge's PLATE_HW_STATUSES; stored in PLATE HARDWARE STATUS
 const PLATE_HW_STAGES = ['Needs buffing', 'In buffing queue', 'Buffing', 'Buffed', 'Installed'];
+// 🎨 finish choices (Melissa 9/16, request 091626terry44) — mirrors CARD_FIELDS in the bridge
+const CARD_FIELD_OPTS = {plateFinish: ['Brass', 'Nickel', 'Copper'], keytopMaterial: ['White Acrylic', 'Off-white Acrylic', 'Ivory']};
+const CARD_FIELD_LABEL = {plateFinish: 'Plating finish', keytopMaterial: 'Keytop material'};
+// read the scope of work / notes and propose a finish when none is set yet
+function cfGuess(p, f) {
+  const txt = [p.plan, p.planNotes, p.scopeNotes, p.replate, p.keyService, p.importantNote, p.pianoNotes, p.benchNote]
+    .filter(Boolean).join(' \n ');
+  if (!txt.trim()) return '';
+  if (f === 'plateFinish') {
+    if (/\bnickel\b/i.test(txt)) return 'Nickel';
+    if (/\bcopper\b/i.test(txt)) return 'Copper';
+    if (/\bbrass\b/i.test(txt)) return 'Brass';
+    return '';
+  }
+  if (/off[- ]?white|antique[- ]white|cream(?:y)?\s+(?:acrylic|keytops?)/i.test(txt)) return 'Off-white Acrylic';
+  if (/\bivor(?:y|ies)\b/i.test(txt) && !/\b(remove|strip|replace)\w*\s+(?:the\s+)?ivor/i.test(txt)) return 'Ivory';
+  if (/\bacrylic\b/i.test(txt)) return 'White Acrylic';
+  return '';
+}
+function cfSuggest(p, f) {
+  if ((p[f] || '').trim()) return '';
+  const g = cfGuess(p, f);
+  if (!g) return '';
+  return `<div class="cfsug" data-f="${f}" data-v="${esc(g)}">✨ From the scope notes: <b>${esc(g)}</b>
+    <button class="cfsuguse">use</button></div>`;
+}
 function plateBadge(v) {
   v = (v || '').trim();
   if (!v) return '<span class="lite" style="color:#8a929a">not tracked</span>';
@@ -9812,7 +9872,7 @@ const TQ_DEFS = [
    // queue even when the old key-work note still reads like a request (8/28)
    need: p => !taskAutoDone(p, 'keys') && !/^Done/i.test(p.keytopStatus || '')
      && ['needed', 'noted'].includes(taskStatus(taskVal(p, 'keys'))),
-   note: p => [p.keytopStatus, taskVal(p, 'keys')].filter(Boolean).join(' · ')},
+   note: p => [p.keytopMaterial ? '🎨 ' + p.keytopMaterial : '', p.keytopStatus, taskVal(p, 'keys')].filter(Boolean).join(' · ')},
   {key: 'plates', icon: '⚙️', title: 'PLATES TO CURTIS HARPER',
    need: p => ['Removed', 'Plate storage — BEFORE'].includes((p.plateStatus || '').trim()),
    note: p => p.plateStatus},
@@ -9826,7 +9886,7 @@ const TQ_DEFS = [
   // driven by the card's Plate hardware status (request 091126greenhalgh06)
   {key: 'platehw', icon: '🪞', title: 'PLATE HARDWARE BUFFING — KORBAN',
    need: p => ['Needs buffing', 'In buffing queue', 'Buffing'].includes((p.plateHwStatus || '').trim()),
-   note: p => p.plateHwStatus},
+   note: p => [p.plateFinish ? '🎨 ' + p.plateFinish : '', p.plateHwStatus].filter(Boolean).join(' · ')},
   {key: 'decals', icon: '🏷', title: 'DECALS TO ORDER',
    need: p => !taskAutoDone(p, 'decals') && ['needed', 'noted'].includes(taskStatus(taskVal(p, 'decals'))),
    note: p => taskVal(p, 'decals')},

@@ -50,7 +50,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-09-17.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-09-17.4';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -1362,6 +1362,12 @@ function doPost(e) {
     }
     if (req.action === 'pianonote') {
       return json_(pianoNote_(req, who));
+    }
+    if (req.action === 'setcardfield') {
+      // 🎨 plating finish / keytop material (Melissa 9/16, request 091626terry44)
+      var cfd = setCardField_(req);
+      if (cfd.ok) logAct_(who, cfd.label, cfd.summary || req.serial, cfd.value || '(cleared)');
+      return json_(cfd);
     }
     if (req.action === 'setplatehw') {
       // 🪞 plate hardware buffing status (Korban 9/11, request 091126greenhalgh06)
@@ -7711,6 +7717,31 @@ function setBenchNote_(req, who) {
   return {ok: true, row: found.row, summary: found.summary, benchNote: val};
 }
 var PLATE_HW_STATUSES = ['', 'Needs buffing', 'In buffing queue', 'Buffing', 'Buffed', 'Installed'];
+// 🎨 finish choices on the card (Melissa 9/16, request 091626terry44): the
+// color the plating shop should do (Korban orders by it) and the keytop
+// material Marcelo should fit. Header-created Piano Log columns.
+var CARD_FIELDS = {
+  plateFinish:    {header: 'PLATE HARDWARE FINISH', values: ['', 'Brass', 'Nickel', 'Copper'], label: 'Plate hardware finish'},
+  keytopMaterial: {header: 'KEYTOP MATERIAL', values: ['', 'White Acrylic', 'Off-white Acrylic', 'Ivory'], label: 'Keytop material'}
+};
+function setCardField_(req) {
+  var def = CARD_FIELDS[String(req.field || '')];
+  if (!def) return {error: 'unknown card field'};
+  var val = String(req.value == null ? '' : req.value).trim();
+  if (def.values.indexOf(val) < 0) return {error: 'bad ' + def.label + ': ' + val};
+  var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+  var found = findPiano_(sh, req.serial, req.row);
+  if (found.error) return found;
+  var last = sh.getLastColumn();
+  var hdr = sh.getRange(2, 1, 1, last).getValues()[0];
+  var col = -1;
+  for (var c = 0; c < hdr.length; c++) {
+    if (String(hdr[c] || '').trim().toUpperCase() === def.header) { col = c + 1; break; }
+  }
+  if (col < 0) { sh.getRange(2, last + 1).setValue(def.header); col = last + 1; }
+  sh.getRange(found.row, col).setValue(val);
+  return {ok: true, row: found.row, summary: found.summary, field: String(req.field), value: val, label: def.label};
+}
 // Plate bolts / screws / hardware buffing — a concurrent task on the card,
 // tracked in a header-created PLATE HARDWARE STATUS column (Korban 9/11).
 function setPlateHw_(req) {
