@@ -19,7 +19,7 @@ var APP_URL = 'https://blpstoremap.netlify.app';
 var REPORT_TO = 'info@brighamlarsonpianos.com';
 var PIANO_LOG_ID = '1ZunbPKygpQlcXfTyPowDHdUE9spJ3uV1XA4iX1eoKRc';
 var BRIDGE_SECRET = 'PASTE_SECRET_HERE';   // server-to-server auth (optional)
-var BRIDGE_REV = '2026-09-17.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-09-17.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = 'PASTE_PIN_HERE';           // what BLP team members type to move pianos
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -2382,7 +2382,11 @@ function setPhase_(req) {
   // Delivered pianos exit the map: physically relocate the row into the
   // SOLD section (right after the divider) so the parsers' soldZone skip
   // takes it off the live map on the next fetch
-  if (phase === 'Delivered' && found.row < soldDividerRow_(sh)) {
+  // prev !== 'Delivered' (Walter 9/17): the bottleneck flow ran twice on 9/11
+  // and the second pass logged "Delivered → Delivered" and relocated a SECOND
+  // row. Re-stating the phase a piano already has is not a delivery and must
+  // never move anything.
+  if (phase === 'Delivered' && prev !== 'Delivered' && found.row < soldDividerRow_(sh)) {
     var lock = LockService.getScriptLock();
     lock.waitLock(20000);
     try {
