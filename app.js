@@ -4499,6 +4499,23 @@ async function openQcRail(id) {
     if (p.mainFolder) L.push(`<a href="${esc(p.mainFolder)}" target="_blank" rel="noopener">📁 Main folder</a>`);
     return `<div class="qclinks">${L.join('')}</div>`;
   };
+  // paperwork-backed items (Brigham 9/17): the Hellerbass sheet and the
+  // plating bag/order live in the card's Paperwork slots — link the scan or
+  // photo, or offer to attach one (opens the card) when the slot is empty
+  const pw = pwOf(p);
+  const qcPaper = text => {
+    const t = String(text || '');
+    const L = [];
+    const slot = (key, label, hint) => {
+      const it = pw[key];
+      if (it && it.url) L.push(`<a href="${esc(it.url)}" target="_blank" rel="noopener">${label}</a>`);
+      else L.push(`<a href="#" class="qcpw" data-row="${p.row || ''}" title="${esc(hint)}">📎 ${esc(hint)}</a>`);
+    };
+    if (/hellerbass|heller-bass|bass string/i.test(t)) slot('bass', '🎼 Hellerbass sheet', 'no Hellerbass sheet attached yet — add it under Paperwork');
+    if (/plating|replating|ziplock/i.test(t)) { slot('plating', '✨ Plating order / bag photo', 'no plating photo or order attached yet — add it under Paperwork'); L.push(`<a href="#" class="qctech" data-serial="${esc(p.serial || '')}">🔧 Tech folder (progress photos)</a>`); }
+    if (/tear ?down/i.test(t)) slot('teardown', '🔩 Tear down sheet', 'no tear down sheet attached yet — add it under Paperwork');
+    return L.length ? `<div class="qclinks">${L.join('')}</div>` : '';
+  };
   const WHO_SUGGEST = ['Brigham Larson', 'Karmel Larson', 'Mark Hales', 'Matthew Wessman', 'Jacob Mower', 'Melissa Terry'];
   const close = () => { clearInterval(poll); ov.remove(); };
   const render = () => {
@@ -4534,7 +4551,7 @@ async function openQcRail(id) {
               <button class="qcn" data-t="${esc(it.text)}" title="add a note" style="border:1.5px solid #cfc9bf;background:${open ? '#f2f6fb' : '#fff'};border-radius:8px;padding:5px 8px;color:#274b6d;white-space:nowrap">📝 Note</button>`
               : vd ? `<b style="color:${vd.verdict === 'pass' ? '#2f7d4f' : '#9e2020'};white-space:nowrap">${vd.verdict === 'pass' ? '✓ Pass' : '✗ Rework'}</b>` : '<span style="color:#c9c2b6">·</span>'}
           </div>
-          ${qcLinks(it.text)}
+          ${qcLinks(it.text)}${qcPaper(it.text)}
           ${vd && vd.note ? `<div style="font-size:11.5px;color:${vd.verdict === 'fail' ? '#9e2020' : '#274b6d'};margin:3px 0 0 2px">↳ ${esc(vd.note)}${vd.by ? ` <span style="color:#8a847b">— ${esc(String(vd.by).split(' ')[0])}</span>` : ''}</div>` : ''}
           ${open ? `<div class="qcnotebox" data-t="${esc(it.text)}">
               <textarea class="qcnotetxt" maxlength="300" rows="2" placeholder="${noteMode.get(it.text) === 'fail' ? 'What needs rework on this item? (required)' : 'Note on this item (optional)'}">${esc(noteDraft.get(it.text) || (vd && vd.note) || '')}</textarea>
@@ -4555,6 +4572,12 @@ async function openQcRail(id) {
       ${!canJudge && !settled ? '<div class="dssub" style="margin-top:10px">Waiting on a manager — this updates live.</div>' : ''}`;
     ov.querySelector('.dsx').onclick = close;
     ov.querySelectorAll('.qctech').forEach(t => t.onclick = ev => { ev.preventDefault(); openTechFolder(t.dataset.serial, t); });
+    ov.querySelectorAll('.qcpw').forEach(t => t.onclick = ev => {
+      ev.preventDefault();
+      const pp = S.data.pianos.find(x => String(x.row) === String(t.dataset.row));
+      if (!pp) return;
+      close(); switchView('map'); focusPiano(pp); openPop(pp.row, S.popAnchor, true);
+    });
     if (!canJudge || settled) return;
     // ✗ opens an inline note box (prompt() is suppressed in the installed
     // app — a silent ✗ was the "how do we assign rework?" confusion, 9/17)
