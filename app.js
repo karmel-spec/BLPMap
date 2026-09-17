@@ -4485,6 +4485,7 @@ async function openQcRail(id) {
   // who is performing this mini-QC (Brigham 9/17): defaults to the signed-in
   // name, editable — Brigham often inspects on a tech's phone during training
   let inspector = clockName() || '';
+  const miscItems = [];   // typed-in extra items awaiting their first verdict
   // Brigham 9/17: items that ask about photos/video link straight to the
   // piano's Drive folders so the inspector can check the shots in one tap
   const qcLinks = text => {
@@ -4520,8 +4521,14 @@ async function openQcRail(id) {
   const close = () => { clearInterval(poll); ov.remove(); };
   const render = () => {
     const v = live.verdicts || {};
-    const all = items.length && items.every(it => v[it.text] && v[it.text].verdict === 'pass');
-    const anyFail = items.some(it => v[it.text] && v[it.text].verdict === 'fail');
+    // miscellaneous items (Brigham 9/17): anything typed in the bottom row
+    // becomes its own verdict line — judged verdicts plus ones still being noted
+    const extraKeys = [...new Set(Object.keys(v).filter(k => k !== '_note' && !items.some(it => it.text === k)).concat(miscItems))];
+    const shown = items.map(it => ({section: it.section, text: it.text}))
+      .concat(extraKeys.map(k => ({section: 'Miscellaneous', text: k})));
+    const all = items.length && items.every(it => v[it.text] && v[it.text].verdict === 'pass')
+      && extraKeys.every(k => v[k] && v[k].verdict === 'pass');
+    const anyFail = shown.some(it => v[it.text] && v[it.text].verdict === 'fail');
     const settled = live.status !== 'pending';
     ov.innerHTML = `<div class="dsheet" style="max-height:86vh;overflow:auto"><button class="dsx">✕</button>
       <h3>🔍 Mini-QC — ${esc(q.phase)}</h3>
@@ -4540,7 +4547,7 @@ async function openQcRail(id) {
         ${workItems.filter(it => st.notes.has(it.i)).map(it => `<div style="font-size:12px;margin-top:4px">• ${esc(it.text.slice(0, 90))}<br>
           <span style="color:#274b6d">↳ ${esc(st.notes.get(it.i))}</span></div>`).join('')}</div>` : ''}
       ${canJudge && !settled ? `<div class="qchelp"><b>Pass</b> = this item meets standard · <b>Rework</b> = it doesn't — say what to fix · <b>Note</b> = attach a comment to a pass. When every item is a Pass, <b>Approve</b> advances the phase; any Rework unlocks <b>Send back</b>, which puts a 🔁 Rework card on the tech's board and texts them.</div>` : ''}
-      ${items.map(it => {
+      ${shown.map(it => {
         const vd = v[it.text];
         const open = noteOpen.has(it.text);
         return `<div style="padding:9px 2px;border-top:1px solid #f0ece5" data-item="${esc(it.text)}">
@@ -4562,6 +4569,12 @@ async function openQcRail(id) {
                      <button class="qcnsave" data-v="fail" style="background:#fff;color:#9e2020;border:1.5px solid #9e2020;border-radius:7px;padding:5px 10px;font-weight:700">Save ✗</button>`}
                 <button class="qcncancel" style="background:none;border:0;color:#8a847b">cancel</button></div></div>` : ''}</div>`;
       }).join('')}
+      ${canJudge && !settled ? `<div class="qcmisc">
+        <span style="font-size:10px;letter-spacing:1px;color:#8a847b;text-transform:uppercase">Miscellaneous</span>
+        <div class="qcmiscrow">
+          <input class="qcmisctxt" maxlength="160" placeholder="anything out of the ordinary — e.g. cracked key slip, missing caster…">
+          <button class="qcmiscp" title="passes">✓ Pass</button>
+          <button class="qcmiscf" title="needs rework">✗ Rework</button></div></div>` : ''}
       ${canJudge && !settled ? `<div style="margin-top:14px">
         <label style="font-size:11px;letter-spacing:1px;color:#8a847b;text-transform:uppercase">📝 Note to the tech (optional)</label>
         <textarea class="qcgen" maxlength="400" rows="2" placeholder="Goes on the rework card and in the text — praise, context, what to watch next time…">${esc(genNote)}</textarea>
@@ -4590,6 +4603,20 @@ async function openQcRail(id) {
       if (j.verdicts) { live.verdicts = j.verdicts; render(); }
     };
     const keepGen = () => { const g = ov.querySelector('.qcgen'); if (g) genNote = g.value; };
+    const miscIn = ov.querySelector('.qcmisctxt');
+    const miscGo = verdict => {
+      const txt = (miscIn.value || '').trim().slice(0, 160);
+      if (!txt) { miscIn.focus(); miscIn.style.borderColor = '#9e2020'; return; }
+      if (shown.some(it => it.text.toLowerCase() === txt.toLowerCase())) { miscIn.style.borderColor = '#9e2020'; miscIn.title = 'already on the list'; return; }
+      miscItems.push(txt);
+      if (verdict === 'pass') { keepGen(); sendVerdict(txt, 'pass', ''); }
+      else openNote(txt, 'fail');
+    };
+    if (miscIn) {
+      miscIn.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); miscGo('pass'); } };
+      ov.querySelector('.qcmiscp').onclick = () => miscGo('pass');
+      ov.querySelector('.qcmiscf').onclick = () => miscGo('fail');
+    }
     const who = ov.querySelector('.qcwho');
     if (who) who.oninput = () => { inspector = who.value.trim(); };
     const needWho = () => { if (inspector) return true; if (who) { who.focus(); who.style.borderColor = '#9e2020'; } return false; };
