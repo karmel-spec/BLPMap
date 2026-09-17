@@ -759,12 +759,23 @@ function openRefinishQ() {
 }
 /* 🔑 Keytop Queue popup (Brigham 9/4): every piano with an open keytop
  * status, queue order first — tap a row to jump to its card. */
+// keytop queue order (Brigham 9/17): work IN PROGRESS on top, then the numbered
+// queue in order, then Evaluate, then anything else — by shop queue position
+function keytopRank(p) {
+  const st = String(p.keytopStatus || '').trim();
+  if (/^in progress|^in process/i.test(st)) return 0;
+  const m = /#\s*(\d+)/.exec(st);
+  if (/^in key queue/i.test(st)) return 1000 + (m ? +m[1] : 999);
+  if (/^evaluate/i.test(st)) return 3000;
+  return 4000;
+}
+function keytopOrder(a, b) {
+  return keytopRank(a) - keytopRank(b) || ((a.queuePos || 999) - (b.queuePos || 999)) || (a.row - b.row);
+}
 function openKeytopQ() {
   const rows = S.data.pianos.filter(x => x.active && (x.keytopStatus || '').trim()
     && !/^done/i.test(x.keytopStatus));
-  const qn = st => { const m = /#\s*(\d+)/.exec(st || ''); return m ? +m[1] : 999; };
-  rows.sort((a2, b2) => qn(a2.keytopStatus) - qn(b2.keytopStatus)
-    || String(a2.keytopStatus).localeCompare(String(b2.keytopStatus)));
+  rows.sort(keytopOrder);
   const old = document.querySelector('.dsheetov'); if (old) old.remove();
   const ov = document.createElement('div');
   ov.className = 'dsheetov';
@@ -9875,7 +9886,10 @@ const TQ_DEFS = [
    // queue even when the old key-work note still reads like a request (8/28)
    need: p => !taskAutoDone(p, 'keys') && !/^Done/i.test(p.keytopStatus || '')
      && ['needed', 'noted'].includes(taskStatus(taskVal(p, 'keys'))),
-   note: p => [p.keytopMaterial ? '🎨 ' + p.keytopMaterial : '', p.keytopStatus, taskVal(p, 'keys')].filter(Boolean).join(' · ')},
+   note: p => [p.keytopMaterial ? '🎨 ' + p.keytopMaterial : '', p.keytopStatus, taskVal(p, 'keys')].filter(Boolean).join(' · '),
+   // In Progress first, then In Key Queue #n, then Evaluate (Brigham 9/17)
+   pool: () => S.data.pianos.filter(p => p.active && p.serial && (p.queuePos || p.phase)
+     && (p.phase || '') !== 'For Sale' && (p.phase || '') !== 'Delivered').sort(keytopOrder)},
   {key: 'plates', icon: '⚙️', title: 'PLATES TO CURTIS HARPER',
    need: p => ['Removed', 'Plate storage — BEFORE'].includes((p.plateStatus || '').trim()),
    note: p => p.plateStatus},
