@@ -3895,7 +3895,9 @@ const QC_PHASES = ['CAP', 'PRSB - Downbearing'];
 const QC_NEVER = ['Post Sale QC', 'Chip Tuning', '1st Tuning', '2nd Tuning', 'QC & Assembly'];
 // phases that carry a digital checklist (worksheet + progress pill). QC &
 // Assembly keeps its worksheet even though it no longer gates.
-const CHECKLIST_PHASES = QC_PHASES.concat(['QC & Assembly', 'Post Sale QC']);
+// 9/17 (Brigham): the handbook trio (bench steps + training view + mini-QC) now
+// covers Notching & Pins, Restringing and DHRT too — seeded on the Phase Checklists tab
+const CHECKLIST_PHASES = QC_PHASES.concat(['PRSB - Notching and Pins', 'Restringing', 'DHRT', 'QC & Assembly', 'Post Sale QC']);
 // acronym school (Brigham 9/3): TRAINING mode spells acronyms out so newbies
 // learn them; trained techs see the acronyms alone everywhere else.
 const PHASE_LONG = {
