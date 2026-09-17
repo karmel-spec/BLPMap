@@ -10875,13 +10875,14 @@ function clockAdjustTable() {
     const todayYmd = new Date().toLocaleDateString('en-CA', {timeZone: 'America/Denver'});
     if (!S.payDay) S.payDay = todayYmd;
     const isPast = S.payDay < todayYmd;
-    const dayList = S.payRows.filter(r => r.date === S.payDay && !String(r.voided || ''))
+    const dayList = S.payRows.filter(r => r.date === S.payDay)
       .sort((x, y) => String(x.tech).localeCompare(String(y.tech)) || new Date(x.start) - new Date(y.start));
     const knownTechs = [...new Set(S.payRows.filter(r => new Date(r.start) >= Date.now() - 30 * 86400000).map(r => r.tech))].sort();
     const punched = new Set(dayList.map(r => r.tech));
     const noPunch = knownTechs.filter(t => !punched.has(t));
-    const dayIssues = dayList.filter(r => (!r.end && isPast) || adjAutoClosed(r));
+    const dayIssues = dayList.filter(r => !String(r.voided || '') && ((!r.end && isPast) || adjAutoClosed(r)));
     const dayRow = r => {
+      if (String(r.voided || '')) return `<tr class="adjvoided"><td>${esc(r.tech)}</td><td style="white-space:nowrap">${fmtT(r.start)} → ${r.end ? fmtT(r.end) : '--:--'} <span class="voidchip" title="${esc(String(r.voided))}">🚫 voided</span></td><td>—</td><td></td><td></td></tr>`;
       const open = !r.end, auto = adjAutoClosed(r);
       const fixable = (open && isPast) || auto;
       const issue = open && isPast ? '<span class="dayissue">Missing clock out</span>'
@@ -10892,7 +10893,8 @@ function clockAdjustTable() {
         <td>${r.minutes ? fmtHM(r.minutes) : '—'}</td><td>${issue}</td>
         <td style="white-space:nowrap">${fixable ? `<span class="rfd">out <input type="datetime-local" class="dayout" value="${esc(dayLocal(r.end || r.start))}"></span>
             <button class="csvbtn dayoutsave" data-row="${r.row}" data-start="${esc(r.start)}">Save clock out</button>` : ''}
-          <button class="adjedit dayedit" data-row="${r.row}" title="full edit — change the clock-in too, or void">✎</button><span class="adjmsg phmsg"></span></td></tr>`;
+          <button class="adjedit dayedit" data-row="${r.row}" title="full edit — change the clock-in too">✎</button>
+          <button class="adjedit dayvoid" data-row="${r.row}" title="void this punch — for a duplicate or a clock-in by mistake; it stays visible, struck through, and counts toward nothing">🚫</button><span class="adjmsg phmsg"></span></td></tr>`;
     };
     const dayLabel = new Date(S.payDay + 'T12:00:00').toLocaleDateString('en-US', {weekday: 'long', month: 'short', day: 'numeric', year: 'numeric'});
     const dayHtml = `<div class="rfbar daynav">
@@ -11566,6 +11568,7 @@ function renderReport() {
   const pdd = body.querySelector('.paydaydate'); if (pdd) pdd.onchange = () => { if (pdd.value) { S.payDay = pdd.value; renderReport(); } };
   body.querySelectorAll('.dayjump').forEach(b => b.onclick = () => { S.payDay = b.dataset.day; S.payDayView = true; renderReport(); });
   body.querySelectorAll('.dayedit').forEach(b => b.onclick = () => { S.adjEdit = {clock: 'pay', row: +b.dataset.row}; S.payDayView = false; renderReport(); });
+  body.querySelectorAll('.dayvoid').forEach(b => b.onclick = () => { S.adjEdit = {clock: 'pay', row: +b.dataset.row, mode: 'void'}; S.payDayView = false; renderReport(); });
   body.querySelectorAll('.dayadd').forEach(b => b.onclick = () => {
     S.payDayView = false; renderReport();
     const bar = document.querySelector('.rpt[data-r="clockadjust"] .adjaddbar[data-clock="pay"]');
