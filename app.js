@@ -5236,6 +5236,17 @@ function cfxComposeNote(ymd, inT, outT, text) {
   const head = parts.length ? `${day ? day + ': ' : ''}${parts.join(', ')}.` : (day ? `${day}.` : '');
   return [head, String(text || '').trim()].filter(Boolean).join(' ');
 }
+/* Management and Shop Tidying ride the Work Clock under pseudo-serials rather
+ * than a piano (see the dashboard's MGMT / TIDY buttons). They were only
+ * reachable by typing "TIDY" into a box labelled "piano serial", which nobody
+ * would guess — so a tidying punch could not be reported as wrong (Walter
+ * 9/18). They are first-class choices now, everywhere a clock is picked. */
+const CLOCK_PSEUDO = {TIDY: 'Shop tidying', MGMT: 'Management'};
+const clockLabel = (clock, serial) => {
+  const p = CLOCK_PSEUDO[String(serial || '').toUpperCase()];
+  return p || (String(clock || '') + (serial ? ' #' + serial : ''));
+};
+
 function clockFixModal(prefill) {
   const old = document.querySelector('.dsheetov'); if (old) old.remove();
   const ov = document.createElement('div');
@@ -5246,7 +5257,9 @@ function clockFixModal(prefill) {
     <div class="dssub">Pick the day and enter the times that are <b>correct</b> — leave a time blank if that punch is already right.</div>
     <div class="rfbar"><select class="cf-clock">
       <option value="pay">My day clock (payroll)</option>
-      <option value="piano">A piano work clock</option></select>
+      <option value="piano">A piano work clock</option>
+      <option value="TIDY">Shop tidying</option>
+      <option value="MGMT">Management</option></select>
       <input type="text" class="cf-serial" placeholder="piano serial" style="display:none"></div>
     <div class="rfbar">
       <label class="rfd">day <input type="date" class="cf-date" value="${today}" max="${today}"></label>
@@ -5259,7 +5272,7 @@ function clockFixModal(prefill) {
   document.body.appendChild(ov);
   ov.querySelector('.dsx').onclick = () => ov.remove();
   const sel = ov.querySelector('.cf-clock'), ser = ov.querySelector('.cf-serial');
-  sel.onchange = () => { ser.style.display = sel.value === 'piano' ? '' : 'none'; };
+  sel.onchange = () => { ser.style.display = sel.value === 'piano' ? '' : 'none'; };   // no serial for pay/TIDY/MGMT
   ov.querySelector('.cf-send').onclick = async ev => {
     const sendBtn = ev.currentTarget;
     if (sendBtn.disabled) return;   // a second tap while the bridge is slow filed the request twice (Mark 9/14)
@@ -5269,12 +5282,18 @@ function clockFixModal(prefill) {
     if (!inT && !outT && !text) { msg.textContent = 'enter the correct clock-in and/or clock-out time (or describe the fix)'; return; }
     if (inT && outT && outT <= inT) { msg.textContent = 'clock-out must be after clock-in'; return; }
     if (sel.value === 'piano' && !ser.value.trim()) { msg.textContent = 'which piano? enter its serial'; return; }
-    const note = cfxComposeNote(ymd, inT, outT, text);
+    // TIDY / MGMT travel as a piano-clock request against their pseudo-serial,
+    // and the label goes into the note so the manager's text says which it was
+    const pseudo = CLOCK_PSEUDO[sel.value] ? sel.value : '';
+    const clock = sel.value === 'pay' ? 'pay' : 'piano';
+    const serial = pseudo || ser.value.trim();
+    const note = cfxComposeNote(ymd, inT, outT,
+      [pseudo ? CLOCK_PSEUDO[pseudo] + ' clock.' : '', text].filter(Boolean).join(' '));
     sendBtn.disabled = true; const sendWas = sendBtn.textContent; sendBtn.textContent = 'Sending…';
     msg.textContent = 'sending…';
     // file it in the language the app is set to, so the "your clock is fixed"
     // text comes back in that language without anyone maintaining a list
-    const j = await clockFixPost({action: 'clockfix', clock: sel.value, serial: ser.value.trim(), note,
+    const j = await clockFixPost({action: 'clockfix', clock, serial, note,
       date: ymd, inAt: inT, outAt: outT, lang: es() ? 'es' : 'en'});
     if (j.error) { msg.textContent = j.error; sendBtn.disabled = false; sendBtn.textContent = sendWas; return; }
     ov.querySelector('.dsheet').innerHTML = j.duplicate
@@ -10978,7 +10997,7 @@ function clockAdjustTable() {
               <option value="pay" ${/piano/i.test(r.clock) ? '' : 'selected'}>Day clock</option>
               <option value="piano" ${/piano/i.test(r.clock) ? 'selected' : ''}>Piano clock</option></select>
             <input type="text" class="cfxserial" data-row="${r.row}" placeholder="serial #" value="${esc(r.serial || '')}" title="piano serial this request is about" ${/piano/i.test(r.clock) ? '' : 'hidden'}>`
-         : esc(r.clock) + (r.serial ? ' #' + esc(r.serial) : '')}</td><td>${esc(r.note)}${isDup(r) ? ' <span class="cfxdupmark" title="the same person sent this exact request more than once">⧉ sent ' + fxCount[fxKey(r)] + '×</span>' : ''}</td>
+         : esc(clockLabel(r.clock, r.serial))}</td><td>${esc(r.note)}${isDup(r) ? ' <span class="cfxdupmark" title="the same person sent this exact request more than once">⧉ sent ' + fxCount[fxKey(r)] + '×</span>' : ''}</td>
        <td style="white-space:nowrap"><span class="cfxopen">OPEN</span>
          <button class="cfxres cfxapply" data-row="${r.row}" title="open the punch this request is about so you can fix it">✎ Apply →</button>
          <button class="cfxres" data-row="${r.row}" title="fixed it? clear this request and text the team member that their clock is correct">Mark resolved</button>
@@ -11081,7 +11100,7 @@ function clockAdjustTable() {
     // the very last thing on the page
     tlAdd = `<div class="rfbar adjaddbar" data-clock="piano"><b>+ missed piano session:</b>
         <input type="text" class="a-tech" placeholder="tech name">
-        <input type="text" class="a-serial" placeholder="piano serial">
+        <input type="text" class="a-serial" placeholder="piano serial · or TIDY / MGMT">
         <input type="text" class="a-phase" placeholder="phase">
         <span class="rfd">in <input type="datetime-local" class="a-start"></span>
         <span class="rfd">out <input type="datetime-local" class="a-end"></span>
