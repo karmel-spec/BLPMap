@@ -5429,12 +5429,13 @@ function popHTML(p) {
   // position) until someone decides; Yes shows the history button above.
   const crVal = (p.clientReports || '').trim().toLowerCase();
   const crOn = crVal === 'yes', crUnset = crVal !== 'yes' && crVal !== 'no';
-  const crAsk = p.serial ? `<div class="crask crrow">
-      <span class="crlbl">📨 Client email update reports</span>
-      <button class="crsw ${crOn ? 'on' : ''} ${crUnset ? 'unset' : ''}" role="switch" aria-checked="${crOn}"
-        title="${crOn ? 'ON — tap to stop sending this client update reports' : 'OFF — tap to send this client email update reports'}"><span class="crknob"></span></button>
-      <b class="crstate ${crOn ? 'on' : crUnset ? 'unset' : 'off'}">${crOn ? 'ON' : crUnset ? 'NOT SET' : 'OFF'}</b>
-      <span class="crhint">${crOn ? 'this client receives emailed update reports' : crUnset ? 'decide: should this client get emailed update reports?' : 'no update reports go to this client'}</span>
+  const crAsk = p.serial ? `<div class="crbox ${crOn ? 'on' : crUnset ? 'unset' : 'off'}">
+      <div class="crtitle">📨 Client email update reports ${crUnset ? '<span class="crbadge">choose one</span>' : ''}</div>
+      <div class="crseg" role="radiogroup" aria-label="Client email update reports">
+        <button class="crsw cropt ${crOn ? 'sel' : ''}" data-on="1" role="radio" aria-checked="${crOn}">${crOn ? '✓ ' : ''}SEND REPORTS</button>
+        <button class="crsw cropt ${!crOn && !crUnset ? 'sel' : ''}" data-on="0" role="radio" aria-checked="${!crOn && !crUnset}">${!crOn && !crUnset ? '✓ ' : ''}NO REPORTS</button>
+      </div>
+      <div class="crhint">${crOn ? 'This client <b>WILL</b> receive emailed update reports as the work progresses.' : crUnset ? 'Not decided yet — should this client receive emailed update reports?' : 'This client will <b>NOT</b> receive emailed update reports.'}</div>
       <span class="crmsg"></span></div>` : '';
   const ownerLine = [ownerNameOf(p), ownerCityStateOf(p)].filter(Boolean).join(' — ') || '—';
   const pct = shopProgressPct(p);
@@ -6225,9 +6226,10 @@ function wirePop(p) {
   });
   pop.querySelectorAll('.crsw').forEach(sw => sw.onclick = ev => {
     ev.stopPropagation(); popPinned = true;
-    if (sw.disabled) return;
-    sw.disabled = true;
-    setClientReports(p, !sw.classList.contains('on'), pop);
+    const want = sw.dataset.on === '1';
+    if (sw.classList.contains('sel')) return;   // already the current choice
+    pop.querySelectorAll('.crsw').forEach(b => b.disabled = true);
+    setClientReports(p, want, pop);
   });
   const cr = pop.querySelector('.creports');
   if (cr) cr.onclick = ev => {
