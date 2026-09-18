@@ -50,7 +50,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-09-18.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-09-18.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -1271,6 +1271,12 @@ function doPost(e) {
       if (spw.ok) logAct_(who, 'Paperwork', spw.summary || req.serial,
         req.kind + (req.url ? ' attached' : ' removed'));
       return json_(spw);
+    }
+    if (req.action === 'restoreproposal') {
+      var rp = restoreProposal_(req);
+      if (rp.ok) logAct_(who, 'Proposal restored', rp.week || '(week)',
+        'history row ' + rp.from_row + ' → store, replacing ' + rp.replaced);
+      return json_(rp);
     }
     if (req.action === 'saveproposal') {
       var svp = saveProposal_(req);
@@ -4897,7 +4903,23 @@ function proposalSheet_() {
 function saveProposal_(req) {
   var plan = String(req.plan || '');
   if (!plan || plan.length > 400000) return {error: 'plan missing or too large'};
-  try { JSON.parse(plan); } catch (e) { return {error: 'plan is not valid JSON'}; }
+  var parsed = null;
+  try { parsed = JSON.parse(plan); } catch (e) { return {error: 'plan is not valid JSON'}; }
+  // A BLANK save wiped the store on 9/18 — week:'', weekStart:'', zero techs,
+  // from "Mark Hales (Planner notes)". Both guards below compare weekStarts,
+  // so a missing one walked straight past them; worse, it left the store with
+  // no weekStart at all, which disarms the older-week guard for every save
+  // after it. A proposal that names no week, or carries no technicians, is
+  // not a proposal — it is a wipe, and it is refused before anything is
+  // touched. force:true still allows a deliberate clear.
+  if (!req.force) {
+    if (!String(req.weekStart || '').trim()) {
+      return {error: 'refusing to save a proposal with no weekStart — nothing saved'};
+    }
+    if (!((parsed && parsed.techs) || []).length) {
+      return {error: 'refusing to save a proposal with no technicians — nothing saved'};
+    }
+  }
   var savedBy = String((req.user && req.user.name) || req.by || '').slice(0, 80);
   var meta = {week: String(req.week || ''), weekStart: String(req.weekStart || ''),
               savedAt: new Date().toISOString(), store: 'sheet', applied: false, savedBy: savedBy};
@@ -4954,6 +4976,39 @@ function proposalHistoryPush_(sh, oldMeta, newBy) {
   h.appendRow(row);
   var last = h.getLastRow();
   if (last > 61) h.deleteRows(2, last - 61);   // keep the newest 60 versions
+}
+/* Put a history version back into the store (Walter 9/18). Recovery used to
+ * mean unhiding two tabs and copying chunked cells by hand — needed twice now,
+ * after 9/11 and 9/18. `{action:'restoreproposal', row: N}`, N from
+ * ?fn=proposalhistory. The restore snapshots whatever it replaces first, so an
+ * unwanted restore is itself recoverable. */
+function restoreProposal_(req) {
+  var ss = SpreadsheetApp.openById('11RoeVRETag5rZYX6_tEH-rf6x8JL0JeZU0P5AT0WI-I');
+  var h = ss.getSheetByName(PROPOSAL_HISTORY_TAB);
+  if (!h || h.getLastRow() < 2) return {error: 'no proposal history yet'};
+  var row = Number(req.row);
+  if (!(row >= 2) || row > h.getLastRow()) return {error: 'bad history row'};
+  var vals = h.getRange(row, 1, 1, h.getLastColumn()).getValues()[0];
+  var meta = {};
+  try { meta = JSON.parse(String(vals[3] || '{}')); } catch (e) { return {error: 'that history row has unreadable meta'}; }
+  var raw = '';
+  for (var i = 4; i < vals.length; i++) raw += String(vals[i] || '');
+  if (!raw) return {error: 'that history row has no plan stored'};
+  var parsed = null;
+  try { parsed = JSON.parse(raw); } catch (e2) { return {error: 'that history row holds invalid JSON'}; }
+  var sh = proposalSheet_();
+  var curMeta = {};
+  try { curMeta = JSON.parse(String(sh.getRange(1, 1).getValue() || '{}')); } catch (e3) {}
+  try { proposalHistoryPush_(sh, curMeta, 'restore of history row ' + row); } catch (e4) {}
+  meta.restoredAt = new Date().toISOString();
+  meta.restoredBy = String((req.user && req.user.name) || req.by || '').slice(0, 80);
+  var rows = [[JSON.stringify(meta)]];
+  for (var j = 0; j < raw.length; j += PROPOSAL_CHUNK) rows.push([raw.substr(j, PROPOSAL_CHUNK)]);
+  sh.clearContents();
+  sh.getRange(1, 1, rows.length, 1).setValues(rows);
+  return {ok: true, week: meta.week || '', weekStart: meta.weekStart || '',
+          techs: ((parsed && parsed.techs) || []).length, from_row: row,
+          replaced: (curMeta.week || '(blank)')};
 }
 // ?fn=proposalhistory (key-gated) → the saved versions, newest first, meta only
 function proposalHistory_() {
