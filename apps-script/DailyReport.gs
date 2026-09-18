@@ -50,7 +50,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-09-18.5';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-09-18.6';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -5220,7 +5220,11 @@ function applyScheduleLocked_(req) {
           if (b[2] === 'tune' && tuneMaster) {
             try {
               opts.guests = calId;
-              opts.sendInvites = true;
+              // no invitation emails (Walter 9/18): applying a week would
+              // otherwise send the tech one per tuning block — 10 at once for
+              // Korban. Adding the guest still puts the event on their own
+              // calendar; it just arrives quietly.
+              opts.sendInvites = false;
               tuneMaster.createEvent(evTitle, d1, d2, opts);
               placed = true; tuned++;
             } catch (eT) { delete opts.guests; delete opts.sendInvites; }
