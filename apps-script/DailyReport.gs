@@ -50,7 +50,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-09-17.11';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-09-17.12';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -1435,6 +1435,8 @@ function doPost(e) {
     if (req.action === 'cardmedia') {
       return json_(cardMedia_(req, who));
     }
+    if (req.action === 'videosession') return json_(videoSession_(req, who));
+    if (req.action === 'videodone') return json_(videoDone_(req, who));
     if (req.action === 'photo') {
       var pt = savePhoto_(req, who);
       if (pt.saved) logAct_(who,
@@ -1792,6 +1794,74 @@ function mediaFolderFor_(sh, row, serial, kind) {
   if (!folder) folder = parent.createFolder(name);
   try { sh.getRange(row, col).setValue(folder.getUrl()); } catch (e) {}
   return folder;
+}
+/* ===== BEFORE / AFTER VIDEO — phone camera → Drive, straight from the browser (Brigham 9/17) =====
+ * Videos are far too big for the base64 photo path. The bridge (karmel@) opens a Drive
+ * RESUMABLE upload session inside the piano's Before Video / After Video folder and hands
+ * the session URL to the app; the phone PUTs the bytes to Google directly (8 MB chunks),
+ * so the file is owned by karmel@ like every photo and never touches Apps Script's
+ * payload limits. The Origin header on the session request is what lets the browser's
+ * PUTs pass CORS. `videodone` logs the finished file to the ACTIVITY LOG. */
+function videoFolderFor_(sh, row, serial, kind) {
+  var field = kind === 'before' ? 'bvideo' : 'avideo';
+  var col = mediaCol_(sh, field);
+  var cell = col ? String(sh.getRange(row, col).getValue() || '') : '';
+  var m = /folders\/([A-Za-z0-9_-]+)/.exec(cell);
+  if (m) { try { return DriveApp.getFolderById(m[1]); } catch (e) {} }
+  var tech = techFolderFor_(sh, row, serial);
+  if (!tech) return null;
+  var parentIt = tech.getParents();
+  var parent = parentIt.hasNext() ? parentIt.next() : tech;
+  var re = kind === 'before' ? /before/i : /after/i;
+  var folder = null;
+  var it = parent.getFolders();
+  while (it.hasNext()) {
+    var f = it.next();
+    if (re.test(f.getName()) && /video/i.test(f.getName())) { folder = f; break; }
+  }
+  if (!folder) folder = parent.createFolder(kind === 'before' ? 'Before Video' : 'After Video');
+  // the Piano Log cell holds the folder link (= "✓ have" on the card) unless a human
+  // already pasted a different link there
+  if (col) {
+    try { if (!cell.trim() || /^(✓|Skipped)/.test(cell.trim())) sh.getRange(row, col).setValue(folder.getUrl()); } catch (e2) {}
+  }
+  return folder;
+}
+function videoSession_(req, who) {
+  var kind = req.kind === 'after' ? 'after' : 'before';
+  var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+  var found = findPiano_(sh, req.serial, req.row);
+  if (found.error) return found;
+  var folder = videoFolderFor_(sh, found.row, req.serial, kind);
+  if (!folder) return {error: 'no Drive folder for this piano yet — add its main folder link to the Piano Log first'};
+  var ext = (String(req.name || '').match(/\.[A-Za-z0-9]{2,5}$/) || [''])[0]
+    || (/quicktime/i.test(String(req.mime || '')) ? '.mov' : '.mp4');
+  var stamp = Utilities.formatDate(new Date(), 'America/Denver', 'yyyy-MM-dd HH.mm');
+  var name = ((found.summary || 'Piano') + ' ' + String(req.serial) + ' — '
+    + (kind === 'before' ? 'Before' : 'After') + ' video ' + stamp)
+    .replace(/[\/\\:*?"<>|]/g, '-').slice(0, 120) + ext.toLowerCase();
+  var resp = UrlFetchApp.fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&supportsAllDrives=true&fields=id,name,webViewLink,size', {
+    method: 'post', contentType: 'application/json; charset=UTF-8', muteHttpExceptions: true,
+    headers: {Authorization: 'Bearer ' + ScriptApp.getOAuthToken(),
+              'X-Upload-Content-Type': String(req.mime || 'video/mp4'),
+              'X-Upload-Content-Length': String(Number(req.size) || 0),
+              Origin: APP_URL},
+    payload: JSON.stringify({name: name, parents: [folder.getId()]})});
+  var code = resp.getResponseCode();
+  var hdrs = resp.getAllHeaders();
+  var loc = hdrs['Location'] || hdrs['location'];
+  if (code !== 200 || !loc) return {error: 'Drive would not open an upload (' + code + '): ' + resp.getContentText().slice(0, 160)};
+  return {ok: true, sessionUrl: String(loc), name: name, folderId: folder.getId(), folderUrl: folder.getUrl(),
+          row: found.row, summary: found.summary, kind: kind};
+}
+function videoDone_(req, who) {
+  var kind = req.kind === 'after' ? 'after' : 'before';
+  var file;
+  try { file = DriveApp.getFileById(String(req.fileId || '')); } catch (e) { return {error: 'uploaded file not found in Drive'}; }
+  var mb = Math.round(file.getSize() / 1048576 * 10) / 10;
+  logAct_(who, kind === 'before' ? 'Before video' : 'After video', String(req.summary || req.serial || ''),
+          file.getName() + ' (' + mb + ' MB) → ' + file.getUrl());
+  return {ok: true, link: file.getUrl(), name: file.getName(), mb: mb};
 }
 function techFolderFor_(sh, row, serial) {
   var folder = null;

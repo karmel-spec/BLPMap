@@ -1625,9 +1625,15 @@ function mediaCard(p) {
     ${line('After video', 'avideo', p.avideo, late)}
     ${folderRow}
     ${p.serial ? `<div class="tagbtns mediaadd">
+      <button class="tagbtn vidbtn" data-kind="before">🎥 Record before video</button>
+      <button class="tagbtn vidbtn" data-kind="after">🎥 Record after video</button>
       <button class="tagbtn wizbtn" data-kind="before">🧭 Before shot list (13)</button>
       <button class="tagbtn wizbtn" data-kind="after">🧭 After shot list (13)</button>
-    </div>` : ''}
+      <input type="file" class="vidin" accept="video/*" capture="environment" hidden>
+      <input type="file" class="vidpick" accept="video/*" hidden>
+    </div>
+    <div class="lite" style="font-size:11px;margin-top:2px">🎥 opens the camera and files the clip in this piano’s Before / After Video folder — or upload a saved
+      <a href="#" class="vidpicklink" data-kind="before">before</a> / <a href="#" class="vidpicklink" data-kind="after">after</a> video.</div>` : ''}
     <div class="mdmsg"></div>
   </div>`;
 }
@@ -6428,6 +6434,20 @@ function wirePop(p) {
     ev.stopPropagation(); popPinned = true;
     openShotWizard(p, b.dataset.kind);
   });
+  // 🎥 before / after video: the camera input records, the plain input picks a saved clip
+  (() => {
+    const cam = pop.querySelector('.vidin'), pick = pop.querySelector('.vidpick');
+    if (!cam || !pick) return;
+    let vkind = 'before';
+    pop.querySelectorAll('.vidbtn').forEach(b => b.onclick = ev => {
+      ev.stopPropagation(); popPinned = true; vkind = b.dataset.kind; cam.value = ''; cam.click();
+    });
+    pop.querySelectorAll('.vidpicklink').forEach(a => a.onclick = ev => {
+      ev.preventDefault(); ev.stopPropagation(); popPinned = true; vkind = a.dataset.kind; pick.value = ''; pick.click();
+    });
+    cam.onchange = () => uploadVideo(p, vkind, cam.files && cam.files[0], pop);
+    pick.onchange = () => uploadVideo(p, vkind, pick.files && pick.files[0], pop);
+  })();
   (() => {
     const fin = pop.querySelector('.maddin');
     if (!fin) return;
@@ -8631,6 +8651,77 @@ async function photoPost(body) {
     }
   }
   return {error: 'the Google bridge hiccuped — the photo did NOT save; try again in a minute'};
+}
+/* Before / After VIDEO — phone camera → the piano's Drive folder (Brigham 9/17).
+ * Videos are far too big for the base64 photo path, so the bridge opens a Drive
+ * resumable-upload session in the right folder and the phone PUTs the bytes to
+ * Google directly, 8 MB at a time, with progress and per-chunk retries. The
+ * file ends up owned by karmel@ like every photo. */
+const VID_CHUNK = 8 * 1024 * 1024;
+async function uploadVideo(p, kind, f, pop) {
+  if (!f) return;
+  const say = (cls, t) => { const m = pop.querySelector('.mdmsg'); if (m) { m.className = 'mdmsg ' + cls; m.textContent = t; } };
+  popPinned = true;
+  const {pin, ok} = writeAuth();
+  if (!ok) { say('err', 'Sign in with Google (☰ menu) first — uploads are logged under your name.'); return; }
+  const label = kind === 'after' ? 'after' : 'before';
+  const mb = Math.round(f.size / 1048576 * 10) / 10;
+  const btns = [...pop.querySelectorAll('.vidbtn')];
+  btns.forEach(b => b.disabled = true);
+  try {
+    say('', `Opening the piano’s ${label} video folder…`);
+    const r0 = await fetchT(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+      headers: {'content-type': 'text/plain;charset=utf-8'},
+      body: JSON.stringify({pin, action: 'videosession', serial: p.serial, row: p.row, kind: label,
+        mime: f.type || 'video/mp4', size: f.size, name: f.name || '', ...authFields()})}, 45000);
+    const s = await r0.json();
+    if (!s.ok || !s.sessionUrl) throw new Error(s.error || 'could not open a Drive upload');
+    let pos = 0, file = null, tries = 0;
+    while (pos < f.size) {
+      const end = Math.min(pos + VID_CHUNK, f.size);
+      say('', `Uploading ${label} video — ${Math.round(pos / f.size * 100)}% of ${mb} MB… keep this open`);
+      let r = null;
+      try {
+        r = await fetchT(s.sessionUrl, {method: 'PUT',
+          headers: {'Content-Range': `bytes ${pos}-${end - 1}/${f.size}`}, body: f.slice(pos, end)}, 180000);
+      } catch (e) { r = null; }
+      if (r && (r.status === 200 || r.status === 201)) { file = await r.json(); break; }
+      if (r && r.status === 308) {   // chunk accepted — Google tells us how far it got
+        const rg = r.headers.get('Range');
+        const m = rg && /-(\d+)$/.exec(rg);
+        pos = m ? Number(m[1]) + 1 : end;
+        tries = 0; continue;
+      }
+      // network blip or 5xx: ask Google where the upload stands, then carry on from there
+      if (++tries > 4) throw new Error('the upload kept failing at ' + Math.round(pos / f.size * 100) + '% — check the Wi-Fi and try again');
+      await new Promise(res => setTimeout(res, 1500 * tries));
+      try {
+        const q = await fetchT(s.sessionUrl, {method: 'PUT', headers: {'Content-Range': `bytes */${f.size}`}}, 30000);
+        if (q.status === 200 || q.status === 201) { file = await q.json(); break; }
+        if (q.status === 308) { const rg2 = q.headers.get('Range'); const m2 = rg2 && /-(\d+)$/.exec(rg2); pos = m2 ? Number(m2[1]) + 1 : 0; }
+      } catch (e2) { /* try the chunk again */ }
+    }
+    if (!file || !file.id) throw new Error('Drive did not confirm the file');
+    say('', 'Saved to Drive — logging it…');
+    let done = {};
+    try {
+      const r2 = await fetchT(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+        headers: {'content-type': 'text/plain;charset=utf-8'},
+        body: JSON.stringify({pin, action: 'videodone', serial: p.serial, row: p.row, kind: label,
+          fileId: file.id, summary: s.summary || p.summary || '', ...authFields()})}, 30000);
+      done = await r2.json();
+    } catch (e3) { done = {}; }
+    const field = label === 'before' ? 'bvideo' : 'avideo';
+    p[field] = true; p[field + 'Url'] = s.folderUrl;
+    const edit = pendingEdits.get(p.row) || {}; edit[field] = true; pendingEdits.set(p.row, edit);
+    renderMap(); renderKpis();
+    openPop(p.row, S.popAnchor, true);
+    const m3 = pop.querySelector('.mdmsg');
+    if (m3) { m3.className = 'mdmsg ok'; m3.innerHTML = `✓ ${label === 'before' ? 'Before' : 'After'} video saved (${mb} MB) — <a href="${esc(done.link || s.folderUrl)}" target="_blank" rel="noopener">open in Drive ↗</a>`; }
+  } catch (e) {
+    say('err', '✗ ' + (e && e.message || e));
+    btns.forEach(b => b.disabled = false);
+  }
 }
 async function uploadPhoto(p, input, pop) {
   const f = input.files && input.files[0];
