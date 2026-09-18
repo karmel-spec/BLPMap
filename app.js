@@ -15709,7 +15709,9 @@ boot();
  * like Marcus on the Marketing app home screen. Per-person helper sets are
  * unchanged from the old widget. If the gateway can't be reached the window
  * shows a clear error — nothing is ever answered on the agent's behalf.
- * Threads are remembered per agent on this device (localStorage). */
+ * Threads live in Supabase (agent_messages, written by the function) so they
+ * survive browsers and devices and are searchable across every agent; the
+ * device keeps a copy as an instant cache / offline fallback (Karmel 9/18). */
 (() => {
   const ORIGIN = 'https://blpagents.netlify.app';
   const DEFAULT_AGENTS = ['chris'];
@@ -15769,11 +15771,18 @@ boot();
   box.innerHTML = `<div class="agchat-h"><img alt=""><div class="agchat-n"><b></b><small></small></div>
       <a class="agchat-tg" target="_blank" rel="noopener" title="Same agent on Telegram, if you prefer">Telegram ↗</a>
       <button class="agchat-x" type="button" aria-label="Close">×</button></div>
+    <div class="agchat-s"><input type="search" placeholder="Search every agent conversation… (Enter)"><button type="button" class="agchat-sx" hidden>Clear</button></div>
+    <div class="agchat-hits" hidden></div>
     <div class="agchat-t"></div>
     <form class="agchat-c"><textarea rows="1" placeholder="Message… (Enter to send, Shift+Enter for a new line)"></textarea><button type="submit">Send</button></form>`;
   document.body.appendChild(box);
   const thread = box.querySelector('.agchat-t'), form = box.querySelector('form'),
-        ta = box.querySelector('textarea'), sendBtn = form.querySelector('button');
+        ta = box.querySelector('textarea'), sendBtn = form.querySelector('button'),
+        sIn = box.querySelector('.agchat-s input'), sClr = box.querySelector('.agchat-sx'),
+        hits = box.querySelector('.agchat-hits');
+  sIn.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); search(sIn.value); } });
+  sIn.addEventListener('input', () => { if (!sIn.value.trim()) clearSearch(); });
+  sClr.onclick = clearSearch;
   box.querySelector('.agchat-x').onclick = closeChat;
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && !box.hidden) closeChat(); });
   ta.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); form.requestSubmit(); } });
@@ -15781,10 +15790,52 @@ boot();
 
   const histKey = slug => 'blpAgentChat:' + slug;
   const runKey = slug => 'blpAgentRun:' + slug;
+  const syncKey = slug => 'blpAgentSynced:' + slug;
   function history(slug) { try { return JSON.parse(lsGet(histKey(slug)) || '[]'); } catch (e) { return []; } }
+  function saveHist(slug, h) { lsSet(histKey(slug), JSON.stringify(h.slice(-KEEP))); }
   function push(slug, m) {
     const h = history(slug); h.push(m);
-    lsSet(histKey(slug), JSON.stringify(h.slice(-KEEP)));
+    saveHist(slug, h);
+    if (slug === CH.slug) render();
+  }
+  /* ----- server copy (Supabase agent_messages, read with the publishable key) ----- */
+  const SBH = {apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY};
+  const fromRow = r => ({r: r.role === 'user' ? 'me' : 'ag', t: r.body, by: r.role === 'user' ? r.who : undefined,
+    at: new Date(r.created_at).getTime(), id: r.id});
+  // server thread wins; local-only rows (offline sends, errors) are kept in place
+  function merge(local, server) {
+    const seen = new Set(server.map(m => m.r + '|' + m.t));
+    const extra = local.filter(m => m.r === 'err' || !seen.has(m.r + '|' + m.t));
+    return server.concat(extra).sort((a, b) => a.at - b.at);
+  }
+  async function loadThread(slug) {
+    const r = await fetch(SB_URL + '/rest/v1/agent_messages?agent=eq.' + encodeURIComponent(slug)
+      + '&select=id,role,who,body,created_at&order=created_at.desc&limit=300', {headers: SBH, cache: 'no-store'});
+    if (!r.ok) throw new Error('history read failed (' + r.status + ')');
+    return (await r.json()).reverse().map(fromRow);
+  }
+  // a thread that so far lived only in this browser (before 9/18) is copied
+  // up once, so it becomes part of the permanent record
+  async function importIfNeeded(slug, local, server) {
+    if (lsGet(syncKey(slug)) || server.length || !local.some(m => m.r !== 'err')) return false;
+    const wa = authFields();
+    if (!wa.idToken) return false;
+    const r = await fetch('/api/agent', {method: 'POST', headers: {'content-type': 'application/json'},
+      body: JSON.stringify({slug, import: local.filter(m => m.r !== 'err'), idToken: wa.idToken})});
+    const j = await r.json().catch(() => ({}));
+    if (r.ok && j.imported) { lsSet(syncKey(slug), String(j.imported)); return true; }
+    return false;
+  }
+  async function syncThread(slug) {
+    try {
+      let server = await loadThread(slug);
+      const local = history(slug);
+      if (await importIfNeeded(slug, local, server)) server = await loadThread(slug);
+      saveHist(slug, merge(local, server));
+      CH.offline = false;
+    } catch (e) {
+      CH.offline = true;   // show the device copy and say so
+    }
     if (slug === CH.slug) render();
   }
   function render() {
@@ -15792,10 +15843,11 @@ boot();
     const h = history(CH.slug);
     const me = (authUser() || {}).name || 'You';
     let html = h.length ? '' : `<div class="agmsg hint">Same ${esc(a.name)} as on Telegram — reads the vault files and memory on every turn. Ask anything; replies usually take 10–60 s.</div>`;
+    if (CH.offline) html += `<div class="agmsg hint">⚠ Couldn't reach the saved history — showing this device's copy.</div>`;
     html += h.map(m => {
       if (m.r === 'err') return `<div class="agmsg err">⚠ ${esc(m.t)}</div>`;
       const who = m.r === 'me' ? esc(String(m.by || me).split(' ')[0]) : esc(a.name);
-      return `<div class="agmsg ${m.r === 'me' ? 'me' : ''}"><span class="agwho">${who}<time>${esc(stamp(m.at))}</time></span>${esc(m.t)}</div>`;
+      return `<div class="agmsg ${m.r === 'me' ? 'me' : ''}" ${m.id ? `data-id="${m.id}"` : ''}><span class="agwho">${who}<time>${esc(stamp(m.at))}</time></span>${esc(m.t)}</div>`;
     }).join('');
     if (CH.busy) html += `<div class="agtyping">${esc(a.name)} is working (Hermes agent on the agents' Mac — usually 10–60 s; if the agent can't be reached you'll see an error, never a stand-in)…</div>`;
     thread.innerHTML = html;
@@ -15813,6 +15865,8 @@ boot();
     tg.href = a.bot ? 'https://t.me/' + a.bot : '#'; tg.hidden = !a.bot;
     box.hidden = false;
     stack.style.display = 'none';
+    clearSearch();
+    syncThread(slug);
     // a reply still in flight when the window closed or the page reloaded
     let pend = null;
     try { pend = JSON.parse(lsGet(runKey(slug)) || 'null'); } catch (e) { pend = null; }
@@ -15882,7 +15936,61 @@ boot();
     lsDel(runKey(slug));
     CH.busy = false;
     push(slug, Object.assign({at: Date.now()}, msg));
+    if (msg.r === 'ag') setTimeout(() => syncThread(slug), 1500);
     if (!box.hidden && CH.slug === slug) setTimeout(() => ta.focus(), 50);
   }
+  /* ----- search across every agent's saved conversations ----- */
+  async function search(term) {
+    const t = String(term || '').trim();
+    if (!t) { clearSearch(); return; }
+    hits.hidden = false; thread.hidden = true; sClr.hidden = false;
+    hits.innerHTML = '<div class="aghit-meta">Searching…</div>';
+    try {
+      // full-text first (word stems, any order); fall back to a plain substring match
+      const fts = t.split(/\s+/).filter(Boolean).map(w => w.replace(/[^\w'-]/g, '')).filter(Boolean).join(' & ');
+      let r = fts ? await fetch(SB_URL + '/rest/v1/agent_messages?body=fts(english).' + encodeURIComponent(fts)
+        + '&select=id,agent,role,who,body,created_at&order=created_at.desc&limit=60', {headers: SBH}) : {ok: false};
+      let rows = r.ok ? await r.json() : [];
+      if (!rows.length) {
+        r = await fetch(SB_URL + '/rest/v1/agent_messages?body=ilike.' + encodeURIComponent('*' + t.replace(/[%*]/g, '') + '*')
+          + '&select=id,agent,role,who,body,created_at&order=created_at.desc&limit=60', {headers: SBH});
+        if (!r.ok) throw new Error('search failed (' + r.status + ')');
+        rows = await r.json();
+      }
+      const words = t.split(/\s+/).filter(Boolean).map(w => w.toLowerCase());
+      const snip = body => {
+        const lo = body.toLowerCase();
+        let i = -1; for (const w of words) { i = lo.indexOf(w); if (i >= 0) break; }
+        const st = Math.max(0, (i < 0 ? 0 : i) - 90);
+        let out = (st ? '…' : '') + body.slice(st, st + 260) + (body.length > st + 260 ? '…' : '');
+        out = esc(out);
+        for (const w of words) out = out.replace(new RegExp(w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'ig'), m => '<mark>' + m + '</mark>');
+        return out;
+      };
+      hits.innerHTML = `<div class="aghit-meta">${rows.length} match${rows.length === 1 ? '' : 'es'} across all agents</div>` + rows.map(x => {
+        const a = INFO[x.agent] || {name: x.agent};
+        return `<div class="aghit" data-agent="${esc(x.agent)}" data-id="${x.id}">
+          <div class="aghit-meta">${x.role === 'user' ? esc(x.who || 'Team') + ' → ' + esc(a.name) : esc(a.name)} · ${esc(stamp(new Date(x.created_at).getTime()))}</div>
+          <div class="aghit-body">${snip(x.body)}</div></div>`;
+      }).join('') || '<div class="agmsg hint">Nothing found.</div>';
+    } catch (e) {
+      hits.innerHTML = `<div class="agmsg err">⚠ ${esc(e.message || e)}</div>`;
+    }
+  }
+  function clearSearch() {
+    sIn.value = ''; hits.hidden = true; hits.innerHTML = ''; thread.hidden = false; sClr.hidden = true;
+  }
+  hits.addEventListener('click', ev => {
+    const h = ev.target.closest('.aghit'); if (!h) return;
+    const slug = h.dataset.agent, id = +h.dataset.id;
+    if (slug !== CH.slug) openChat(slug); else clearSearch();
+    // after the thread paints, scroll to and flash the matched message
+    const go = (tries) => {
+      const el = thread.querySelector(`.agmsg[data-id="${id}"]`);
+      if (el) { el.scrollIntoView({block: 'center'}); el.classList.add('flash'); setTimeout(() => el.classList.remove('flash'), 2200); }
+      else if (tries > 0) setTimeout(() => go(tries - 1), 300);
+    };
+    go(12);
+  });
   window.openAgentChat = openChat;
 })();

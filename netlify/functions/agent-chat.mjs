@@ -3,9 +3,16 @@
 // the Marketing app uses for Marcus. The gateway URL + key live in Netlify
 // env vars so they never reach browsers.
 //
-//   POST {slug, message, transcript?, idToken}   -> {run_id, session_id}
+//   POST {slug, message, transcript?, idToken}   -> {run_id, session_id, stored}
+//   POST {slug, import: [{r, t, by, at}], idToken} -> {imported}   (one-time copy of a browser thread)
 //   GET  ?slug=lindsay&run=<run_id>  (x-blp-idtoken header)
-//                                              -> {status, output, error}
+//                                              -> {status, output, error, stored}
+//
+// Every message is also written to Supabase (agent_messages, see
+// supabase/agent_chat.sql) with the service-role key, so threads survive the
+// browser and are searchable. The browser reads them back with the
+// publishable key. Without SUPABASE_SERVICE_KEY the chat still works —
+// threads just stay in the browser (the reply says stored:false).
 //
 // Only a signed-in BLP Google account may talk to an agent: the ID token the
 // map already holds is verified against Google's tokeninfo endpoint, and the
@@ -18,6 +25,8 @@ const GATEWAY_KEY = process.env.BLP_GATEWAY_KEY || '';
 const GOOGLE_CLIENT_ID = '110628682621-v65mkaoanv87sp75ggdfcrglfr7bkr8p.apps.googleusercontent.com';
 const AGENTS = ['lindsay', 'melody', 'carla', 'chris', 'clara', 'arnold', 'ivory', 'marcus'];
 const NAMES = { lindsay: 'Lindsay', melody: 'Melody', carla: 'Carla', chris: 'Chris', clara: 'Clara', arnold: 'Arnold', ivory: 'Ivory', marcus: 'Marcus' };
+const SB_URL = (process.env.SUPABASE_URL || 'https://ismacawxfvvllfinibbf.supabase.co').replace(/\/$/, '');
+const SB_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || '';
 const GATEWAY_DOWN = 'Could not reach the agent gateway (the Hermes agents on the agents\' Mac). Check that the Mac is awake, the gateway is up and the Cloudflare tunnel is connected, then try again. Nothing was answered on the agent\'s behalf.';
 
 function json(body, status = 200) {
@@ -69,6 +78,22 @@ async function gateway(path, init) {
   return out;
 }
 
+// insert rows into agent_messages; never throws — chat must not fail because
+// history did. Duplicate agent replies (same run polled twice) are ignored.
+async function store(rows) {
+  if (!SB_SERVICE_KEY || !rows.length) return false;
+  try {
+    const r = await fetch(SB_URL + '/rest/v1/agent_messages?on_conflict=run_id', {
+      method: 'POST',
+      headers: { apikey: SB_SERVICE_KEY, Authorization: 'Bearer ' + SB_SERVICE_KEY,
+        'content-type': 'application/json', Prefer: 'resolution=ignore-duplicates,return=minimal' },
+      body: JSON.stringify(rows),
+      signal: AbortSignal.timeout(8000),
+    });
+    return r.ok;
+  } catch (e) { return false; }
+}
+
 export default async (req) => {
   if (!GATEWAY_KEY) return json({ error: 'agent chat not configured — set BLP_GATEWAY_KEY (and BLP_GATEWAY_URL) in Netlify env vars' }, 501);
   const url = new URL(req.url);
@@ -81,7 +106,11 @@ export default async (req) => {
     if (!who) return json({ error: 'Sign in with your BLP Google account first.' }, 401);
     try {
       const st = await gateway('/agents/' + slug + '/runs/' + encodeURIComponent(run));
-      return json({ status: st.status, output: st.output || null, error: st.error || null });
+      let stored = false;
+      if (st.status === 'completed' && (st.output || '').trim()) {
+        stored = await store([{ agent: slug, role: 'agent', who: NAMES[slug], body: String(st.output).trim(), run_id: run }]);
+      }
+      return json({ status: st.status, output: st.output || null, error: st.error || null, stored });
     } catch (e) {
       return json({ error: String(e && e.message || e) }, 502);
     }
@@ -92,6 +121,21 @@ export default async (req) => {
   try { body = await req.json(); } catch (e) { body = {}; }
   const slug = String(body.slug || '').toLowerCase();
   if (!AGENTS.includes(slug)) return json({ error: 'unknown agent' }, 400);
+  if (Array.isArray(body.import)) {
+    // one-time copy of a thread that so far lived only in a browser
+    const who = await verify(body.idToken);
+    if (!who) return json({ error: 'Sign in with your BLP Google account first.' }, 401);
+    const rows = body.import.slice(0, 500).map((m) => ({
+      agent: slug, role: m.r === 'me' ? 'user' : 'agent',
+      who: m.r === 'me' ? String(m.by || who.name).slice(0, 80) : NAMES[slug],
+      who_email: m.r === 'me' ? who.email : '',
+      body: String(m.t || '').slice(0, 20000),
+      created_at: new Date(Number(m.at) || Date.now()).toISOString(),
+    })).filter((r) => r.body);
+    if (!SB_SERVICE_KEY) return json({ error: 'history storage not configured (SUPABASE_SERVICE_KEY)' }, 501);
+    const ok = await store(rows);
+    return json({ imported: ok ? rows.length : 0, error: ok ? undefined : 'Supabase rejected the import' }, ok ? 200 : 502);
+  }
   const message = String(body.message || '').trim();
   if (!message) return json({ error: 'Type a message first' }, 400);
   if (message.length > 4000) return json({ error: 'Keep a message under 4,000 characters' }, 400);
@@ -115,7 +159,8 @@ export default async (req) => {
       body: JSON.stringify({ input, requester: first + ' <store map>' }),
     });
     if (!rec.run_id) throw new Error('gateway accepted the message but returned no run id');
-    return json({ run_id: rec.run_id, session_id: rec.session_id || null, status: rec.status || 'started' });
+    const stored = await store([{ agent: slug, role: 'user', who: who.name, who_email: who.email, body: message }]);
+    return json({ run_id: rec.run_id, session_id: rec.session_id || null, status: rec.status || 'started', stored });
   } catch (e) {
     return json({ error: String(e && e.message || e) }, 502);
   }

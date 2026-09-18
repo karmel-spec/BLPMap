@@ -635,6 +635,9 @@ def bridge_call(payload):
 GATEWAY_URL = (os.environ.get('BLP_GATEWAY_URL') or _CFG.get('gateway_url')
                or 'https://agents.brighamlarsonpianos.com').rstrip('/')
 GATEWAY_KEY = os.environ.get('BLP_GATEWAY_KEY') or _CFG.get('gateway_key', '')
+SB_URL = (os.environ.get('SUPABASE_URL') or _CFG.get('supabase_url')
+          or 'https://ismacawxfvvllfinibbf.supabase.co').rstrip('/')
+SB_SERVICE_KEY = os.environ.get('SUPABASE_SERVICE_KEY') or _CFG.get('supabase_service_key', '')
 GOOGLE_CLIENT_ID = '110628682621-v65mkaoanv87sp75ggdfcrglfr7bkr8p.apps.googleusercontent.com'
 AGENT_SLUGS = ['lindsay', 'melody', 'carla', 'chris', 'clara', 'arnold', 'ivory', 'marcus']
 AGENT_NAMES = {s: s.capitalize() for s in AGENT_SLUGS}
@@ -695,7 +698,52 @@ def gateway_call(path, payload=None):
                            "connected, then try again. Nothing was answered on the agent's behalf. (%s)" % e)
 
 
+def store_messages(rows):
+    """Write chat rows to Supabase agent_messages; never raises."""
+    if not SB_SERVICE_KEY or not rows:
+        return False
+    try:
+        rq = urllib.request.Request(SB_URL + '/rest/v1/agent_messages?on_conflict=run_id',
+                                    data=json.dumps(rows).encode(), method='POST',
+                                    headers={'apikey': SB_SERVICE_KEY,
+                                             'Authorization': 'Bearer ' + SB_SERVICE_KEY,
+                                             'Content-Type': 'application/json',
+                                             'Prefer': 'resolution=ignore-duplicates,return=minimal'})
+        with urllib.request.urlopen(rq, timeout=8):
+            return True
+    except Exception:
+        return False
+
+
+def agent_import(req, who):
+    slug = str(req.get('slug', '')).lower()
+    if slug not in AGENT_SLUGS:
+        return {'error': 'unknown agent'}, 400
+    if not SB_SERVICE_KEY:
+        return {'error': 'history storage not configured (supabase_service_key)'}, 501
+    rows = []
+    for m in (req.get('import') or [])[:500]:
+        body = str(m.get('t', ''))[:20000]
+        if not body:
+            continue
+        mine = m.get('r') == 'me'
+        try:
+            at = datetime.utcfromtimestamp(int(m.get('at')) / 1000).isoformat() + 'Z'
+        except Exception:
+            at = datetime.utcnow().isoformat() + 'Z'
+        rows.append({'agent': slug, 'role': 'user' if mine else 'agent',
+                     'who': str(m.get('by') or who['name'])[:80] if mine else AGENT_NAMES[slug],
+                     'who_email': who['email'] if mine else '', 'body': body, 'created_at': at})
+    ok = store_messages(rows)
+    return ({'imported': len(rows)} if ok else {'imported': 0, 'error': 'Supabase rejected the import'}), (200 if ok else 502)
+
+
 def agent_dispatch(req):
+    if isinstance(req.get('import'), list):
+        who = verify_google(req.get('idToken'))
+        if not who:
+            return {'error': 'Sign in with your BLP Google account first.'}, 401
+        return agent_import(req, who)
     slug = str(req.get('slug', '')).lower()
     if slug not in AGENT_SLUGS:
         return {'error': 'unknown agent'}, 400
@@ -720,7 +768,10 @@ def agent_dispatch(req):
                        {'input': '\n\n'.join(p for p in parts if p), 'requester': first + ' <store map>'})
     if not rec.get('run_id'):
         return {'error': 'gateway accepted the message but returned no run id'}, 502
-    return {'run_id': rec['run_id'], 'session_id': rec.get('session_id'), 'status': rec.get('status', 'started')}, 200
+    stored = store_messages([{'agent': slug, 'role': 'user', 'who': who['name'],
+                              'who_email': who['email'], 'body': message}])
+    return {'run_id': rec['run_id'], 'session_id': rec.get('session_id'),
+            'status': rec.get('status', 'started'), 'stored': stored}, 200
 
 
 class Handler(SimpleHTTPRequestHandler):
@@ -780,7 +831,12 @@ class Handler(SimpleHTTPRequestHandler):
                 return
             try:
                 st = gateway_call('/agents/%s/runs/%s' % (slug, urllib.parse.quote(run)))
-                self._json({'status': st.get('status'), 'output': st.get('output'), 'error': st.get('error')})
+                stored = False
+                if st.get('status') == 'completed' and (st.get('output') or '').strip():
+                    stored = store_messages([{'agent': slug, 'role': 'agent', 'who': AGENT_NAMES[slug],
+                                              'body': st['output'].strip(), 'run_id': run}])
+                self._json({'status': st.get('status'), 'output': st.get('output'),
+                            'error': st.get('error'), 'stored': stored})
             except Exception as exc:
                 self._json({'error': str(exc)}, 502)
             return

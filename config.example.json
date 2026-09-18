@@ -4,5 +4,6 @@
   "bridge_url": "https://script.google.com/macros/s/DEPLOYMENT_ID/exec",
   "bridge_secret": "PASTE_SECRET_HERE",
   "gateway_url": "https://agents.brighamlarsonpianos.com",
-  "gateway_key": "PASTE_AGENT_GATEWAY_KEY_HERE"
+  "gateway_key": "PASTE_AGENT_GATEWAY_KEY_HERE",
+  "supabase_service_key": "PASTE_SUPABASE_SERVICE_ROLE_KEY_HERE"
 }

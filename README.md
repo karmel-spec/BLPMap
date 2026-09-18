@@ -35,8 +35,11 @@ never be committed. Without it the app still runs (map + pianos, no moves).
   person's own helpers, e.g. Lindsay · Melody · Carla for Karmel) open an
   in-app chat with that Hermes agent through the BLP Agent Gateway
   (`netlify/functions/agent-chat.mjs`, `/api/agent`), like Marcus on the
-  Marketing app — no more bouncing out to Telegram. Threads are kept per
-  agent on the device; a "Telegram ↗" link in the header stays as a fallback.
+  Marketing app — no more bouncing out to Telegram. Every message is saved
+  to Supabase (`agent_messages`, `supabase/agent_chat.sql`) so threads follow
+  you across devices, and the search bar in each window searches every
+  agent's conversations; the device keeps a copy as an instant cache. A
+  "Telegram ↗" link in the header stays as a fallback.
 - `app.js` renders the SVG map (scroll-zoom / drag-pan), floor tabs, search,
   KPI tiles, piano popups (deep-link to pianologapp.netlify.app), Move Board,
   and the Unplaced / Duplicate-slot admin report.

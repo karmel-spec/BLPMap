@@ -28,6 +28,7 @@ The map, moves and calendar need no env vars (see below). **Agent chat**
 |---|---|
 | `BLP_GATEWAY_KEY` | the shared BLP Agent Gateway key — same value the **blpmarketing** Netlify site uses for Marcus |
 | `BLP_GATEWAY_URL` | optional; defaults to `https://agents.brighamlarsonpianos.com` (the Cloudflare tunnel to the agents' Mac) |
+| `SUPABASE_SERVICE_KEY` | service-role key of the Supabase project (`ismacawxfvvllfinibbf`) — lets the function save every chat message to `agent_messages` so threads survive the browser and are searchable. Run `supabase/agent_chat.sql` once in the SQL editor first. Without it chat works but threads stay on the device. |
 
 Without the key `/api/agent` answers 501 and the chat window shows
 "agent chat not configured" — the rest of the app is unaffected. The
