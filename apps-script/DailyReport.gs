@@ -50,7 +50,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-09-18.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-09-18.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -4921,8 +4921,13 @@ function saveProposal_(req) {
     }
   }
   var savedBy = String((req.user && req.user.name) || req.by || '').slice(0, 80);
+  // aiRevised (Walter 9/18): the Planner-notes flow saves under the NAME of the
+  // human who clicked apply — correct, since they asked for it and it may
+  // overwrite their own plan — but the week itself was written by a model.
+  // Without this the history reads as if they typed it all by hand.
   var meta = {week: String(req.week || ''), weekStart: String(req.weekStart || ''),
-              savedAt: new Date().toISOString(), store: 'sheet', applied: false, savedBy: savedBy};
+              savedAt: new Date().toISOString(), store: 'sheet', applied: false, savedBy: savedBy,
+              aiRevised: !!req.aiRevised, aiModel: req.aiRevised ? String(req.aiModel || '').slice(0, 60) : ''};
   var rows = [[JSON.stringify(meta)]];
   for (var i = 0; i < plan.length; i += PROPOSAL_CHUNK) rows.push([plan.substr(i, PROPOSAL_CHUNK)]);
   var sh = proposalSheet_();
