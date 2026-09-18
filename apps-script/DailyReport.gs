@@ -50,7 +50,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-09-17.10';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-09-17.11';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -580,8 +580,13 @@ function addPiano_(req) {
   }
   var summary = [req.year, req.make, req.model].filter(function (x) { return x; })
     .join(' ').trim() || ('Piano SN ' + serial);
-  if (req.dryrun) return {ok: true, added: false, dryrun: true, soldRow: soldRow, summary: summary};
-  var row = soldRow;                       // just above the SOLD divider
+  // Melissa 9/1 (request 090126terry11): a piano added from the app lands at
+  // the end of the NEW / QUESTIONS section — where admins look for arrivals —
+  // instead of just above the SOLD divider. Falls back to above-SOLD only
+  // when that banner is missing from the log.
+  var slot = newQuestionsSlot_(sh, owners, serials, soldRow);
+  if (req.dryrun) return {ok: true, added: false, dryrun: true, soldRow: soldRow, row: slot.row, section: slot.section, summary: summary};
+  var row = slot.row;
   sh.insertRowBefore(row);
   sh.getRange(row, 2).setValue(String(req.owner || 'BLP'));                 // B owner
   sh.getRange(row, 3).setValue(serial);                                     // C serial
@@ -618,8 +623,27 @@ function addPiano_(req) {
       sh.getRange(row, 69).setValue(folder.getUrl());   // Main Folder col
     } catch (eF) {}
   }
-  return {ok: true, added: true, row: row, summary: summary,
+  return {ok: true, added: true, row: row, section: slot.section, summary: summary,
           location: String(req.location || '').trim(), bumped: bumped};
+}
+/* Where a new piano row goes: the row right after the last piano of the
+ * NEW / QUESTIONS section (so it inherits a piano row's formatting, not the
+ * banner's). The section ends at the next banner — a one-line ALL-CAPS owner
+ * label with no serial, the same rule the map's data feed uses — or at SOLD. */
+function newQuestionsSlot_(sh, owners, serials, soldRow) {
+  var hdr = -1, i;
+  for (i = 0; i < soldRow - 1 && i < owners.length; i++) {
+    var b = String(owners[i][0] || '').trim().toUpperCase().replace(/\s+/g, ' ');
+    if (!String(serials[i][0] || '').trim() && b === 'NEW / QUESTIONS') { hdr = i + 1; break; }
+  }
+  if (hdr < 0) return {row: soldRow, section: ''};
+  for (var r = hdr + 1; r < soldRow && r <= owners.length; r++) {
+    var o = String(owners[r - 1][0] || '').trim();
+    var sn = String(serials[r - 1][0] || '').trim();
+    var banner = !sn && o && o.indexOf('\n') < 0 && o.length < 60 && /[A-Z]/.test(o) && !/[a-z]/.test(o);
+    if (banner) return {row: r, section: 'NEW / QUESTIONS'};
+  }
+  return {row: soldRow, section: 'NEW / QUESTIONS'};
 }
 /* Approve or reject a TEMP ENTRY (owners/Melissa/managers, Google-verified).
  * Approve clears the marker; reject marks the row duplicate + clears it. */

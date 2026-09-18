@@ -7958,7 +7958,7 @@ async function submitAdd(slotId, ov) {
     msg.className = 'tmmsg ok';
     msg.textContent = isTemp
       ? `✓ Added as a TEMP entry${loc ? ' at spot ' + loc : ''} — an admin will approve it from the morning brief.`
-      : `✓ Added to the Piano Log (row ${j.row})${loc ? ' at spot ' + loc : ''}.`;
+      : `✓ Added to the Piano Log${j.section ? ' — ' + j.section + ' section' : ''} (row ${j.row})${loc ? ' at spot ' + loc : ''}.`;
     applyBumps(j.bumped);
     const nu = {row: j.row, section: '', owner: fields.owner, serial,
       summary: j.summary, year: fields.year, make: fields.make, model: fields.model,
