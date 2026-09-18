@@ -766,6 +766,56 @@ function openRefinishQ() {
     }
   };
 }
+/* ⚙️ Plate Queue popup (Karmel 9/18): every piano whose PLATE is out of the
+ * piano and not yet back — same shape as the Keytop Q. Order: at Curtis
+ * Harper's (in progress) on top, then waiting to go (Removed / storage
+ * BEFORE), then refinished and waiting to go back in (storage AFTER) — by
+ * shop queue position within each group. Tap a row to jump to its card. */
+function plateOpen(p) {
+  const st = String(p.plateStatus || '').trim();
+  return !!st && !/^in piano$/i.test(st) && !/^back in piano$/i.test(st);
+}
+function plateRank(p) {
+  const st = String(p.plateStatus || '').trim();
+  if (/curtis/i.test(st)) return 0;
+  if (/before/i.test(st)) return 1000;
+  if (/^removed/i.test(st)) return 1500;
+  if (/after/i.test(st)) return 3000;
+  return 4000;
+}
+function plateOrder(a, b) {
+  return plateRank(a) - plateRank(b) || ((a.queuePos || 999) - (b.queuePos || 999)) || (a.row - b.row);
+}
+function openPlateQ() {
+  const rows = S.data.pianos.filter(x => x.active && plateOpen(x));
+  rows.sort(plateOrder);
+  const old = document.querySelector('.dsheetov'); if (old) old.remove();
+  const ov = document.createElement('div');
+  ov.className = 'dsheetov';
+  ov.innerHTML = `<div class="dsheet" style="max-height:80vh;overflow:auto"><button class="dsx">✕</button>
+    <h3>⚙️ Plate Queue</h3>
+    <div class="dssub">${rows.length} plate${rows.length === 1 ? '' : 's'} out of the piano · at Curtis first, then waiting to go, then back from refinishing · tap one to open its card</div>
+    ${rows.map(x => {
+      const slat = cabTokens(x).find(t => /^\d+p$/.test(t));
+      const where = x.plateTemp ? 'plate: ' + x.plateTemp : slat ? 'plate at ' + slat.toUpperCase() : '';
+      return `<div class="kqrow" data-row="${x.row}" style="display:flex;gap:10px;align-items:center;padding:8px 2px;border-top:1px solid #f0ece5;cursor:pointer">
+      ${plateBadge(x.plateStatus)}
+      <span style="flex:1">${esc(x.summary || '')} <span class="lite">#${esc(x.serial)}</span>
+        ${where ? `<div class="lite" style="font-size:11px">${esc(where)}</div>` : ''}</span>
+      <span class="lite">${esc(x.location || '')}</span></div>`;
+    }).join('') || '<div class="empty">No plates out — nothing in the plate queue 🎉</div>'}`;
+  document.body.appendChild(ov);
+  ov.querySelector('.dsx').onclick = () => ov.remove();
+  ov.onclick = ev => {
+    if (ev.target === ov) { ov.remove(); return; }
+    const row = ev.target.closest('.kqrow[data-row]');
+    if (row) {
+      ov.remove();
+      const p = S.data.pianos.find(x => x.row === +row.dataset.row);
+      if (p) { switchView('map'); focusPiano(p); openPop(p.row, S.popAnchor, true); }
+    }
+  };
+}
 /* 🔑 Keytop Queue popup (Brigham 9/4): every piano with an open keytop
  * status, queue order first — tap a row to jump to its card. */
 // keytop queue order (Brigham 9/17): work IN PROGRESS on top, then the numbered
@@ -3237,6 +3287,17 @@ function renderMap() {
       <text x="${rx9 + rw9 / 2}" y="${ry9 + 31}" text-anchor="middle" class="kqtxt" font-size="20">🎨 <tspan font-weight="800" font-size="15">Refinish Q</tspan></text>
       <text x="${rx9 + rw9 / 2}" y="${ry9 + 58}" text-anchor="middle" class="kqtxt kqcount" font-size="13">${rqReady ? REFQ.rows.length + ' in queue ›' : 'loading…'}</text>
     </g>`;
+    // ⚙️ Plate Queue box just below the plate rack (under slat 18P, past the
+    // rack's bottom wall) — tap for every plate that is out of its piano
+    const pq = S.data.pianos.filter(x => x.active && plateOpen(x)).length;
+    const p18 = f.slots.find(z => /^18p$/i.test(z.id));
+    const pw = 160, ph = 78;
+    const pxq = p18 ? p18.x + p18.w / 2 - pw / 2 : 1092, pyq = p18 ? p18.y + p18.h + 33 : 1061;
+    s += `<g class="pqbtn" style="cursor:pointer">
+      <rect x="${pxq}" y="${pyq}" width="${pw}" height="${ph}" rx="8" class="kqrect"/>
+      <text x="${pxq + pw / 2}" y="${pyq + 31}" text-anchor="middle" class="kqtxt" font-size="20">⚙️ <tspan font-weight="800" font-size="15">Plate Q</tspan></text>
+      <text x="${pxq + pw / 2}" y="${pyq + 58}" text-anchor="middle" class="kqtxt kqcount" font-size="13">${pq} in queue ›</text>
+    </g>`;
   }
   S.drawW = drawW; S.drawH = drawH;
 
@@ -3307,6 +3368,8 @@ function renderMap() {
   if (kqb) kqb.addEventListener('click', ev => { ev.stopPropagation(); openKeytopQ(); });
   const rqb = svg.querySelector('.rqbtn');
   if (rqb) rqb.addEventListener('click', ev => { ev.stopPropagation(); openRefinishQ(); });
+  const pqb = svg.querySelector('.pqbtn');
+  if (pqb) pqb.addEventListener('click', ev => { ev.stopPropagation(); openPlateQ(); });
   sizePlan();
   // cards open on CLICK only (082726hales16) — hover-open made panning the
   // map spray cards everywhere; hover now just shows the cursor affordance
