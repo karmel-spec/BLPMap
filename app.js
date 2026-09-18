@@ -5354,8 +5354,7 @@ function popHTML(p) {
     : '';
   const tuner = '';   // tuning now lives in the Request menu
   const photo = p.serial
-    ? `<button class="photobtn">📸 Add progress photo</button>
-       <input type="file" class="photoin" accept="image/*" hidden>
+    ? `<input type="file" class="photoin" accept="image/*" hidden>
        <div class="photomsg"></div>`
     : '';
   const effPh = effectivePhase(p);
