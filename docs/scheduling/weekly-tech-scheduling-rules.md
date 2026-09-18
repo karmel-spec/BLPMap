@@ -168,10 +168,15 @@ subscribe revealed it). Recovery: created the 74 missing events via gog
 (karmel@ for 11 techs, **melissa@ for Hunter** — hunterrawlings.blp is
 reader-only to karmel@, owners = hunter/melissa/brighamlarson@gmail/info/
 alisa/susie), then bridge `applyschedule markOnly:true` → applied:true, all
-15. STILL OPEN: an owner must grant karmel@ "Make changes" on
-hunterrawlings.blp@gmail.com or next week's apply fails for Hunter again
-(gog has no ACL-write). Week Aug 31–Sep 4: 74 events created 8/31, all
-verified on-calendar.
+15. Week Aug 31–Sep 4: 74 events created 8/31, all verified on-calendar.
+**CLOSED 2026-09-18 (Walter): karmel@brighamlarsonpianos.com now has "Make
+changes" on hunterrawlings.blp@gmail.com** — Hunter applies from karmel@ with
+everyone else, no melissa@ detour. The old "STILL OPEN" wording stayed here
+for ~3 weeks after the grant and the Friday draft kept raising it as a
+manager clarification every week, because this file is an INPUT to that
+routine. Close items here when they are done — a stale line becomes a weekly
+false alarm. If Hunter is ever skipped on Apply again, re-check the sharing
+before believing any note.
 
 **Apps Script deploy gotchas (8/26, hard-won):** (1) a STALE Manage-deployments
 dialog re-saves pinned to the version it OPENED with — a peer's "no-op"
