@@ -50,7 +50,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-09-17.12';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-09-18.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -1437,6 +1437,7 @@ function doPost(e) {
     }
     if (req.action === 'videosession') return json_(videoSession_(req, who));
     if (req.action === 'videodone') return json_(videoDone_(req, who));
+    if (req.action === 'videothumb') return json_(videoThumb_(req, who));
     if (req.action === 'photo') {
       var pt = savePhoto_(req, who);
       if (pt.saved) logAct_(who,
@@ -1802,9 +1803,13 @@ function mediaFolderFor_(sh, row, serial, kind) {
  * so the file is owned by karmel@ like every photo and never touches Apps Script's
  * payload limits. The Origin header on the session request is what lets the browser's
  * PUTs pass CORS. `videodone` logs the finished file to the ACTIVITY LOG. */
+var VIDEO_FOLDER_NAMES = {before: 'Before Video', after: 'After Video', progress: 'Progress Video'};
+function videoKind_(k) { return k === 'after' ? 'after' : k === 'progress' ? 'progress' : 'before'; }
 function videoFolderFor_(sh, row, serial, kind) {
-  var field = kind === 'before' ? 'bvideo' : 'avideo';
-  var col = mediaCol_(sh, field);
+  // before/after live in the BEFORE/AFTER VIDEO media columns; progress videos
+  // (Brigham 9/18) get their own PROGRESS VIDEO column, created on first use
+  var field = kind === 'before' ? 'bvideo' : kind === 'after' ? 'avideo' : '';
+  var col = field ? mediaCol_(sh, field) : pianoCol_(sh, 'PROGRESS VIDEO');
   var cell = col ? String(sh.getRange(row, col).getValue() || '') : '';
   var m = /folders\/([A-Za-z0-9_-]+)/.exec(cell);
   if (m) { try { return DriveApp.getFolderById(m[1]); } catch (e) {} }
@@ -1812,14 +1817,14 @@ function videoFolderFor_(sh, row, serial, kind) {
   if (!tech) return null;
   var parentIt = tech.getParents();
   var parent = parentIt.hasNext() ? parentIt.next() : tech;
-  var re = kind === 'before' ? /before/i : /after/i;
+  var re = kind === 'before' ? /before/i : kind === 'after' ? /after/i : /progress/i;
   var folder = null;
   var it = parent.getFolders();
   while (it.hasNext()) {
     var f = it.next();
     if (re.test(f.getName()) && /video/i.test(f.getName())) { folder = f; break; }
   }
-  if (!folder) folder = parent.createFolder(kind === 'before' ? 'Before Video' : 'After Video');
+  if (!folder) folder = parent.createFolder(VIDEO_FOLDER_NAMES[kind] || 'Before Video');
   // the Piano Log cell holds the folder link (= "✓ have" on the card) unless a human
   // already pasted a different link there
   if (col) {
@@ -1828,7 +1833,7 @@ function videoFolderFor_(sh, row, serial, kind) {
   return folder;
 }
 function videoSession_(req, who) {
-  var kind = req.kind === 'after' ? 'after' : 'before';
+  var kind = videoKind_(req.kind);
   var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
   var found = findPiano_(sh, req.serial, req.row);
   if (found.error) return found;
@@ -1837,8 +1842,9 @@ function videoSession_(req, who) {
   var ext = (String(req.name || '').match(/\.[A-Za-z0-9]{2,5}$/) || [''])[0]
     || (/quicktime/i.test(String(req.mime || '')) ? '.mov' : '.mp4');
   var stamp = Utilities.formatDate(new Date(), 'America/Denver', 'yyyy-MM-dd HH.mm');
+  var stage = kind === 'progress' && req.stage ? ' (' + String(req.stage).slice(0, 40) + ')' : '';
   var name = ((found.summary || 'Piano') + ' ' + String(req.serial) + ' — '
-    + (kind === 'before' ? 'Before' : 'After') + ' video ' + stamp)
+    + (kind === 'before' ? 'Before' : kind === 'after' ? 'After' : 'Progress') + ' video' + stage + ' ' + stamp)
     .replace(/[\/\\:*?"<>|]/g, '-').slice(0, 120) + ext.toLowerCase();
   var resp = UrlFetchApp.fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&supportsAllDrives=true&fields=id,name,webViewLink,size', {
     method: 'post', contentType: 'application/json; charset=UTF-8', muteHttpExceptions: true,
@@ -1855,13 +1861,32 @@ function videoSession_(req, who) {
           row: found.row, summary: found.summary, kind: kind};
 }
 function videoDone_(req, who) {
-  var kind = req.kind === 'after' ? 'after' : 'before';
+  var kind = videoKind_(req.kind);
   var file;
   try { file = DriveApp.getFileById(String(req.fileId || '')); } catch (e) { return {error: 'uploaded file not found in Drive'}; }
   var mb = Math.round(file.getSize() / 1048576 * 10) / 10;
-  logAct_(who, kind === 'before' ? 'Before video' : 'After video', String(req.summary || req.serial || ''),
-          file.getName() + ' (' + mb + ' MB) → ' + file.getUrl());
+  logAct_(who, kind === 'before' ? 'Before video' : kind === 'after' ? 'After video' : 'Progress video',
+          String(req.summary || req.serial || ''), file.getName() + ' (' + mb + ' MB) → ' + file.getUrl());
   return {ok: true, link: file.getUrl(), name: file.getName(), mb: mb};
+}
+/* YouTube-size thumbnail (1280×720 JPEG) for a video that was just filed —
+ * saved next to the video in the same folder (Brigham 9/18: five per video,
+ * the app's thumbnail wizard walks the tech through them). The last one of
+ * the set writes one ACTIVITY LOG line for the whole set. */
+function videoThumb_(req, who) {
+  if (!req.data) return {error: 'no image data'};
+  var folder;
+  try { folder = DriveApp.getFolderById(String(req.folderId || '')); } catch (e) { return {error: 'video folder not found'}; }
+  var name = String(req.name || ('thumbnail ' + Utilities.formatDate(new Date(), 'America/Denver', 'yyyy-MM-dd HH.mm.ss')))
+    .replace(/[\/\\:*?"<>|]/g, '-').slice(0, 140);
+  if (!/\.jpe?g$/i.test(name)) name += '.jpg';
+  var blob = Utilities.newBlob(Utilities.base64Decode(String(req.data)), 'image/jpeg', name);
+  var file = folder.createFile(blob);
+  if (req.last) {
+    logAct_(who, 'Video thumbnails', String(req.summary || req.serial || ''),
+            (Number(req.count) || 1) + ' YouTube-size thumbnail(s) for ' + String(req.videoName || 'the video').slice(0, 80) + ' → ' + folder.getUrl());
+  }
+  return {ok: true, id: file.getId(), link: file.getUrl(), name: name};
 }
 function techFolderFor_(sh, row, serial) {
   var folder = null;

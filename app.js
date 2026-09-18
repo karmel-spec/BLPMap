@@ -1610,6 +1610,7 @@ function mediaCard(p) {
     ['\ud83c\udfa5 Before video', p.bvideoUrl],
     ['\ud83d\udcf7 After photos', p.aphotoUrl],
     ['\ud83c\udfa5 After video', p.avideoUrl],
+    ['\ud83c\udfac Progress video', p.pvideoUrl],
     ['\ud83d\udcc1 Main folder', p.mainFolder],
   ].filter(x => x[1]);
   const folderRow = (links.length || p.serial)
@@ -1624,16 +1625,18 @@ function mediaCard(p) {
     ${line('After photos', 'aphoto', p.aphoto, late)}
     ${line('After video', 'avideo', p.avideo, late)}
     ${folderRow}
-    ${p.serial ? `<div class="tagbtns mediaadd">
-      <button class="tagbtn vidbtn" data-kind="before">🎥 Record before video</button>
-      <button class="tagbtn vidbtn" data-kind="after">🎥 Record after video</button>
-      <button class="tagbtn wizbtn" data-kind="before">🧭 Before shot list (13)</button>
-      <button class="tagbtn wizbtn" data-kind="after">🧭 After shot list (13)</button>
+    ${p.serial ? `<div class="mediagrid">
+      <button class="tagbtn wizbtn" data-kind="before">📷 Before photos <small>13-shot list</small></button>
+      <button class="tagbtn vidbtn" data-kind="before">🎥 Before video</button>
+      <button class="tagbtn wizbtn" data-kind="after">📷 After photos <small>13-shot list</small></button>
+      <button class="tagbtn vidbtn" data-kind="after">🎥 After video</button>
+      <button class="tagbtn photobtn">📸 Tech photo <small>shop progress</small></button>
+      <button class="tagbtn vidbtn" data-kind="progress">🎬 Progress video</button>
       <input type="file" class="vidin" accept="video/*" capture="environment" hidden>
       <input type="file" class="vidpick" accept="video/*" hidden>
     </div>
-    <div class="lite" style="font-size:11px;margin-top:2px">🎥 opens the camera and files the clip in this piano’s Before / After Video folder — or upload a saved
-      <a href="#" class="vidpicklink" data-kind="before">before</a> / <a href="#" class="vidpicklink" data-kind="after">after</a> video.</div>` : ''}
+    <div class="lite" style="font-size:11px;margin-top:2px">Videos open the camera and file the clip in this piano’s Before / After / Progress Video folder, then ask for 5 YouTube-size thumbnails. Saved clip instead:
+      <a href="#" class="vidpicklink" data-kind="before">before</a> · <a href="#" class="vidpicklink" data-kind="after">after</a> · <a href="#" class="vidpicklink" data-kind="progress">progress</a>.</div>` : ''}
     <div class="mdmsg"></div>
   </div>`;
 }
@@ -8683,7 +8686,7 @@ async function uploadVideo(p, kind, f, pop) {
   popPinned = true;
   const {pin, ok} = writeAuth();
   if (!ok) { say('err', 'Sign in with Google (☰ menu) first — uploads are logged under your name.'); return; }
-  const label = kind === 'after' ? 'after' : 'before';
+  const label = kind === 'after' ? 'after' : kind === 'progress' ? 'progress' : 'before';
   const mb = Math.round(f.size / 1048576 * 10) / 10;
   const btns = [...pop.querySelectorAll('.vidbtn')];
   btns.forEach(b => b.disabled = true);
@@ -8692,6 +8695,7 @@ async function uploadVideo(p, kind, f, pop) {
     const r0 = await fetchT(BRIDGE_URL, {method: 'POST', redirect: 'follow',
       headers: {'content-type': 'text/plain;charset=utf-8'},
       body: JSON.stringify({pin, action: 'videosession', serial: p.serial, row: p.row, kind: label,
+        stage: label === 'progress' ? (effectivePhase(p) || '') : '',
         mime: f.type || 'video/mp4', size: f.size, name: f.name || '', ...authFields()})}, 45000);
     const s = await r0.json();
     if (!s.ok || !s.sessionUrl) throw new Error(s.error || 'could not open a Drive upload');
@@ -8730,17 +8734,134 @@ async function uploadVideo(p, kind, f, pop) {
           fileId: file.id, summary: s.summary || p.summary || '', ...authFields()})}, 30000);
       done = await r2.json();
     } catch (e3) { done = {}; }
-    const field = label === 'before' ? 'bvideo' : 'avideo';
-    p[field] = true; p[field + 'Url'] = s.folderUrl;
-    const edit = pendingEdits.get(p.row) || {}; edit[field] = true; pendingEdits.set(p.row, edit);
+    if (label === 'progress') {
+      p.pvideoUrl = s.folderUrl;
+    } else {
+      const field = label === 'before' ? 'bvideo' : 'avideo';
+      p[field] = true; p[field + 'Url'] = s.folderUrl;
+      const edit = pendingEdits.get(p.row) || {}; edit[field] = true; pendingEdits.set(p.row, edit);
+    }
     renderMap(); renderKpis();
     openPop(p.row, S.popAnchor, true);
+    const nice = label === 'before' ? 'Before' : label === 'after' ? 'After' : 'Progress';
     const m3 = pop.querySelector('.mdmsg');
-    if (m3) { m3.className = 'mdmsg ok'; m3.innerHTML = `✓ ${label === 'before' ? 'Before' : 'After'} video saved (${mb} MB) — <a href="${esc(done.link || s.folderUrl)}" target="_blank" rel="noopener">open in Drive ↗</a>`; }
+    if (m3) { m3.className = 'mdmsg ok'; m3.innerHTML = `✓ ${nice} video saved (${mb} MB) — <a href="${esc(done.link || s.folderUrl)}" target="_blank" rel="noopener">open in Drive ↗</a>`; }
+    // Brigham 9/18: every filed video gets 5 YouTube-size thumbnails, taken right now
+    openThumbWizard(p, label, {folderId: s.folderId, folderUrl: s.folderUrl, videoName: file.name || s.name, summary: s.summary || p.summary || ''}, pop);
   } catch (e) {
     say('err', '✗ ' + (e && e.message || e));
     btns.forEach(b => b.disabled = false);
   }
+}
+/* ---------- 5-thumbnail wizard (Brigham 9/18) ----------
+ * Opens the moment a before / after / progress video is filed. Live
+ * viewfinder masked to a 16:9 YouTube-thumbnail frame (what you see in the
+ * frame is exactly the 1280×720 JPEG that gets saved); shaded bands above
+ * and below show what is cut off. Five shots, each filed into the SAME
+ * Drive folder the video just went into, named after the video. */
+const THUMB_N = 5;
+function openThumbWizard(p, kind, sess, pop) {
+  document.querySelectorAll('.thumbwiz').forEach(el => el.remove());
+  const W = {n: 0, busy: false, stream: null, noCam: false, links: []};
+  const base = String(sess.videoName || 'video').replace(/\.[A-Za-z0-9]{2,5}$/, '');
+  const nice = kind === 'before' ? 'Before' : kind === 'after' ? 'After' : 'Progress';
+  const ov = document.createElement('div');
+  ov.className = 'tagview shotwiz thumbwiz';
+  document.body.appendChild(ov);
+  const stopCam = () => { if (W.stream) { W.stream.getTracks().forEach(t => t.stop()); W.stream = null; } };
+  const close = () => {
+    stopCam(); ov.remove();
+    const m = pop && pop.querySelector('.mdmsg');
+    if (m && W.n) { m.className = 'mdmsg ok'; m.innerHTML = `✓ ${nice} video saved · ${W.n}/${THUMB_N} thumbnails filed — <a href="${esc(sess.folderUrl)}" target="_blank" rel="noopener">open the folder ↗</a>`; }
+  };
+  const ensureCam = async () => {
+    if (W.stream || W.noCam) return;
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { W.noCam = true; return; }
+    try {
+      W.stream = await navigator.mediaDevices.getUserMedia({video: {facingMode: 'environment', width: {ideal: 1920}, height: {ideal: 1080}}, audio: false});
+    } catch (e) { W.noCam = true; }
+  };
+  const attachCam = () => { const v = ov.querySelector('.swvideo'); if (v && W.stream) { v.srcObject = W.stream; v.play().catch(() => {}); } };
+  const render = () => {
+    const live = !W.noCam;
+    const finished = W.n >= THUMB_N;
+    ov.innerHTML = `<div class="tvbox swbox">
+      <div class="tvhead"><div><b>🖼 THUMBNAILS — ${esc(nice)} video · ${esc(p.serial)}</b>
+        <span>${esc(base).slice(0, 60)}</span></div><span class="x swx">✕</span></div>
+      ${finished ? `<div class="swfin">🎉</div>
+        <div class="swtitle" style="text-align:center">${THUMB_N} thumbnails filed with the video</div>
+        <div class="swhint" style="text-align:center">They’re in the same ${esc(nice)} Video folder, named after the clip — ready for YouTube.</div>
+        <button class="swsnap swclose2">Done</button>`
+      : `<div class="swstep">THUMBNAIL ${W.n + 1} OF ${THUMB_N} · YOUTUBE SIZE 16:9 · 1280×720</div>
+        <div class="swtitle">Frame the piano the way it should look as the video’s cover image</div>
+        <div class="twband">outside the thumbnail — cut off</div>
+        <div class="twframe">${live ? '<video class="swvideo" autoplay playsinline muted></video>' : '<div class="swico">🖼</div>'}
+          <span class="twlbl">16 : 9</span></div>
+        <div class="twband">outside the thumbnail — cut off</div>
+        <div class="swhint">Five different angles / details make good YouTube covers: whole piano, keys, decal, action, a finish detail. Take all ${THUMB_N} now — they file straight into the video’s folder.</div>
+        <div class="swmsg"></div>
+        <button class="swsnap">${live ? '⚪ CAPTURE' : '📷 TAKE THIS THUMBNAIL'}</button>
+        <div class="swalt">${live ? '<button class="swcambtn">📷 use the phone camera app</button> · ' : ''}<button class="swlib">🖼 photo library</button></div>
+        <input type="file" class="swcam" accept="image/*" capture="environment" hidden>
+        <input type="file" class="swfile" accept="image/*" hidden>
+        <div class="swnav"><span></span><span class="swcount">${W.n}/${THUMB_N} done</span>
+          <button class="swnext">${W.n ? 'finish early' : 'not now'}</button></div>
+        <div class="swdots">${Array.from({length: THUMB_N}, (_, i) => `<i class="${i < W.n ? 'ok' : ''} ${i === W.n ? 'on' : ''}"></i>`).join('')}</div>`}
+    </div>`;
+    wire(); attachCam();
+  };
+  // centred 16:9 crop → 1280×720 JPEG
+  const crop169 = (src, sw, sh) => {
+    const cw = Math.min(sw, sh * 16 / 9), ch = cw * 9 / 16;
+    const c = document.createElement('canvas'); c.width = 1280; c.height = 720;
+    c.getContext('2d').drawImage(src, (sw - cw) / 2, (sh - ch) / 2, cw, ch, 0, 0, 1280, 720);
+    return c.toDataURL('image/jpeg', 0.9);
+  };
+  const captureFrame = () => { const v = ov.querySelector('.swvideo'); return (v && v.videoWidth) ? crop169(v, v.videoWidth, v.videoHeight) : null; };
+  const fromFile = f => new Promise((res, rej) => {
+    const url = URL.createObjectURL(f); const im = new Image();
+    im.onload = () => { try { res(crop169(im, im.naturalWidth, im.naturalHeight)); } catch (e) { rej(e); } URL.revokeObjectURL(url); };
+    im.onerror = () => { URL.revokeObjectURL(url); rej(new Error('could not read that photo')); };
+    im.src = url;
+  });
+  const upload = async dataUrl => {
+    if (!dataUrl || W.busy) return;
+    const wa = writeAuth();
+    const msg = ov.querySelector('.swmsg');
+    if (!wa.ok) { if (msg) { msg.className = 'swmsg err'; msg.textContent = 'Sign in first.'; } return; }
+    W.busy = true;
+    if (msg) { msg.className = 'swmsg'; msg.textContent = 'Saving thumbnail…'; }
+    const snap = ov.querySelector('.swsnap'); if (snap) snap.disabled = true;
+    try {
+      const j = await photoPost({pin: wa.pin, action: 'videothumb', folderId: sess.folderId, serial: p.serial,
+        summary: sess.summary, videoName: sess.videoName, name: `${base} — thumbnail ${W.n + 1}.jpg`,
+        count: W.n + 1, last: W.n + 1 >= THUMB_N ? 1 : 0, mime: 'image/jpeg', data: dataUrl.split(',')[1], ...authFields()});
+      if (!j || !j.ok) throw new Error((j && j.error) || 'upload failed');
+      W.links.push(j.link); W.n++; W.busy = false;
+      if (W.n >= THUMB_N) stopCam();
+      render();
+    } catch (e) {
+      W.busy = false;
+      if (msg) { msg.className = 'swmsg err'; msg.textContent = '✗ ' + (e.message || e); }
+      if (snap) snap.disabled = false;
+    }
+  };
+  function wire() {
+    ov.querySelector('.swx').onclick = close;
+    const c2 = ov.querySelector('.swclose2'); if (c2) c2.onclick = close;
+    const snap = ov.querySelector('.swsnap'); const cam = ov.querySelector('.swcam'); const lib = ov.querySelector('.swfile');
+    if (!cam) return;
+    snap.onclick = () => { if (!W.noCam) { const shot = captureFrame(); if (shot) { upload(shot); return; } } cam.click(); };
+    const cb = ov.querySelector('.swcambtn'); if (cb) cb.onclick = () => cam.click();
+    ov.querySelector('.swlib').onclick = () => lib.click();
+    const viaFile = async f => { if (!f) return; try { upload(await fromFile(f)); } catch (e) { const m = ov.querySelector('.swmsg'); if (m) { m.className = 'swmsg err'; m.textContent = '✗ ' + e.message; } } };
+    cam.onchange = () => { viaFile(cam.files[0]); cam.value = ''; };
+    lib.onchange = () => { viaFile(lib.files[0]); lib.value = ''; };
+    const nx = ov.querySelector('.swnext');
+    if (nx) nx.onclick = () => { if (W.n || confirm('Skip the thumbnails for now? The video still needs 5 before it can go on YouTube.')) close(); };
+  }
+  ov.innerHTML = `<div class="tvbox swbox"><div class="swhint" style="padding:30px;text-align:center">Video saved — opening the camera for its thumbnails…</div></div>`;
+  ensureCam().then(render);
 }
 async function uploadPhoto(p, input, pop) {
   const f = input.files && input.files[0];

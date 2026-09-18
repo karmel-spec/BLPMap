@@ -137,6 +137,8 @@ function parsePianos(text) {
     ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'TEMP ENTRY') : -1;
   const tagSnapIdx = rows[1]
     ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'TAG SNAPSHOT') : -1;
+  const pvideoIdx = rows[1]
+    ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'PROGRESS VIDEO') : -1;
   const paperworkIdx = rows[1]
     ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'PAPERWORK') : -1;
   // CUSTOM SHOPWORK queue bounds (1-based rows)
@@ -253,6 +255,7 @@ function parsePianos(text) {
       // the media cells double as Drive folder links when they hold a URL
       bphotoUrl: driveUrl(col(14)), bvideoUrl: driveUrl(col(15)),
       aphotoUrl: driveUrl(col(16)), avideoUrl: driveUrl(col(17)),
+      pvideoUrl: pvideoIdx >= 0 ? driveUrl(col(pvideoIdx)) : '',
       mainFolder: driveUrl(col(68)),
       isSlot: SLOT_RE.test(loc),
       entered: entered ? entered.toISOString().slice(0, 10) : null,
