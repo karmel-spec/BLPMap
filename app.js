@@ -15637,3 +15637,189 @@ $('#mapscroll').addEventListener('dblclick', e => {
 });
 
 boot();
+
+/* ---------- 🤖 agent chat (Karmel 9/18) ----------
+ * The agents' faces bottom-right used to be blpagents.netlify.app/assistant.js,
+ * which bounced every tap out to the agent's Telegram bot. Now a tap opens an
+ * in-app chat with that Hermes agent — the same agent, same vault + memory —
+ * through the BLP Agent Gateway (netlify/functions/agent-chat.mjs), exactly
+ * like Marcus on the Marketing app home screen. Per-person helper sets are
+ * unchanged from the old widget. If the gateway can't be reached the window
+ * shows a clear error — nothing is ever answered on the agent's behalf.
+ * Threads are remembered per agent on this device (localStorage). */
+(() => {
+  const ORIGIN = 'https://blpagents.netlify.app';
+  const DEFAULT_AGENTS = ['chris'];
+  const BY_USER = {
+    brigham: ['clara', 'arnold', 'chris'], brighamlarson: ['clara', 'arnold', 'chris'],
+    karmel: ['lindsay', 'melody', 'carla'], lisa: ['ivory', 'melody', 'arnold'],
+    melissa: ['melody', 'chris', 'carla'], susie: ['lindsay', 'chris', 'melody'], alisa: ['marcus'],
+  };
+  const INFO = {
+    chris: {name: 'Chris', role: 'the shop', tip: 'Ask Chris a question — shop help', bot: 'chrislarsonbot'},
+    clara: {name: 'Clara', role: 'admin, scheduling, your inbox', bot: 'claralarsonbot'},
+    arnold: {name: 'Arnold', role: 'sales & leads', bot: 'arnoldlarsonbot'},
+    ivory: {name: 'Ivory', role: 'tuning revenue & reactivation', bot: 'ivorylarsonbot'},
+    melody: {name: 'Melody', role: 'admin & customer service', bot: 'melodylarsonbot'},
+    marcus: {name: 'Marcus', role: 'marketing', bot: 'marcuslarsonbot'},
+    lindsay: {name: 'Lindsay', role: "operations, Karmel's assistant", bot: 'lindsaystrategistbot'},
+    carla: {name: 'Carla', role: 'BLP helper', bot: 'carlalarsonbot'},
+  };
+  const POLL_MS = 2500, MAX_WAIT_MS = 10 * 60 * 1000, KEEP = 80;
+
+  function userKey() {
+    const u = authUser();
+    const id = u ? String(u.email || u.name || '').toLowerCase() : '';
+    return id ? id.split('@')[0].split(/[\s._-]/)[0] : '';
+  }
+  function agentsFor() { return BY_USER[userKey()] || DEFAULT_AGENTS; }
+  const stamp = ts => new Date(ts || Date.now()).toLocaleString('en-US', {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'});
+
+  /* ----- faces ----- */
+  const stack = document.createElement('div');
+  stack.className = 'agf-stack';
+  document.body.appendChild(stack);
+  let builtFor = '';
+  function buildFaces(list) {
+    builtFor = list.join(',');
+    stack.innerHTML = list.map(slug => {
+      const a = INFO[slug] || {name: slug, role: ''};
+      const tip = a.tip || ('Message ' + a.name + (a.role ? ' — ' + a.role : ''));
+      return `<div class="agf-item"><button class="agf-btn" type="button" data-agent="${slug}" title="${esc(tip)}" aria-label="${esc(tip)}">
+        <img src="${ORIGIN}/agents/${slug}.jpg" alt=""></button><div class="agf-tip">${esc(tip)}</div></div>`;
+    }).join('');
+    stack.querySelectorAll('.agf-btn').forEach(b => b.onclick = () => openChat(b.dataset.agent));
+  }
+  function refreshFaces() {
+    const want = agentsFor();
+    if (want.join(',') !== builtFor) buildFaces(want);
+    stack.classList.toggle('show', !!authUser());
+  }
+  refreshFaces();
+  setInterval(refreshFaces, 4000);   // pick up sign-in / a different person without a reload
+
+  /* ----- chat window ----- */
+  const CH = {slug: null, busy: false, timer: null};
+  const box = document.createElement('div');
+  box.className = 'agchat';
+  box.hidden = true;
+  box.innerHTML = `<div class="agchat-h"><img alt=""><div class="agchat-n"><b></b><small></small></div>
+      <a class="agchat-tg" target="_blank" rel="noopener" title="Same agent on Telegram, if you prefer">Telegram ↗</a>
+      <button class="agchat-x" type="button" aria-label="Close">×</button></div>
+    <div class="agchat-t"></div>
+    <form class="agchat-c"><textarea rows="1" placeholder="Message… (Enter to send, Shift+Enter for a new line)"></textarea><button type="submit">Send</button></form>`;
+  document.body.appendChild(box);
+  const thread = box.querySelector('.agchat-t'), form = box.querySelector('form'),
+        ta = box.querySelector('textarea'), sendBtn = form.querySelector('button');
+  box.querySelector('.agchat-x').onclick = closeChat;
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !box.hidden) closeChat(); });
+  ta.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); form.requestSubmit(); } });
+  form.onsubmit = e => { e.preventDefault(); send(ta.value); };
+
+  const histKey = slug => 'blpAgentChat:' + slug;
+  const runKey = slug => 'blpAgentRun:' + slug;
+  function history(slug) { try { return JSON.parse(lsGet(histKey(slug)) || '[]'); } catch (e) { return []; } }
+  function push(slug, m) {
+    const h = history(slug); h.push(m);
+    lsSet(histKey(slug), JSON.stringify(h.slice(-KEEP)));
+    if (slug === CH.slug) render();
+  }
+  function render() {
+    const a = INFO[CH.slug] || {name: CH.slug};
+    const h = history(CH.slug);
+    const me = (authUser() || {}).name || 'You';
+    let html = h.length ? '' : `<div class="agmsg hint">Same ${esc(a.name)} as on Telegram — reads the vault files and memory on every turn. Ask anything; replies usually take 10–60 s.</div>`;
+    html += h.map(m => {
+      if (m.r === 'err') return `<div class="agmsg err">⚠ ${esc(m.t)}</div>`;
+      const who = m.r === 'me' ? esc(String(m.by || me).split(' ')[0]) : esc(a.name);
+      return `<div class="agmsg ${m.r === 'me' ? 'me' : ''}"><span class="agwho">${who}<time>${esc(stamp(m.at))}</time></span>${esc(m.t)}</div>`;
+    }).join('');
+    if (CH.busy) html += `<div class="agtyping">${esc(a.name)} is working (Hermes agent on the agents' Mac — usually 10–60 s; if the agent can't be reached you'll see an error, never a stand-in)…</div>`;
+    thread.innerHTML = html;
+    thread.scrollTop = thread.scrollHeight;
+    sendBtn.disabled = CH.busy;
+    ta.disabled = CH.busy;
+  }
+  function openChat(slug) {
+    if (CH.slug !== slug) { stopPoll(); CH.slug = slug; CH.busy = false; }
+    const a = INFO[slug] || {name: slug, role: ''};
+    box.querySelector('img').src = ORIGIN + '/agents/' + slug + '.jpg';
+    box.querySelector('b').textContent = a.name;
+    box.querySelector('small').textContent = (a.role ? a.role + ' · ' : '') + 'Hermes agent';
+    const tg = box.querySelector('.agchat-tg');
+    tg.href = a.bot ? 'https://t.me/' + a.bot : '#'; tg.hidden = !a.bot;
+    box.hidden = false;
+    stack.style.display = 'none';
+    // a reply still in flight when the window closed or the page reloaded
+    let pend = null;
+    try { pend = JSON.parse(lsGet(runKey(slug)) || 'null'); } catch (e) { pend = null; }
+    if (pend && pend.run && Date.now() - pend.at < MAX_WAIT_MS && !CH.busy) poll(slug, pend.run, pend.at);
+    render();
+    if (!CH.busy) setTimeout(() => ta.focus(), 50);
+  }
+  function closeChat() { box.hidden = true; stack.style.display = ''; }
+  function stopPoll() { if (CH.timer) { clearTimeout(CH.timer); CH.timer = null; } }
+
+  function transcript(slug) {
+    const me = ((authUser() || {}).name || 'You').split(' ')[0];
+    return history(slug).filter(m => m.r !== 'err').slice(-10)
+      .map(m => (m.r === 'me' ? (m.by || me).split(' ')[0] : (INFO[slug] || {name: slug}).name) + ': ' + m.t).join('\n\n');
+  }
+  async function send(text) {
+    const t = String(text || '').trim();
+    if (!t || CH.busy || !CH.slug) return;
+    const slug = CH.slug;
+    const wa = authFields();
+    if (!wa.idToken) { push(slug, {r: 'err', t: 'Sign-in expired — renewing, retry in a moment.', at: Date.now()}); return; }
+    const me = (authUser() || {}).name || 'You';
+    const tr = transcript(slug);   // before this message is added
+    ta.value = '';
+    push(slug, {r: 'me', t, by: me, at: Date.now()});
+    CH.busy = true; render();
+    try {
+      const r = await fetch('/api/agent', {method: 'POST', headers: {'content-type': 'application/json'},
+        body: JSON.stringify({slug, message: t, transcript: tr, idToken: wa.idToken})});
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.run_id) throw new Error(j.error || ('Request failed (' + r.status + ')'));
+      const at = Date.now();
+      lsSet(runKey(slug), JSON.stringify({run: j.run_id, at}));
+      poll(slug, j.run_id, at);
+    } catch (e) {
+      CH.busy = false;
+      push(slug, {r: 'err', t: e.message || String(e), at: Date.now()});
+    }
+  }
+  function poll(slug, run, startedAt) {
+    CH.busy = true; render();
+    const tick = async () => {
+      if (CH.slug !== slug) return;   // switched agents — that window resumes on reopen
+      if (Date.now() - startedAt > MAX_WAIT_MS) {
+        finish(slug, {r: 'err', t: (INFO[slug] || {name: slug}).name + ' is taking longer than ten minutes — check Telegram; nothing was answered on their behalf.'});
+        return;
+      }
+      try {
+        const wa = authFields();
+        const r = await fetch('/api/agent?slug=' + encodeURIComponent(slug) + '&run=' + encodeURIComponent(run),
+          {headers: wa.idToken ? {'x-blp-idtoken': wa.idToken} : {}, cache: 'no-store'});
+        const j = await r.json().catch(() => ({}));
+        if (r.status === 401) { finish(slug, {r: 'err', t: j.error || 'Sign in with Google (menu) first.'}); return; }
+        if (!r.ok) throw new Error(j.error || ('Request failed (' + r.status + ')'));
+        if (j.status === 'completed') { finish(slug, {r: 'ag', t: (j.output || '').trim() || '(no reply)'}); return; }
+        if (j.status === 'failed' || j.status === 'cancelled') { finish(slug, {r: 'err', t: 'Run ' + j.status + (j.error ? ': ' + j.error : '')}); return; }
+      } catch (e) {
+        // gateway hiccup mid-poll — keep waiting until the cap; the run is still live on the Mac
+        if (/not configured|Sign in/i.test(e.message || '')) { finish(slug, {r: 'err', t: e.message}); return; }
+      }
+      CH.timer = setTimeout(tick, POLL_MS);
+    };
+    CH.timer = setTimeout(tick, POLL_MS);
+  }
+  function finish(slug, msg) {
+    stopPoll();
+    lsDel(runKey(slug));
+    CH.busy = false;
+    push(slug, Object.assign({at: Date.now()}, msg));
+    if (!box.hidden && CH.slug === slug) setTimeout(() => ta.focus(), 50);
+  }
+  window.openAgentChat = openChat;
+})();

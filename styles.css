@@ -2069,3 +2069,42 @@ tr.daynone td{color:#9aa2ab}
 .thumbwiz .twband{width:min(360px,92vw);margin:0 auto;height:34px;background:repeating-linear-gradient(135deg,#2a2a2a 0 6px,#3a3a3a 6px 12px);
   color:#bbb;font-size:10px;letter-spacing:1px;text-transform:uppercase;display:flex;align-items:center;justify-content:center;opacity:.85}
 .thumbwiz .twband:first-of-type{border-radius:8px 8px 0 0}
+
+/* ---------- 🤖 agent faces + in-app chat (Karmel 9/18) ----------
+   The agents' faces sit bottom-right (same look as the old Telegram quick-
+   links); tapping one opens a chat window with that Hermes agent through the
+   agent gateway — like Marcus on the Marketing app home screen. */
+.agf-stack{position:fixed;right:18px;bottom:18px;z-index:300;display:none;flex-direction:column-reverse;gap:10px;align-items:flex-end}
+.agf-stack.show{display:flex}
+.agf-item{position:relative;display:flex;align-items:center}
+.agf-btn{width:52px;height:52px;border-radius:50%;padding:0;border:3px solid #9e2020;background:#121212;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,.28);overflow:hidden;transition:transform .12s;display:block}
+.agf-btn:hover{transform:scale(1.08)}
+.agf-btn img{width:100%;height:100%;object-fit:cover;display:block}
+.agf-tip{position:absolute;right:62px;top:50%;transform:translateY(-50%);background:#121212;color:#fff;font-size:12.5px;font-weight:600;line-height:1.2;padding:7px 10px;border-radius:8px;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .15s}
+.agf-item:hover .agf-tip{opacity:1}
+@media (max-width:600px){.agf-stack{right:12px;bottom:76px;gap:8px}.agf-btn{width:46px;height:46px}.agf-tip{display:none}}
+
+.agchat{position:fixed;right:18px;bottom:18px;width:400px;max-width:calc(100vw - 24px);height:min(680px,calc(100vh - 40px));background:#fff;border:1px solid #dfe3e7;border-top:4px solid #9e2020;border-radius:12px;box-shadow:0 18px 48px rgba(20,30,40,.28);z-index:310;display:flex;flex-direction:column;overflow:hidden}
+.agchat[hidden]{display:none}
+.agchat-h{display:flex;align-items:center;gap:10px;padding:10px 12px;background:#0d0d0d;color:#e8e8e8;flex-shrink:0}
+.agchat-h img{width:38px;height:38px;border-radius:50%;border:2px solid #9e2020;object-fit:cover;flex-shrink:0}
+.agchat-h .agchat-n{min-width:0}
+.agchat-h b{display:block;font-size:14px}
+.agchat-h small{display:block;font-size:11px;color:#a8a8aa;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.agchat-h .agchat-tg{margin-left:auto;font-size:11px;color:#a8a8aa;text-decoration:none;border:1px solid #3c3c3e;border-radius:6px;padding:4px 7px;white-space:nowrap}
+.agchat-h .agchat-tg:hover{color:#fff;border-color:#9e2020}
+.agchat-h .agchat-x{background:none;border:0;color:#e8e8e8;font-size:20px;line-height:1;cursor:pointer;padding:2px 6px}
+.agchat-t{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px;background:#f7f8f9;-webkit-overflow-scrolling:touch}
+.agmsg{max-width:88%;padding:8px 11px;border-radius:10px;font-size:13.5px;line-height:1.4;white-space:pre-wrap;word-break:break-word;background:#fff;border:1px solid #e3e6e9;align-self:flex-start;color:#121212}
+.agmsg.me{align-self:flex-end;background:#9e2020;color:#fff;border-color:#9e2020}
+.agmsg.err{background:#fdf7f7;border-color:#e5c9c9;color:#9e2020;align-self:stretch;max-width:none}
+.agmsg.hint{background:transparent;border-style:dashed;color:#5f6770;align-self:stretch;max-width:none}
+.agmsg .agwho{display:flex;justify-content:space-between;gap:10px;font-size:10px;letter-spacing:1px;text-transform:uppercase;opacity:.7;margin-bottom:3px}
+.agmsg .agwho time{letter-spacing:0;text-transform:none}
+.agtyping{font-size:12px;color:#8a929a;font-style:italic;padding:0 2px}
+.agchat-c{display:flex;gap:8px;padding:10px;border-top:1px solid #e3e6e9;background:#fff;flex-shrink:0}
+.agchat-c textarea{flex:1;resize:none;min-height:44px;max-height:120px;border:1px solid #cfd6dc;border-radius:8px;padding:9px 10px;font-size:13.5px;font-family:inherit;outline:none}
+.agchat-c textarea:focus{border-color:#9e2020}
+.agchat-c button{background:#9e2020;color:#fff;border:0;border-radius:8px;padding:0 14px;font-weight:700;cursor:pointer;font-size:13.5px}
+.agchat-c button:disabled{opacity:.5;cursor:default}
+@media (max-width:600px){.agchat{inset:0;width:auto;max-width:none;height:auto;border-radius:0}}

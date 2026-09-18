@@ -31,6 +31,12 @@ never be committed. Without it the app still runs (map + pianos, no moves).
 - `server.py` serves the static app plus `/api/data`: Piano Log CSV export +
   moving-calendar iCal feed, parsed, merged, cached 2 minutes. Falls back to
   the last good payload if Google is unreachable.
+- **Agent chat** — the agents' faces bottom-right (Chris for everyone; each
+  person's own helpers, e.g. Lindsay · Melody · Carla for Karmel) open an
+  in-app chat with that Hermes agent through the BLP Agent Gateway
+  (`netlify/functions/agent-chat.mjs`, `/api/agent`), like Marcus on the
+  Marketing app — no more bouncing out to Telegram. Threads are kept per
+  agent on the device; a "Telegram ↗" link in the header stays as a fallback.
 - `app.js` renders the SVG map (scroll-zoom / drag-pan), floor tabs, search,
   KPI tiles, piano popups (deep-link to pianologapp.netlify.app), Move Board,
   and the Unplaced / Duplicate-slot admin report.

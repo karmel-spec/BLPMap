@@ -11,6 +11,7 @@ local computer.
 | Map + stats + reports UI | Netlify (static) | auto-deploy from GitHub |
 | `/api/data` (Piano Log + calendar) | Netlify Function | `BLP_MOVING_ICS` env var |
 | `/api/slots` (floor-plan geometry, live from the sheet, 6 h cache) | Netlify Function | none — `netlify/functions/slots.mjs` |
+| `/api/agent` (in-app chat with Lindsay / Melody / Chris … — the Hermes agents) | Netlify Function | `BLP_GATEWAY_URL`, `BLP_GATEWAY_KEY` env vars |
 | Daily report email (weekdays 6 AM) | Google Apps Script as info@ | `apps-script/DailyReport.gs` |
 
 Geometry needs no cron at all: `/api/slots` regenerates from the Store Map
@@ -19,7 +20,24 @@ sheet on demand (cached 6 hours), so floor-plan edits appear the same day.
 
 ## One-time setup
 
-### 1. Netlify environment variables — NONE REQUIRED
+### 1. Netlify environment variables — two, for agent chat only
+The map, moves and calendar need no env vars (see below). **Agent chat**
+(tap an agent's face bottom-right → chat window, added Sep 18 2026) does:
+
+| Var | Value |
+|---|---|
+| `BLP_GATEWAY_KEY` | the shared BLP Agent Gateway key — same value the **blpmarketing** Netlify site uses for Marcus |
+| `BLP_GATEWAY_URL` | optional; defaults to `https://agents.brighamlarsonpianos.com` (the Cloudflare tunnel to the agents' Mac) |
+
+Without the key `/api/agent` answers 501 and the chat window shows
+"agent chat not configured" — the rest of the app is unaffected. The
+function verifies the signed-in Google ID token (BLP accounts only) before
+forwarding anything, and if the gateway is down it reports that plainly;
+no stand-in ever answers for an agent (Brigham's rule, same as Marcus).
+Local dev: put `"gateway_key"` in `config.json` (gitignored) — `server.py`
+mirrors the function.
+
+#### Everything else — NONE REQUIRED
 The live site needs no env vars: calendar events are served by the Apps
 Script bridge (`GET <bridge>/exec?fn=events` — the secret iCal address
 lives only inside the deployed script), and piano moves go browser →

@@ -16,6 +16,7 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.parse
 import urllib.request
 from datetime import date, datetime, timedelta
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -627,8 +628,121 @@ def bridge_call(payload):
         raise
 
 
+
+# ---- in-app agent chat (local dev mirror of netlify/functions/agent-chat.mjs) ----
+# Proxies to the BLP Agent Gateway on the agents' Mac. Needs "gateway_key"
+# (and optionally "gateway_url") in config.json, or BLP_GATEWAY_KEY in the env.
+GATEWAY_URL = (os.environ.get('BLP_GATEWAY_URL') or _CFG.get('gateway_url')
+               or 'https://agents.brighamlarsonpianos.com').rstrip('/')
+GATEWAY_KEY = os.environ.get('BLP_GATEWAY_KEY') or _CFG.get('gateway_key', '')
+GOOGLE_CLIENT_ID = '110628682621-v65mkaoanv87sp75ggdfcrglfr7bkr8p.apps.googleusercontent.com'
+AGENT_SLUGS = ['lindsay', 'melody', 'carla', 'chris', 'clara', 'arnold', 'ivory', 'marcus']
+AGENT_NAMES = {s: s.capitalize() for s in AGENT_SLUGS}
+_TOKENS = {}
+
+
+def _blp_account(email):
+    e = (email or '').lower()
+    return (e.endswith('@brighamlarsonpianos.com') or e.endswith('.blp@gmail.com')
+            or e == 'brighamlarson@gmail.com')
+
+
+def verify_google(tok):
+    """ID token -> {email, name} for a BLP account, else None (cached until exp)."""
+    if not tok:
+        return None
+    hit = _TOKENS.get(tok)
+    if hit and hit['exp'] * 1000 > time.time() * 1000:
+        return hit
+    try:
+        with urllib.request.urlopen('https://oauth2.googleapis.com/tokeninfo?id_token='
+                                    + urllib.parse.quote(tok), timeout=8) as r:
+            info = json.loads(r.read())
+    except Exception:
+        return None
+    if info.get('aud') != GOOGLE_CLIENT_ID or str(info.get('email_verified')) != 'true':
+        return None
+    if not _blp_account(info.get('email')):
+        return None
+    u = {'email': info['email'].lower(), 'name': info.get('name') or info['email'],
+         'exp': int(info.get('exp') or 0)}
+    if len(_TOKENS) > 500:
+        _TOKENS.clear()
+    _TOKENS[tok] = u
+    return u
+
+
+def gateway_call(path, payload=None):
+    if not GATEWAY_KEY:
+        raise RuntimeError('agent chat not configured — add "gateway_key" to config.json')
+    data = json.dumps(payload).encode() if payload is not None else None
+    req = urllib.request.Request(GATEWAY_URL + path, data=data, method='POST' if data else 'GET',
+                                 headers={'Content-Type': 'application/json',
+                                          'x-blp-gateway-key': GATEWAY_KEY})
+    try:
+        with urllib.request.urlopen(req, timeout=20) as r:
+            return json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        body = e.read().decode('utf-8', 'replace')
+        try:
+            msg = json.loads(body).get('error') or body
+        except Exception:
+            msg = body
+        raise RuntimeError('Agent gateway %s: %s' % (e.code, msg[:160]))
+    except Exception as e:
+        raise RuntimeError("Could not reach the agent gateway (the Hermes agents on the agents' Mac). "
+                           "Check that the Mac is awake, the gateway is up and the Cloudflare tunnel is "
+                           "connected, then try again. Nothing was answered on the agent's behalf. (%s)" % e)
+
+
+def agent_dispatch(req):
+    slug = str(req.get('slug', '')).lower()
+    if slug not in AGENT_SLUGS:
+        return {'error': 'unknown agent'}, 400
+    message = str(req.get('message', '')).strip()
+    if not message:
+        return {'error': 'Type a message first'}, 400
+    who = verify_google(req.get('idToken'))
+    if not who:
+        return {'error': 'Sign in with your BLP Google account first.'}, 401
+    first = who['name'].split()[0]
+    transcript = str(req.get('transcript', ''))[:12000]
+    parts = [
+        'You are being messaged from the BLP Store Map web app (local dev) by %s <%s>. '
+        'Answer as yourself — the same %s as on Telegram — using your vault files and memory as usual. '
+        'Reply in plain text for a small chat window: short paragraphs, no markdown tables or headings. '
+        'You never post, send or change anything on their behalf from here unless they ask you to.'
+        % (who['name'], who['email'], AGENT_NAMES[slug]),
+        ('RECENT THREAD (this chat window):\n' + transcript) if transcript else '',
+        first + ': ' + message,
+    ]
+    rec = gateway_call('/agents/%s/runs' % slug,
+                       {'input': '\n\n'.join(p for p in parts if p), 'requester': first + ' <store map>'})
+    if not rec.get('run_id'):
+        return {'error': 'gateway accepted the message but returned no run id'}, 502
+    return {'run_id': rec['run_id'], 'session_id': rec.get('session_id'), 'status': rec.get('status', 'started')}, 200
+
+
 class Handler(SimpleHTTPRequestHandler):
+    def _json(self, out, status=200):
+        body = json.dumps(out).encode()
+        self.send_response(status)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Cache-Control', 'no-store')
+        self.send_header('Content-Length', str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     def do_POST(self):
+        if self.path.split('?')[0] == '/api/agent':
+            try:
+                n = int(self.headers.get('Content-Length', 0))
+                req = json.loads(self.rfile.read(n) or b'{}')
+                out, status = agent_dispatch(req)
+            except Exception as exc:
+                out, status = {'error': str(exc)}, 502
+            self._json(out, status)
+            return
         if self.path.split('?')[0] == '/api/move':
             try:
                 if not BRIDGE_URL or not BRIDGE_SECRET:
@@ -654,6 +768,22 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_error(404)
 
     def do_GET(self):
+        if self.path.split('?')[0] == '/api/agent':
+            q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            slug = (q.get('slug') or [''])[0].lower()
+            run = (q.get('run') or [''])[0]
+            if slug not in AGENT_SLUGS or not re.match(r'^[\w.-]{1,80}$', run):
+                self._json({'error': 'slug and run required'}, 400)
+                return
+            if not verify_google(self.headers.get('x-blp-idtoken')):
+                self._json({'error': 'Sign in with your BLP Google account first.'}, 401)
+                return
+            try:
+                st = gateway_call('/agents/%s/runs/%s' % (slug, urllib.parse.quote(run)))
+                self._json({'status': st.get('status'), 'output': st.get('output'), 'error': st.get('error')})
+            except Exception as exc:
+                self._json({'error': str(exc)}, 502)
+            return
         if self.path.split('?')[0] == '/api/data':
             data = get_data()
             if 'scope=active' in self.path:
