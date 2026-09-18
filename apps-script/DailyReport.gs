@@ -50,7 +50,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-09-18.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-09-18.4';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -4900,11 +4900,46 @@ function proposalSheet_() {
   if (!sh) { sh = ss.insertSheet(PROPOSAL_TAB, ss.getSheets().length); sh.hideSheet(); }
   return sh;
 }
+/* A proposal is a JSON OBJECT with a techs array. Two ways a bad one got in
+ * on 9/18 (Brigham): the Planner's adjust job saved plan = JSON.stringify(<a
+ * string>) — a DOUBLE-encoded plan, which JSON.parse happily returns as a
+ * string, and whose inner text was itself broken JSON — so every reader
+ * (Planner, adjust job, Friday nudge) failed to parse it and the Planner fell
+ * back to the Aug 10 snapshot. Now: unwrap a string plan, require an object
+ * with technicians whose days are arrays, and store it single-encoded. */
+function normalizePlan_(plan) {
+  var parsed = null;
+  try { parsed = JSON.parse(plan); } catch (e) { return {error: 'plan is not valid JSON'}; }
+  if (typeof parsed === 'string') {   // double-encoded — unwrap once
+    try { parsed = JSON.parse(parsed); } catch (e2) { return {error: 'plan is a JSON string whose contents are not valid JSON (double-encoded and broken) — nothing saved'}; }
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {error: 'plan must be a JSON object — nothing saved'};
+  if (!Array.isArray(parsed.techs) || !parsed.techs.length) return {error: 'plan has no technicians — nothing saved'};
+  for (var i = 0; i < parsed.techs.length; i++) {
+    var t = parsed.techs[i];
+    if (!t || typeof t !== 'object' || !t.name) return {error: 'technician #' + (i + 1) + ' is malformed — nothing saved'};
+    if (t.days != null && !Array.isArray(t.days)) return {error: 'technician ' + t.name + ' has malformed days — nothing saved'};
+  }
+  return {parsed: parsed, text: JSON.stringify(parsed)};
+}
 function saveProposal_(req) {
   var plan = String(req.plan || '');
   if (!plan || plan.length > 400000) return {error: 'plan missing or too large'};
-  var parsed = null;
-  try { parsed = JSON.parse(plan); } catch (e) { return {error: 'plan is not valid JSON'}; }
+  var norm = normalizePlan_(plan);
+  if (norm.error) return norm;
+  var parsed = norm.parsed;
+  plan = norm.text;
+  // the week rides inside the plan too — never let a saver's missing field
+  // blank the meta (that is what disarmed the guards on 9/18)
+  if (!String(req.weekStart || '').trim() && parsed.weekStart) req.weekStart = String(parsed.weekStart);
+  if (!String(req.week || '').trim() && parsed.week) req.week = String(parsed.week);
+  // automation only ever proposes the week AHEAD: a bot save whose week has
+  // already started is a stale draft — refused (Brigham 9/18)
+  var botSaver = PROPOSAL_BOT_RE.test(String((req.user && req.user.name) || req.by || ''));
+  if (!req.force && botSaver && /^\d{4}-\d{2}-\d{2}$/.test(String(req.weekStart || ''))) {
+    var today = Utilities.formatDate(new Date(), 'America/Denver', 'yyyy-MM-dd');
+    if (String(req.weekStart) <= today) return {error: 'automated drafts must be for the week AHEAD — ' + req.weekStart + ' has already started; nothing saved'};
+  }
   // A BLANK save wiped the store on 9/18 — week:'', weekStart:'', zero techs,
   // from "Mark Hales (Planner notes)". Both guards below compare weekStarts,
   // so a missing one walked straight past them; worse, it left the store with
@@ -5035,7 +5070,18 @@ function latestProposal_() {
   var raw = '';
   for (var i = 1; i < vals.length; i++) raw += String(vals[i][0] || '');
   if (!raw) return {error: 'proposal store has meta but no plan'};
-  return {ok: true, meta: meta, plan: JSON.parse(raw)};
+  var plan = JSON.parse(raw);
+  // legacy double-encoded store: unwrap; if the inside is broken say so
+  // plainly instead of handing readers a string they cannot parse (9/18)
+  if (typeof plan === 'string') {
+    try { plan = JSON.parse(plan); }
+    catch (e) { return {error: 'the saved proposal is damaged (double-encoded, inner JSON invalid) — restore a version from Proposal History', meta: meta}; }
+  }
+  if (plan && typeof plan === 'object') {   // the week lives in the plan too
+    if (!meta.weekStart && plan.weekStart) meta.weekStart = String(plan.weekStart);
+    if (!meta.week && plan.week) meta.week = String(plan.week);
+  }
+  return {ok: true, meta: meta, plan: plan};
 }
 function techCalMap_() {
   var ss = SpreadsheetApp.openById('11RoeVRETag5rZYX6_tEH-rf6x8JL0JeZU0P5AT0WI-I');

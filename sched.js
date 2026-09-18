@@ -674,37 +674,51 @@ async function loadAdjustHistory(panel){
 async function loadProposal(box){
   if(!box) return;
   box.innerHTML=`<div class="curmsg">Loading proposed week…</div>`;
-  let got=null;
-  // The bridge can take 25 s+ under load (Karmel 9/11: "the current week shows
-  // about half the time") — the single 25 s try then fell back to the repo
-  // snapshot, which is the week of Aug 10. Now: up to three tries, 45 s each,
-  // with a note in the box; the snapshot is a last resort and says so.
+  let got=null, lastErr="";
+  // Bridge only, with retries — the Aug 10 repo snapshot is GONE as a fallback
+  // (Brigham 9/18: it kept showing "a former week in August" whenever the
+  // bridge hiccuped or the store held unparseable JSON). If the bridge cannot
+  // be read, this device's last successfully loaded copy is shown, clearly
+  // labelled and with Approve disabled — never a plan from another month.
+  const CACHE_KEY="blp.planner.lastgood";
+  const parsePlan=v=>{ let pl=v; if(typeof pl==="string") pl=JSON.parse(pl); if(typeof pl==="string") pl=JSON.parse(pl); if(!pl||typeof pl!=="object"||!Array.isArray(pl.techs)) throw new Error("plan has no technicians"); return pl; };
   for(let a=0;a<3&&!got;a++){
     if(a) box.innerHTML=`<div class="curmsg">Still loading the proposed week — the Google bridge is slow right now (try ${a+1} of 3)…</div>`;
     try{
       const r=await fetch(CONFIG.STOREMAP_BRIDGE+"?fn=proposal&_="+Date.now(),{redirect:"follow",signal:AbortSignal.timeout(45000)});
       const j=await r.json();
-      if(j.ok) got=j;
-      // a double-encoded save leaves plan as a JSON string — parse, don't blank
-      if(got&&typeof got.plan==="string"){ try{got.plan=JSON.parse(got.plan);}catch(e2){got=null;} }
-    }catch(e){/* timeout or bridge hiccup — try again */}
+      if(j&&j.error){ lastErr=String(j.error); break; }            // the bridge answered and says the store is bad — no point retrying
+      if(j&&j.ok&&j.plan){ try{ j.plan=parsePlan(j.plan); got=j; }catch(e2){ lastErr="the saved proposal cannot be read ("+e2.message+")"; break; } }
+      else lastErr="the bridge answered without a plan";              // ping imposter mid-deploy — retry
+    }catch(e){ lastErr=(e&&e.name==="TimeoutError")?"the bridge did not answer in 45 s":String(e&&e.message||e); }
   }
-  if(!got){
-    try{
-      const r2=await fetch("https://blpshop.netlify.app/data/schedule-proposal.json?ts="+Date.now());
-      if(r2.ok){ const plan=await r2.json(); got={ok:true,plan,meta:{week:plan.week,savedAt:plan.generatedAt||"",applied:false,fallback:true}}; }
-    }catch(e){}
+  if(got){
+    got.meta=got.meta||{};
+    if(!got.meta.weekStart&&got.plan.weekStart) got.meta.weekStart=got.plan.weekStart;
+    if(!got.meta.week&&got.plan.week) got.meta.week=got.plan.week;
+    try{ localStorage.setItem(CACHE_KEY, JSON.stringify({plan:got.plan,meta:got.meta,at:Date.now()})); }catch(e){}
+  } else {
+    let c=null; try{ c=JSON.parse(localStorage.getItem(CACHE_KEY)||"null"); }catch(e){}
+    if(c&&c.plan){ got={ok:true,plan:c.plan,meta:{...(c.meta||{}),fallback:true,cachedAt:c.at}}; }
   }
-  if(!got){ box.innerHTML=`<div class="curmsg">Couldn't reach the Google bridge for the proposed week. <button class="applybtn ghost" id="propRetry">↻ Try again</button></div>`; const rb=box.querySelector("#propRetry"); if(rb) rb.onclick=()=>loadProposal(box); return; }
+  if(!got){ box.innerHTML=`<div class="curmsg" style="color:var(--red)">Couldn't load the proposed week — ${esc(lastErr||"the Google bridge did not answer")}.${/damaged|cannot be read/i.test(lastErr)?" The saved proposal needs to be restored from Proposal History — tell Karmel.":""} <button class="applybtn ghost" id="propRetry">↻ Try again</button></div>`; const rb=box.querySelector("#propRetry"); if(rb) rb.onclick=()=>loadProposal(box); return; }
   const {plan,meta}=got;
   const colors=plan.colors||{};
+  // week sanity (Brigham 9/18): the Planner proposes the week AHEAD. A plan
+  // whose Monday is already behind us is stale — say so in red and never
+  // offer to apply it to the calendars.
+  const thisMon=iso(mondayOf(FRI)), nextMon=iso(mondayOf(NEXT_FRI));
+  const wk=String((meta&&meta.weekStart)||plan.weekStart||"");
+  const stale=!!wk&&wk<thisMon;
+  const staleNote=stale?`<div class="curmsg" style="color:var(--red);font-weight:700">⚠ This proposal is for a PAST week (${esc(plan.week||wk)}). Next week's (Mon ${esc(nextMon)}) should have been drafted Friday 7 AM — tap ↻ Try again; if this stays, tell Karmel so the Friday routine and the store get checked.</div>`:"";
   box.innerHTML=`<div class="propwrap">
+    ${staleNote}
     <div class="prophead">
       <h3>📅 Proposed Technician Week — ${esc(plan.week||"")}</h3>
-      <span class="meta">${meta.fallback?"⚠ OLD SNAPSHOT — the bridge did not answer; this is NOT the current plan. <button class=\"applybtn ghost\" id=\"propRetry\">↻ Try again</button>":"from the weekly proposal"} · saved ${esc(fmtDenver(meta.savedAt))}
+      <span class="meta">${meta.fallback?"⚠ LAST COPY LOADED ON THIS DEVICE "+esc(meta.cachedAt?fmtDenver(new Date(meta.cachedAt).toISOString()):"")+" — the bridge is not answering right now; this may not be the current plan. <button class=\"applybtn ghost\" id=\"propRetry\">↻ Try again</button>":"from the weekly proposal"} · saved ${esc(fmtDenver(meta.savedAt))}
         ${meta.applied?" · <b style='color:#7fc48f'>APPLIED "+esc((meta.appliedAt||"").slice(0,10))+"</b>":""}</span>
-      <button class="applybtn" id="applySched" ${meta.applied||meta.fallback?"disabled":""}>
-        ${meta.applied?"✓ Applied to calendars":meta.fallback?"Apply (needs bridge update)":(meta.appliedTechs&&meta.appliedTechs.length?"✅ Approve more — "+meta.appliedTechs.length+" of "+((plan&&plan.techs)||[]).length+" applied":"✅ Approve — apply to live tech calendars")}</button>
+      <button class="applybtn" id="applySched" ${meta.applied||meta.fallback||stale?"disabled":""}>
+        ${meta.applied?"✓ Applied to calendars":stale?"Past week — cannot apply":meta.fallback?"Apply (bridge not answering)":(meta.appliedTechs&&meta.appliedTechs.length?"✅ Approve more — "+meta.appliedTechs.length+" of "+((plan&&plan.techs)||[]).length+" applied":"✅ Approve — apply to live tech calendars")}</button>
       ${(meta.appliedTechs&&meta.appliedTechs.length)?`<button class="applybtn ghost" id="checkSched" title="Count this week's applied events on each tech's real calendar and flag duplicates">🧹 Check calendars</button>`:""}
     </div>
     <div class="propbody">
