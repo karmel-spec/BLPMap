@@ -50,7 +50,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-09-18.6';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-09-18.7';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -5216,8 +5216,17 @@ function applyScheduleLocked_(req) {
           // placeholders that hold the slot). Field work is typed 'misc' and
           // is untouched. If the master is unreachable the event still lands
           // on the tech's own calendar rather than being lost.
+          // IN STORE only (Walter 9/18). The type marker alone is not proof:
+          // the weekly plan is AI-drafted, and a field tuning typed 'tune' by
+          // mistake would otherwise land on the customer-facing calendar.
+          // Field work is titled "Field: <place> — tuning", so a title that
+          // says field never goes to the master whatever its type says.
+          // Today McKinly's field tunings are all typed 'misc' and this never
+          // fires — it is here so that staying true does not depend on the
+          // draft getting the type right every week.
+          var isField = /^\s*field\b|\bfield\s*:/i.test(evTitle);
           var placed = false;
-          if (b[2] === 'tune' && tuneMaster) {
+          if (b[2] === 'tune' && !isField && tuneMaster) {
             try {
               opts.guests = calId;
               // no invitation emails (Walter 9/18): applying a week would
