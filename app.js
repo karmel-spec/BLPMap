@@ -5471,12 +5471,14 @@ function popHTML(p) {
       <button class="tagbtn paymosave" style="margin-left:4px">Save</button></span></div>
     <div class="paymsg phmsg"></div>
     <div class="row" title="the client's admin journey — tap a step to mark it done, or skip it">Admin steps
-      <b>${asDone.length}/${ADMIN_STEPS.length}</b>${asSkipped.length ? ` <small class="lite">· ${asSkipped.length} skipped</small>` : ''}</div>
+      <b>${asDone.length}/${ADMIN_STEPS.length}</b> <small class="lite">done${asSkipped.length ? ` · ${asSkipped.length} skipped` : ''}</small></div>
     <div class="adminsteps">${ADMIN_STEPS.map((s, i) => {
       const on = asDone.includes(s), sk = asSkipped.includes(s);
       return `<div class="asrow ${on ? 'on' : ''} ${sk ? 'skip' : ''}">
-        <button class="astep ${on ? 'on' : ''} ${sk ? 'skip' : ''}" data-as="${esc(s)}" title="${on ? 'done — tap to undo' : sk ? 'skipped — tap to mark done instead' : 'tap to mark done'}"><i>${on ? '✓' : sk ? '⤼' : i + 1}</i>${esc(s)}</button>
-        <button class="asskip" data-as="${esc(s)}" title="${sk ? 'put this step back' : 'skip this step — not needed for this client'}">${sk ? 'unskip' : 'skip'}</button>
+        <button class="astep ${on ? 'on' : ''} ${sk ? 'skip' : ''}" data-as="${esc(s)}" title="${on ? 'done — tap to undo' : sk ? 'skipped — tap to mark done instead' : 'tap to mark done'}"><i>${on ? '✓' : sk ? '–' : i + 1}</i><span class="aslbl">${esc(s)}</span>${sk ? '<em class="astag">SKIPPED</em>' : ''}</button>
+        ${on ? '' : sk
+          ? `<button class="asskip undo" data-as="${esc(s)}" title="put this step back on the list">↩ Restore</button>`
+          : `<button class="asskip" data-as="${esc(s)}" title="not needed for this client — skip it">Skip ⤼</button>`}
       </div>`;
     }).join('')}</div><div class="asmsg phmsg"></div>
     ${payBar}`) : '';
