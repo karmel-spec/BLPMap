@@ -5414,16 +5414,18 @@ function popHTML(p) {
       </span></div>
     ${isPayrollAdmin() || isOwner() ? `<div class="row"><button class="ctrbtn">📜 Owner contract & selections</button></div>
       <div class="ctrout"></div>` : ''}`) : '';
-  // opt-IN: blank asks, Yes shows the history button, No shows nothing at all
+  // Client email update reports: a clear ON / OFF switch (Brigham 9/18) —
+  // always shown for a piano with a serial. Blank = "not set" (amber, off
+  // position) until someone decides; Yes shows the history button above.
   const crVal = (p.clientReports || '').trim().toLowerCase();
-  let crAsk = '';
-  if (crVal === 'yes') {
-    crAsk = `<div class="crask"><span class="croff">✕ no client reports</span><span class="crmsg"></span></div>`;
-  } else if (crVal !== 'no') {
-    crAsk = `<div class="crask">Client reports for this piano?
-      <button class="crbtn cryes">Yes</button><button class="crbtn crno">No</button>
-      <span class="crmsg"></span></div>`;
-  }
+  const crOn = crVal === 'yes', crUnset = crVal !== 'yes' && crVal !== 'no';
+  const crAsk = p.serial ? `<div class="crask crrow">
+      <span class="crlbl">📨 Client email update reports</span>
+      <button class="crsw ${crOn ? 'on' : ''} ${crUnset ? 'unset' : ''}" role="switch" aria-checked="${crOn}"
+        title="${crOn ? 'ON — tap to stop sending this client update reports' : 'OFF — tap to send this client email update reports'}"><span class="crknob"></span></button>
+      <b class="crstate ${crOn ? 'on' : crUnset ? 'unset' : 'off'}">${crOn ? 'ON' : crUnset ? 'NOT SET' : 'OFF'}</b>
+      <span class="crhint">${crOn ? 'this client receives emailed update reports' : crUnset ? 'decide: should this client get emailed update reports?' : 'no update reports go to this client'}</span>
+      <span class="crmsg"></span></div>` : '';
   const ownerLine = [ownerNameOf(p), ownerCityStateOf(p)].filter(Boolean).join(' — ') || '—';
   const pct = shopProgressPct(p);
   const payBar = (p.serial && inShopwork(p)) ? (() => {
@@ -6193,10 +6195,12 @@ function wirePop(p) {
     const d = new Date(Date.now() + (+b.dataset.d) * 86400000);
     setSnooze(p, `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`, pop);
   });
-  const cy = pop.querySelector('.cryes');
-  if (cy) cy.onclick = ev => { ev.stopPropagation(); setClientReports(p, true, pop); };
-  pop.querySelectorAll('.crno, .croff').forEach(b =>
-    b.onclick = ev => { ev.stopPropagation(); setClientReports(p, false, pop); });
+  pop.querySelectorAll('.crsw').forEach(sw => sw.onclick = ev => {
+    ev.stopPropagation(); popPinned = true;
+    if (sw.disabled) return;
+    sw.disabled = true;
+    setClientReports(p, !sw.classList.contains('on'), pop);
+  });
   const cr = pop.querySelector('.creports');
   if (cr) cr.onclick = ev => {
     ev.stopPropagation();
