@@ -45,7 +45,16 @@ const TRACKS = ['Rebuild', 'Hybrid', 'Refurbish', 'Refinish', 'Technology', 'Old
 // Admin section: client payment plans, the shop-progress milestones that
 // trigger a payment email to info@, and the client's admin-experience steps
 const KEY_SERVICE = ['Ivory', 'Plastic', 'Ebony'];   // key-top service, multi-select
-const PAY_PLANS = ['Pd in Full', '12 Month', '24 Month', '4 Progress Payments', 'Financed'];
+const PAY_PLANS = ['Pd in Full', 'Pay upon completion', '12 Month', '24 Month', '4 Progress Payments', 'Financed'];
+// refinishing-only jobs pay upon completion (Brigham 9/18): when a piano's
+// work track is nothing but Refinish and no plan is set, the card shows and
+// saves "Pay upon completion" on its own
+const PAY_ON_COMPLETION = 'Pay upon completion';
+function refinishOnly(p) {
+  const l = trackParts(p.track).list.map(t => t.toLowerCase());
+  return l.length > 0 && l.every(t => t === 'refinish');
+}
+const payAutoDone = new Set();
 const PAY_MILESTONES = [25, 50, 75, 100];
 const ADMIN_STEPS = ['$1000 Queue Payment', 'Selections Made (Google Form)', 'Welcome Email',
   'Before Photos', 'Plan Entered to Shop Tag & Printed',
@@ -1891,6 +1900,7 @@ function openShotWizard(p, kind) {
       W.done[W.idx] = true;
       if (kind === 'before' && j.id) W.beforeIds[W.idx] = j.id;
       if (kind === 'before') p.bphoto = p.bphoto || true; else p.aphoto = p.aphoto || true;
+      if (kind === 'before' && !adminStepsOf(p).includes('Before Photos')) setAdminStepState(p, 'Before Photos', 'done', null);   // step 4 follows the photos (Brigham 9/18)
       W.busy = false;
       advance();
     } catch (e) {
@@ -5434,7 +5444,7 @@ function popHTML(p) {
       <div class="pbar"><i style="width:${pct}%"></i><s style="left:25%"></s><s style="left:50%"></s><s style="left:75%"></s></div>
       <div class="pbarlbl">${next ? `next payment milestone at ${next}%` : 'all payment milestones reached'}${+p.payMilestone ? ` · last emailed at ${esc(p.payMilestone)}%` : ''}</div>`;
   })() : '';
-  const asDone = adminStepsOf(p);
+  const asDone = adminStepsOf(p), asSkipped = adminSkippedOf(p);
   const contractBlock = p.serial && (isPayrollAdmin() || isOwner())
     ? `<div class="row"><button class="ctrbtn">📜 Owner contract & selections</button></div><div class="ctrout"></div>`
     : '';
@@ -5451,18 +5461,22 @@ function popHTML(p) {
     <div class="row rowflex payrow"><span>Payment plan</span>
       <select class="paysel"><option value="">— not set —</option>
         ${PAY_PLANS.concat(p.payPlan && !PAY_PLANS.includes(p.payPlan) ? [p.payPlan] : [])
-          .map(o => `<option ${p.payPlan === o ? 'selected' : ''}>${o}</option>`).join('')}
+          .map(o => `<option ${(p.payPlan || (refinishOnly(p) ? PAY_ON_COMPLETION : '')) === o ? 'selected' : ''}>${o}</option>`).join('')}
         <option value="__monthly">Monthly — custom amount…</option>
       </select></div>
+    ${!p.payPlan && refinishOnly(p) ? `<div class="lite payauto" style="font-size:11px">🎨 refinishing-only job → <b>Pay upon completion</b> set automatically</div>` : ''}
     <div class="row rowflex paycustom" hidden><span>$ per month</span>
       <span><input type="number" class="paymo" min="1" step="1" placeholder="1000" style="width:84px;font:inherit;font-size:12px;padding:3px 6px;border:1px solid #cfd6dc;border-radius:6px">
       <button class="tagbtn paymosave" style="margin-left:4px">Save</button></span></div>
     <div class="paymsg phmsg"></div>
-    <div class="row" title="the client's admin journey — tap a step to mark it done">Admin steps
-      <b>${asDone.length}/${ADMIN_STEPS.length}</b></div>
+    <div class="row" title="the client's admin journey — tap a step to mark it done, or skip it">Admin steps
+      <b>${asDone.length}/${ADMIN_STEPS.length}</b>${asSkipped.length ? ` <small class="lite">· ${asSkipped.length} skipped</small>` : ''}</div>
     <div class="adminsteps">${ADMIN_STEPS.map((s, i) => {
-      const on = asDone.includes(s);
-      return `<button class="astep ${on ? 'on' : ''}" data-as="${esc(s)}"><i>${on ? '✓' : i + 1}</i>${esc(s)}</button>`;
+      const on = asDone.includes(s), sk = asSkipped.includes(s);
+      return `<div class="asrow ${on ? 'on' : ''} ${sk ? 'skip' : ''}">
+        <button class="astep ${on ? 'on' : ''} ${sk ? 'skip' : ''}" data-as="${esc(s)}" title="${on ? 'done — tap to undo' : sk ? 'skipped — tap to mark done instead' : 'tap to mark done'}"><i>${on ? '✓' : sk ? '⤼' : i + 1}</i>${esc(s)}</button>
+        <button class="asskip" data-as="${esc(s)}" title="${sk ? 'put this step back' : 'skip this step — not needed for this client'}">${sk ? 'unskip' : 'skip'}</button>
+      </div>`;
     }).join('')}</div><div class="asmsg phmsg"></div>
     ${payBar}`) : '';
   const typeBtns = p.serial
@@ -6118,6 +6132,11 @@ function wirePop(p) {
     setKeyService(p, list.includes(k) ? list.filter(x => x !== k) : list.concat(k), pop);
   });
   const pay = pop.querySelector('.paysel');
+  // refinishing-only + no plan → save "Pay upon completion" now (once per piano per session)
+  if (pay && !p.payPlan && refinishOnly(p) && !payAutoDone.has(p.serial) && writeAuth().ok) {
+    payAutoDone.add(p.serial);
+    setPayPlan(p, PAY_ON_COMPLETION, pop, 'auto: refinishing-only');
+  }
   if (pay) {
     pay.onclick = ev => ev.stopPropagation();
     // Melissa 9/9 (request 090926terry29): a client on an approved custom
@@ -6149,6 +6168,15 @@ function wirePop(p) {
   pop.querySelectorAll('.astep').forEach(b => b.onclick = ev => {
     ev.stopPropagation();
     toggleAdminStep(p, b.dataset.as, pop);
+  });
+  pop.querySelectorAll('.asskip').forEach(b => b.onclick = ev => {
+    ev.stopPropagation(); popPinned = true;
+    const step = b.dataset.as, sk = adminSkippedOf(p).includes(step);
+    const m = pop.querySelector('.asmsg'); if (m) { m.className = 'asmsg phmsg'; m.textContent = 'Saving...'; }
+    setAdminStepState(p, step, sk ? 'clear' : 'skip', pop).then(ok => {
+      const m3 = $('#pop').querySelector('.asmsg');
+      if (m3) { m3.className = 'asmsg phmsg ' + (ok ? 'ok' : 'err'); m3.textContent = ok ? (sk ? '✓ step back on the list' : '✓ step skipped') : 'Error — sign in with Google (menu) and try again'; }
+    });
   });
   // drag either side edge to resize (for the shop Chromebooks' big screens);
   // width is remembered on this device
@@ -6970,20 +6998,13 @@ async function setMedia(p, field, pop, skip) {
       if (wrap) wrap.outerHTML = skip ? '<b class="mskip">— skipped</b>' : '<b class="myes">✓ have</b>';
       msg.className = 'mdmsg ok';
       msg.textContent = skip ? '✓ Skipped — removed from the media reports' : '✓ Saved to the Piano Log';
-      // before photos done ⇒ tick "Before Photos" on the admin checklist too
-      // (Brigham 8/27) — one action, both records honest
-      if (field === 'bphoto' && !skip && !adminStepsOf(p).includes('Before Photos')) {
+      // before photos done ⇒ admin step 4 "Before Photos" done; skipped ⇒ step
+      // skipped (Brigham 8/27 + 9/18) — one action, both records honest
+      if (field === 'bphoto') {
         try {
-          const steps = ADMIN_STEPS.filter(s =>
-            adminStepsOf(p).includes(s) || s === 'Before Photos').join(' | ');
-          const ra = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
-            headers: {'content-type': 'text/plain;charset=utf-8'},
-            body: JSON.stringify({pin, serial: p.serial, action: 'setadminsteps',
-              steps, row: p.row, ...authFields()})});
-          if ((await ra.json()).ok) {
-            p.adminSteps = steps;
-            msg.textContent = '✓ Saved — and ticked “Before Photos” on the admin checklist';
-          }
+          const already = adminStepsOf(p).includes('Before Photos');
+          if (!skip && !already && await setAdminStepState(p, 'Before Photos', 'done', null)) msg.textContent = '✓ Saved — and ticked “Before Photos” on the admin steps';
+          if (skip && !already && await setAdminStepState(p, 'Before Photos', 'skip', null)) msg.textContent = '✓ Skipped — and admin step 4 “Before Photos” marked skipped too';
         } catch (e2) { /* the media save already succeeded; don't undo it */ }
       }
     } else {
@@ -7085,6 +7106,7 @@ async function toggleTrack(p, track, pop, miscNote) {
     if (btn) btn.classList.toggle('on');
     msg.className = 'trkmsg phmsg err'; msg.textContent = '✗ ' + e.message + ' — not saved';
   }
+  if (refinishOnly(p) && !p.payPlan && writeAuth().ok) setPayPlan(p, PAY_ON_COMPLETION, pop, 'auto: refinishing-only');
 }
 
 // Cabinetry shelf picker: unit 1-9, side for double units, level
@@ -7222,7 +7244,7 @@ function shopProgressPct(p) {
   list.forEach((ph, i) => { if (dl.includes(ph) || (effIdx >= 0 && i < effIdx)) done++; });
   return Math.min(100, Math.round(done / list.length * 100));
 }
-async function setPayPlan(p, plan, pop) {
+async function setPayPlan(p, plan, pop, why) {
   const msg = pop.querySelector('.paymsg');
   popPinned = true;
   const {pin, ok} = writeAuth();
@@ -7235,7 +7257,7 @@ async function setPayPlan(p, plan, pop) {
       method: 'POST', redirect: 'follow',
       headers: {'content-type': 'text/plain;charset=utf-8'},
       body: JSON.stringify({pin, serial: p.serial, action: 'setpayplan',
-        plan, row: p.row, ...authFields()}),
+        plan, row: p.row, why: why || '', ...authFields()}),
     });
     const j = await r.json();
     if (j.error === 'unauthorized') { lsDel('blpPin'); throw new Error('Not authorized'); }
@@ -7248,8 +7270,38 @@ async function setPayPlan(p, plan, pop) {
     return false;
   }
 }
-function adminStepsOf(p) {
-  return (p.adminSteps || '').split('|').map(t => t.trim()).filter(Boolean);
+// ADMIN STEPS cell = "Step | Step | ~Step": a plain name is DONE, a "~" prefix
+// is SKIPPED (Brigham 9/18 — every step can be skipped; skipped counts as
+// resolved for the client's journey but never as done)
+function adminStepsOf(p) {   // done steps only
+  return (p.adminSteps || '').split('|').map(t => t.trim()).filter(t => t && t[0] !== '~');
+}
+function adminSkippedOf(p) {
+  return (p.adminSteps || '').split('|').map(t => t.trim()).filter(t => t && t[0] === '~').map(t => t.slice(1).trim());
+}
+function adminStepsSerialize(done, skipped) {
+  return ADMIN_STEPS.filter(s => done.includes(s) || skipped.includes(s))
+    .map(s => done.includes(s) ? s : '~' + s).join(' | ');
+}
+// save one step's state — 'done' | 'skip' | 'clear' — from any place in the
+// app (the step buttons, the Media section, the shot wizard)
+async function setAdminStepState(p, step, state, pop) {
+  const {pin, ok} = writeAuth();
+  if (!ok) return false;
+  const was = p.adminSteps || '';
+  let done = adminStepsOf(p).filter(s => s !== step), skipped = adminSkippedOf(p).filter(s => s !== step);
+  if (state === 'done') done.push(step); else if (state === 'skip') skipped.push(step);
+  p.adminSteps = adminStepsSerialize(done, skipped);
+  if (p.adminSteps === was) return true;
+  try {
+    const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+      headers: {'content-type': 'text/plain;charset=utf-8'},
+      body: JSON.stringify({pin, serial: p.serial, action: 'setadminsteps', steps: p.adminSteps, row: p.row, ...authFields()})});
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error || 'save failed');
+    if (pop && !$('#pop').hidden && pop === $('#pop')) { try { openPop(p.row, S.popAnchor, true); } catch (e) {} }
+    return true;
+  } catch (e) { p.adminSteps = was; return false; }
 }
 async function toggleAdminStep(p, step, pop) {
   const msg = pop.querySelector('.asmsg');
@@ -7259,8 +7311,8 @@ async function toggleAdminStep(p, step, pop) {
   const was = p.adminSteps || '';
   const list = adminStepsOf(p);
   const next = list.includes(step) ? list.filter(s => s !== step) : list.concat(step);
-  // keep sheet order canonical regardless of click order
-  p.adminSteps = ADMIN_STEPS.filter(s => next.includes(s)).join(' | ');
+  // keep sheet order canonical regardless of click order; marking done clears a skip
+  p.adminSteps = adminStepsSerialize(next, adminSkippedOf(p).filter(s => s !== step));
   if (!$('#pop').hidden) openPop(p.row, S.popAnchor, true);
   const m2 = $('#pop').querySelector('.asmsg');
   if (m2) { m2.className = 'asmsg phmsg'; m2.textContent = 'Saving...'; }
@@ -7303,6 +7355,8 @@ async function checkPayMilestone(p, pop) {
   const nmYr = [p.year, p.make, p.model].filter(Boolean).join(' ') || p.summary;
   const monthly = /^Monthly\b/i.test(p.payPlan);   // custom monthly amount: nothing extra falls due at a milestone
   const payAsk = p.payPlan === 'Pd in Full' ? ''
+    : p.payPlan === PAY_ON_COMPLETION
+      ? `\n\nPayment for this work is due upon completion — nothing is due at this milestone.`
     : p.payPlan === '4 Progress Payments'
       ? `\n\nWith the ${milestone}% milestone reached, this is also the point in your payment plan where the next progress payment comes due. We'll send the invoice separately — and as always, reach out with any questions.`
       : monthly

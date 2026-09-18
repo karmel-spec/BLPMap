@@ -232,6 +232,14 @@ body{background:#f7f8f9;color:#121212;display:flex;flex-direction:column;overflo
 .astep i{font-style:normal;flex:none;width:16px;height:16px;border:1.2px solid #cfd6dc;border-radius:4px;display:grid;place-items:center;font-size:9px;font-weight:700;color:#9aa3ac}
 .astep.on{color:#121212;border-color:#bfd8c6;background:#f2f9f4}
 .astep.on i{background:#2e7d4f;border-color:#2e7d4f;color:#fff}
+/* one row per step: the step button + a small skip / unskip link (Brigham 9/18) */
+.asrow{display:flex;align-items:stretch;gap:4px}
+.asrow .astep{flex:1}
+.astep.skip{color:#8a939b;border-style:dashed;background:#fafafa;text-decoration:line-through}
+.astep.skip i{background:#e6e9ec;border-color:#cfd6dc;color:#6f7a84;text-decoration:none}
+.asskip{font:inherit;font-size:10px;color:#8a939b;background:none;border:1px solid transparent;border-radius:6px;padding:0 6px;cursor:pointer;flex:none}
+.asskip:hover{color:#9e2020;border-color:#e0dcd4}
+.asrow.skip .asskip{color:#9e6a00}
 /* admin: shop-progress bar with 25/50/75 payment-milestone ticks */
 .pbar{position:relative;height:12px;background:#efece6;border:1px solid #dfdad1;border-radius:99px;overflow:hidden;margin:3px 0 2px}
 .pbar i{position:absolute;inset:0 auto 0 0;background:linear-gradient(90deg,#b43333,#9e2020);border-radius:99px}
