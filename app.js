@@ -13089,8 +13089,10 @@ const TB_HEADSHOTS = {
   };
 const tbNorm = n => String(n || '').trim().toLowerCase().replace(/\s+/g, ' ');
 // full access to every board: the face strip + open/edit/add on anyone's
-// board — owners (Brigham, Karmel) plus Melissa (Brigham 8/28)
-const TB_ADMIN_EMAILS = OWNER_EMAILS.concat(['melissa@brighamlarsonpianos.com']);
+// board — owners (Brigham, Karmel) plus Melissa (Brigham 8/28) and Mark, the
+// lead manager (Brigham 9/17): every team member's face bubble, so he can
+// assign, edit and reassign cards to or from anyone's board
+const TB_ADMIN_EMAILS = OWNER_EMAILS.concat(['melissa@brighamlarsonpianos.com', 'markhales.blp@gmail.com']);
 function tbAdmin() { return TB_ADMIN_EMAILS.includes(userEmail()); }
 const TB_AV_COLORS = ['#9e2020', '#2c5d96', '#2f7d4f', '#8a6d3b', '#6a3aa0', '#a05a2c', '#3a7a8a', '#b4536b'];
 function tbAvColor(name) {
