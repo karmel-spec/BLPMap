@@ -134,6 +134,17 @@ calendar create (karmel@ or karmel.larson@gmail.com is owner on tech cals)
 then bridge markOnly. Week Aug 17–21 applied this way 8/16: 81/81 events,
 audited 0 missing, all 15 techs marked, applied:true.
 
+**In-store tuning protocol — the overlap is DELIBERATE (Walter 2026-09-18):**
+an in-store tuning is created on the **"03-In Store Tuning"** calendar
+(blp.matthewputnam@gmail.com) and the technician is added as a **guest**, so it
+reaches their own calendar as an invitation. `scheduleTuning_` already does
+exactly this. The weekly plan is a SEPARATE system: applySchedule_ writes plan
+blocks straight onto the tech's own calendar, no master, no guests. So a
+planned tuning block and the real tuning appointment can sit in the same slot
+on Korban's calendar. **That is the protocol working, not a double-booking to
+report or clean up** — never raise it as a conflict, never delete one side,
+never "resolve" it by moving a tuning off the In Store Tuning calendar.
+
 **Tech Calendars tab is fully mapped (2026-08-09):** all 15 active techs on
 the report sheet's Tech Calendars tab. Calendars answer by DIRECT ID
 (firstlast.blp@gmail.com) even though they never appear in karmel's
