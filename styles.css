@@ -2120,3 +2120,11 @@ tr.daynone td{color:#9aa2ab}
 .aghit-body{font-size:13px;line-height:1.4;white-space:pre-wrap;word-break:break-word;color:#121212}
 .aghit-body mark{background:#ffe9a8;color:inherit;padding:0 1px;border-radius:2px}
 .agmsg.flash{box-shadow:0 0 0 3px #ffe9a8;transition:box-shadow .3s}
+/* agent chat — drag the left / top edge or corner to resize (Karmel 9/18) */
+.aggrip{position:absolute;z-index:9;touch-action:none}
+.aggrip.l{left:-3px;top:14px;bottom:14px;width:9px;cursor:ew-resize}
+.aggrip.t{top:-5px;left:14px;right:14px;height:9px;cursor:ns-resize}
+.aggrip.c{left:-4px;top:-6px;width:18px;height:18px;cursor:nwse-resize}
+.aggrip:hover{background:rgba(158,32,32,.14)}
+.agchat{max-height:calc(100vh - 40px)}
+@media (max-width:600px){.aggrip{display:none}.agchat{width:auto!important;height:auto!important}}

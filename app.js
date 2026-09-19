@@ -15768,7 +15768,8 @@ boot();
   const box = document.createElement('div');
   box.className = 'agchat';
   box.hidden = true;
-  box.innerHTML = `<div class="agchat-h"><img alt=""><div class="agchat-n"><b></b><small></small></div>
+  box.innerHTML = `<div class="aggrip l" title="drag to resize"></div><div class="aggrip t" title="drag to resize"></div><div class="aggrip c" title="drag to resize"></div>
+    <div class="agchat-h"><img alt=""><div class="agchat-n"><b></b><small></small></div>
       <a class="agchat-tg" target="_blank" rel="noopener" title="Same agent on Telegram, if you prefer">Telegram ↗</a>
       <button class="agchat-x" type="button" aria-label="Close">×</button></div>
     <div class="agchat-s"><input type="search" placeholder="Search every agent conversation… (Enter)"><button type="button" class="agchat-sx" hidden>Clear</button></div>
@@ -15784,6 +15785,27 @@ boot();
   sIn.addEventListener('input', () => { if (!sIn.value.trim()) clearSearch(); });
   sClr.onclick = clearSearch;
   box.querySelector('.agchat-x').onclick = closeChat;
+  // drag the left edge (width), top edge (height) or the corner (both) to
+  // resize — same idea as the piano cards' edge grips; the size is remembered
+  // on this device. Phones keep the full-screen layout (grips hidden in CSS).
+  const AG_MIN_W = 320, AG_MIN_H = 360;
+  const agMaxW = () => Math.max(AG_MIN_W, window.innerWidth - 36), agMaxH = () => Math.max(AG_MIN_H, window.innerHeight - 40);
+  const savedW = parseInt(lsGet('agchatW') || '', 10), savedH = parseInt(lsGet('agchatH') || '', 10);
+  if (savedW) box.style.width = Math.max(AG_MIN_W, Math.min(agMaxW(), savedW)) + 'px';
+  if (savedH) box.style.height = Math.max(AG_MIN_H, Math.min(agMaxH(), savedH)) + 'px';
+  box.querySelectorAll('.aggrip').forEach(g => g.onpointerdown = ev => {
+    ev.preventDefault(); ev.stopPropagation();
+    const doW = g.classList.contains('l') || g.classList.contains('c');
+    const doH = g.classList.contains('t') || g.classList.contains('c');
+    const startX = ev.clientX, startY = ev.clientY, startW = box.offsetWidth, startH = box.offsetHeight;
+    const move = e => {
+      if (doW) { const w = Math.max(AG_MIN_W, Math.min(agMaxW(), startW + (startX - e.clientX))); box.style.width = w + 'px'; lsSet('agchatW', String(w)); }
+      if (doH) { const h = Math.max(AG_MIN_H, Math.min(agMaxH(), startH + (startY - e.clientY))); box.style.height = h + 'px'; lsSet('agchatH', String(h)); }
+    };
+    const up = () => { removeEventListener('pointermove', move); removeEventListener('pointerup', up); thread.scrollTop = thread.scrollHeight; };
+    addEventListener('pointermove', move);
+    addEventListener('pointerup', up);
+  });
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && !box.hidden) closeChat(); });
   ta.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); form.requestSubmit(); } });
   form.onsubmit = e => { e.preventDefault(); send(ta.value); };
