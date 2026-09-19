@@ -12,6 +12,7 @@ local computer.
 | `/api/data` (Piano Log + calendar) | Netlify Function | `BLP_MOVING_ICS` env var |
 | `/api/slots` (floor-plan geometry, live from the sheet, 6 h cache) | Netlify Function | none — `netlify/functions/slots.mjs` |
 | `/api/agent` (in-app chat with Lindsay / Melody / Chris … — the Hermes agents) | Netlify Function | `BLP_GATEWAY_URL`, `BLP_GATEWAY_KEY` env vars |
+| `/api/queue` (drag-to-reorder + ＋ add for the Keytop / Refinish / Plate Q boxes — owners, managers & admins) | Netlify Function | `SUPABASE_SERVICE_KEY`; run `supabase/queue_order.sql` once |
 | Daily report email (weekdays 6 AM) | Google Apps Script as info@ | `apps-script/DailyReport.gs` |
 
 Geometry needs no cron at all: `/api/slots` regenerates from the Store Map
@@ -37,6 +38,12 @@ forwarding anything, and if the gateway is down it reports that plainly;
 no stand-in ever answers for an agent (Brigham's rule, same as Marcus).
 Local dev: put `"gateway_key"` in `config.json` (gitignored) — `server.py`
 mirrors the function.
+
+The same `SUPABASE_SERVICE_KEY` also powers `/api/queue` (hand-set order and
+＋ additions for the three queue boxes; table from `supabase/queue_order.sql`).
+Only owners, managers and admins may write — the function checks the signed-in
+email against the list in `netlify/functions/queue-order.mjs`; add more with a
+comma-separated `QUEUE_EDITORS` env var.
 
 #### Everything else — NONE REQUIRED
 The live site needs no env vars: calendar events are served by the Apps

@@ -31,6 +31,11 @@ never be committed. Without it the app still runs (map + pianos, no moves).
 - `server.py` serves the static app plus `/api/data`: Piano Log CSV export +
   moving-calendar iCal feed, parsed, merged, cached 2 minutes. Falls back to
   the last good payload if Google is unreachable.
+- **Queue boxes are editable** (Keytop Q · Refinish Q · Plate Q, Karmel 9/18):
+  owners, managers and admins drag ⠿ to reorder and ＋ add a piano; the order
+  and additions live in Supabase `queue_order` (`supabase/queue_order.sql`,
+  written by `/api/queue`). The Keytop Q also writes the new "In Key Queue #n"
+  numbers back to the Piano Log. Everyone else sees the same order, read-only.
 - **Agent chat** — the agents' faces bottom-right (Chris for everyone; each
   person's own helpers, e.g. Lindsay · Melody · Carla for Karmel) open an
   in-app chat with that Hermes agent through the BLP Agent Gateway

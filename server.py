@@ -739,6 +739,44 @@ def agent_import(req, who):
     return ({'imported': len(rows)} if ok else {'imported': 0, 'error': 'Supabase rejected the import'}), (200 if ok else 502)
 
 
+QUEUE_EDITORS = set(e.lower() for e in [
+    'brigham@brighamlarsonpianos.com', 'karmel@brighamlarsonpianos.com', 'brighamlarson@gmail.com',
+    'melissa@brighamlarsonpianos.com', 'alisa@brighamlarsonpianos.com', 'susie@brighamlarsonpianos.com',
+    'walter@brighamlarsonpianos.com', 'markhales.blp@gmail.com', 'matthewwessman.blp@gmail.com',
+    'jacobmower.blp@gmail.com'] + [x.strip() for x in os.environ.get('QUEUE_EDITORS', '').split(',') if x.strip()])
+
+
+def queue_save(req):
+    """Local mirror of netlify/functions/queue-order.mjs — hand-set queue order."""
+    q = str(req.get('q', '')).lower()
+    if q not in ('keytop', 'refin', 'plates'):
+        return {'error': 'unknown queue'}, 400
+    who = verify_google(req.get('idToken'))
+    if not who:
+        return {'error': 'Sign in with your BLP Google account first.'}, 401
+    if who['email'] not in QUEUE_EDITORS:
+        return {'error': 'Only owners, managers and admins can change a queue.'}, 403
+    if not SB_SERVICE_KEY:
+        return {'error': 'queue order storage not configured (supabase_service_key)'}, 501
+    order = [str(x).strip()[:40] for x in (req.get('order') or []) if str(x).strip()][:500]
+    manual = [{'serial': str(m.get('serial', '')).strip()[:40], 'by': str(m.get('by') or who['name'])[:80],
+               'at': str(m.get('at') or datetime.utcnow().isoformat() + 'Z')[:40]}
+              for m in (req.get('manual') or [])[:200] if isinstance(m, dict) and str(m.get('serial', '')).strip()]
+    row = {'queue': q, 'ord': order, 'manual': manual, 'updated_by': who['name'],
+           'updated_at': datetime.utcnow().isoformat() + 'Z'}
+    rq = urllib.request.Request(SB_URL + '/rest/v1/queue_order?on_conflict=queue', data=json.dumps([row]).encode(),
+                                method='POST', headers={'apikey': SB_SERVICE_KEY, 'Authorization': 'Bearer ' + SB_SERVICE_KEY,
+                                                        'Content-Type': 'application/json',
+                                                        'Prefer': 'resolution=merge-duplicates,return=minimal'})
+    try:
+        with urllib.request.urlopen(rq, timeout=8):
+            return {'ok': True, 'by': who['name']}, 200
+    except urllib.error.HTTPError as e:
+        return {'error': 'Supabase %s: %s' % (e.code, e.read().decode('utf-8', 'replace')[:160])}, 502
+    except Exception as e:
+        return {'error': str(e)}, 502
+
+
 def agent_dispatch(req):
     if isinstance(req.get('import'), list):
         who = verify_google(req.get('idToken'))
@@ -786,6 +824,14 @@ class Handler(SimpleHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_POST(self):
+        if self.path.split('?')[0] == '/api/queue':
+            try:
+                n = int(self.headers.get('Content-Length', 0))
+                out, status = queue_save(json.loads(self.rfile.read(n) or b'{}'))
+            except Exception as exc:
+                out, status = {'error': str(exc)}, 502
+            self._json(out, status)
+            return
         if self.path.split('?')[0] == '/api/agent':
             try:
                 n = int(self.headers.get('Content-Length', 0))

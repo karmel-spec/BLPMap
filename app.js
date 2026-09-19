@@ -736,36 +736,6 @@ function needRefQ() {
     }).catch(() => {}).then(() => { REFQ.loading = false; });
   return false;
 }
-function openRefinishQ() {
-  const rows = REFQ.rows || [];
-  const old = document.querySelector('.dsheetov'); if (old) old.remove();
-  const ov = document.createElement('div');
-  ov.className = 'dsheetov';
-  ov.innerHTML = `<div class="dsheet" style="max-height:80vh;overflow:auto"><button class="dsx">✕</button>
-    <h3>🎨 Refinishing Queue</h3>
-    <div class="dssub">${rows.length} piano${rows.length === 1 ? '' : 's'} in priority order from the refinishing sheet · tap one to open its card</div>
-    ${rows.map(x => {
-      const p = S.data.pianos.find(pp => pp.active && String(pp.serial || '').replace(/\D/g, '') === x.serial.replace(/\D/g, ''));
-      return `<div class="kqrow" ${p ? `data-row="${p.row}"` : ''} style="display:flex;gap:10px;align-items:center;padding:8px 2px;border-top:1px solid #f0ece5;${p ? 'cursor:pointer' : 'opacity:.75'}">
-      <b style="min-width:34px;color:#9e2020">#${x.pri}</b>
-      <span style="flex:1">${esc(x.brand)} <span class="lite">#${esc(x.serial)}</span>
-        ${x.req ? `<div class="lite" style="font-size:11px;white-space:normal;line-height:1.4">${esc(x.req)}</div>` : ''}</span>
-      ${x.lvl ? `<span class="lite" style="font-weight:700">L${esc(x.lvl)}</span>` : ''}
-      <span class="lite">${esc(x.loc || (p ? p.location || '' : ''))}</span></div>`;
-    }).join('') || '<div class="pwnone" style="display:block;padding:8px 0">The refinishing sheet is empty — nothing queued.</div>'}
-  </div>`;
-  document.body.appendChild(ov);
-  ov.querySelector('.dsx').onclick = () => ov.remove();
-  ov.onclick = ev => {
-    if (ev.target === ov) { ov.remove(); return; }
-    const row = ev.target.closest('.kqrow[data-row]');
-    if (row) {
-      ov.remove();
-      const p = S.data.pianos.find(x => x.row === +row.dataset.row);
-      if (p) { switchView('map'); focusPiano(p); openPop(p.row, S.popAnchor, true); }
-    }
-  };
-}
 /* ⚙️ Plate Queue popup (Karmel 9/18): every piano whose PLATE is out of the
  * piano and not yet back — same shape as the Keytop Q. Order: at Curtis
  * Harper's (in progress) on top, then waiting to go (Removed / storage
@@ -786,28 +756,130 @@ function plateRank(p) {
 function plateOrder(a, b) {
   return plateRank(a) - plateRank(b) || ((a.queuePos || 999) - (b.queuePos || 999)) || (a.row - b.row);
 }
-function openPlateQ() {
-  const rows = S.data.pianos.filter(x => x.active && plateOpen(x));
-  rows.sort(plateOrder);
+/* ---------- queue sheets — Keytop Q · Refinish Q · Plate Q share one renderer
+ * (Karmel 9/18). Owners, managers & admins can drag ⠿ to reorder and ＋ add a
+ * piano; the hand-set order + additions live in Supabase queue_order (written
+ * by /api/queue, which re-checks the role). Anything not hand-ordered keeps
+ * its natural order after the ordered rows. The Keytop Q also writes the new
+ * "In Key Queue #n" numbers back to the Piano Log so cards agree. ---------- */
+const QORD = {data: null, at: 0, loading: false};
+const qn = s => { const d = String(s || '').replace(/\D/g, ''); return d || String(s || '').trim().toLowerCase(); };
+function qordLoad(force) {
+  if (QORD.loading || (!force && QORD.data && Date.now() - QORD.at < 120000)) return Promise.resolve(QORD.data || {});
+  QORD.loading = true;
+  return fetch(SB_URL + '/rest/v1/queue_order?select=queue,ord,manual',
+    {headers: {apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY}, cache: 'no-store'})
+    .then(r => r.ok ? r.json() : [])
+    .then(rows => { const d = {}; rows.forEach(r => { d[r.queue] = {order: (r.ord || []).map(String), manual: r.manual || []}; });
+      QORD.data = d; QORD.at = Date.now(); return d; })
+    .catch(() => QORD.data || {})
+    .then(d => { QORD.loading = false; return d; });
+}
+function qState(key) { return ((QORD.data || {})[key]) || {order: [], manual: []}; }
+function qItem(p, badge, sub) {
+  return {serial: p.serial, p, badge: badge || '', sub: sub || '',
+    main: `${esc(p.summary || '')} <span class="lite">#${esc(p.serial)}</span>`,
+    right: `<span class="lite">${esc(p.location || '')}</span>`};
+}
+const QDEFS = {
+  keytop: {title: '🔑 Keytop Queue', noun: 'keytop queue', unit: 'piano',
+    sub: 'open keytop work · In Progress first, then the numbered queue', empty: 'Nothing in the keytop queue 🎉',
+    natural: () => S.data.pianos.filter(x => x.active && (x.keytopStatus || '').trim() && !/^done/i.test(x.keytopStatus))
+      .sort(keytopOrder).map(p => qItem(p, `<b style="min-width:88px;color:#9e2020">${esc(p.keytopStatus)}</b>`))},
+  plates: {title: '⚙️ Plate Queue', noun: 'plate queue', unit: 'plate',
+    sub: 'plates out of the piano · at Curtis first, then waiting to go, then back from refinishing', empty: 'No plates out — nothing in the plate queue 🎉',
+    natural: () => S.data.pianos.filter(x => x.active && plateOpen(x)).sort(plateOrder).map(p => {
+      const slat = cabTokens(p).find(t => /^\d+p$/.test(t));
+      return qItem(p, plateBadge(p.plateStatus), p.plateTemp ? 'plate: ' + p.plateTemp : slat ? 'plate at ' + slat.toUpperCase() : '');
+    })},
+  refin: {title: '🎨 Refinishing Queue', noun: 'refinishing queue', unit: 'piano',
+    sub: 'from the refinishing sheet (its row order = priority)', empty: 'The refinishing sheet is empty — nothing queued.',
+    natural: () => (REFQ.rows || []).map(x => {
+      const p = S.data.pianos.find(pp => pp.active && qn(pp.serial) === qn(x.serial));
+      return {serial: x.serial, p, badge: '', sub: x.req || '',
+        main: `${esc(x.brand)} <span class="lite">#${esc(x.serial)}</span>`,
+        right: (x.lvl ? `<span class="lite" style="font-weight:700">L${esc(x.lvl)}</span>` : '') + `<span class="lite">${esc(x.loc || (p ? p.location || '' : ''))}</span>`};
+    })},
+};
+// natural members + manual additions, in the hand-set order (unordered rows follow)
+function queueItems(key) {
+  const def = QDEFS[key], st = qState(key);
+  const items = def.natural();
+  const have = new Set(items.map(it => qn(it.serial)));
+  st.manual.forEach(m => {
+    if (have.has(qn(m.serial))) return;
+    const p = S.data.pianos.find(pp => pp.active && qn(pp.serial) === qn(m.serial));
+    const it = p ? qItem(p, '<span class="qman">added</span>')
+      : {serial: m.serial, p: null, badge: '<span class="qman">added</span>', sub: '', right: '',
+         main: `<span class="lite">#${esc(m.serial)}</span> <span class="lite">(not an active piano in the Piano Log)</span>`};
+    it.manual = true; it.by = m.by;
+    items.push(it); have.add(qn(it.serial));
+  });
+  const pos = new Map(st.order.map((x, i) => [qn(x), i]));
+  const rank = (it, i) => pos.has(qn(it.serial)) ? pos.get(qn(it.serial)) : 1e6 + i;
+  return items.map((it, i) => ({it, r: rank(it, i)})).sort((a, b) => a.r - b.r).map(x => x.it);
+}
+async function qordSave(key, order, manual) {
+  const wa = authFields();
+  if (!wa.idToken) throw new Error('Sign in with Google (☰ menu) first.');
+  const r = await fetch('/api/queue', {method: 'POST', headers: {'content-type': 'application/json'},
+    body: JSON.stringify({q: key, order, manual, idToken: wa.idToken})});
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+  QORD.data = QORD.data || {};
+  QORD.data[key] = {order: order.map(String), manual};
+  QORD.at = Date.now();
+  renderMap();
+}
+async function setKeytopStatusBridge(p, val) {
+  const {pin, ok} = writeAuth();
+  if (!ok) throw new Error('Sign in first.');
+  const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+    headers: {'content-type': 'text/plain;charset=utf-8'},
+    body: JSON.stringify({pin, action: 'setkeystatus', serial: p.serial, row: p.row, value: val, ...authFields()})});
+  const j = await r.json();
+  if (j.error) throw new Error(j.error);
+  p.keytopStatus = val;
+}
+// after a drag: In Progress rows keep their status; every "In Key Queue"
+// row (and any Evaluate row dragged above one) gets its new #n
+async function keytopRenumber(items) {
+  const isQ = it => it.p && /^in key queue/i.test(it.p.keytopStatus || '');
+  const lastQ = items.map(isQ).lastIndexOf(true);
+  let k = 1;
+  for (let i = 0; i < items.length; i++) {
+    const p = items[i].p; if (!p) continue;
+    const st = (p.keytopStatus || '').trim();
+    if (/^in progress|^in process|^done/i.test(st)) continue;
+    if (/^in key queue/i.test(st) || (i < lastQ && /^evaluate/i.test(st))) {
+      const val = 'In Key Queue #' + (k++);
+      if (val !== st) await setKeytopStatusBridge(p, val);
+    }
+  }
+}
+function openQueueSheet(key) {
+  const def = QDEFS[key];
+  const canEdit = isTeamAdmin();   // owners, managers & admins only (Karmel 9/18)
   const old = document.querySelector('.dsheetov'); if (old) old.remove();
   const ov = document.createElement('div');
   ov.className = 'dsheetov';
-  ov.innerHTML = `<div class="dsheet" style="max-height:80vh;overflow:auto"><button class="dsx">✕</button>
-    <h3>⚙️ Plate Queue</h3>
-    <div class="dssub">${rows.length} plate${rows.length === 1 ? '' : 's'} out of the piano · at Curtis first, then waiting to go, then back from refinishing · tap one to open its card</div>
-    ${rows.map(x => {
-      const slat = cabTokens(x).find(t => /^\d+p$/.test(t));
-      const where = x.plateTemp ? 'plate: ' + x.plateTemp : slat ? 'plate at ' + slat.toUpperCase() : '';
-      return `<div class="kqrow" data-row="${x.row}" style="display:flex;gap:10px;align-items:center;padding:8px 2px;border-top:1px solid #f0ece5;cursor:pointer">
-      ${plateBadge(x.plateStatus)}
-      <span style="flex:1">${esc(x.summary || '')} <span class="lite">#${esc(x.serial)}</span>
-        ${where ? `<div class="lite" style="font-size:11px">${esc(where)}</div>` : ''}</span>
-      <span class="lite">${esc(x.location || '')}</span></div>`;
-    }).join('') || '<div class="empty">No plates out — nothing in the plate queue 🎉</div>'}`;
-  document.body.appendChild(ov);
-  ov.querySelector('.dsx').onclick = () => ov.remove();
+  const paint = () => {
+    const items = queueItems(key);
+    ov.innerHTML = `<div class="dsheet" style="max-height:80vh;overflow:auto"><button class="dsx">✕</button>
+      <h3>${def.title}</h3>
+      <div class="dssub">${items.length} ${def.unit}${items.length === 1 ? '' : 's'} · ${def.sub} · tap one to open its card${canEdit ? ' · drag ⠿ to reorder' : ''}</div>
+      ${canEdit ? `<div class="qtools"><button class="qadd" type="button">＋ Add a piano</button><span class="qmsg"></span></div>` : ''}
+      <div class="qlist">${items.map((it, i) => `<div class="kqrow" data-serial="${esc(it.serial)}" ${it.p ? `data-row="${it.p.row}"` : ''} style="display:flex;gap:10px;align-items:center;padding:8px 2px;border-top:1px solid #f0ece5;${it.p ? 'cursor:pointer' : 'opacity:.8'}">
+        ${canEdit ? '<span class="qgrab" title="drag to reorder">⠿</span>' : ''}<span class="qpos">#${i + 1}</span>${it.badge}
+        <span style="flex:1">${it.main}${it.sub ? `<div class="lite" style="font-size:11px;white-space:normal;line-height:1.4">${esc(it.sub)}</div>` : ''}</span>${it.right}
+        ${canEdit && it.manual ? '<button class="qdel" type="button" title="remove from this queue">✕</button>' : ''}</div>`).join('')
+        || `<div class="empty">${def.empty}</div>`}</div></div>`;
+    ov.querySelector('.dsx').onclick = () => ov.remove();
+    if (canEdit) wireQueueEdit(ov, key, paint);
+  };
   ov.onclick = ev => {
     if (ev.target === ov) { ov.remove(); return; }
+    if (ev.target.closest('.qgrab, .qadd, .qdel, .qtools')) return;
     const row = ev.target.closest('.kqrow[data-row]');
     if (row) {
       ov.remove();
@@ -815,7 +887,91 @@ function openPlateQ() {
       if (p) { switchView('map'); focusPiano(p); openPop(p.row, S.popAnchor, true); }
     }
   };
+  paint();
+  document.body.appendChild(ov);
+  qordLoad().then(() => { if (ov.isConnected && !ov.querySelector('.qdrag')) paint(); });   // freshest order
 }
+function wireQueueEdit(ov, key, paint) {
+  const list = ov.querySelector('.qlist');
+  // paint() rebuilds the sheet, so always find the message slot afresh
+  const say = (t, cls) => { const m = ov.querySelector('.qmsg'); if (m) { m.className = 'qmsg ' + (cls || ''); m.textContent = t; } };
+  const commit = async (order, manual) => {
+    say('saving…');
+    let err = '';
+    try {
+      await qordSave(key, order, manual);
+      if (key === 'keytop') await keytopRenumber(queueItems('keytop'));
+    } catch (e) { err = e.message || String(e); }
+    paint();
+    say(err ? '✗ ' + err : '✓ saved', err ? 'err' : 'ok');
+  };
+  ov.querySelector('.qadd').onclick = ev => { ev.stopPropagation(); openQueueAddModal(key, commit); };
+  list.querySelectorAll('.qdel').forEach(b => b.onclick = ev => {
+    ev.stopPropagation();
+    const sn = b.closest('.kqrow').dataset.serial, cur = qState(key);
+    commit(cur.order.filter(x => qn(x) !== qn(sn)), cur.manual.filter(m => qn(m.serial) !== qn(sn)));
+  });
+  // drag ⠿ up/down (mouse + touch): the row follows the pointer live; on
+  // release the visible order is saved
+  list.querySelectorAll('.qgrab').forEach(g => g.addEventListener('pointerdown', ev => {
+    ev.preventDefault(); ev.stopPropagation();
+    const row = g.closest('.kqrow');
+    row.classList.add('qdrag'); document.body.classList.add('qdragging');
+    const renumber = () => [...list.querySelectorAll('.kqrow .qpos')].forEach((el, i) => { el.textContent = '#' + (i + 1); });
+    const move = e => {
+      const rows = [...list.querySelectorAll('.kqrow')].filter(r => r !== row);
+      for (const r of rows) {
+        const rc = r.getBoundingClientRect();
+        if (e.clientY < rc.top + rc.height / 2) { if (row.nextElementSibling !== r) { list.insertBefore(row, r); renumber(); } return; }
+      }
+      if (list.lastElementChild !== row) { list.appendChild(row); renumber(); }
+    };
+    const up = () => {
+      removeEventListener('pointermove', move); removeEventListener('pointerup', up); removeEventListener('pointercancel', up);
+      row.classList.remove('qdrag'); document.body.classList.remove('qdragging');
+      commit([...list.querySelectorAll('.kqrow')].map(r => r.dataset.serial), qState(key).manual);
+    };
+    addEventListener('pointermove', move); addEventListener('pointerup', up); addEventListener('pointercancel', up);
+  }));
+}
+function openQueueAddModal(key, commit) {
+  const def = QDEFS[key];
+  serialDatalist();
+  const ov = modalShell('qaddmodal', `
+    <span class="x">✕</span>
+    <h3>＋ Add a piano to the ${esc(def.noun)}</h3>
+    <label>Which piano? (serial)</label>
+    <input class="qasn" maxlength="20" placeholder="type the serial…">
+    ${key === 'keytop' ? '<p class="pd">Its keytop status becomes "In Key Queue #n" at the end of the queue.</p>' : ''}
+    <button class="tmgo qago">Add to the ${esc(def.noun)}</button>
+    <div class="tmmsg"></div>`);
+  attachSerialSuggest(ov.querySelector('.qasn'));
+  ov.querySelector('.qago').onclick = async () => {
+    const msg = ov.querySelector('.tmmsg');
+    const sn = ov.querySelector('.qasn').value.trim().split(' — ')[0].trim();
+    if (!sn) { msg.className = 'tmmsg err'; msg.textContent = 'Type a serial number first.'; return; }
+    const p = S.data.pianos.find(x => x.active && qn(x.serial) === qn(sn));
+    if (!p) { msg.className = 'tmmsg err'; msg.textContent = 'No active piano with that serial.'; return; }
+    const items = queueItems(key);
+    if (items.some(it => qn(it.serial) === qn(p.serial))) { msg.className = 'tmmsg err'; msg.textContent = 'Already in this queue.'; return; }
+    msg.className = 'tmmsg'; msg.textContent = 'Adding…';
+    try {
+      if (key === 'keytop') {
+        const n = items.filter(it => it.p && /^in key queue/i.test(it.p.keytopStatus || '')).length;
+        await setKeytopStatusBridge(p, 'In Key Queue #' + (n + 1));
+      }
+      const cur = qState(key);
+      const manual = cur.manual.concat([{serial: p.serial, by: ((authUser() || {}).name || '').split(' ')[0], at: new Date().toISOString()}]);
+      const order = items.map(it => it.serial).concat([p.serial]);
+      ov.hidden = true;
+      await commit(order, manual);
+    } catch (e) { msg.className = 'tmmsg err'; msg.textContent = '✗ ' + (e.message || e); }
+  };
+  ov.querySelector('.qasn').focus();
+}
+const openKeytopQ = () => openQueueSheet('keytop');
+const openRefinishQ = () => openQueueSheet('refin');
+const openPlateQ = () => openQueueSheet('plates');
 /* 🔑 Keytop Queue popup (Brigham 9/4): every piano with an open keytop
  * status, queue order first — tap a row to jump to its card. */
 // keytop queue order (Brigham 9/17): work IN PROGRESS on top, then the numbered
@@ -830,30 +986,6 @@ function keytopRank(p) {
 }
 function keytopOrder(a, b) {
   return keytopRank(a) - keytopRank(b) || ((a.queuePos || 999) - (b.queuePos || 999)) || (a.row - b.row);
-}
-function openKeytopQ() {
-  const rows = S.data.pianos.filter(x => x.active && (x.keytopStatus || '').trim()
-    && !/^done/i.test(x.keytopStatus));
-  rows.sort(keytopOrder);
-  const old = document.querySelector('.dsheetov'); if (old) old.remove();
-  const ov = document.createElement('div');
-  ov.className = 'dsheetov';
-  ov.innerHTML = `<div class="dsheet" style="max-height:80vh;overflow:auto"><button class="dsx">✕</button>
-    <h3>🔑 Keytop Queue</h3>
-    <div class="dssub">${rows.length} piano${rows.length === 1 ? '' : 's'} with open keytop work · tap one to open its card</div>
-    ${rows.map(x => `<div class="kqrow" data-row="${x.row}" style="display:flex;gap:10px;align-items:center;padding:8px 2px;border-top:1px solid #f0ece5;cursor:pointer">
-      <b style="min-width:88px;color:#9e2020">${esc(x.keytopStatus)}</b>
-      <span style="flex:1">${esc(x.summary || '')} <span class="lite">#${esc(x.serial)}</span></span>
-      <span class="lite">${esc(x.location || '')}</span></div>`).join('')
-      || '<div class="empty">Nothing in the keytop queue 🎉</div>'}`;
-  document.body.appendChild(ov);
-  ov.querySelector('.dsx').onclick = () => ov.remove();
-  ov.onclick = ev => { if (ev.target === ov) ov.remove(); };
-  ov.querySelectorAll('.kqrow').forEach(r2 => r2.onclick = () => {
-    ov.remove();
-    const p2 = S.data.pianos.find(x => x.row === +r2.dataset.row);
-    if (p2) { switchView('map'); focusPiano(p2); openPop(p2.row, S.popAnchor, true); }
-  });
 }
 /* ---- tech specialties: who to assign for the current phase ---- */
 const PHASE_TO_AREA = {
@@ -3265,8 +3397,8 @@ function renderMap() {
   // 🔑 Keytop Queue box by the Key Top Corner (Brigham 9/4) — tap for the
   // live keytop queue (Evaluate / In Key Queue #n / In Progress)
   if (S.floor === 0) {
-    const kq = S.data.pianos.filter(x => x.active && (x.keytopStatus || '').trim()
-      && !/^done/i.test(x.keytopStatus)).length;
+    if (!QORD.data && !QORD.loading) qordLoad().then(() => renderMap());   // hand-set queue order (Karmel 9/18)
+    const kq = queueItems('keytop').length;
     // anchored just under the "Key Top Corner" zone label (Brigham 9/4)
     const kz = (f.labels || []).find(z => /key top corner/i.test(z.text || ''));
     const kx = kz ? kz.x - 10 : 1560, ky = kz ? kz.y + kz.h + 14 : 760;
@@ -3285,11 +3417,11 @@ function renderMap() {
     s += `<g class="rqbtn" style="cursor:pointer">
       <rect x="${rx9}" y="${ry9}" width="${rw9}" height="${rh9}" rx="8" class="kqrect"/>
       <text x="${rx9 + rw9 / 2}" y="${ry9 + 31}" text-anchor="middle" class="kqtxt" font-size="20">🎨 <tspan font-weight="800" font-size="15">Refinish Q</tspan></text>
-      <text x="${rx9 + rw9 / 2}" y="${ry9 + 58}" text-anchor="middle" class="kqtxt kqcount" font-size="13">${rqReady ? REFQ.rows.length + ' in queue ›' : 'loading…'}</text>
+      <text x="${rx9 + rw9 / 2}" y="${ry9 + 58}" text-anchor="middle" class="kqtxt kqcount" font-size="13">${rqReady ? queueItems('refin').length + ' in queue ›' : 'loading…'}</text>
     </g>`;
     // ⚙️ Plate Queue box just below the plate rack (under slat 18P, past the
     // rack's bottom wall) — tap for every plate that is out of its piano
-    const pq = S.data.pianos.filter(x => x.active && plateOpen(x)).length;
+    const pq = queueItems('plates').length;
     const p18 = f.slots.find(z => /^18p$/i.test(z.id));
     const pw = 160, ph = 78;
     const pxq = p18 ? p18.x + p18.w / 2 - pw / 2 : 1092, pyq = p18 ? p18.y + p18.h + 33 : 1061;
@@ -15717,7 +15849,8 @@ boot();
   const DEFAULT_AGENTS = ['chris'];
   const BY_USER = {
     brigham: ['clara', 'arnold', 'chris'], brighamlarson: ['clara', 'arnold', 'chris'],
-    karmel: ['lindsay', 'melody', 'carla'], lisa: ['ivory', 'melody', 'arnold'],
+    karmel: ['lindsay', 'melody', 'carla', 'chris', 'clara', 'arnold', 'ivory', 'marcus'],   // every agent (Karmel 9/18)
+    lisa: ['ivory', 'melody', 'arnold'],
     melissa: ['melody', 'chris', 'carla'], susie: ['lindsay', 'chris', 'melody'], alisa: ['marcus'],
   };
   const INFO = {

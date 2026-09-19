@@ -2140,3 +2140,16 @@ tr.daynone td{color:#9aa2ab}
 .agqgo{background:#9e2020;color:#fff;border:0;border-radius:6px;padding:3px 9px;font-size:11.5px;font-weight:700;cursor:pointer}
 .agqdel{background:none;border:0;color:#9e2020;cursor:pointer;font-size:13px}
 .agtyping .lite{font-style:normal}
+/* queue sheets (Keytop / Refinish / Plate Q) — drag to reorder, ＋ to add (Karmel 9/18) */
+.qtools{display:flex;gap:8px;align-items:center;margin:6px 0 4px}
+.qadd{background:#9e2020;color:#fff;border:0;border-radius:8px;padding:5px 11px;font-size:12.5px;font-weight:700;cursor:pointer}
+.qmsg{font-size:11.5px;color:#8a929a}
+.qmsg.err{color:#9e2020}
+.qmsg.ok{color:#2f7d4f}
+.kqrow .qgrab{cursor:grab;color:#b5aca0;font-size:16px;padding:0 4px;user-select:none;touch-action:none;flex-shrink:0}
+.kqrow .qgrab:active{cursor:grabbing}
+.kqrow.qdrag{opacity:.45;background:#fffdf7}
+.kqrow .qman{font-size:10px;color:#8a847b;border:1px dashed #cfc9bf;border-radius:999px;padding:1px 6px;white-space:nowrap}
+.kqrow .qdel{background:none;border:0;color:#9e2020;cursor:pointer;font-size:13px;padding:0 4px}
+.kqrow .qpos{min-width:26px;color:#9e2020;font-weight:800;font-size:12px}
+body.qdragging{user-select:none}
