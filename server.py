@@ -637,7 +637,8 @@ GATEWAY_URL = (os.environ.get('BLP_GATEWAY_URL') or _CFG.get('gateway_url')
 GATEWAY_KEY = os.environ.get('BLP_GATEWAY_KEY') or _CFG.get('gateway_key', '')
 SB_URL = (os.environ.get('SUPABASE_URL') or _CFG.get('supabase_url')
           or 'https://ismacawxfvvllfinibbf.supabase.co').rstrip('/')
-SB_SERVICE_KEY = os.environ.get('SUPABASE_SERVICE_KEY') or _CFG.get('supabase_service_key', '')
+SB_SERVICE_KEY = (os.environ.get('SUPABASE_SERVICE_KEY') or os.environ.get('SUPABASE_SERVICE_ROLE_KEY')
+                  or _CFG.get('supabase_service_key', ''))
 GOOGLE_CLIENT_ID = '110628682621-v65mkaoanv87sp75ggdfcrglfr7bkr8p.apps.googleusercontent.com'
 AGENT_SLUGS = ['lindsay', 'melody', 'carla', 'chris', 'clara', 'arnold', 'ivory', 'marcus']
 AGENT_NAMES = {s: s.capitalize() for s in AGENT_SLUGS}

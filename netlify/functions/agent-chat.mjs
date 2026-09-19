@@ -26,7 +26,8 @@ const GOOGLE_CLIENT_ID = '110628682621-v65mkaoanv87sp75ggdfcrglfr7bkr8p.apps.goo
 const AGENTS = ['lindsay', 'melody', 'carla', 'chris', 'clara', 'arnold', 'ivory', 'marcus'];
 const NAMES = { lindsay: 'Lindsay', melody: 'Melody', carla: 'Carla', chris: 'Chris', clara: 'Clara', arnold: 'Arnold', ivory: 'Ivory', marcus: 'Marcus' };
 const SB_URL = (process.env.SUPABASE_URL || 'https://ismacawxfvvllfinibbf.supabase.co').replace(/\/$/, '');
-const SB_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || '';
+// either spelling works — Supabase's dashboard calls it the service_role key
+const SB_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const GATEWAY_DOWN = 'Could not reach the agent gateway (the Hermes agents on the agents\' Mac). Check that the Mac is awake, the gateway is up and the Cloudflare tunnel is connected, then try again. Nothing was answered on the agent\'s behalf.';
 
 function json(body, status = 200) {
@@ -132,7 +133,7 @@ export default async (req) => {
       body: String(m.t || '').slice(0, 20000),
       created_at: new Date(Number(m.at) || Date.now()).toISOString(),
     })).filter((r) => r.body);
-    if (!SB_SERVICE_KEY) return json({ error: 'history storage not configured (SUPABASE_SERVICE_KEY)' }, 501);
+    if (!SB_SERVICE_KEY) return json({ error: 'history storage not configured — set SUPABASE_SERVICE_KEY in this site\'s Netlify env vars (all scopes) and redeploy' }, 501);
     const ok = await store(rows);
     return json({ imported: ok ? rows.length : 0, error: ok ? undefined : 'Supabase rejected the import' }, ok ? 200 : 502);
   }
