@@ -13461,10 +13461,15 @@ const TB_HEADSHOTS = {
   "thayne larson": "https://www.brighamlarsonpianos.com/cdn/shop/files/Thayne.Larson.BW_d6685ac0-6746-4c41-98b5-57b3e19bcfbb.jpg?v=1735947791&width=240",
   "melissa terry": "https://www.brighamlarsonpianos.com/cdn/shop/files/5U4A1257.jpg?v=1775246484&width=240",
   "ezzy lopp": "https://www.brighamlarsonpianos.com/cdn/shop/files/Ezaray.Lopp.BW_cc6b4562-389e-4c78-b1fe-3dcd2590bd86.jpg?v=1777569159&width=240",
-  "alisa merrill": "https://www.brighamlarsonpianos.com/cdn/shop/files/Alisa.Merrill.BW_1.jpg?v=1735949942&width=240",
+  "alisa miller": "https://www.brighamlarsonpianos.com/cdn/shop/files/Alisa.Merrill.BW_1.jpg?v=1735949942&width=240",
   "lisa litton": "assets/headshots/lisa-litton.jpg?v=2"
   };
-const tbNorm = n => String(n || '').trim().toLowerCase().replace(/\s+/g, ' ');
+// one person, two spellings: the team roster says "Alisa Merrill", her
+// imported Trello cards say "Alisa Miller" — the board showed two Alisas,
+// one empty. Alias them to a single board (Karmel 9/18).
+const TB_ALIAS = {'alisa merrill': 'alisa miller'};
+const TB_DISPLAY = {'alisa miller': 'Alisa Miller'};   // name shown on the face strip
+const tbNorm = n => { const k = String(n || '').trim().toLowerCase().replace(/\s+/g, ' '); return TB_ALIAS[k] || k; };
 // full access to every board: the face strip + open/edit/add on anyone's
 // board — owners (Brigham, Karmel) plus Melissa (Brigham 8/28) and Mark, the
 // lead manager (Brigham 9/17): every team member's face bubble, so he can
@@ -13484,7 +13489,7 @@ function tbPeople() {
   [me, ...TB_SEED, ...(TB.faces || []), ...owners].forEach(n => {
     const k = tbNorm(n);
     if (!k || TB_EXCLUDE.includes(k)) return;
-    if (!set.has(k)) set.set(k, n);
+    if (!set.has(k)) set.set(k, TB_DISPLAY[k] || n);
   });
   return [...set.values()].sort((a, b) => a.localeCompare(b));
 }
