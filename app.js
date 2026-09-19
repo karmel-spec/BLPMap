@@ -15764,13 +15764,20 @@ boot();
   setInterval(refreshFaces, 4000);   // pick up sign-in / a different person without a reload
 
   /* ----- chat window ----- */
-  const CH = {slug: null, busy: false, timer: null};
+  // one window, many agents: each agent's run is tracked on its own so a
+  // reply keeps coming in while the window is minimised or another agent is
+  // open, and follow-up questions queue up until the agent is free (Karmel 9/18)
+  const CH = {slug: null};
+  const RUNS = {};                 // slug -> {timer, run, startedAt}
+  const MIN = new Set();           // agents minimised mid-run — pop back open on reply
+  const busy = slug => !!RUNS[slug];
   const box = document.createElement('div');
   box.className = 'agchat';
   box.hidden = true;
   box.innerHTML = `<div class="aggrip l" title="drag to resize"></div><div class="aggrip t" title="drag to resize"></div><div class="aggrip c" title="drag to resize"></div>
     <div class="agchat-h"><img alt=""><div class="agchat-n"><b></b><small></small></div>
       <a class="agchat-tg" target="_blank" rel="noopener" title="Same agent on Telegram, if you prefer">Telegram ↗</a>
+      <button class="agchat-min" type="button" title="Minimise — the agent keeps working and the window pops back open when the answer is ready" aria-label="Minimise">–</button>
       <button class="agchat-x" type="button" aria-label="Close">×</button></div>
     <div class="agchat-s"><input type="search" placeholder="Search every agent conversation… (Enter)"><button type="button" class="agchat-sx" hidden>Clear</button></div>
     <div class="agchat-hits" hidden></div>
@@ -15785,6 +15792,7 @@ boot();
   sIn.addEventListener('input', () => { if (!sIn.value.trim()) clearSearch(); });
   sClr.onclick = clearSearch;
   box.querySelector('.agchat-x').onclick = closeChat;
+  box.querySelector('.agchat-min').onclick = minimizeChat;
   // drag the left edge (width), top edge (height) or the corner (both) to
   // resize — same idea as the piano cards' edge grips; the size is remembered
   // on this device. Phones keep the full-screen layout (grips hidden in CSS).
@@ -15860,9 +15868,16 @@ boot();
     }
     if (slug === CH.slug) render();
   }
+  /* ----- queued follow-ups (per agent, kept on this device) ----- */
+  const qKey = slug => 'blpAgentQueue:' + slug;
+  function queue(slug) { try { return JSON.parse(lsGet(qKey(slug)) || '[]'); } catch (e) { return []; } }
+  function saveQueue(slug, q) { if (q.length) lsSet(qKey(slug), JSON.stringify(q)); else lsDel(qKey(slug)); }
+
   function render() {
-    const a = INFO[CH.slug] || {name: CH.slug};
-    const h = history(CH.slug);
+    if (!CH.slug) return;
+    const slug = CH.slug;
+    const a = INFO[slug] || {name: slug};
+    const h = history(slug);
     const me = (authUser() || {}).name || 'You';
     let html = h.length ? '' : `<div class="agmsg hint">Same ${esc(a.name)} as on Telegram — reads the vault files and memory on every turn. Ask anything; replies usually take 10–60 s.</div>`;
     if (CH.offline) html += `<div class="agmsg hint">⚠ Couldn't reach the saved history — showing this device's copy.</div>`;
@@ -15871,14 +15886,31 @@ boot();
       const who = m.r === 'me' ? esc(String(m.by || me).split(' ')[0]) : esc(a.name);
       return `<div class="agmsg ${m.r === 'me' ? 'me' : ''}" ${m.id ? `data-id="${m.id}"` : ''}><span class="agwho">${who}<time>${esc(stamp(m.at))}</time></span>${esc(m.t)}</div>`;
     }).join('');
-    if (CH.busy) html += `<div class="agtyping">${esc(a.name)} is working (Hermes agent on the agents' Mac — usually 10–60 s; if the agent can't be reached you'll see an error, never a stand-in)…</div>`;
+    const b = busy(slug);
+    if (b) html += `<div class="agtyping">${esc(a.name)} is working (Hermes agent on the agents' Mac — usually 10–60 s; if the agent can't be reached you'll see an error, never a stand-in)… <span class="lite">minimise (–) and it pops back when the answer lands</span></div>`;
+    const q = queue(slug);
+    if (q.length) html += `<div class="agqueue"><div class="agqhead">⏳ Up next — sent automatically when ${esc(a.name)} is free</div>` + q.map((t, i) =>
+      `<div class="agqrow"><span class="agqtxt">${esc(t)}</span>${b ? '' : `<button type="button" class="agqgo" data-i="${i}" title="send now">Send</button>`}<button type="button" class="agqdel" data-i="${i}" title="remove">✕</button></div>`).join('') + '</div>';
     thread.innerHTML = html;
     thread.scrollTop = thread.scrollHeight;
-    sendBtn.disabled = CH.busy;
-    ta.disabled = CH.busy;
+    sendBtn.textContent = b ? 'Queue' : 'Send';
+    sendBtn.title = b ? 'Held until ' + a.name + ' finishes the current answer, then sent automatically' : '';
+    ta.placeholder = b ? 'Type the next question — it goes as soon as ' + a.name + ' is free' : 'Message… (Enter to send, Shift+Enter for a new line)';
+    markWorking();
+  }
+  thread.addEventListener('click', ev => {
+    const del = ev.target.closest('.agqdel'), go = ev.target.closest('.agqgo');
+    if (!del && !go) return;
+    const slug = CH.slug, q = queue(slug), i = +(del || go).dataset.i;
+    const [t] = q.splice(i, 1); saveQueue(slug, q);
+    if (go && t && !busy(slug)) dispatch(slug, t); else render();
+  });
+  // the faces show who is still working on an answer (pulsing ring)
+  function markWorking() {
+    stack.querySelectorAll('.agf-btn').forEach(b => b.classList.toggle('working', busy(b.dataset.agent)));
   }
   function openChat(slug) {
-    if (CH.slug !== slug) { stopPoll(); CH.slug = slug; CH.busy = false; }
+    CH.slug = slug; MIN.delete(slug);
     const a = INFO[slug] || {name: slug, role: ''};
     box.querySelector('img').src = ORIGIN + '/agents/' + slug + '.jpg';
     box.querySelector('b').textContent = a.name;
@@ -15889,32 +15921,47 @@ boot();
     stack.style.display = 'none';
     clearSearch();
     syncThread(slug);
-    // a reply still in flight when the window closed or the page reloaded
+    resumeRun(slug);
+    render();
+    setTimeout(() => ta.focus(), 50);
+  }
+  // a reply still in flight when the window closed or the page reloaded
+  function resumeRun(slug) {
+    if (busy(slug)) return;
     let pend = null;
     try { pend = JSON.parse(lsGet(runKey(slug)) || 'null'); } catch (e) { pend = null; }
-    if (pend && pend.run && Date.now() - pend.at < MAX_WAIT_MS && !CH.busy) poll(slug, pend.run, pend.at);
-    render();
-    if (!CH.busy) setTimeout(() => ta.focus(), 50);
+    if (pend && pend.run && Date.now() - pend.at < MAX_WAIT_MS) poll(slug, pend.run, pend.at);
+    else if (pend) lsDel(runKey(slug));
   }
-  function closeChat() { box.hidden = true; stack.style.display = ''; }
-  function stopPoll() { if (CH.timer) { clearTimeout(CH.timer); CH.timer = null; } }
+  function closeChat() { MIN.delete(CH.slug); box.hidden = true; stack.style.display = ''; markWorking(); }
+  function minimizeChat() {
+    if (busy(CH.slug) || queue(CH.slug).length) MIN.add(CH.slug);   // pop back when the answer lands
+    box.hidden = true; stack.style.display = ''; markWorking();
+  }
 
   function transcript(slug) {
     const me = ((authUser() || {}).name || 'You').split(' ')[0];
     return history(slug).filter(m => m.r !== 'err').slice(-10)
       .map(m => (m.r === 'me' ? (m.by || me).split(' ')[0] : (INFO[slug] || {name: slug}).name) + ': ' + m.t).join('\n\n');
   }
-  async function send(text) {
+  // Send while the agent is busy = hold it in the queue; it goes out on its
+  // own the moment the current answer lands
+  function send(text) {
     const t = String(text || '').trim();
-    if (!t || CH.busy || !CH.slug) return;
+    if (!t || !CH.slug) return;
     const slug = CH.slug;
+    ta.value = '';
+    if (busy(slug)) { const q = queue(slug); q.push(t); saveQueue(slug, q); render(); return; }
+    dispatch(slug, t);
+  }
+  async function dispatch(slug, t) {
     const wa = authFields();
-    if (!wa.idToken) { push(slug, {r: 'err', t: 'Sign-in expired — renewing, retry in a moment.', at: Date.now()}); return; }
+    if (!wa.idToken) { push(slug, {r: 'err', t: 'Sign-in expired — sign in again (☰ menu) and retry.', at: Date.now()}); return; }
     const me = (authUser() || {}).name || 'You';
     const tr = transcript(slug);   // before this message is added
-    ta.value = '';
     push(slug, {r: 'me', t, by: me, at: Date.now()});
-    CH.busy = true; render();
+    RUNS[slug] = {timer: null, run: null, startedAt: Date.now()};   // busy from the first keystroke of the request
+    render();
     try {
       const r = await fetch('/api/agent', {method: 'POST', headers: {'content-type': 'application/json'},
         body: JSON.stringify({slug, message: t, transcript: tr, idToken: wa.idToken})});
@@ -15924,14 +15971,15 @@ boot();
       lsSet(runKey(slug), JSON.stringify({run: j.run_id, at}));
       poll(slug, j.run_id, at);
     } catch (e) {
-      CH.busy = false;
-      push(slug, {r: 'err', t: e.message || String(e), at: Date.now()});
+      delete RUNS[slug];
+      finish(slug, {r: 'err', t: e.message || String(e)});
     }
   }
   function poll(slug, run, startedAt) {
-    CH.busy = true; render();
+    if (RUNS[slug] && RUNS[slug].timer) clearTimeout(RUNS[slug].timer);
+    RUNS[slug] = {timer: null, run, startedAt};
+    if (CH.slug === slug) render(); else markWorking();
     const tick = async () => {
-      if (CH.slug !== slug) return;   // switched agents — that window resumes on reopen
       if (Date.now() - startedAt > MAX_WAIT_MS) {
         finish(slug, {r: 'err', t: (INFO[slug] || {name: slug}).name + ' is taking longer than ten minutes — check Telegram; nothing was answered on their behalf.'});
         return;
@@ -15949,18 +15997,28 @@ boot();
         // gateway hiccup mid-poll — keep waiting until the cap; the run is still live on the Mac
         if (/not configured|Sign in/i.test(e.message || '')) { finish(slug, {r: 'err', t: e.message}); return; }
       }
-      CH.timer = setTimeout(tick, POLL_MS);
+      if (RUNS[slug]) RUNS[slug].timer = setTimeout(tick, POLL_MS);
     };
-    CH.timer = setTimeout(tick, POLL_MS);
+    RUNS[slug].timer = setTimeout(tick, POLL_MS);
   }
   function finish(slug, msg) {
-    stopPoll();
+    if (RUNS[slug] && RUNS[slug].timer) clearTimeout(RUNS[slug].timer);
+    delete RUNS[slug];
     lsDel(runKey(slug));
-    CH.busy = false;
     push(slug, Object.assign({at: Date.now()}, msg));
     if (msg.r === 'ag') setTimeout(() => syncThread(slug), 1500);
+    // minimised while waiting → pop back open with the answer
+    if (MIN.has(slug)) openChat(slug);
+    else if (CH.slug === slug) render(); else markWorking();
+    // next queued question goes out on its own after a real answer; after an
+    // error it waits for a tap on "Send" so nothing is fired into a dead line
+    const q = queue(slug);
+    if (msg.r === 'ag' && q.length) { const t = q.shift(); saveQueue(slug, q); dispatch(slug, t); }
     if (!box.hidden && CH.slug === slug) setTimeout(() => ta.focus(), 50);
   }
+  // runs that were in flight when the page last closed keep being tracked,
+  // so the face shows who is still working and the answer is picked up
+  Object.keys(INFO).forEach(slug => { if (lsGet(runKey(slug))) resumeRun(slug); });
   /* ----- search across every agent's saved conversations ----- */
   async function search(term) {
     const t = String(term || '').trim();
