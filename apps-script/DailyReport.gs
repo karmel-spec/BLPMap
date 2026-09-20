@@ -172,13 +172,11 @@ function doGet(e) {
       return json_(lateClockNudge(doSend ? null : {dry: true}));
     } catch (err) { return json_({error: String(err)}); }
   }
-  // Friday-report chaser: dry-run preview by default; &send=1 (key-gated)
-  // texts the stragglers now instead of waiting for the next sweep
+  // Former Friday-report chaser: reports are now due Thursday, so the Friday
+  // sweep is retired (Karmel 2026-09-20). Keep the endpoint as a safe no-op
+  // for old bookmarks / test links.
   if (e && e.parameter && e.parameter.fn === 'fridaysweep') {
-    try {
-      var fSend = e.parameter.send === '1' && e.parameter.key === TEAM_PIN;
-      return json_(fridaySweepRun_(fSend));
-    } catch (err) { return json_({error: String(err)}); }
+    return json_({ok: true, disabled: true, reason: 'Friday report sweep retired; weekly tech reports are due Thursday.'});
   }
   // PHOTO LOG rows for one piano — feeds the 13-shot photo wizard (which
   // shots exist, and the Before file ids for After-mode ghost matching)
@@ -6776,7 +6774,10 @@ function briefSms_() {
   return {ok: true, text: L.join('\n'), url: url, lines: L.length};
 }
 
-function sendShopManagerReportTo_(to, note, dayOffset) {
+function sendShopManagerReportTo_(to, note, dayOffset, opts) {
+  opts = opts || {};
+  var sendShop = opts.sendShop !== false;
+  var sendAdmin = opts.sendAdmin !== false && !note;
   var R = buildShopManagerReport_(dayOffset);
   var alerts = R.blocked.length + R.noCab.length + R.noTrack.length + R.noPhase.length;
   var html = shopManagerHtml_(R);
@@ -6788,23 +6789,27 @@ function sendShopManagerReportTo_(to, note, dayOffset) {
   var subject = (note ? '[SAMPLE] ' : '') + 'Shop Manager Briefing — ' + R.day
     + ' · ' + alerts + ' to review';
   var docUrl = '', docErr = '';
-  try { docUrl = briefDoc_(subject, html, 'shop'); } catch (e) { docErr = String(e).slice(0, 200); }
-  if (docUrl) {
+  if (sendShop) {
+    try { docUrl = briefDoc_(subject, html, 'shop'); } catch (e) { docErr = String(e).slice(0, 200); }
+  }
+  if (sendShop && docUrl) {
     html = '<div style="max-width:760px;margin:0 auto 10px;text-align:right;font:12px Helvetica,Arial">'
       + '<a href="' + docUrl + '">📄 Open this briefing as a Google Doc</a></div>' + html;
   }
-  MailApp.sendEmail({
-    to: to,
-    subject: subject,
-    htmlBody: html,
-    body: 'Shop Manager Briefing ' + R.day + '\n'
-      + R.activity.total + ' changes logged, ' + alerts + ' items needing attention.\n'
-      + 'Open in HTML for the full briefing.',
-    name: 'BLP Store Map',
-  });
+  if (sendShop) {
+    MailApp.sendEmail({
+      to: to,
+      subject: subject,
+      htmlBody: html,
+      body: 'Shop Manager Briefing ' + R.day + '\n'
+        + R.activity.total + ' changes logged, ' + alerts + ' items needing attention.\n'
+        + 'Open in HTML for the full briefing.',
+      name: 'BLP Store Map',
+    });
+  }
   // the Admin Morning Brief rides the same build — payments, media, logistics
   var adm = {sent: false};
-  if (!note) {
+  if (sendAdmin) {
     try {
       var aHtml = adminBriefHtml_(R);
       var aAlerts = adminAlerts_(R);
@@ -6821,7 +6826,7 @@ function sendShopManagerReportTo_(to, note, dayOffset) {
       adm = {sent: true, to: ADMIN_TO, alerts: aAlerts, doc: aDoc};
     } catch (e3) { adm = {sent: false, err: String(e3).slice(0, 160)}; }
   }
-  return {ok: true, to: to, alerts: alerts, changes: R.activity.total, doc: docUrl, docErr: docErr, admin: adm};
+  return {ok: true, to: sendShop ? to : '', alerts: alerts, changes: R.activity.total, doc: docUrl, docErr: docErr, admin: adm, shopSent: sendShop};
 }
 // build + archive today's brief as a Google Doc WITHOUT emailing (for testing
 // and for regenerating a doc on demand)
@@ -6843,19 +6848,24 @@ function setupShopManagerBriefing() {
   return 'Briefings scheduled — evenings ~6:30 PM for the next morning. Shop: '
     + SHOPMGR_TO + ' | Admin: ' + ADMIN_TO;
 }
-/* 7:45am Mon–Fri: both briefs by EMAIL plus a TEXT carrying the doc link.
- * Shop brief texts managers + owners; admin brief texts Melissa + owners
- * (info@ is a mailbox — email only). Replaces the evening send (Brigham 8/28). */
+/* 7:45am cadence (Karmel 9/20): shop briefs Mon–Fri, admin briefs Mon–Sat,
+ * never Sunday. Both use EMAIL plus a TEXT carrying the doc link. Shop brief
+ * texts managers + owners; admin brief texts Melissa + owners (info@ is a
+ * mailbox — email only). Replaces the evening send (Brigham 8/28). */
 var SHOP_TEXT_NAMES = ['Mark', 'Matthew', 'Jacob', 'Brigham', 'Karmel'];
 var ADMIN_TEXT_NAMES = ['Melissa', 'Brigham', 'Karmel'];
 function morningBriefs() {
   try { scorecardSnapshot_(); } catch (eSnap) { /* trends resume tomorrow */ }
   var dow = Number(Utilities.formatDate(new Date(), 'America/Denver', 'u'));
-  if (dow > 5 && !isManualRun_()) return;          // Mon–Fri only
-  var r = sendShopManagerReportTo_(SHOPMGR_TO, null, 0);   // today's shop + admin emails
+  if (dow === 7) return {ok: true, skipped: 'Sunday — no shop/admin brief'};
+  var sendShop = dow <= 5;
+  var sendAdmin = dow <= 6;
+  var r = sendShopManagerReportTo_(SHOPMGR_TO, null, 0, {sendShop: sendShop, sendAdmin: sendAdmin});
   var day = Utilities.formatDate(new Date(), 'America/Denver', 'EEE M/d');
-  notifyTeam_(SHOP_TEXT_NAMES,
-    '🌅 Shop brief ' + day + ' — ' + r.alerts + ' to review. ' + (r.doc || APP_URL));
+  if (sendShop) {
+    notifyTeam_(SHOP_TEXT_NAMES,
+      '🌅 Shop brief ' + day + ' — ' + r.alerts + ' to review. ' + (r.doc || APP_URL));
+  }
   if (r.admin && r.admin.sent) {
     notifyTeam_(ADMIN_TEXT_NAMES,
       '🌅 Admin brief ' + day + ' — ' + r.admin.alerts + ' to review. ' + (r.admin.doc || APP_URL));
@@ -6866,13 +6876,13 @@ function sendShopManagerReport() {
   var hour = Number(Utilities.formatDate(new Date(), 'America/Denver', 'H'));
   // the briefs moved to an evening send. A stale morning trigger still exists
   // under another account (getProjectTriggers can't delete another user's), so
-  // ignore any firing before noon rather than double-send.
-  if (!isManualRun_() && hour < 12) return;
-  // evening send: the brief is for TOMORROW, so skip the evenings before a
-  // non-working day (Fri evening's brief would be for Saturday) and let
-  // Sunday evening cover Monday
+  // ignore any firing before noon rather than double-send. Do not use
+  // isManualRun_() here — it returns true in this script, which broke Sunday gates.
+  if (hour < 12) return;
+  // Stale evening trigger: shop/admin briefs now ride morningBriefs. Never send
+  // this old combined brief Friday/Saturday/Sunday.
   var dow = Number(Utilities.formatDate(new Date(), 'America/Denver', 'u'));  // 1=Mon..7=Sun
-  if (!isManualRun_() && (dow === 5 || dow === 6)) return;   // Fri/Sat evenings off
+  if (dow === 5 || dow === 6 || dow === 7) return;   // Fri/Sat/Sun evenings off
   return sendShopManagerReportTo_(SHOPMGR_TO, null, 1);
 }
 
@@ -7244,17 +7254,18 @@ function reinstallAllTriggers() {
 /* TEMP (8/27): repair triggers for the EXECUTING user.
  *  mode=ensureall — full production set, delete-then-recreate each:
  *    6AM report, ~6:30PM briefs, Monday 8AM digest, 6PM late-clock nudge.
+ *    Does NOT recreate the retired Friday-report sweep.
  *  mode=nudgeonly — just the digest + nudge, leave report/briefs alone. */
 function fixTriggers_(mode) {
   if (mode !== 'ensureall' && mode !== 'nudgeonly' && mode !== 'fridayonly'
-    && mode !== 'briefsonly') return {error: 'mode?'};
+    && mode !== 'briefsonly' && mode !== 'nofriday') return {error: 'mode?'};
   var mine = ScriptApp.getProjectTriggers();
   var removed = [];
   mine.forEach(function (t) {
     var h = t.getHandlerFunction();
     var kill = mode === 'ensureall'
       ? ['sendDailyReport', 'sendShopManagerReport', 'morningBriefs', 'mondayAdminDigest', 'lateClockNudge', 'fridaySweep'].indexOf(h) >= 0
-      : mode === 'fridayonly' ? h === 'fridaySweep'
+      : (mode === 'fridayonly' || mode === 'nofriday') ? h === 'fridaySweep'
       : mode === 'briefsonly' ? ['sendShopManagerReport', 'morningBriefs'].indexOf(h) >= 0
       : ['mondayAdminDigest', 'lateClockNudge'].indexOf(h) >= 0;
     if (kill) { ScriptApp.deleteTrigger(t); removed.push(h); }
@@ -7268,15 +7279,15 @@ function fixTriggers_(mode) {
     ScriptApp.newTrigger('morningBriefs').timeBased()
       .everyDays(1).atHour(7).nearMinute(45).inTimezone('America/Denver').create();
   }
-  if (mode !== 'fridayonly') {
+  if (mode !== 'fridayonly' && mode !== 'nofriday') {
     ScriptApp.newTrigger('mondayAdminDigest').timeBased()
       .onWeekDay(ScriptApp.WeekDay.MONDAY).atHour(8).inTimezone('America/Denver').create();
     ScriptApp.newTrigger('lateClockNudge').timeBased()
       .everyDays(1).atHour(18).inTimezone('America/Denver').create();
   }
-  // Friday-report chaser — Friday 6:15pm + Saturday 10am follow-up if any
-  // reports are still missing (Brigham 8/28; self-gated in fridaySweep too)
-  if (mode === 'ensureall' || mode === 'fridayonly') {
+  // Friday-report chaser retired (Karmel 2026-09-20): weekly tech reports now
+  // happen Thursdays, so ensureall must not recreate the old Friday/Saturday triggers.
+  if (mode === 'fridayonly') {
     ScriptApp.newTrigger('fridaySweep').timeBased()
       .onWeekDay(ScriptApp.WeekDay.FRIDAY).atHour(18).nearMinute(15).inTimezone('America/Denver').create();
     ScriptApp.newTrigger('fridaySweep').timeBased()
@@ -7309,11 +7320,10 @@ function moverFirsts_() {
   } catch (e) {}
   return out;
 }
-/* ---------- Friday-report chaser (Brigham 8/28) ----------
- * Fridays at 2pm, 4pm and 6pm Mountain: text every tech whose column for
- * today on the year tab is still blank (Brigham + Karmel get one summary
- * text per sweep), and text Brigham + Karmel once when everyone is in.
- * Courtney and Victoria no longer work at BLP — never chased. */
+/* ---------- Retired Friday-report chaser (Brigham 8/28; retired Karmel 2026-09-20) ----------
+ * Weekly tech reports now happen Thursdays. The old Friday/Saturday sweep is
+ * disabled; this block remains so old trigger/function references fail safe
+ * until the live Apps Script project is cleaned up. */
 var FRIDAY_EXCLUDE = ['courtney', 'victoria'];
 var FRIDAY_COPY = ['Brigham', 'Karmel'];
 function fridayReportStatus_(dayOffset) {
@@ -7345,13 +7355,7 @@ function fridayReportStatus_(dayOffset) {
     dateKey: Utilities.formatDate(when, 'America/Denver', 'yyyy-MM-dd')};
 }
 function fridaySweep() {
-  // one nudge Friday 6:15pm, one follow-up Saturday 10am ONLY if reports are
-  // still missing (Brigham 8/28) — Saturday reads Friday's column
-  var now = new Date();
-  var dow = Utilities.formatDate(now, 'America/Denver', 'u');
-  var hr = parseInt(Utilities.formatDate(now, 'America/Denver', 'H'), 10);
-  if (dow === '5' && hr === 18) return fridaySweepRun_(true, 0);
-  if (dow === '6' && hr === 10) return fridaySweepRun_(true, -1);
+  return {ok: true, disabled: true, reason: 'Friday report sweep retired; weekly tech reports are due Thursday.'};
 }
 function fridaySweepRun_(send, dayOffset) {
   if (dayOffset === undefined) {
