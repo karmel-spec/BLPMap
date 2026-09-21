@@ -50,7 +50,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-09-18.7';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-09-21.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -3630,6 +3630,52 @@ function closePayRow_(sh, open, endAt, note) {
   return {tech: String(open.v[0]), date: String(open.v[1]), start: String(open.v[2]),
           end: end.toISOString(), minutes: mins};
 }
+/* Each person's USUAL finish, from their own recent day punches — the floor
+ * the forgotten-clock sweep stamps when there is no later activity to find.
+ *
+ * A flat 6:00 PM is a day-shift assumption. Melissa works 10 to 7, so every
+ * forgotten clock-out cost her an hour: 9/3 and 9/7 were both stamped 6:00 PM
+ * against a real ~7:00 PM finish (Walter 9/21). Rather than a list of names
+ * and times for someone to keep current, each person's own history says when
+ * their day ends, and it follows them if their hours change.
+ *
+ * Only CLOSED punches the sweep did not invent are counted — including its own
+ * 6 PM stamps would drag the floor back toward 6 PM and hold it there.
+ * The median is used, so one late night does not move it. At least 3 punches
+ * are required, or there is not enough to say.
+ *
+ * It can only ever push the floor LATER than 6 PM, never earlier: fixing the
+ * under-stamping must not quietly start shortening anyone else's day. */
+function usualFinishIndex_(sh) {
+  var out = {};
+  try {
+    var last = sh.getLastRow();
+    if (last < 2) return out;
+    var from = Math.max(2, last - 400);
+    var vals = sh.getRange(from, 1, last - from + 1, 8).getValues();
+    var mins = {};
+    for (var i = 0; i < vals.length; i++) {
+      var tech = String(vals[i][0] || '').trim();
+      if (!tech || !vals[i][2] || !vals[i][3] || vals[i][7]) continue;   // open or voided
+      if (/auto:/i.test(String(vals[i][6] || ''))) continue;             // a stamp we invented
+      var endAt = new Date(vals[i][3]);
+      if (isNaN(endAt.getTime())) continue;
+      var hm = Utilities.formatDate(endAt, 'America/Denver', 'HH:mm').split(':');
+      var m = Number(hm[0]) * 60 + Number(hm[1]);
+      if (m < 6 * 60) m += 24 * 60;        // a finish after midnight belongs to that day
+      var k = tech.toLowerCase();
+      (mins[k] = mins[k] || []).push(m);
+    }
+    for (var k2 in mins) {
+      var a = mins[k2].sort(function (x, y) { return x - y; });
+      if (a.length < 3) continue;
+      var med = a[Math.floor(a.length / 2)];
+      out[k2] = {h: Math.floor(med / 60) % 24, m: med % 60, n: a.length};
+    }
+  } catch (e) { /* no history — every floor stays 6 PM */ }
+  return out;
+}
+
 function sweepForgottenPay_(sh) {
   var last = sh.getLastRow();
   if (last < 2) return;
@@ -3645,9 +3691,19 @@ function sweepForgottenPay_(sh) {
   }
   if (!todo.length) return;   // the common case — no evidence reads at all
   var ev = dayEvidenceIndex_(todo.map(function (t) { return evidenceKey_(t.v[0], t.start); }));
+  var usual = usualFinishIndex_(sh);
+  var pad2 = function (n) { return (n < 10 ? '0' : '') + n; };
   todo.forEach(function (t) {
     var start = t.start;
-    var six = new Date(Utilities.formatDate(start, 'America/Denver', "yyyy-MM-dd'T'18:00:00XXX"));
+    var floorAt = new Date(Utilities.formatDate(start, 'America/Denver', "yyyy-MM-dd'T'18:00:00XXX"));
+    var u = usual[String(t.v[0] || '').trim().toLowerCase()], usualUsed = null;
+    if (u) {
+      var uAt = new Date(Utilities.formatDate(start, 'America/Denver',
+        "yyyy-MM-dd'T'" + pad2(u.h) + ':' + pad2(u.m) + ":00XXX"));
+      if (u.h < 6) uAt = new Date(uAt.getTime() + 86400000);   // a past-midnight finish
+      if (uAt > floorAt) { floorAt = uAt; usualUsed = u; }     // later than 6 PM only
+    }
+    var six = floorAt;
     var end = six > start ? six : new Date(start.getTime() + 3600000);
     var seen = ev[evidenceKey_(t.v[0], start)];
     var used = null;
@@ -3657,7 +3713,9 @@ function sweepForgottenPay_(sh) {
     var when = Utilities.formatDate(end, 'America/Denver', 'h:mm a');
     closePayRow_(sh, {row: t.row, v: t.v}, end.toISOString(), used
       ? 'auto: forgot to clock out \u2014 ended at last activity ' + when + ' (' + used.what + ') \u2014 review before payroll'
-      : 'auto: forgot to clock out \u2014 stamped ' + when + ', no later activity found \u2014 review before payroll');
+      : 'auto: forgot to clock out \u2014 stamped ' + when
+        + (usualUsed ? ' (their usual finish, from ' + usualUsed.n + ' recent punches)' : '')
+        + ', no later activity found \u2014 review before payroll');
   });
 }
 
