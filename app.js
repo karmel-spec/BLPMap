@@ -376,7 +376,7 @@ async function boot() {
     try {
       const [m, d2] = await Promise.all([fetchSlots(), fetchData('active')]);
       S.map = m; S.data = mergeInactive(d2);
-      index(); renderAll();
+      index(); renderAll(true);   // background: don't tear down a view in use
       if (!d2.stale && d2.pianos.length) writeCache();
     } catch (e) { /* keep last */ }
   }, 150000);
@@ -1525,10 +1525,24 @@ function tryFixClockLink() {
 window.addEventListener('hashchange', () => { deepLinkDone = ''; tryDeepLink(); tryReportLink(); tryCardLink(); tryBoardLink(); tryFixClockLink(); });
 
 /* ---------- rendering ---------- */
-function renderAll() {
+/* Views that fetch their own data and rebuild their own DOM. The 2.5-minute
+ * map refresh calls renderAll(), which ends in showView(S.view) — so sitting
+ * on one of these had it torn down and rebuilt every 150 seconds: the Planner
+ * lost whatever was typed in the notes box, lost its scroll position, and made
+ * you wait on a fresh proposal fetch (Walter 9/21). Worse, a rebuild landing
+ * mid-flight during "Apply adjustments" discards the result you were waiting
+ * for, which is how one apply came to look like it needed two.
+ * A BACKGROUND refresh leaves them alone; anything the user actually does
+ * (switching view, moving a piano) still calls renderAll() with no argument
+ * and re-renders everything exactly as before. */
+const SELF_RENDERING_VIEWS = ['sched', 'tboard', 'team', 'admdash', 'updates',
+  'manager', 'appset', 'whiteboard', 'dash', 'training', 'trainingdoc'];
+function renderAll(background) {
   if (!QCQ.rows ? Date.now() - QCQ.at > 60000 : Date.now() - QCQ.at > 300000) loadQcQueue();
   renderTabs(); renderKpis(); renderCrew(); renderMoves();
-  renderMap(); renderReport(); renderBoard(); renderCal(); renderMedia(); showView(S.view); syncFeed();
+  renderMap(); renderReport(); renderBoard(); renderCal(); renderMedia();
+  if (!(background && SELF_RENDERING_VIEWS.includes(S.view))) showView(S.view);
+  syncFeed();
 }
 
 function renderTabs() {
