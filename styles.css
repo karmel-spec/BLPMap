@@ -2074,7 +2074,16 @@ tr.daynone td{color:#9aa2ab}
    The agents' faces sit bottom-right (same look as the old Telegram quick-
    links); tapping one opens a chat window with that Hermes agent through the
    agent gateway — like Marcus on the Marketing app home screen. */
-.agf-stack{position:fixed;right:18px;bottom:18px;z-index:300;display:none;flex-direction:column-reverse;gap:10px;align-items:flex-end}
+/* bottom:18px put the faces straight on top of the work-clock dock and the
+ * map's zoom controls, and at z-index 300 they win over both — the dock's
+ * minimise and the zoom-in button became unclickable (Walter 9/21).
+ * Measured on desktop: the zoom controls reach 57px up (76px once the dock
+ * shrinks the map) and the full dock reaches 81px, so the faces start above
+ * all of it. Mobile already cleared everything at 76px and is unchanged. */
+.agf-stack{position:fixed;right:18px;bottom:66px;z-index:300;display:none;flex-direction:column-reverse;gap:10px;align-items:flex-end}
+body:has(#mydock:not([hidden])) .agf-stack{bottom:92px}
+/* the minimised dock is a short pill (top ~44px) — no need to sit as high */
+body:has(#mydock.dockmini:not([hidden])) .agf-stack{bottom:66px}
 .agf-stack.show{display:flex}
 .agf-item{position:relative;display:flex;align-items:center}
 .agf-btn{width:52px;height:52px;border-radius:50%;padding:0;border:3px solid #9e2020;background:#121212;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,.28);overflow:hidden;transition:transform .12s;display:block}
