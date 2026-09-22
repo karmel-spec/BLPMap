@@ -467,6 +467,15 @@ td a{color:#9e2020}
   .kpi{padding:6px 10px}
   .kpi .n{font-size:15px}
   .pop{width:min(240px,80vw)}
+  /* The work-clock dock and the 📋 checklist pill are position:fixed over the
+   * bottom of the screen, so on a phone they sit on top of the card's last
+   * sections and you cannot scroll them into reach (Hunter 9/22,
+   * 092226rawlings06 — CAP checklist + piano clock hiding the bottom of the
+   * card). The card scrolls inside itself, so it needs room underneath to
+   * scroll INTO: dock reaches 65px up, the pill 107px. Only added when the
+   * thing that blocks is actually on screen. */
+  body:has(#mydock:not([hidden])) .pop{padding-bottom:78px}
+  body:has(#clPill:not([hidden])) .pop{padding-bottom:120px}
 }
 
 /* client-reports opt in/out row */
