@@ -8592,3 +8592,105 @@ function queueMove_(req) {
 function authorizeBriefDoc() {
   Logger.log(DriveApp.getRootFolder().getName());
 }
+
+/* ===================== 🎯 BRIGHAM'S TOP 10 — daily one-page brief (Brigham 9/22)
+ * Pulls the ranked lists from the Store Map (/api/top10 — one scoring pass
+ * shared with the app's 🎯 Top 10 view), lays them out as ONE printable page
+ * (three lists: SHOP · SALES · ADMIN NEEDS YOU) in a Google Doc that keeps the
+ * SAME link every day (refreshed in place — Script Property TOP10_DOC_ID), and
+ * emails Brigham a short note with the link at 6:15 AM Mon–Sat.
+ * The look lives in top10Html_ below — refine it there and every morning's
+ * doc picks it up. Run setupTop10Brief() once to install the trigger;
+ * run top10Brief() any time to send one by hand. */
+var TOP10_API = APP_URL + '/api/top10';
+var TOP10_TO = 'brigham@brighamlarsonpianos.com';
+var TOP10_CC = 'karmel@brighamlarsonpianos.com';
+
+function top10Html_(d) {
+  var day = Utilities.formatDate(new Date(), 'America/Denver', 'EEEE, MMMM d, yyyy');
+  var list = function (title, icon, rows) {
+    var H = [];
+    H.push('<td style="vertical-align:top;width:33%;padding:0 8px 0 0">');
+    H.push('<div style="font:700 11px/1.3 Helvetica,Arial,sans-serif;letter-spacing:2px;color:#9e2020;border-bottom:2px solid #9e2020;padding-bottom:4px;margin-bottom:6px">'
+      + icon + ' ' + title + '</div>');
+    if (!rows.length) H.push('<div style="font:11px Helvetica,Arial;color:#8a929a;padding:6px 0">Nothing waiting.</div>');
+    rows.forEach(function (x) {
+      H.push('<div style="display:flex;gap:6px;padding:5px 0;border-bottom:1px solid #eee9e1;font-family:Helvetica,Arial,sans-serif">'
+        + '<span style="display:inline-block;min-width:18px;height:18px;line-height:18px;border-radius:9px;background:' + (x.rank <= 4 ? '#9e2020' : '#3a4046') + ';color:#fff;font-size:10px;font-weight:800;text-align:center">' + x.rank + '</span>'
+        + '<span><span style="font-size:11px;font-weight:700;line-height:1.3">' + (x.link ? '<a href="' + esc_(x.link) + '" style="color:#121212;text-decoration:none">' : '') + esc_(x.title) + (x.link ? '</a>' : '') + '</span>'
+        + (x.why ? '<br><span style="font-size:9.5px;color:#5f6770;line-height:1.35">' + esc_(x.why) + '</span>' : '') + '</span></div>');
+    });
+    H.push('</td>');
+    return H.join('');
+  };
+  return '<div style="max-width:1040px;margin:0 auto;font-family:Helvetica,Arial,sans-serif;color:#121212">'
+    + '<table style="width:100%;border-collapse:collapse;margin-bottom:8px"><tr>'
+    + '<td style="font-family:Georgia,serif;letter-spacing:4px;font-size:16px">BRIGHAM LARSON <b>PIANOS</b></td>'
+    + '<td style="text-align:right;font-size:11px;color:#5f6770">' + day + '<br><a href="' + APP_URL + '/#view=top10" style="color:#9e2020">open the live list in the Store Map ↗</a></td></tr></table>'
+    + '<div style="font-size:20px;font-weight:800;letter-spacing:1px;margin:0 0 2px">🎯 BRIGHAM\'S TOP 10 — TODAY</div>'
+    + '<div style="font-size:10.5px;color:#5f6770;margin-bottom:10px">Everything waiting on you, ranked · '
+    + (d.totals ? d.totals.askOpen + ' open Ask-Brigham questions · ' + d.totals.myCards + ' cards on your board' : '') + '</div>'
+    + '<table style="width:100%;border-collapse:collapse;table-layout:fixed"><tr>'
+    + list('SHOP', '🔧', d.shop || []) + list('SALES', '💼', d.sales || []) + list('ADMIN NEEDS YOU', '🗂', d.admin || [])
+    + '</tr></table>'
+    + '<div style="font-size:9px;color:#8a929a;margin-top:10px;border-top:1px solid #eee9e1;padding-top:4px">Built from the Piano Log, the task boards and the mini-QC queue at '
+    + Utilities.formatDate(new Date(), 'America/Denver', 'h:mm a') + '. Same list as Store Map → ☰ → 🎯 Brigham\'s Top 10. Reply to this email with anything the ranking got wrong.</div>'
+    + '</div>';
+}
+
+// create once, then refresh the same Google Doc in place so the link is stable
+function top10Doc_(html) {
+  var props = PropertiesService.getScriptProperties();
+  var id = props.getProperty('TOP10_DOC_ID');
+  var token = ScriptApp.getOAuthToken();
+  if (id) {
+    var up = UrlFetchApp.fetch('https://www.googleapis.com/upload/drive/v3/files/' + id + '?uploadType=media', {
+      method: 'patch', contentType: 'text/html; charset=UTF-8', payload: html,
+      headers: {Authorization: 'Bearer ' + token}, muteHttpExceptions: true});
+    if (up.getResponseCode() < 300) return 'https://docs.google.com/document/d/' + id + '/edit';
+    // doc was deleted or moved out of reach — fall through and make a new one
+  }
+  var it = DriveApp.getFoldersByName('BLP Shop Briefs');
+  var folder = it.hasNext() ? it.next() : DriveApp.createFolder('BLP Shop Briefs');
+  var meta = {name: "Brigham's Top 10 — daily brief", mimeType: 'application/vnd.google-apps.document', parents: [folder.getId()]};
+  var boundary = 'blptop10' + Date.now();
+  var body = '--' + boundary + '\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n' + JSON.stringify(meta)
+    + '\r\n--' + boundary + '\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n' + html + '\r\n--' + boundary + '--';
+  var res = UrlFetchApp.fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
+    method: 'post', contentType: 'multipart/related; boundary=' + boundary, payload: body,
+    headers: {Authorization: 'Bearer ' + token}});
+  var f = JSON.parse(res.getContentText());
+  props.setProperty('TOP10_DOC_ID', f.id);
+  try { shareAnyoneWithLink_(f.id); } catch (e) {}
+  return 'https://docs.google.com/document/d/' + f.id + '/edit';
+}
+
+function top10Brief() {
+  var dow = Number(Utilities.formatDate(new Date(), 'America/Denver', 'u'));
+  if (dow === 7) return {ok: true, skipped: 'Sunday'};
+  var res = UrlFetchApp.fetch(TOP10_API, {muteHttpExceptions: true, followRedirects: true});
+  if (res.getResponseCode() >= 300) throw new Error('Store Map /api/top10 answered ' + res.getResponseCode());
+  var d = JSON.parse(res.getContentText());
+  if (d.error && !d.shop) throw new Error(d.error);
+  var url = top10Doc_(top10Html_(d));
+  var day = Utilities.formatDate(new Date(), 'America/Denver', 'EEE M/d');
+  var lead = (d.shop && d.shop[0]) ? d.shop[0].title : 'nothing urgent in the shop';
+  MailApp.sendEmail({
+    to: TOP10_TO, cc: TOP10_CC, name: 'BLP Store Map',
+    subject: '🎯 Top 10 for ' + day + ' — ' + lead.slice(0, 70),
+    htmlBody: '<div style="font-family:Helvetica,Arial,sans-serif;max-width:560px">'
+      + '<h2 style="margin:0 0 6px">🎯 Your Top 10 for ' + day + '</h2>'
+      + '<p style="margin:0 0 12px;font-size:14px;color:#3a4046">Shop · Sales · Admin needs you — one page, ranked. '
+      + 'First up: <b>' + esc_(lead) + '</b>.</p>'
+      + '<p style="margin:0 0 14px"><a href="' + url + '" style="display:inline-block;background:#9e2020;color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px;font-weight:700">Open today\'s one-pager ↗</a></p>'
+      + '<p style="font-size:12px;color:#8a929a;margin:0">Print it or open the live list in the Store Map (☰ → 🎯 Brigham\'s Top 10). Same link every day.</p></div>',
+  });
+  try { logAct_('Store Map', 'Top 10 brief sent', 'brief', url); } catch (e) {}
+  return {ok: true, doc: url};
+}
+
+function setupTop10Brief() {
+  ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'top10Brief') ScriptApp.deleteTrigger(t); });
+  ScriptApp.newTrigger('top10Brief').timeBased().everyDays(1).atHour(6).nearMinute(15).inTimezone('America/Denver').create();
+  return {ok: true};
+}

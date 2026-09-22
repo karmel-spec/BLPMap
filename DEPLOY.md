@@ -14,6 +14,7 @@ local computer.
 | `/api/agent` (in-app chat with Lindsay / Melody / Chris … — the Hermes agents) | Netlify Function | `BLP_GATEWAY_URL`, `BLP_GATEWAY_KEY` env vars |
 | `/api/queue` (drag-to-reorder + ＋ add for the Keytop / Refinish / Plate Q boxes — owners, managers & admins) | Netlify Function | `SUPABASE_SERVICE_KEY`; run `supabase/queue_order.sql` once |
 | Daily report email (weekdays 6 AM) | Google Apps Script as info@ | `apps-script/DailyReport.gs` |
+| 🎯 Brigham's Top 10 brief (6:15 AM Mon–Sat, Google Doc + email) | Google Apps Script `top10Brief` ← `/api/top10` Netlify Function | run `setupTop10Brief()` once in the bridge project |
 
 Geometry needs no cron at all: `/api/slots` regenerates from the Store Map
 sheet on demand (cached 6 hours), so floor-plan edits appear the same day.

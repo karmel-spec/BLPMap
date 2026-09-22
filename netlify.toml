@@ -33,3 +33,8 @@
   from = "/api/queue"
   to = "/.netlify/functions/queue-order"
   status = 200
+
+[[redirects]]
+  from = "/api/top10"
+  to = "/.netlify/functions/top10"
+  status = 200

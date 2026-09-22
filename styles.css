@@ -2182,3 +2182,17 @@ body.qdragging{user-select:none}
 .agf-btn.live::after{background:#2e7d4f}
 .agf-btn.down::after{background:#d0332c}
 .agf-btn{position:relative}
+/* 🎯 Brigham's Top 10 (Brigham 9/22) */
+.t10meta{font-size:12px;color:#5f6770;margin:0 0 10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.t10grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+@media (max-width:1000px){.t10grid{grid-template-columns:1fr}}
+.t10col{background:#fff;border:1px solid #dfe3e7;border-top:4px solid #9e2020;border-radius:12px;padding:10px 12px;min-width:0}
+.t10col h3{margin:0 0 6px;font-size:13px;letter-spacing:1.5px;display:flex;align-items:center;gap:8px}
+.t10col h3 small{margin-left:auto;font-size:11px;color:#8a929a;letter-spacing:0;font-weight:600}
+.t10row{display:flex;gap:10px;padding:8px 2px;border-top:1px solid #f0ece5;cursor:pointer;align-items:flex-start}
+.t10row:hover{background:#faf7f2}
+.t10n{min-width:24px;height:24px;border-radius:50%;background:#9e2020;color:#fff;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.t10row:nth-child(n+5) .t10n{background:#3a4046}
+.t10t{min-width:0}
+.t10title{font-size:13px;font-weight:700;line-height:1.3}
+.t10why{font-size:11.5px;color:#5f6770;line-height:1.4;margin-top:2px;white-space:pre-wrap;word-break:break-word}

@@ -391,3 +391,6 @@ export default async (req) => {
       { status: 502 });
   }
 };
+
+// shared with top10.mjs (Brigham's Top 10 brief)
+export { parsePianos, PIANO_LOG_CSV };

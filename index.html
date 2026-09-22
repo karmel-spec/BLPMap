@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Store Map — Brigham Larson Pianos</title>
 <link rel="icon" href="assets/blp-logo.png">
-<link rel="stylesheet" href="styles.css?v=221">
+<link rel="stylesheet" href="styles.css?v=222">
 </head>
 <body>
 
@@ -90,6 +90,7 @@
     <div class="navitem" data-view="team" id="navTeam" hidden><span class="ic">👥</span>Team</div>
     <div class="navitem" data-view="admdash" id="navAdmDash" hidden><span class="ic">🛡</span>Admin</div>
     <div class="navitem" data-view="manager" id="navManager" hidden><span class="ic">📊</span>Manager</div>
+    <div class="navitem" data-view="top10" id="navTop10" hidden><span class="ic">🎯</span>Brigham's Top 10</div>
     <div class="navitem" data-view="appset" id="navAppset" hidden><span class="ic">⚙️</span>Settings</div>
     <div class="crew">
       <b>Synced</b><span id="synced">loading…</span>
@@ -303,6 +304,15 @@
     </div>
   </div>
 
+  <div class="view panelview" id="view-top10" hidden>
+    <div class="panel">
+      <h2 class="ph">🎯 BRIGHAM'S TOP 10</h2>
+      <p class="pd">What is waiting on Brigham, ranked — shop, sales and admin support. Same list the
+        6:15 AM brief emails him; tap a row to open the piano or the card. Owners, managers &amp; admins.</p>
+      <div id="top10Body"></div>
+    </div>
+  </div>
+
   <div class="view panelview" id="view-admdash" hidden>
     <div class="panel">
       <h2 class="ph">🛡 ADMIN DASHBOARD</h2>
@@ -313,7 +323,7 @@
   </div>
 </div>
 
-<script src="app.js?v=455"></script>
+<script src="app.js?v=456"></script>
 <script src="sched.js?v=26"></script>
 <!-- Agent faces (bottom-right) + in-app chat: see "agent chat" in app.js.
      Tapping a face opens a chat window with that Hermes agent (through the

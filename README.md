@@ -31,6 +31,12 @@ never be committed. Without it the app still runs (map + pianos, no moves).
 - `server.py` serves the static app plus `/api/data`: Piano Log CSV export +
   moving-calendar iCal feed, parsed, merged, cached 2 minutes. Falls back to
   the last good payload if Google is unreachable.
+- **🎯 Brigham's Top 10** (Brigham 9/22): ☰ → Brigham's Top 10 (owners, managers,
+  admins) ranks everything waiting on Brigham in three lists — shop, sales,
+  admin support — scored by `/api/top10` (`netlify/functions/top10.mjs`) from
+  the Piano Log, the task boards and pending mini-QCs. The Apps Script bridge
+  (`top10Brief`) writes the same list into one printable Google Doc every
+  morning at 6:15 (same link every day) and emails him the link.
 - **Queue boxes are editable** (Keytop Q · Refinish Q · Plate Q, Karmel 9/18):
   owners, managers and admins drag ⠿ to reorder and ＋ add a piano; the order
   and additions live in Supabase `queue_order` (`supabase/queue_order.sql`,

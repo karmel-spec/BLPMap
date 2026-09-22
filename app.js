@@ -1522,7 +1522,16 @@ function tryFixClockLink() {
   lsDel('blpFC');
   clockFixModal();
 }
-window.addEventListener('hashchange', () => { deepLinkDone = ''; tryDeepLink(); tryReportLink(); tryCardLink(); tryBoardLink(); tryFixClockLink(); });
+// #view=top10 (from the daily brief's link) — any nav view by name, gated like the menu
+let viewLinkDone = '';
+function tryViewLink() {
+  const m = /[#&]view=([a-z0-9]+)/i.exec(location.hash || '');
+  if (!m || m[1] === viewLinkDone || !authUser()) return;
+  viewLinkDone = m[1];
+  switchView(m[1].toLowerCase());
+}
+window.addEventListener('hashchange', () => { deepLinkDone = ''; tryDeepLink(); tryReportLink(); tryCardLink(); tryBoardLink(); tryFixClockLink(); tryViewLink(); });
+setInterval(tryViewLink, 2000);   // sign-in lands after boot — keep trying until it does
 
 /* ---------- rendering ---------- */
 /* Views that fetch their own data and rebuild their own DOM. The 2.5-minute
@@ -9310,6 +9319,8 @@ function gateOr(legacy, key) { const ph = permHas(key); return ph === null ? leg
 function wireNavGates() {
   const nm = $('#navManager');
   if (nm) nm.hidden = !isManagerConsole();
+  const nt = $('#navTop10');
+  if (nt) nt.hidden = !isTeamAdmin();
   const na = $('#navAppset');
   if (na) na.hidden = !isSettingsAdmin();
 }
@@ -15210,7 +15221,7 @@ function renderAdmDash() {
 
 /* ---------- views / nav / drawers ---------- */
 function showView(v) {
-  ['map', 'report', 'board', 'cal', 'media', 'shopmap', 'archive', 'dash', 'whiteboard', 'training', 'trainingdoc', 'sched', 'team', 'admdash', 'updates', 'tboard', 'manager', 'appset'].forEach(x => $('#view-' + x).hidden = x !== v);
+  ['map', 'report', 'board', 'cal', 'media', 'shopmap', 'archive', 'dash', 'whiteboard', 'training', 'trainingdoc', 'sched', 'team', 'admdash', 'updates', 'tboard', 'manager', 'appset', 'top10'].forEach(x => $('#view-' + x).hidden = x !== v);
   if (v === 'archive') renderArchive();
   document.querySelectorAll('.navitem[data-view]').forEach(el =>
     el.classList.toggle('on', el.dataset.view === v));
@@ -15224,6 +15235,7 @@ function showView(v) {
   if (v === 'tboard') renderTaskBoard();
   if (v === 'manager') renderManager();
   if (v === 'appset') renderAppSettings();
+  if (v === 'top10') renderTop10();
 }
 /* 📊 Manager console — the scorecard as its own menu tab */
 function renderManager() {
@@ -15521,6 +15533,7 @@ function switchView(v) {
   if (v === 'sched' && !isTimelogAdmin()) SCHED.tab = 'audit';
   if ((v === 'team' || v === 'admdash') && !isTeamAdmin()) v = 'map';   // admin + managers + owners
   if (v === 'manager' && !isManagerConsole()) v = 'map';   // Brigham, Karmel & Mark only
+  if (v === 'top10' && !isTeamAdmin()) v = 'map';   // owners, managers & admins
   if (v === 'training') renderTraining();   // re-check gated rows for whoever is signed in NOW
   S.view = v; showView(v); closeNav();
   // a leftover page scroll (from panning the map) can slide a view's top —
@@ -16448,3 +16461,47 @@ boot();
   });
   window.openAgentChat = openChat;
 })();
+
+/* ---------- 🎯 Brigham's Top 10 (Brigham 9/22) ----------
+ * Three ranked lists of what is waiting on Brigham — shop, sales, admin
+ * support — scored server-side by /api/top10 (netlify/functions/top10.mjs) so
+ * this view and the 6:15 AM Google-Doc brief show the same list. */
+const TOP10 = {data: null, at: 0, loading: false};
+async function renderTop10() {
+  const el = $('#top10Body'); if (!el) return;
+  if (!isTeamAdmin()) { el.innerHTML = '<div class="empty">Owners, managers &amp; admins only.</div>'; return; }
+  if (!TOP10.data) el.innerHTML = '<div class="empty">Ranking what is waiting on Brigham…</div>';
+  if (!TOP10.loading && (!TOP10.data || Date.now() - TOP10.at > 180000)) {
+    TOP10.loading = true;
+    try {
+      let r = await fetch('/api/top10', {cache: 'no-store'});
+      if (!r.ok || !/json/.test(r.headers.get('content-type') || '')) r = await fetch('https://blpstoremap.netlify.app/api/top10', {cache: 'no-store'});   // local dev has no functions
+      const j = await r.json();
+      if (j.error && !j.shop) throw new Error(j.error);
+      TOP10.data = j; TOP10.at = Date.now();
+    } catch (e) { el.innerHTML = `<div class="empty">✗ ${esc(e.message || e)}</div>`; TOP10.loading = false; return; }
+    TOP10.loading = false;
+  }
+  const d = TOP10.data;
+  const col = (key, title, icon, rows) => `<div class="t10col"><h3>${icon} ${title} <small>${rows.length ? rows.length : 'none'}</small></h3>
+    ${rows.map(x => `<div class="t10row" ${x.link ? `data-link="${esc(x.link)}"` : ''} ${x.serial ? `data-serial="${esc(x.serial)}"` : ''}>
+      <b class="t10n">${x.rank}</b><div class="t10t"><div class="t10title">${esc(x.title)}</div><div class="t10why">${esc(x.why || '')}</div></div></div>`).join('')
+      || '<div class="t10row"><div class="t10t"><div class="t10why">Nothing waiting 🎉</div></div></div>'}</div>`;
+  el.innerHTML = `<div class="t10meta">Ranked ${esc(new Date(d.generated).toLocaleString('en-US', {weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'}))}
+      · ${d.totals.askOpen} open Ask-Brigham questions · ${d.totals.myCards} cards on his board${d.stale ? ' · ⚠ stale (refresh failed)' : ''}
+      <button class="tagbtn t10refresh" type="button">↻ refresh</button>
+      <a class="tagbtn" href="https://blpstoremap.netlify.app/api/top10" target="_blank" rel="noopener" title="the JSON the brief is built from">{ } data</a></div>
+    <div class="t10grid">${col('shop', 'SHOP', '🔧', d.shop)}${col('sales', 'SALES', '💼', d.sales)}${col('admin', 'ADMIN NEEDS YOU', '🗂', d.admin)}</div>`;
+  el.querySelector('.t10refresh').onclick = () => { TOP10.data = null; renderTop10(); };
+  el.querySelectorAll('.t10row[data-serial], .t10row[data-link]').forEach(row => row.onclick = () => {
+    const sn = row.dataset.serial;
+    const p = sn && S.data.pianos.find(x => x.active && String(x.serial || '').toLowerCase() === sn.toLowerCase());
+    if (p) { switchView('map'); focusPiano(p); openPop(p.row, S.popAnchor, true); return; }
+    const link = row.dataset.link || '';
+    const m = /#tboard=([^&]*)/.exec(link);
+    if (m) { TB.person = decodeURIComponent(m[1] || '') || TB.person; switchView('tboard'); return; }
+    const rep = /#report=([^&]*)/.exec(link);
+    if (rep) { switchView('report'); return; }
+    if (link) window.open(link, '_blank', 'noopener');
+  });
+}
