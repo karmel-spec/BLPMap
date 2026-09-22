@@ -75,7 +75,25 @@ async function gateway(path, init) {
   const raw = await r.text();
   let out = {};
   try { out = JSON.parse(raw); } catch (e) { out = {}; }
-  if (!r.ok) throw new Error(out.error || ('Agent gateway ' + r.status + ': ' + raw.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160)));
+  if (!r.ok) {
+    if (out && out.error) throw new Error(out.error);
+    /* Cloudflare answers an unreachable origin with an HTML error page and a
+     * 5xx — 530 is "tunnel up, nothing behind it" (their error 1033), i.e.
+     * exactly the case GATEWAY_DOWN describes. It never reached that message
+     * because a 530 is a successful fetch, so it fell through to the generic
+     * branch; and stripping tags left the inline <script> BODY behind, so the
+     * chat bubble showed Cloudflare's JavaScript (Walter 9/22). */
+    const cfCode = (raw.match(/error code:\s*(\d+)/i) || [])[1];
+    const edge = [502, 503, 504, 520, 521, 522, 523, 524, 525, 526, 530].indexOf(r.status) >= 0;
+    if (edge || cfCode || /^\s*<(!doctype|html)/i.test(raw)) {
+      throw new Error(GATEWAY_DOWN + ' (HTTP ' + r.status
+        + (cfCode ? ', Cloudflare error ' + cfCode : '') + ')');
+    }
+    const text = raw
+      .replace(/<(script|style)[^>]*>[\s\S]*?<\/\1>/gi, ' ')   // drop their bodies, not just the tags
+      .replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160);
+    throw new Error('Agent gateway ' + r.status + (text ? ': ' + text : ''));
+  }
   return out;
 }
 
