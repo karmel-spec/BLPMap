@@ -50,7 +50,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-09-22.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-09-22.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -4102,20 +4102,28 @@ function voidClock_(req) {
     var cur = String(wide[col - 1] || '');
     var cell = sh.getRange(row, col);
     var when = voidWhen_(wide, isPay, teamLang_(tech, ''));
+    /* quiet (Walter 9/22): voiding normally follows the person's OWN request,
+     * so telling them is right. Cleaning up an admin's double-submit is not
+     * their doing — Carlos's "+ missed day punch" was filed three times by
+     * mistake, and two texts saying time was removed from his clock would
+     * worry him over someone else's slip. The stamp records that nobody was
+     * told, so the row still explains itself. */
+    var quiet = !!req.quiet;
     if (req.undo) {
       if (!cur) return {ok: true, voided: false, tech: tech, piano: piano, already: true, texted: false};
       cell.setValue('');
-      return {ok: true, voided: false, tech: tech, piano: piano, was: cur,
-              texted: voidNotify_(tech, false, when, piano, '', row, isPay)};
+      return {ok: true, voided: false, tech: tech, piano: piano, was: cur, quiet: quiet,
+              texted: quiet ? false : voidNotify_(tech, false, when, piano, '', row, isPay)};
     }
     if (cur) return {ok: true, voided: true, tech: tech, piano: piano, already: true, note: cur, texted: false};
     var g = req._g;
     var reason = String(req.reason || '').trim().slice(0, 120);
     var stamp = 'voided by ' + (g.name || g.email) + ' ' +
-      Utilities.formatDate(new Date(), 'America/Denver', 'M/d h:mm a') + (reason ? ' \u2014 ' + reason : '');
+      Utilities.formatDate(new Date(), 'America/Denver', 'M/d h:mm a')
+      + (reason ? ' \u2014 ' + reason : '') + (quiet ? ' (not texted)' : '');
     cell.setValue(stamp);
-    return {ok: true, voided: true, tech: tech, piano: piano, note: stamp,
-            texted: voidNotify_(tech, true, when, piano, reason, row, isPay)};
+    return {ok: true, voided: true, tech: tech, piano: piano, note: stamp, quiet: quiet,
+            texted: quiet ? false : voidNotify_(tech, true, when, piano, reason, row, isPay)};
   });
 }
 

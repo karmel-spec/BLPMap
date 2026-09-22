@@ -11013,6 +11013,7 @@ function adjRow(clock, r, label, sub, dateCell) {
     return `<tr class="adjediting">${dt}<td>${label}</td><td>${sub}</td>
       <td colspan="3"><div class="lite" style="font-size:11.5px;margin-bottom:6px;white-space:normal">Voiding ${fmtT(r.start)} → ${r.end ? fmtT(r.end) : 'open'}${r.minutes ? ' (' + fmtHM(r.minutes) + ')' : ''}. The row stays in the sheet, struck through, and stops counting toward anyone's hours. You can restore it later.</div>
         <span class="rfd">why <input class="adjreason" maxlength="120" style="min-width:230px" placeholder="clocked in by mistake"></span>
+        <label class="rfd" title="leave ticked when the person asked for this. Untick when you are cleaning up a mistake of our own — a duplicate from a double-tap — so they are not told their time was removed."><input type="checkbox" class="adjvoidtell" checked> tell them</label>
         <button class="csvbtn adjvoidsave" data-clock="${clock}" data-row="${r.row}">🚫 Void this punch</button>
         <button class="adjedit adjcancel">cancel</button>
         <span class="adjmsg phmsg"></span></td></tr>`;
@@ -12235,13 +12236,16 @@ function renderReport() {
     b.disabled = true; msg.classList.remove('adjerr');
     msg.textContent = undo ? 'restoring…' : 'voiding…';
     const slow = adjSlowNotice(msg, undo ? 'restoring' : 'voiding');
+    const tell = tr.querySelector('.adjvoidtell');
     const j = await adjustPost({action: 'voidclock', clock, row,
-      reason: reasonEl ? reasonEl.value.trim() : '', undo: undo});
+      reason: reasonEl ? reasonEl.value.trim() : '', undo: undo,
+      quiet: tell ? !tell.checked : false});
     clearTimeout(slow);
     const who = (tr.children[1] && tr.children[1].textContent.trim().split('\n')[0]) || 'that punch';
     const txt = j && j.texted ? ', texted' : '';
-    if (!adjFeedback(msg, j, undo ? `restored — ${who} counts again${txt}`
-                                  : `voided — ${who} no longer counts toward hours${txt}`)) { b.disabled = false; return; }
+    const quietNote = j && j.quiet ? ', not texted' : txt;
+    if (!adjFeedback(msg, j, undo ? `restored — ${who} counts again${quietNote}`
+                                  : `voided — ${who} no longer counts toward hours${quietNote}`)) { b.disabled = false; return; }
     const r = ((clock === 'pay' ? S.payRows : S.tlRows) || []).find(x => x.row === row);
     if (r) r.voided = undo ? '' : (j.note || 'voided just now');
     S.adjEdit = null;
