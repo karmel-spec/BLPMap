@@ -50,7 +50,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-09-22.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-09-22.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -4119,6 +4119,54 @@ function voidClock_(req) {
   });
 }
 
+/* An identical punch is never a second shift: same person, same start, same
+ * end, same piano. Karmel's "+ missed day punch" landed THREE times on 9/9
+ * (stamped 8:42, 8:42, 8:43) when the bridge was slow, and Carlos carried 196
+ * extra minutes twice over until it turned up in his clock-out history two
+ * weeks later (Walter 9/22). Clock fix REQUESTS were deduped on 9/17; the
+ * add-a-punch path never was.
+ *
+ * Unlike a fix request, an identical punch is not meaningful later either —
+ * nobody works the same minutes twice — so there is no time window: a match
+ * anywhere in the recent rows counts. VOIDED rows are ignored, so deliberately
+ * voiding one and re-adding it still works. */
+function dupPunchRow_(sh, width, ix, tech, startIso, endIso, serial) {
+  try {
+    var last = sh.getLastRow();
+    if (last < 2) return 0;
+    var from = Math.max(2, last - 300);
+    var vals = sh.getRange(from, 1, last - from + 1, width).getValues();
+    var iso = function (v) {
+      if (!v) return '';
+      var d = (v instanceof Date) ? v : new Date(v);
+      return isNaN(d.getTime()) ? String(v) : d.toISOString();
+    };
+    var want = String(tech || '').trim().toLowerCase();
+    for (var i = vals.length - 1; i >= 0; i--) {
+      if (vals[i][ix.void]) continue;
+      if (String(vals[i][ix.tech] || '').trim().toLowerCase() !== want) continue;
+      if (iso(vals[i][ix.start]) !== String(startIso || '')) continue;
+      if (iso(vals[i][ix.end]) !== String(endIso || '')) continue;
+      if (ix.serial != null && String(vals[i][ix.serial] || '').trim() !== String(serial || '').trim()) continue;
+      return from + i;
+    }
+  } catch (e) { /* dedupe is best-effort — never block a real punch */ }
+  return 0;
+}
+/* The app keeps one reqId across its own retries, so a retried POST is
+ * recognised exactly rather than guessed at from the values. */
+function addPunchSeen_(reqId) {
+  if (!reqId) return 0;
+  try {
+    var v = CacheService.getScriptCache().get(('addpunch:' + reqId).slice(0, 240));
+    return v ? Number(v) : 0;
+  } catch (e) { return 0; }
+}
+function addPunchRemember_(reqId, row) {
+  if (!reqId) return;
+  try { CacheService.getScriptCache().put(('addpunch:' + reqId).slice(0, 240), String(row), 21600); } catch (e) {}
+}
+
 function adjustClock_(req) {
   return withClockLock_(function () {
     var g = req._g;
@@ -4135,9 +4183,17 @@ function adjustClock_(req) {
       var sh = payrollSheet_();
       if (req.add) {
         if (!req.tech) return {error: 'tech required'};
+        var seenPay = addPunchSeen_(req.reqId)
+          || dupPunchRow_(sh, 8, {tech: 0, start: 2, end: 3, void: 7}, req.tech,
+                          start.toISOString(), end ? end.toISOString() : '', null);
+        if (seenPay) {
+          addPunchRemember_(req.reqId, seenPay);
+          return {ok: true, tech: String(req.tech), duplicate: true, row: seenPay};
+        }
         sh.appendRow([String(req.tech),
           Utilities.formatDate(start, 'America/Denver', 'yyyy-MM-dd'),
           start.toISOString(), end ? end.toISOString() : '', mins, 'adjust', 'added: ' + stamp.slice(9)]);
+        addPunchRemember_(req.reqId, sh.getLastRow());
         return {ok: true, tech: String(req.tech)};
       }
       var row = Number(req.row);
@@ -4151,11 +4207,20 @@ function adjustClock_(req) {
     var tsh = timeLogSheet_();
     if (req.add) {
       if (!req.tech || !req.serial) return {error: 'tech and piano serial required'};
+      var seenTl = addPunchSeen_(req.reqId)
+        || dupPunchRow_(tsh, 10, {tech: 0, serial: 1, start: 4, end: 5, void: 9}, req.tech,
+                        start.toISOString(), end ? end.toISOString() : '', req.serial);
+      if (seenTl) {
+        addPunchRemember_(req.reqId, seenTl);
+        return {ok: true, tech: String(req.tech), duplicate: true, row: seenTl,
+                piano: String(tsh.getRange(seenTl, 3).getValue() || req.serial)};
+      }
       var psh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
       var f = findPiano_(psh, req.serial, null);
       tsh.appendRow([String(req.tech), String(req.serial), (f && f.summary) || '',
         String(req.phase || ''), start.toISOString(), end ? end.toISOString() : '', mins,
         'adjust', 'added: ' + stamp.slice(9)]);
+      addPunchRemember_(req.reqId, tsh.getLastRow());
       return {ok: true, tech: String(req.tech), piano: (f && f.summary) || String(req.serial)};
     }
     var trow = Number(req.row);

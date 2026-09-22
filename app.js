@@ -12282,11 +12282,16 @@ function renderReport() {
     if (!adjSanity(start, end, tech)) return;
     b.disabled = true; msg.textContent = 'adding…'; msg.classList.remove('adjerr');
     const slow = adjSlowNotice(msg, 'adding');
-    const j = await adjustPost({action: 'adjustclock', clock, add: true, tech,
+    // one id for this press, kept across adjustPost's own retries, so a retry
+    // after a slow bridge is recognised rather than filed as a second punch
+    // (Karmel's missed day punch landed 3× on 9/9 — Walter 9/22)
+    const reqId = 'add-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
+    const j = await adjustPost({action: 'adjustclock', clock, add: true, tech, reqId,
       serial: val('.a-serial'), phase: val('.a-phase'),
       start: new Date(start).toISOString(), end: end ? new Date(end).toISOString() : ''});
     clearTimeout(slow);
-    if (!adjFeedback(msg, j, `added — ${tech}: ${fmtT(new Date(start).toISOString())} → ${end ? fmtT(new Date(end).toISOString()) : 'open'}`)) { b.disabled = false; return; }
+    const added = `${tech}: ${fmtT(new Date(start).toISOString())} → ${end ? fmtT(new Date(end).toISOString()) : 'open'}`;
+    if (!adjFeedback(msg, j, j && j.duplicate ? `already there — ${added} (not added twice)` : `added — ${added}`)) { b.disabled = false; return; }
     b.textContent = '✓ added';
     bar.querySelectorAll('input').forEach(i => i.value = '');
     const fromFix = bar.dataset.fromfix; delete bar.dataset.fromfix;
