@@ -12699,7 +12699,10 @@ async function loadMyClock(name) {
   try {
     // fast path: service-account sheet read (~0.5s) — Google's Apps Script
     // can take 30s+ when it's moody, and punch verification can't wait
-    const fr = await fetch('https://blpsalesapp.netlify.app/.netlify/functions/clock-history?key=pianoman&days=16');
+    // 40 days, not 16: a month-to-date total needs the whole current month,
+    // and after the 16th a 16-day window would quietly under-count it
+    // (Alisa 9/18, 091826miller07)
+    const fr = await fetch('https://blpsalesapp.netlify.app/.netlify/functions/clock-history?key=pianoman&days=40');
     const fj = await fr.json();
     if (!fj.ok) throw new Error(fj.error || 'fast feed down');
     MYCLOCK.pay = (fj.pay || []).filter(r => myClockMatch(r.tech, name));
@@ -12707,8 +12710,8 @@ async function loadMyClock(name) {
   } catch (e0) {
     try {
       const [pr, tr] = await Promise.all([
-        fetch(BRIDGE_URL + '?fn=payrollrows&days=16', {redirect: 'follow'}).then(r => r.json()),
-        fetch(BRIDGE_URL + '?fn=timelog&days=16', {redirect: 'follow'}).then(r => r.json()),
+        fetch(BRIDGE_URL + '?fn=payrollrows&days=40', {redirect: 'follow'}).then(r => r.json()),
+        fetch(BRIDGE_URL + '?fn=timelog&days=40', {redirect: 'follow'}).then(r => r.json()),
       ]);
       MYCLOCK.pay = (pr.rows || []).filter(r => myClockMatch(r.tech, name));
       MYCLOCK.tl = (tr.rows || []).filter(r => myClockMatch(r.tech, name));
@@ -12755,12 +12758,26 @@ function myWeekCard() {
     : h >= cap - 6
       ? `<b style="color:#9a5b13">${leftHM} left before ${cap}h</b> — plan the rest of the week so you don't go over. Going past ${cap}h needs Brigham's OK <u>ahead of time</u>.`
       : `<b>${done}</b> this week · ${leftHM} until ${cap}h.`;
+  /* Month to date (Alisa 9/18, 091826miller07) — she wanted a running total
+   * for the full month, not just the week. Same punches, counted from the 1st,
+   * live punch included. The loader now keeps 40 days so this is never short. */
+  const m1 = today.slice(0, 8) + '01';
+  let monthMins = 0, monthDays = new Set();
+  for (const r of MYCLOCK.pay) {
+    const day = denverDay(r.start);
+    if (day < m1) continue;
+    monthDays.add(day);
+    monthMins += r.end ? (r.minutes || 0) : Math.max(0, (Date.now() - new Date(r.start)) / 60000);
+  }
+  const monthName = new Date(today + 'T12:00:00').toLocaleDateString('en-US', {month: 'long'});
+  const monthLine = `<div class="dline"><b>${fmtHM(monthMins)}</b> so far in ${monthName} · ${monthDays.size} day${monthDays.size === 1 ? '' : 's'} worked.</div>`;
   return `<div class="dbench db-forty">
     <h4>⏳ My week vs ${cap} hours</h4>
     <div style="height:12px;background:#efece6;border-radius:6px;overflow:hidden;margin:6px 0">
       <div style="height:100%;width:${pctBar}%;background:${tone};border-radius:6px"></div></div>
     <div class="dline">${msg}</div>
-    <div class="dline dim">Week runs Monday–Sunday, from your Payroll Clock punches (live punch included).</div>
+    ${monthLine}
+    <div class="dline dim">Week runs Monday–Sunday and the month from the 1st, both from your Payroll Clock punches (live punch included).</div>
   </div>`;
 }
 function myClockHistory() {
