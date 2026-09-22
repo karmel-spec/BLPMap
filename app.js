@@ -1540,7 +1540,10 @@ const SELF_RENDERING_VIEWS = ['sched', 'tboard', 'team', 'admdash', 'updates',
 function renderAll(background) {
   if (!QCQ.rows ? Date.now() - QCQ.at > 60000 : Date.now() - QCQ.at > 300000) loadQcQueue();
   renderTabs(); renderKpis(); renderCrew(); renderMoves();
-  renderMap(); renderReport(); renderBoard(); renderCal(); renderMedia();
+  // a half-filled edit row is never rebuilt by the background refresh — it
+  // would move focus, lose scroll, and reset the void bar (Walter 9/22)
+  const midEdit = background && (S.adjEdit || document.querySelector('.rpt .adjediting'));
+  renderMap(); if (!midEdit) renderReport(); renderBoard(); renderCal(); renderMedia();
   if (!(background && SELF_RENDERING_VIEWS.includes(S.view))) showView(S.view);
   syncFeed();
 }
@@ -11012,8 +11015,8 @@ function adjRow(clock, r, label, sub, dateCell) {
   if (S.adjEdit.mode === 'void') {
     return `<tr class="adjediting">${dt}<td>${label}</td><td>${sub}</td>
       <td colspan="3"><div class="lite" style="font-size:11.5px;margin-bottom:6px;white-space:normal">Voiding ${fmtT(r.start)} → ${r.end ? fmtT(r.end) : 'open'}${r.minutes ? ' (' + fmtHM(r.minutes) + ')' : ''}. The row stays in the sheet, struck through, and stops counting toward anyone's hours. You can restore it later.</div>
-        <span class="rfd">why <input class="adjreason" maxlength="120" style="min-width:230px" placeholder="clocked in by mistake"></span>
-        <label class="rfd" title="leave ticked when the person asked for this. Untick when you are cleaning up a mistake of our own — a duplicate from a double-tap — so they are not told their time was removed."><input type="checkbox" class="adjvoidtell" checked> tell them</label>
+        <span class="rfd">why <input class="adjreason" maxlength="120" style="min-width:230px" placeholder="clocked in by mistake" value="${esc(S.adjEdit.reason || '')}"></span>
+        <label class="rfd" title="leave ticked when the person asked for this. Untick when you are cleaning up a mistake of our own — a duplicate from a double-tap — so they are not told their time was removed."><input type="checkbox" class="adjvoidtell"${S.adjEdit.tell === false ? '' : ' checked'}> tell them</label>
         <button class="csvbtn adjvoidsave" data-clock="${clock}" data-row="${r.row}">🚫 Void this punch</button>
         <button class="adjedit adjcancel">cancel</button>
         <span class="adjmsg phmsg"></span></td></tr>`;
@@ -12223,6 +12226,17 @@ function renderReport() {
   body.querySelectorAll('.adjvoidbtn').forEach(b => b.onclick = () => {
     S.adjEdit = {clock: b.dataset.clock, row: +b.dataset.row, mode: 'void'};
     renderReport();
+  });
+  /* Keep what has been typed/ticked in S.adjEdit. renderReport() re-runs on
+   * the 2.5-minute background refresh and on any clock reload, and the bar was
+   * rebuilt from defaults each time — so unticking "tell them", pausing, then
+   * voiding would re-tick it and text the person anyway, and a typed reason
+   * vanished silently (Walter 9/22). */
+  body.querySelectorAll('.adjvoidtell').forEach(c => c.onchange = () => {
+    if (S.adjEdit) S.adjEdit.tell = c.checked;
+  });
+  body.querySelectorAll('.adjreason').forEach(i => i.oninput = () => {
+    if (S.adjEdit) S.adjEdit.reason = i.value;
   });
   body.querySelectorAll('.adjvoidsave, .adjunvoid').forEach(b => b.onclick = async () => {
     const undo = b.classList.contains('adjunvoid');
