@@ -50,7 +50,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-09-21.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-09-22.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -3644,8 +3644,19 @@ function closePayRow_(sh, open, endAt, note) {
  * The median is used, so one late night does not move it. At least 3 punches
  * are required, or there is not enough to say.
  *
- * It can only ever push the floor LATER than 6 PM, never earlier: fixing the
- * under-stamping must not quietly start shortening anyone else's day. */
+ * It replaces 6 PM in BOTH directions. A one-directional rail was tried first
+ * and was wrong: it protected late finishers like Melissa while quietly
+ * over-paying early ones. Avery works 8:00 to 12:07 — a 6 PM floor hands him
+ * six hours he did not work every time he forgets (Walter 9/22). 6 PM only
+ * remains for people with too little history to say. */
+/* One key per person however their name was stamped: punches carry
+ * "Alex Martin", "Alex Martin (session expired — unverified)" and
+ * "Mark Hales <mark@…>" — left raw, each spelling builds its own history and
+ * none of them reaches 3 punches. Same normalising evidenceKey_ uses. */
+function finishKey_(name) {
+  return String(name || '').replace(/<[^>]*>/g, '').replace(/\([^)]*\)/g, ' ')
+    .trim().toLowerCase().replace(/\s+/g, ' ');
+}
 function usualFinishIndex_(sh) {
   var out = {};
   try {
@@ -3663,7 +3674,7 @@ function usualFinishIndex_(sh) {
       var hm = Utilities.formatDate(endAt, 'America/Denver', 'HH:mm').split(':');
       var m = Number(hm[0]) * 60 + Number(hm[1]);
       if (m < 6 * 60) m += 24 * 60;        // a finish after midnight belongs to that day
-      var k = tech.toLowerCase();
+      var k = finishKey_(tech);
       (mins[k] = mins[k] || []).push(m);
     }
     for (var k2 in mins) {
@@ -3696,12 +3707,14 @@ function sweepForgottenPay_(sh) {
   todo.forEach(function (t) {
     var start = t.start;
     var floorAt = new Date(Utilities.formatDate(start, 'America/Denver', "yyyy-MM-dd'T'18:00:00XXX"));
-    var u = usual[String(t.v[0] || '').trim().toLowerCase()], usualUsed = null;
+    var u = usual[finishKey_(t.v[0])], usualUsed = null;
     if (u) {
       var uAt = new Date(Utilities.formatDate(start, 'America/Denver',
         "yyyy-MM-dd'T'" + pad2(u.h) + ':' + pad2(u.m) + ":00XXX"));
       if (u.h < 6) uAt = new Date(uAt.getTime() + 86400000);   // a past-midnight finish
-      if (uAt > floorAt) { floorAt = uAt; usualUsed = u; }     // later than 6 PM only
+      // their own finish replaces 6 PM whether it is later OR earlier; the
+      // floor is only ever reached when nothing later was actually recorded
+      if (uAt > start) { floorAt = uAt; usualUsed = u; }
     }
     var six = floorAt;
     var end = six > start ? six : new Date(start.getTime() + 3600000);
