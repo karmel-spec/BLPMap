@@ -10737,12 +10737,12 @@ function payTimeTable() {
   const f = S.payF || (S.payF = {who: '', from: '', to: '', group: 'day', detail: seesDetail ? 'all' : 'day', cat: ''});
   if (f.detail === undefined) f.detail = seesDetail ? 'all' : 'day';
   if (f.cat === undefined) f.cat = '';
-  const techs = [...new Set([...S.payRows.map(r => r.tech), ...S.tlRows.map(r => r.tech)])].sort();
+  const techs = [...new Set([...S.payRows.map(r => techName(r.tech)), ...S.tlRows.map(r => techName(r.tech))].filter(Boolean))].sort();
   const rows = unvoided(S.payRows).filter(r =>
-    (!f.who || r.tech === f.who) && inRange(r.date, f));
+    (!f.who || techName(r.tech) === f.who) && inRange(r.date, f));
   // Work Clock sessions, same member + range (+ category when chosen)
   const tlAll = unvoided(S.tlRows).filter(r =>
-    (!f.who || r.tech === f.who) && inRange(denverDay(r.start), f));
+    (!f.who || techName(r.tech) === f.who) && inRange(denverDay(r.start), f));
   const cats = [...new Set(tlAll.map(r => r.phase || '(no phase)'))].sort();
   const tl = f.cat ? tlAll.filter(r => (r.phase || '(no phase)') === f.cat) : tlAll;
   const showTl = f.detail === 'all';
@@ -10843,12 +10843,12 @@ function payTimeTable() {
 function jobCostTable() {
   if (!S.tlRows) return '<div class="empty">Loading the Work Clock ledger…</div>';
   const f = S.jcF || (S.jcF = {q: '', tech: '', phase: '', from: '', to: ''});
-  const techs = [...new Set(S.tlRows.map(r => r.tech))].sort();
+  const techs = [...new Set(S.tlRows.map(r => techName(r.tech)).filter(Boolean))].sort();
   const phases = [...new Set(S.tlRows.map(r => r.phase).filter(Boolean))].sort();
   const q = f.q.trim().toLowerCase();
   const rows = unvoided(S.tlRows).filter(r =>
     (!q || (r.serial + ' ' + r.piano).toLowerCase().includes(q))
-    && (!f.tech || r.tech === f.tech)
+    && (!f.tech || techName(r.tech) === f.tech)
     && (!f.phase || r.phase === f.phase)
     && inRange(denverDay(r.start), f));
   const bar = filterBar('jc', [
@@ -10976,6 +10976,18 @@ async function adjustPost(body) {
 }
 // a punch the forgotten-clock sweep closed at 6:00 PM, not the person (Mark
 // 9/16): the end time is a guess, so say so until someone adjusts the row
+/* One name per person, however the punch or request recorded it. The same
+ * person shows up as "Hunter Rawlings", "Hunter Rawlings (session expired —
+ * unverified)" and "Mark Hales <mark@…>", so every filter built from raw
+ * names listed them two or three times and picking one silently hid the rest
+ * of their rows (Walter 9/22 — Alex, Ezaray and Hunter all doubled in the
+ * requests filter). Used for BOTH the list and the match, or selecting a name
+ * would match nothing. */
+function techName(t) {
+  return String(t || '').replace(/<[^>]*>/g, '').replace(/\([^)]*\)/g, ' ')
+    .trim().replace(/\s+/g, ' ');
+}
+
 function adjAutoClosed(r) {
   const n = String(r.note || '');
   // "confirmed by" = someone checked the auto time and accepted it (Walter
@@ -11054,7 +11066,7 @@ function cfxSinceLaunch(fx) {
   const y = cfxWhenYmd(fx);
   return !y || y >= CLOCK_FIX_SINCE;   // unparseable → don't hide
 }
-const cfxWho = fx => String(fx.who || '').replace(/<[^>]*>/g, '').trim();
+const cfxWho = fx => techName(fx.who);
 const CFX_MON = {jan:0,ene:0,feb:1,mar:2,apr:3,abr:3,may:4,jun:5,jul:6,aug:7,ago:7,sep:8,set:8,oct:9,nov:10,dic:11,dec:11};
 function cfxDates(fx) {
   const note = String(fx.note || '').toLowerCase();
@@ -11361,8 +11373,7 @@ function clockAdjustTable() {
    * the rest of their rows. Names are normalised for both the list and the
    * match, so one entry covers every spelling. Claude's own probe accounts
    * are left out of the picker (their rows still show unfiltered). */
-  const adjName = t => String(t || '').replace(/<[^>]*>/g, '').replace(/\([^)]*\)/g, ' ')
-    .trim().replace(/\s+/g, ' ');
+  const adjName = techName;
   const adjWhos = [...new Set([...(S.payRows || []).map(r => r.tech), ...(S.tlRows || []).map(r => r.tech)]
     .map(adjName).filter(t => t && !/^claude\b/i.test(t)))].sort((a, b) => a.localeCompare(b));
   const adjKeep = (r, clock) => {
