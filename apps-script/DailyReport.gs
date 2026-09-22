@@ -50,7 +50,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-09-22.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-09-22.4';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -4185,8 +4185,15 @@ function adjustClock_(req) {
     if (isNaN(start)) return {error: 'bad start time'};
     if (end && !(end > start)) return {error: 'end must be after start'};
     var mins = end ? Math.max(1, Math.round((end - start) / 60000)) : '';
-    var stamp = 'adjusted by ' + ((g.name || g.email)) + ' ' +
-      Utilities.formatDate(new Date(), 'America/Denver', 'M/d h:mm a');
+    /* confirm (Walter 9/22): an auto-stamped punch that is actually RIGHT had
+     * no way to be signed off — it stayed flagged for review for ever, so the
+     * list never emptied and a real problem sat among rows nobody had ruled
+     * on. Accepting writes the same times back with a stamp that says so,
+     * rather than "adjusted by", which would claim a change that never
+     * happened. Carlos confirmed his 9/11 really did end about 6 PM. */
+    var stamp = (req.confirm ? 'confirmed by ' : 'adjusted by ') + ((g.name || g.email)) + ' ' +
+      Utilities.formatDate(new Date(), 'America/Denver', 'M/d h:mm a')
+      + (req.confirm ? ' \u2014 auto clock-out accepted as correct' : '');
     if (isPay) {
       var sh = payrollSheet_();
       if (req.add) {

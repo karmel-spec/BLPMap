@@ -10978,7 +10978,10 @@ async function adjustPost(body) {
 // 9/16): the end time is a guess, so say so until someone adjusts the row
 function adjAutoClosed(r) {
   const n = String(r.note || '');
-  return /forgot to clock out/i.test(n) && !/adjusted by/i.test(n);
+  // "confirmed by" = someone checked the auto time and accepted it (Walter
+  // 9/22). Like an edit, it takes the row off the review list — the point is
+  // that a human has ruled on it, not that the time changed.
+  return /forgot to clock out/i.test(n) && !/adjusted by|confirmed by/i.test(n);
 }
 /* A voided punch (Mark 9/16) stays in the ledger and stays visible in the 🛠
  * adjust report — struck through, with who voided it and why — but it counts
@@ -11009,7 +11012,9 @@ function adjRow(clock, r, label, sub, dateCell) {
     return `<tr${auto ? ' class="autorow"' : ''}>${dt}<td>${label}</td><td>${sub}</td>
       <td>${fmtT(r.start)} → ${r.end ? fmtT(r.end) : '<b style="color:#2e7d4f">open</b>'}${auto}</td>
       <td>${r.minutes ? fmtHM(r.minutes) : '—'}</td>
-      <td style="white-space:nowrap"><button class="adjedit" data-clock="${clock}" data-row="${r.row}">✎ adjust</button>
+      <td style="white-space:nowrap">${auto ? `<button class="adjaccept" data-clock="${clock}" data-row="${r.row}"
+          data-start="${esc(r.start)}" data-end="${esc(r.end || '')}"
+          title="the stamped time is right — sign it off and take it off the review list, without changing anything">✓ accept</button> ` : ''}<button class="adjedit" data-clock="${clock}" data-row="${r.row}">✎ adjust</button>
         <button class="adjvoidbtn" data-clock="${clock}" data-row="${r.row}" title="for a punch that should never have existed — a clock-in and clock-out a minute apart. The row stays, struck through, and stops counting.">🚫 void</button></td></tr>`;
   }
   if (S.adjEdit.mode === 'void') {
@@ -12222,6 +12227,24 @@ function renderReport() {
         : {clock: b.dataset.clock, row: +b.dataset.row};
       renderReport();
     };
+  });
+  /* ✓ accept — the auto stamp is correct, so write the SAME times back with a
+   * "confirmed by" note. Nothing moves; the row simply stops being flagged.
+   * confirm:true is ignored by an older bridge, which just records it as an
+   * ordinary adjust — still correct, only worded as a change. */
+  body.querySelectorAll('.adjaccept').forEach(b => b.onclick = async () => {
+    const tr = b.closest('tr'), msg = tr.querySelector('.adjmsg') || tr.querySelector('td:last-child');
+    const clock = b.dataset.clock, row = +b.dataset.row;
+    const start = b.dataset.start, end = b.dataset.end;
+    if (!end) { if (msg) msg.textContent = 'still open — use ✎ adjust'; return; }
+    if (adjExpired()) { adjStashAndRenew({}); return; }
+    b.disabled = true; b.textContent = '…';
+    const j = await adjustPost({action: 'adjustclock', clock, row, start, end, confirm: true});
+    if (j && j.error) { b.disabled = false; b.textContent = '✓ accept'; if (msg) { msg.textContent = j.error; msg.classList.add('adjerr'); } return; }
+    adjPatchLocal(clock, row, start, end, {note: 'confirmed just now — syncing…'});
+    S.adjEdit = null;
+    renderReport();
+    refreshClocksQuiet();
   });
   body.querySelectorAll('.adjvoidbtn').forEach(b => b.onclick = () => {
     S.adjEdit = {clock: b.dataset.clock, row: +b.dataset.row, mode: 'void'};
