@@ -12203,10 +12203,21 @@ function renderReport() {
       + (extra ? ` · ${extra} re-sent cop${extra === 1 ? 'y' : 'ies'} archived` : ''));
     S.fixRows = null; loadClockFixes();
   });
-  body.querySelectorAll('.adjedit').forEach(b => b.onclick = () => {
-    S.adjEdit = b.classList.contains('adjcancel') ? null
-      : {clock: b.dataset.clock, row: +b.dataset.row};
-    renderReport();
+  body.querySelectorAll('.adjedit').forEach(b => {
+    /* .dayedit and .dayvoid (the ✎ and 🚫 in the day view) borrow this class
+     * for its styling, but they have their OWN handlers wired above and carry
+     * only data-row — no data-clock. This block runs later and assigns
+     * onclick, so it silently replaced those handlers, then set
+     * S.adjEdit.clock = undefined, which matches no row: clicking either
+     * button did nothing at all (Walter 9/22, Carlos's duplicate rows).
+     * This handler cannot work without a clock, so it only claims buttons
+     * that carry one — anything with its own wiring is left alone. */
+    if (!b.dataset.clock && !b.classList.contains('adjcancel')) return;
+    b.onclick = () => {
+      S.adjEdit = b.classList.contains('adjcancel') ? null
+        : {clock: b.dataset.clock, row: +b.dataset.row};
+      renderReport();
+    };
   });
   body.querySelectorAll('.adjvoidbtn').forEach(b => b.onclick = () => {
     S.adjEdit = {clock: b.dataset.clock, row: +b.dataset.row, mode: 'void'};
