@@ -866,6 +866,20 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_error(404)
 
     def do_GET(self):
+        if self.path.split('?')[0] == '/api/top10':
+            # local dev: the ranking lives in a Netlify function — proxy the live one
+            try:
+                with urllib.request.urlopen('https://blpstoremap.netlify.app/api/top10', timeout=60) as r:
+                    body = r.read()
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Cache-Control', 'no-store')
+                self.send_header('Content-Length', str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+            except Exception as exc:
+                self._json({'error': 'top10 proxy: %s' % exc}, 502)
+            return
         if self.path.split('?')[0] == '/api/agent' and 'health' in self.path:
             try:
                 h = gateway_call('/health')
