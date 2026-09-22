@@ -12697,23 +12697,38 @@ function dashInitials(name) {
 /* 🕘 personal clock history + 40-hour watch (Brigham 9/3): every team
  * member can verify their own punches and see how close the week is to
  * 40 h — overtime needs Brigham's approval AHEAD of time. */
-const MYCLOCK = {at: 0, forName: '', pay: null, tl: null};
+const MYCLOCK = {at: 0, forName: '', pay: null, tl: null, days: 0};
+/* How far back the dashboard is showing, and which clock. The card used to be
+ * a fixed "last 2 weeks" off a 16-day fetch; the team asked to go back as far
+ * as they like and to look at one clock at a time (Walter 9/22). */
+const MYHIST = {from: '', to: '', clock: ''};
+const MYHIST_BASE = 40;                        // default window, covers month-to-date
+function myHistNeedDays() {
+  if (!MYHIST.from) return MYHIST_BASE;
+  const from = new Date(MYHIST.from + 'T12:00:00');
+  if (isNaN(from)) return MYHIST_BASE;
+  const d = Math.ceil((Date.now() - from.getTime()) / 86400000) + 2;
+  return Math.min(730, Math.max(MYHIST_BASE, d));   // the bridge caps at 730
+}
 function myClockMatch(rowTech, myName) {
   const AL = {guadalupe: 'lupita'};
   const norm = x => String(x || '').trim().toLowerCase();
   const first = x => { const f = norm(x).split(/\s+/)[0]; return AL[f] || f; };
   return norm(rowTech) === norm(myName) || first(rowTech) === first(myName);
 }
-async function loadMyClock(name) {
-  if (MYCLOCK.pay && MYCLOCK.forName === name && Date.now() - MYCLOCK.at < 300000) return;
-  MYCLOCK.at = Date.now(); MYCLOCK.forName = name;
+async function loadMyClock(name, days) {
+  const want = Math.max(MYHIST_BASE, days || myHistNeedDays());
+  // cached only while it still covers the window being asked for
+  if (MYCLOCK.pay && MYCLOCK.forName === name && MYCLOCK.days >= want
+      && Date.now() - MYCLOCK.at < 300000) return;
+  MYCLOCK.at = Date.now(); MYCLOCK.forName = name; MYCLOCK.days = want;
   try {
     // fast path: service-account sheet read (~0.5s) — Google's Apps Script
     // can take 30s+ when it's moody, and punch verification can't wait
     // 40 days, not 16: a month-to-date total needs the whole current month,
     // and after the 16th a 16-day window would quietly under-count it
     // (Alisa 9/18, 091826miller07)
-    const fr = await fetch('https://blpsalesapp.netlify.app/.netlify/functions/clock-history?key=pianoman&days=40');
+    const fr = await fetch('https://blpsalesapp.netlify.app/.netlify/functions/clock-history?key=pianoman&days=' + want);
     const fj = await fr.json();
     if (!fj.ok) throw new Error(fj.error || 'fast feed down');
     MYCLOCK.pay = (fj.pay || []).filter(r => myClockMatch(r.tech, name));
@@ -12721,8 +12736,8 @@ async function loadMyClock(name) {
   } catch (e0) {
     try {
       const [pr, tr] = await Promise.all([
-        fetch(BRIDGE_URL + '?fn=payrollrows&days=40', {redirect: 'follow'}).then(r => r.json()),
-        fetch(BRIDGE_URL + '?fn=timelog&days=40', {redirect: 'follow'}).then(r => r.json()),
+        fetch(BRIDGE_URL + '?fn=payrollrows&days=' + want, {redirect: 'follow'}).then(r => r.json()),
+        fetch(BRIDGE_URL + '?fn=timelog&days=' + want, {redirect: 'follow'}).then(r => r.json()),
       ]);
       MYCLOCK.pay = (pr.rows || []).filter(r => myClockMatch(r.tech, name));
       MYCLOCK.tl = (tr.rows || []).filter(r => myClockMatch(r.tech, name));
@@ -12803,21 +12818,48 @@ function myClockHistory() {
     const d = denverDay(r.start);
     (days[d] = days[d] || {pay: [], tl: []}).tl.push(r);
   }
-  const keys = Object.keys(days).sort().reverse().slice(0, 14);
-  if (!keys.length) return `<div class="dbench"><h4>🕘 My clock history</h4><div class="dline dim">No punches in the last two weeks.</div></div>`;
+  /* Filter: any date range, and one clock or both (Walter 9/22). With no
+   * range set the card behaves as it always did — the last 14 days. */
+  const showPay = MYHIST.clock !== 'tl', showTl = MYHIST.clock !== 'pay';
+  const inHist = d => (!MYHIST.from || d >= MYHIST.from) && (!MYHIST.to || d <= MYHIST.to);
+  const ranged = !!(MYHIST.from || MYHIST.to);
+  let keys = Object.keys(days).filter(d => inHist(d)
+    && ((showPay && days[d].pay.length) || (showTl && days[d].tl.length)))
+    .sort().reverse();
+  if (!ranged) keys = keys.slice(0, 14);
+  const histBar = `<div class="rfbar" style="margin:4px 0 8px">
+      <label class="rfd">from <input type="date" class="myhf" data-f="from" value="${esc(MYHIST.from)}"></label>
+      <label class="rfd">to <input type="date" class="myhf" data-f="to" value="${esc(MYHIST.to)}"></label>
+      <select class="myhf" data-f="clock">
+        ${[['', 'Both clocks'], ['pay', 'Day clock only'], ['tl', 'Piano clock only']]
+          .map(([v, t]) => `<option value="${v}"${MYHIST.clock === v ? ' selected' : ''}>${t}</option>`).join('')}</select>
+      ${ranged || MYHIST.clock ? '<button class="myhclear" type="button">clear</button>' : ''}
+    </div>`;
+  if (!keys.length) return `<div class="dbench db-clockhist"><h4>🕘 My clock history</h4>${histBar}
+    <div class="dline dim">No punches ${ranged ? 'in that range' : 'in the last two weeks'}.</div></div>`;
+  const totPay = keys.reduce((a, d) => a + days[d].pay.reduce((x, r) => x + (r.end ? (r.minutes || 0) : Math.max(0, (Date.now() - new Date(r.start)) / 60000)), 0), 0);
+  const totTl = keys.reduce((a, d) => a + days[d].tl.reduce((x, r) => x + (r.minutes || 0), 0), 0);
   const dayLabel = d => new Date(d + 'T12:00').toLocaleDateString('en-US', {weekday: 'short', month: 'short', day: 'numeric'});
   const rows = keys.map(d => {
     const g = days[d];
     const payMin = g.pay.reduce((a, r) => a + (r.end ? (r.minutes || 0) : Math.max(0, (Date.now() - new Date(r.start)) / 60000)), 0);
-    const punches = g.pay.map(r => `<span style="white-space:nowrap">${fmtT(r.start)} → ${r.end ? fmtT(r.end) : '<b style="color:#2f7d4f">on clock</b>'}${!r.end || (r.minutes || 0) > 1 ? '' : ' <b style="color:#9e2020">(0 min?)</b>'}</span>`).join(' · ');
-    const pianos = g.tl.map(r => `<div style="margin-left:14px;color:#6f6a63;font-size:11.5px">🎹 ${esc(r.phase || '')} — #${esc(r.serial || '')} · ${fmtHM(r.minutes || 0)}${r.end ? '' : ' <b style="color:#2f7d4f">open</b>'}</div>`).join('');
+    const punches = !showPay ? '' : g.pay.map(r => `<span style="white-space:nowrap">${fmtT(r.start)} → ${r.end ? fmtT(r.end) : '<b style="color:#2f7d4f">on clock</b>'}${!r.end || (r.minutes || 0) > 1 ? '' : ' <b style="color:#9e2020">(0 min?)</b>'}</span>`).join(' · ');
+    const pianos = !showTl ? '' : g.tl.map(r => `<div style="margin-left:14px;color:#6f6a63;font-size:11.5px">🎹 ${esc(r.phase || '')} — #${esc(r.serial || '')} · ${fmtHM(r.minutes || 0)}${r.end ? '' : ' <b style="color:#2f7d4f">open</b>'}</div>`).join('');
     return `<div style="padding:6px 0;border-top:1px solid #f0ece5">
       <div style="display:flex;gap:8px;align-items:baseline"><b style="min-width:86px">${dayLabel(d)}</b>
-        <span style="flex:1">${punches || '<span class="dim">no day punch</span>'}</span>
-        <b>${fmtHM(payMin)}</b></div>${pianos}</div>`;
+        <span style="flex:1">${punches || (showPay ? '<span class="dim">no day punch</span>' : '')}</span>
+        <b>${showPay ? fmtHM(payMin) : ''}</b></div>${pianos}</div>`;
   }).join('');
+  /* Not "last 2 weeks": the default takes the 14 most recent days that HAVE
+   * punches, which for someone part-time can reach back months. It always
+   * worked that way — the old label just said otherwise. */
+  const span = ranged
+    ? (MYHIST.from || 'the start') + ' → ' + (MYHIST.to || 'today')
+    : 'last ' + keys.length + ' day' + (keys.length === 1 ? '' : 's') + ' worked';
   return `<div class="dbench db-clockhist">
-    <h4>🕘 My clock history — last 2 weeks</h4>
+    <h4>🕘 My clock history — ${esc(span)}</h4>
+    ${histBar}
+    <div class="dline"><b>${showPay ? fmtHM(totPay) + ' on the day clock' : ''}</b>${showPay && showTl ? ' · ' : ''}${showTl ? fmtHM(totTl) + ' on pianos' : ''} across ${keys.length} day${keys.length === 1 ? '' : 's'}.</div>
     <div class="dline dim">Day-clock punches with your piano sessions under each day. Spot something wrong?
       <a class="tact cfixlink2" href="#">🛠 Request a time fix</a></div>
     ${rows}
@@ -13031,6 +13073,21 @@ function renderDash() {
     if (j.error) { if (bm) { bm.className = 'maintmsg phmsg err'; bm.textContent = j.error; } bOff.disabled = false; bOff.textContent = '■ End maintenance time'; }
     else renderDash();
   };
+  /* History filters. Changing "from" can ask for more than is loaded, so the
+   * loader is told how far back and refetches when the window grows; the card
+   * says it is fetching rather than looking empty (Walter 9/22). */
+  body.querySelectorAll('.myhf').forEach(el => el.onchange = async () => {
+    MYHIST[el.dataset.f] = el.value;
+    const need = myHistNeedDays();
+    if (need > MYCLOCK.days) {
+      const card = body.querySelector('.db-clockhist');
+      if (card) { const h = card.querySelector('h4'); if (h) h.textContent = '🕘 My clock history — fetching…'; }
+      await loadMyClock(MYCLOCK.forName || clockName(), need);
+    }
+    renderDash();
+  });
+  const myhc = body.querySelector('.myhclear');
+  if (myhc) myhc.onclick = () => { MYHIST.from = ''; MYHIST.to = ''; MYHIST.clock = ''; renderDash(); };
   const cfx2 = body.querySelector('.cfixlink2');
   if (cfx2) cfx2.onclick = ev => { ev.preventDefault(); const l = body.querySelector('.cfixlink'); if (l) l.click(); };
   const cfx = body.querySelector('.cfixlink');
