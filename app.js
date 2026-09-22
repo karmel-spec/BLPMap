@@ -11345,7 +11345,36 @@ function clockAdjustTable() {
   const me = (authUser() || {}).email || '';
   const canPay = isPayrollAdmin() || me.toLowerCase() === 'markhales.blp@gmail.com';
   const canTl = isTimelogAdmin();
+  /* Melissa 9/21 (092126terry47): she checks her own times on the payroll
+   * report because it filters to one person, then cannot fix anything there —
+   * and the punches she most wanted to fix (8/25, 8/26) were older than the
+   * fixed 14-day window here, so they could not be edited from anywhere.
+   * The window is now a filter, not a wall: pick a person and/or a date range
+   * and the punch tables below follow it. Both clocks are already loaded in
+   * full (190 and 365 days), so nothing extra is fetched. */
+  const af = S.adjF || (S.adjF = {who: '', from: '', to: ''});
+  const adjFiltered = !!(af.who || af.from || af.to);
   const cutoff = Date.now() - 14 * 86400000;
+  const adjWhos = [...new Set([...(S.payRows || []).map(r => r.tech), ...(S.tlRows || []).map(r => r.tech)]
+    .map(t => String(t || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  const adjKeep = (r, clock) => {
+    if (S.adjEdit && S.adjEdit.clock === clock && S.adjEdit.row === r.row) return true;   // never hide a row being edited
+    if (af.who && String(r.tech || '').trim() !== af.who) return false;
+    const day = denverDay(r.start);
+    if (af.from && day < af.from) return false;
+    if (af.to && day > af.to) return false;
+    if (!af.from && !af.to) return new Date(r.start) >= cutoff;   // default view unchanged
+    return true;
+  };
+  const adjBar = (scopeLabel) => `<div class="rfbar">
+      <select class="rptf" data-scope="adj" data-f="who"><option value="">All team members</option>
+        ${adjWhos.map(w => `<option ${af.who === w ? 'selected' : ''}>${esc(w)}</option>`).join('')}</select>
+      <label class="rfd">from <input type="date" class="rptf" data-scope="adj" data-f="from" value="${esc(af.from || '')}"></label>
+      <label class="rfd">to <input type="date" class="rptf" data-scope="adj" data-f="to" value="${esc(af.to || '')}"></label>
+      <span class="lite" style="font-size:11.5px;white-space:nowrap">${adjFiltered
+        ? scopeLabel + ' <button class="adjfclear" type="button">clear filters</button>'
+        : 'last 14 days — set a date range to go further back'}</span>
+    </div>`;
   // filter bar: status · team member · clock · text · date range. Default
   // view is unchanged (open requests + the 8 most recently handled).
   const f = S.cfxF || (S.cfxF = {st: '', who: '', clock: '', q: '', from: '', to: ''});
@@ -11408,7 +11437,7 @@ function clockAdjustTable() {
     </table>`;
   let pay = '', payAdd = '';
   if (canPay) {
-    const keep = r => new Date(r.start) >= cutoff || (S.adjEdit && S.adjEdit.clock === 'pay' && S.adjEdit.row === r.row);
+    const keep = r => adjKeep(r, 'pay');
     // chronological, not sheet order (Melissa 9/8): added/adjusted punches
     // are appended to the sheet, so 9/4 could sit between 8/31 and 9/2.
     // The table scrolls in its own box so the column titles stay put.
@@ -11423,7 +11452,11 @@ function clockAdjustTable() {
           autoSix ? `${autoEv ? ' and' : ' —'} <b>${autoSix}</b> stamped <b>6:00 PM</b> with nothing recorded after that, so the real finish time may be later (movers especially)` : ''}. Adjust any that are wrong.
           <button class="cfxclear payautotog">${S.payAutoOnly ? 'show all punches' : 'show only these ' + autoN}</button></div>`
       : '';
-    pay = `<h4 class="bfhd">Payroll day punches — last 14 days (owners, Melissa & Mark)</h4>
+    const payMins = rows.reduce((a, r) => a + (String(r.voided || '') ? 0 : (r.minutes || 0)), 0);
+    const payWho = af.who ? esc(af.who) : 'everyone shown';
+    pay = `<h4 class="bfhd">Payroll day punches${adjFiltered ? '' : ' — last 14 days'} (owners, Melissa & Mark)</h4>
+      ${adjBar(rows.length + ' punch' + (rows.length === 1 ? '' : 'es'))}
+      ${rows.length ? `<div class="lite" style="font-size:12.5px;margin:-2px 0 8px"><b>${fmtHM(payMins)}</b> (${hDec(payMins)} h) — ${payWho}${adjFiltered ? ' · ' + (af.from || 'start') + ' → ' + (af.to || 'today') : ''}. Voided rows excluded.</div>` : ''}
       ${autoBand}
       <div class="stickytbl"><table><tr><th>DATE</th><th>TEAM MEMBER</th><th>IN → OUT</th><th>HOURS</th><th></th></tr>
       ${rows.map(r => adjRow('pay', r, esc(r.date), esc(r.tech))).join('')
@@ -11487,9 +11520,11 @@ function clockAdjustTable() {
   }
   let tl = '', tlAdd = '';
   if (canTl) {
-    const keep = r => new Date(r.start) >= cutoff || (S.adjEdit && S.adjEdit.clock === 'piano' && S.adjEdit.row === r.row);
+    const keep = r => adjKeep(r, 'piano');
     const rows = S.tlRows.filter(keep).sort((a, b) => new Date(a.start) - new Date(b.start));
-    tl = `<h4 class="bfhd">Piano Work Clock sessions — last 14 days (owners & shop managers)</h4>
+    const tlMins = rows.reduce((a, r) => a + (String(r.voided || '') ? 0 : (r.minutes || 0)), 0);
+    tl = `<h4 class="bfhd">Piano Work Clock sessions${adjFiltered ? '' : ' — last 14 days'} (owners & shop managers)</h4>
+      ${rows.length ? `<div class="lite" style="font-size:12.5px;margin:-2px 0 8px"><b>${fmtHM(tlMins)}</b> (${hDec(tlMins)} h) across ${rows.length} session${rows.length === 1 ? '' : 's'}. Voided rows excluded.</div>` : ''}
       <div class="stickytbl"><table><tr><th>DATE</th><th>PIANO</th><th>TECH · PHASE</th><th>IN → OUT</th><th>HOURS</th><th></th></tr>
       ${rows.map(r => adjRow('piano', r,
           `${esc(r.piano || '—')}<br><small>#${esc(r.serial)}</small>`,
@@ -12351,11 +12386,16 @@ function renderReport() {
     adjResolveFrom(fromFix, msg);
     refreshClocksQuiet();
   });
+  body.querySelectorAll('.adjfclear').forEach(b => b.onclick = () => {
+    S.adjF = {who: '', from: '', to: ''};
+    renderReport();
+  });
   body.querySelectorAll('.rptf').forEach(el => {
     const apply = () => {
       const scope = el.dataset.scope === 'pay' ? (S.payF || (S.payF = {}))
         : el.dataset.scope === 'to' ? (S.toF || (S.toF = {}))
         : el.dataset.scope === 'cfx' ? (S.cfxF || (S.cfxF = {}))
+        : el.dataset.scope === 'adj' ? (S.adjF || (S.adjF = {}))
         : (S.jcF || (S.jcF = {}));
       scope[el.dataset.f] = el.value;
       renderReport();
