@@ -42,6 +42,7 @@ function blpAccount(email) {
 // verified tokens, remembered until they expire, so polling does not hit
 // Google's tokeninfo endpoint every 2.5 seconds
 const seen = new Map();
+const HEALTH = { at: 0, body: null };
 async function verify(idToken) {
   const tok = String(idToken || '');
   if (!tok) return null;
@@ -117,6 +118,21 @@ export default async (req) => {
   if (!GATEWAY_KEY) return json({ error: 'agent chat not configured — set BLP_GATEWAY_KEY (and BLP_GATEWAY_URL) in Netlify env vars' }, 501);
   const url = new URL(req.url);
 
+  if (req.method === 'GET' && url.searchParams.has('health')) {
+    // which agents are live on the agents' Mac — drives the green / red rings
+    // on the faces (Brigham 9/22). Cached 30 s so a busy store doesn't hammer it.
+    if (HEALTH.at && Date.now() - HEALTH.at < 30000) return json(HEALTH.body);
+    try {
+      const h = await gateway('/health');
+      const agents = {};
+      Object.entries(h.agents || {}).forEach(([k, v]) => { agents[k.toLowerCase()] = !!(v && v.up); });
+      HEALTH.body = { ok: !!h.ok, machine: h.machine || '', agents, at: new Date().toISOString() };
+    } catch (e) {
+      HEALTH.body = { ok: false, agents: {}, error: String(e && e.message || e), at: new Date().toISOString() };
+    }
+    HEALTH.at = Date.now();
+    return json(HEALTH.body);
+  }
   if (req.method === 'GET') {
     const slug = String(url.searchParams.get('slug') || '').toLowerCase();
     const run = String(url.searchParams.get('run') || '');

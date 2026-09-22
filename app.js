@@ -16091,7 +16091,7 @@ boot();
   stack.className = 'agf-stack';
   document.body.appendChild(stack);
   let builtFor = '';
-  function buildFaces(list) {
+  let buildFaces = function (list) {
     builtFor = list.join(',');
     stack.innerHTML = list.map(slug => {
       const a = INFO[slug] || {name: slug, role: ''};
@@ -16100,7 +16100,8 @@ boot();
         <img src="${ORIGIN}/agents/${slug}.jpg" alt=""></button><div class="agf-tip">${esc(tip)}</div></div>`;
     }).join('');
     stack.querySelectorAll('.agf-btn').forEach(b => b.onclick = () => openChat(b.dataset.agent));
-  }
+  };
+
   function refreshFaces() {
     const want = agentsFor();
     if (want.join(',') !== builtFor) buildFaces(want);
@@ -16108,6 +16109,33 @@ boot();
   }
   refreshFaces();
   setInterval(refreshFaces, 4000);   // pick up sign-in / a different person without a reload
+  // live / down rings (Brigham 9/22): the gateway on the agents' Mac says which
+  // agents are up — green ring = live, red ring = down or unreachable (needs
+  // help). Gold pulse (below) still means "working on your question".
+  const LIVE = {agents: null, ok: false};
+  async function pollHealth() {
+    try {
+      const r = await fetch('/api/agent?health=1', {cache: 'no-store'});
+      const j = await r.json();
+      LIVE.agents = j.agents || {}; LIVE.ok = !!j.ok; LIVE.err = j.error || '';
+    } catch (e) { LIVE.agents = {}; LIVE.ok = false; LIVE.err = 'health check failed'; }
+    paintLive();
+  }
+  function paintLive() {
+    stack.querySelectorAll('.agf-btn').forEach(b => {
+      const slug = b.dataset.agent, a = INFO[slug] || {name: slug};
+      const known = LIVE.agents && slug in LIVE.agents;
+      const up = known ? LIVE.agents[slug] : LIVE.ok;   // gateway up but agent unlisted → assume live
+      b.classList.toggle('live', LIVE.agents !== null && up);
+      b.classList.toggle('down', LIVE.agents !== null && !up);
+      const base = b.dataset.tip || b.title; b.dataset.tip = base;
+      b.title = base + (LIVE.agents === null ? '' : up ? ' · 🟢 live' : ' · 🔴 down — needs help' + (LIVE.err ? ' (' + LIVE.err.slice(0, 80) + ')' : ''));
+    });
+  }
+  pollHealth();
+  setInterval(pollHealth, 60000);
+  const _buildFaces = buildFaces;
+  buildFaces = list => { _buildFaces(list); paintLive(); };
 
   /* ----- chat window ----- */
   // one window, many agents: each agent's run is tracked on its own so a

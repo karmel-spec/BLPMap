@@ -2175,3 +2175,10 @@ body:has(#mydock.dockmini:not([hidden])) .agf-stack{bottom:66px}
 .kqrow .qdel{background:none;border:0;color:#9e2020;cursor:pointer;font-size:13px;padding:0 4px}
 .kqrow .qpos{min-width:26px;color:#9e2020;font-weight:800;font-size:12px}
 body.qdragging{user-select:none}
+/* agent faces — live / down rings (Brigham 9/22): green = live, red = needs help, gold pulse = working */
+.agf-btn.live{border-color:#2e7d4f}
+.agf-btn.down{border-color:#d0332c}
+.agf-btn.live::after,.agf-btn.down::after{content:'';position:absolute;right:1px;bottom:1px;width:11px;height:11px;border-radius:50%;border:2px solid #121212}
+.agf-btn.live::after{background:#2e7d4f}
+.agf-btn.down::after{background:#d0332c}
+.agf-btn{position:relative}

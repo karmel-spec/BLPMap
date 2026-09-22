@@ -866,6 +866,14 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_error(404)
 
     def do_GET(self):
+        if self.path.split('?')[0] == '/api/agent' and 'health' in self.path:
+            try:
+                h = gateway_call('/health')
+                agents = {k.lower(): bool(v and v.get('up')) for k, v in (h.get('agents') or {}).items()}
+                self._json({'ok': bool(h.get('ok')), 'machine': h.get('machine', ''), 'agents': agents})
+            except Exception as exc:
+                self._json({'ok': False, 'agents': {}, 'error': str(exc)})
+            return
         if self.path.split('?')[0] == '/api/agent':
             q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
             slug = (q.get('slug') or [''])[0].lower()
