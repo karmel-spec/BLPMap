@@ -11355,11 +11355,19 @@ function clockAdjustTable() {
   const af = S.adjF || (S.adjF = {who: '', from: '', to: ''});
   const adjFiltered = !!(af.who || af.from || af.to);
   const cutoff = Date.now() - 14 * 86400000;
+  /* Punches carry a person's name several ways — "Alex Martin", "Alex Martin
+   * (session expired — unverified)", "Mark Hales <mark@…>". Listed raw, the
+   * same person appears two or three times and picking one silently misses
+   * the rest of their rows. Names are normalised for both the list and the
+   * match, so one entry covers every spelling. Claude's own probe accounts
+   * are left out of the picker (their rows still show unfiltered). */
+  const adjName = t => String(t || '').replace(/<[^>]*>/g, '').replace(/\([^)]*\)/g, ' ')
+    .trim().replace(/\s+/g, ' ');
   const adjWhos = [...new Set([...(S.payRows || []).map(r => r.tech), ...(S.tlRows || []).map(r => r.tech)]
-    .map(t => String(t || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    .map(adjName).filter(t => t && !/^claude\b/i.test(t)))].sort((a, b) => a.localeCompare(b));
   const adjKeep = (r, clock) => {
     if (S.adjEdit && S.adjEdit.clock === clock && S.adjEdit.row === r.row) return true;   // never hide a row being edited
-    if (af.who && String(r.tech || '').trim() !== af.who) return false;
+    if (af.who && adjName(r.tech) !== af.who) return false;
     const day = denverDay(r.start);
     if (af.from && day < af.from) return false;
     if (af.to && day > af.to) return false;
