@@ -12641,11 +12641,15 @@ function myWeekCard() {
   const h = mins / 60, left = cap - h;
   const pctBar = Math.min(100, h / cap * 100);
   const tone = h >= cap ? '#9e2020' : h >= cap - 6 ? '#9a5b13' : '#2f7d4f';
+  // hours and minutes, not decimals (Garrett 9/18, request 091826taylor01):
+  // "1h 36m to 40h" reads straight off a timesheet; "1.6h" has to be converted
+  // in your head. fmtHM is the same formatter the clock reports already use.
+  const done = fmtHM(mins), leftHM = fmtHM(Math.max(0, cap * 60 - mins));
   const msg = h >= cap
-    ? `<b style="color:#9e2020">You've hit ${h.toFixed(1)} h — your approved week is ${cap} h. Stop and check with Brigham.</b>`
+    ? `<b style="color:#9e2020">You've hit ${done} — your approved week is ${cap}h. Stop and check with Brigham.</b>`
     : h >= cap - 6
-      ? `<b style="color:#9a5b13">${left.toFixed(1)} h left before ${cap}</b> — plan the rest of the week so you don't go over. Going past ${cap} h needs Brigham's OK <u>ahead of time</u>.`
-      : `<b>${h.toFixed(1)} h</b> this week · ${left.toFixed(1)} h until ${cap}.`;
+      ? `<b style="color:#9a5b13">${leftHM} left before ${cap}h</b> — plan the rest of the week so you don't go over. Going past ${cap}h needs Brigham's OK <u>ahead of time</u>.`
+      : `<b>${done}</b> this week · ${leftHM} until ${cap}h.`;
   return `<div class="dbench db-forty">
     <h4>⏳ My week vs ${cap} hours</h4>
     <div style="height:12px;background:#efece6;border-radius:6px;overflow:hidden;margin:6px 0">
