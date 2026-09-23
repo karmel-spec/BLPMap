@@ -50,7 +50,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-09-22.4';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-09-23.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -3293,7 +3293,11 @@ function openSessionRow_(sh, tech) {
   var vals = sh.getRange(from, 1, last - from + 1, 10).getValues();
   for (var i = vals.length - 1; i >= 0; i--) {
     if (vals[i][9]) continue;   // a voided punch is not the tech's open session
-    if (String(vals[i][0]).toLowerCase() === tech.toLowerCase() && !vals[i][5]) {
+    // finishKey_, not an exact compare (Walter 9/23): a session stored as
+    // "Sadie Erickson (session expired — unverified)" was invisible to her
+    // day clock-out, so it stayed open until the overnight sweep closed it at
+    // 6 PM — 9/15, row 442, on top of the real session day-out HAD closed.
+    if (finishKey_(vals[i][0]) === finishKey_(tech) && !vals[i][5]) {
       return {row: from + i, v: vals[i]};
     }
   }
@@ -3307,7 +3311,7 @@ function recentClosedRow_(sh, tech) {
   var vals = sh.getRange(from, 1, last - from + 1, 10).getValues();
   for (var i = vals.length - 1; i >= 0; i--) {
     if (vals[i][9]) continue;   // never re-join a voided session
-    if (String(vals[i][0]).toLowerCase() === tech.toLowerCase() && vals[i][5]) {
+    if (finishKey_(vals[i][0]) === finishKey_(tech) && vals[i][5]) {
       return {row: from + i, v: vals[i]};
     }
   }
@@ -3427,6 +3431,7 @@ function clockOutLocked_(req) {
  * 6 PM default: app silence is not proof that someone went home, so nobody's
  * day is ever trimmed by this. Built once per sweep, and only when there is
  * something to close. */
+var NOT_WORK_ACTIVITY = /request|time off|training|app update|brief|clock fix|clock adjust|clock punch|clock void|price|suggest|handbook/i;
 function dayEvidenceIndex_(keys) {
   var want = {}, i;
   for (i = 0; i < keys.length; i++) want[keys[i]] = 1;
@@ -3463,6 +3468,13 @@ function dayEvidenceIndex_(keys) {
       for (i = 0; i < av.length; i++) {
         if (!av[i][0] || !av[i][1]) continue;
         if (/\(auto\)|^store map/i.test(String(av[i][1]))) continue;   // the app's own entries
+        // Requests and admin chores are not WORK (Walter 9/23). Sadie clocked
+        // off her piano at 4, her day clock stayed open, and at 7:06 PM she
+        // reported it from home — the sweep then took that report as her "last
+        // activity" and ran her paid day to 7:06 PM. People report forgotten
+        // clocks in the evening, so this over-credits exactly those who flag a
+        // problem. Only things done to a piano count.
+        if (NOT_WORK_ACTIVITY.test(String(av[i][2] || ''))) continue;
         note(av[i][1], (av[i][0] instanceof Date) ? av[i][0] : new Date(av[i][0]),
              String(av[i][2] || 'activity').toLowerCase());
       }
@@ -3614,7 +3626,7 @@ function openPayRow_(sh, tech) {
   var vals = sh.getRange(from, 1, last - from + 1, 8).getValues();
   for (var i = vals.length - 1; i >= 0; i--) {
     if (vals[i][7]) continue;   // a voided day punch is not the tech's open day
-    if (String(vals[i][0]).toLowerCase() === tech.toLowerCase() && vals[i][2] && !vals[i][3]) {
+    if (finishKey_(vals[i][0]) === finishKey_(tech) && vals[i][2] && !vals[i][3]) {
       return {row: from + i, v: vals[i]};
     }
   }
