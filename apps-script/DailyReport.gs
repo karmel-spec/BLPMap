@@ -50,7 +50,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-09-23.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-09-23.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -5325,6 +5325,8 @@ function applyScheduleLocked_(req) {
   var map = techCalMap_();
   var tuneMaster = null;
   try { tuneMaster = calById_(MASTER_TUNING_CAL); } catch (eM) {}
+  var qcCal = null;
+  try { qcCal = calById_(SERVICE_CAL); } catch (eQ) {}
   // standing rule (Brigham 2026-08-17): every scheduled piano event carries the
   // piano's CURRENT map spot in the Google event's location field (bare value)
   var spotBySerial = {};
@@ -5358,7 +5360,7 @@ function applyScheduleLocked_(req) {
     var cal;
     try { cal = calById_(calId); } catch (e) { cal = null; }   // subscribes if only shared
     if (!cal) { results.push({tech: tch.name, error: 'no access to ' + calId}); return; }
-    var made = 0, failed = 0, offDays = [], tuned = 0, tuneFellBack = 0, fieldHeld = 0;
+    var made = 0, failed = 0, offDays = [], tuned = 0, tuneFellBack = 0, fieldHeld = 0, qcRouted = 0, qcFellBack = 0;
     (tch.days || []).forEach(function (blocks, di) {
       // Melissa 9/7 (request 090726terry22): the draft put Curtis on
       // Wednesday + Friday although his calendar says "Curtis off Wednesdays
@@ -5401,22 +5403,33 @@ function applyScheduleLocked_(req) {
           // fires — it is here so that staying true does not depend on the
           // draft getting the type right every week.
           var isField = /^\s*field\b|\bfield\s*:/i.test(evTitle);
+          /* QCs follow the same protocol (Melissa 9/22, 092226terry54): a QC
+           * belongs to the "20-QC & Showroom Repairs" calendar with the tech as
+           * a GUEST. Apply was writing them straight onto Curtis's own
+           * calendar, so #20 — where admins search a serial to see when a
+           * piano was last QC'd — never saw planned QCs at all. Every block
+           * the plan types 'qc' now goes there; the title already carries the
+           * serial, so search-by-serial works on it. */
+          var orgCal = (b[2] === 'tune' && !isField) ? tuneMaster
+                     : (b[2] === 'qc' && !isField) ? qcCal : null;
           var placed = false;
-          if (b[2] === 'tune' && !isField && tuneMaster) {
+          if (orgCal) {
             try {
               opts.guests = calId;
               // no invitation emails (Walter 9/18): applying a week would
-              // otherwise send the tech one per tuning block — 10 at once for
-              // Korban. Adding the guest still puts the event on their own
-              // calendar; it just arrives quietly.
+              // otherwise send the tech one per block — 10 at once for Korban.
+              // Adding the guest still puts the event on their own calendar;
+              // it just arrives quietly. Same for QCs.
               opts.sendInvites = false;
-              tuneMaster.createEvent(evTitle, d1, d2, opts);
-              placed = true; tuned++;
+              orgCal.createEvent(evTitle, d1, d2, opts);
+              placed = true;
+              if (b[2] === 'qc') qcRouted++; else tuned++;
             } catch (eT) { delete opts.guests; delete opts.sendInvites; }
           }
           if (!placed) {
             cal.createEvent(evTitle, d1, d2, opts);
             if (b[2] === 'tune') tuneFellBack++;
+            if (b[2] === 'qc') qcFellBack++;
           }
           made++;
         } catch (e) { failed++; }
@@ -5426,6 +5439,8 @@ function applyScheduleLocked_(req) {
     if (tuned) res.onTuningCal = tuned;
     if (tuneFellBack) res.tuningFellBackToOwnCal = tuneFellBack;
     if (fieldHeld) res.fieldKeptOffCalendar = fieldHeld;
+    if (qcRouted) res.onQcCal = qcRouted;
+    if (qcFellBack) res.qcFellBackToOwnCal = qcFellBack;
     if (offDays.length) res.offDays = offDays;
     results.push(res);
     // a tech whose every event-create failed (e.g. read-only calendar access)
@@ -5511,8 +5526,11 @@ function scheduleCheck_(req) {
   // and a purge would leave them behind. Read the master once and index by
   // guest (Walter 9/18).
   var masterByGuest = {};
+  // tagged events on the organizer calendars — In Store Tuning AND QC &
+  // Showroom Repairs — indexed by guest (Walter 9/18, 9/23)
+  [MASTER_TUNING_CAL, SERVICE_CAL].forEach(function (orgId) {
   try {
-    var mCal = calById_(MASTER_TUNING_CAL);
+    var mCal = calById_(orgId);
     if (mCal) {
       mCal.getEvents(start, end).forEach(function (ev) {
         var desc = '';
@@ -5527,7 +5545,8 @@ function scheduleCheck_(req) {
         });
       });
     }
-  } catch (eMS) { /* master unreadable — fall back to tech calendars only */ }
+  } catch (eMS) { /* that calendar unreadable — fall back to tech calendars only */ }
+  });
   (plan.techs || []).forEach(function (tch) {
     var key = String(tch.name || '').toLowerCase();
     var row = {tech: tch.name, planned: 0, applied: 0, unique: 0, extra: 0, removed: 0, events: []};
