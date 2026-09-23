@@ -6636,6 +6636,9 @@ function wirePop(p) {
       const ar = h.querySelector('.secarrow');
       if (ar) ar.textContent = closed ? '▸' : '▾';
       lsSet('sec_' + h.dataset.sec, closed ? 'closed' : 'open');
+      const st = pop.scrollTop;
+      place(pop, S.popAnchor);   // card grew/shrank: slide it up to fit
+      pop.scrollTop = st;
     };
   });
   const lhb = pop.querySelector('.lhbtn');
@@ -9834,6 +9837,7 @@ function place(pop, el) {
   S.popAnchor = el || null;   // remembered so the card can re-clamp if it grows
   const card = $('.mapcard').getBoundingClientRect();
   const r = el ? el.getBoundingClientRect() : card;
+  pop.style.maxHeight = '';   // measure at its natural (CSS-capped) height
   const pw = pop.offsetWidth || 260, ph = pop.offsetHeight || 220;
   let x = r.left - card.left + r.width + 10;
   let y = r.top - card.top - 10;
@@ -9841,6 +9845,9 @@ function place(pop, el) {
   x = Math.max(8, Math.min(x, card.width - pw - 8));
   y = Math.max(8, Math.min(y, card.height - ph - 8));   // never hang off the bottom
   pop.style.left = x + 'px'; pop.style.top = y + 'px';
+  // cap the height from where the card actually starts, so a tall card scrolls
+  // inside itself instead of running past the map's clipped bottom edge
+  pop.style.maxHeight = Math.max(120, card.height - y - 8) + 'px';
 }
 
 /* ---------- reports (accordion of printable reports) ---------- */
