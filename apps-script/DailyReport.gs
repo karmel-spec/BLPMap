@@ -50,7 +50,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-09-23.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-09-23.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -5280,6 +5280,21 @@ function shopClock_(t) {
   if (h >= 1 && h <= 6) h += 12;
   return {h: h, min: parseInt(m[2], 10)};
 }
+/* Does this plan block get WRITTEN to the tech's calendar on Apply?
+ * 'hold' blocks never do — they are already there. Nor does field work
+ * (Melissa 9/22, 092226terry50): the Friday draft reads McKinly's calendar,
+ * sees the field appointments admins booked, and writes "Field: <town> —
+ * tuning" into the plan to hold that time — so Apply was writing each booked
+ * appointment straight back onto his calendar as a second, salmon-coloured
+ * copy beside the real one. The draft only knows the town BECAUSE an
+ * appointment is booked there, so these are always duplicates. They stay in
+ * the plan, which keeps shop work out of his field hours; they just never
+ * reach the calendar. Same "Field:" test as the In Store Tuning guard. */
+function planBlockOnCal_(b) {
+  if (!b || b[2] === 'hold') return false;
+  return !/^\s*field\b|\bfield\s*:/i.test(String(b[3] || ''));
+}
+
 function applySchedule_(req) {
   // Brigham 2026-09-06: three "Apply selected" taps on the phone raced and
   // each read meta before any wrote it, so the week went out 3x for most
@@ -5343,7 +5358,7 @@ function applyScheduleLocked_(req) {
     var cal;
     try { cal = calById_(calId); } catch (e) { cal = null; }   // subscribes if only shared
     if (!cal) { results.push({tech: tch.name, error: 'no access to ' + calId}); return; }
-    var made = 0, failed = 0, offDays = [], tuned = 0, tuneFellBack = 0;
+    var made = 0, failed = 0, offDays = [], tuned = 0, tuneFellBack = 0, fieldHeld = 0;
     (tch.days || []).forEach(function (blocks, di) {
       // Melissa 9/7 (request 090726terry22): the draft put Curtis on
       // Wednesday + Friday although his calendar says "Curtis off Wednesdays
@@ -5351,12 +5366,12 @@ function applyScheduleLocked_(req) {
       // skipped and reported, whatever the proposal says.
       var dayAt = new Date(start); dayAt.setDate(dayAt.getDate() + di);
       var off = calOffMarker_(cal, dayAt);
-      if (off && (blocks || []).some(function (b) { return b[2] !== 'hold'; })) {
+      if (off && (blocks || []).some(planBlockOnCal_)) {
         offDays.push({day: Utilities.formatDate(dayAt, 'America/Denver', 'EEE M/d'), why: off});
         return;
       }
       (blocks || []).forEach(function (b) {
-        if (b[2] === 'hold') return;               // already on their calendar
+        if (!planBlockOnCal_(b)) { if (b && b[2] !== 'hold') fieldHeld++; return; }   // already on their calendar
         var t1 = shopClock_(b[0]), t2 = shopClock_(b[1]);
         if (!t1 || !t2) { failed++; return; }
         var d1 = new Date(start); d1.setDate(d1.getDate() + di); d1.setHours(t1.h, t1.min, 0, 0);
@@ -5410,6 +5425,7 @@ function applyScheduleLocked_(req) {
     var res = {tech: tch.name, events: made, failed: failed};
     if (tuned) res.onTuningCal = tuned;
     if (tuneFellBack) res.tuningFellBackToOwnCal = tuneFellBack;
+    if (fieldHeld) res.fieldKeptOffCalendar = fieldHeld;
     if (offDays.length) res.offDays = offDays;
     results.push(res);
     // a tech whose every event-create failed (e.g. read-only calendar access)
@@ -5516,7 +5532,7 @@ function scheduleCheck_(req) {
     var key = String(tch.name || '').toLowerCase();
     var row = {tech: tch.name, planned: 0, applied: 0, unique: 0, extra: 0, removed: 0, events: []};
     (tch.days || []).forEach(function (blocks) {
-      (blocks || []).forEach(function (b) { if (b[2] !== 'hold') row.planned++; });
+      (blocks || []).forEach(function (b) { if (planBlockOnCal_(b)) row.planned++; });
     });
     var calId = map[key];
     if (!calId) { row.skipped = 'no calendar mapped'; techs.push(row); return; }
