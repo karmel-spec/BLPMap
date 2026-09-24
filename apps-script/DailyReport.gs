@@ -50,7 +50,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-09-23.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-09-24.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -3420,68 +3420,12 @@ function clockOutLocked_(req) {
   while ((extra = openSessionRow_(sh, tech))) closeSession_(sh, extra, 'duplicate punch (auto)');
   return {ok: true, closed: out};
 }
-/* Forgotten sessions: anything still open from a PREVIOUS day gets closed
- * automatically — at 6 PM Denver on its start day (or +1h if it began after
- * 6 PM), capped at 10 hours. Runs opportunistically, at most every 10 min. */
-/* Last proof a person was actually working on a given day: their piano clock
- * (session starts, and ends that a HUMAN recorded) plus the ACTIVITY LOG
- * (moves, phase changes, photos, notes, queue changes). A forgotten punch is
- * ended at this instead of a flat 6:00 PM (Mark 9/16 — movers work past 6 and
- * were losing the hours). Evidence can only push an end time LATER than the
- * 6 PM default: app silence is not proof that someone went home, so nobody's
- * day is ever trimmed by this. Built once per sweep, and only when there is
- * something to close. */
-var NOT_WORK_ACTIVITY = /request|time off|training|app update|brief|clock fix|clock adjust|clock punch|clock void|price|suggest|handbook/i;
-function dayEvidenceIndex_(keys) {
-  var want = {}, i;
-  for (i = 0; i < keys.length; i++) want[keys[i]] = 1;
-  var best = {};
-  var norm = function (n) {
-    return String(n || '').replace(/<[^>]*>/g, '').replace(/\([^)]*\)/g, ' ')
-      .trim().toLowerCase().replace(/\s+/g, ' ');
-  };
-  var note = function (who, at, what) {
-    if (!at || isNaN(at.getTime())) return;
-    var k = norm(who) + '|' + Utilities.formatDate(at, 'America/Denver', 'yyyy-MM-dd');
-    if (!want[k]) return;
-    if (!best[k] || at > best[k].at) best[k] = {at: at, what: what};
-  };
-  try {
-    var tsh = timeLogSheet_(), lastT = tsh.getLastRow();
-    if (lastT >= 2) {
-      var fromT = Math.max(2, lastT - 600);
-      var tv = tsh.getRange(fromT, 1, lastT - fromT + 1, 10).getValues();
-      for (i = 0; i < tv.length; i++) {
-        if (!tv[i][0] || tv[i][9]) continue;   // a voided punch is not evidence of a working day
-        if (tv[i][4]) note(tv[i][0], new Date(tv[i][4]), 'piano clock-in');
-        // an end the sweep itself invented is not evidence
-        if (tv[i][5] && String(tv[i][8] || '').indexOf('auto:') < 0) note(tv[i][0], new Date(tv[i][5]), 'piano clock-out');
-      }
-    }
-  } catch (e1) {}
-  try {
-    var ash = SpreadsheetApp.openById(PIANO_LOG_ID).getSheetByName('ACTIVITY LOG');
-    var lastA = ash ? ash.getLastRow() : 0;
-    if (lastA >= 2) {
-      var fromA = Math.max(2, lastA - 800);
-      var av = ash.getRange(fromA, 1, lastA - fromA + 1, 3).getValues();
-      for (i = 0; i < av.length; i++) {
-        if (!av[i][0] || !av[i][1]) continue;
-        if (/\(auto\)|^store map/i.test(String(av[i][1]))) continue;   // the app's own entries
-        // Requests and admin chores are not WORK (Walter 9/23). Sadie clocked
-        // off her piano at 4, her day clock stayed open, and at 7:06 PM she
-        // reported it from home — the sweep then took that report as her "last
-        // activity" and ran her paid day to 7:06 PM. People report forgotten
-        // clocks in the evening, so this over-credits exactly those who flag a
-        // problem. Only things done to a piano count.
-        if (NOT_WORK_ACTIVITY.test(String(av[i][2] || ''))) continue;
-        note(av[i][1], (av[i][0] instanceof Date) ? av[i][0] : new Date(av[i][0]),
-             String(av[i][2] || 'activity').toLowerCase());
-      }
-    }
-  } catch (e2) {}
-  return best;
-}
+/* Forgotten PIANO sessions: anything still open from a PREVIOUS day is
+ * closed at the same flat time as the day clock (6 PM; 8 PM for movers and
+ * Melissa — Walter 9/24), +1 h if it began after that, capped at 10 hours.
+ * The "last activity" lookup that used to stretch these is retired for the
+ * same reason as on the day clock: it was not reviewable. Runs
+ * opportunistically, at most every 10 min. */
 function evidenceKey_(tech, when) {
   return String(tech || '').replace(/<[^>]*>/g, '').replace(/\([^)]*\)/g, ' ')
     .trim().toLowerCase().replace(/\s+/g, ' ')
@@ -3505,19 +3449,14 @@ function sweepForgottenClocks_() {
     todo.push({row: from + i, v: vals[i], start: st});
   }
   if (!todo.length) return 0;
-  var ev = dayEvidenceIndex_(todo.map(function (t) { return evidenceKey_(t.v[0], t.start); }));
+  var crew = lateCrew_();
   todo.forEach(function (t) {
     var start = t.start;
-    var six = new Date(Utilities.formatDate(start, 'America/Denver', "yyyy-MM-dd'T'18:00:00XXX"));
-    var end = six > start ? six : new Date(start.getTime() + 3600000);
-    var seen = ev[evidenceKey_(t.v[0], start)];
-    var used = null;
-    if (seen && seen.at > end) { end = seen.at; used = seen; }
-    var cap = used ? 50400000 : 36000000;   // 10 h normally; up to 14 h on evidence
-    if (end - start > cap) { end = new Date(start.getTime() + cap); }
-    closeSession_(sh, {row: t.row, v: t.v},
-      used ? 'auto: forgot to clock out (last activity ' + Utilities.formatDate(end, 'America/Denver', 'h:mm a') + ')'
-           : 'auto: forgot to clock out', end.toISOString());
+    var hour = flatFinishHour_(t.v[0], crew);
+    var flat = new Date(Utilities.formatDate(start, 'America/Denver', "yyyy-MM-dd'T'" + hour + ':00:00XXX'));
+    var end = flat > start ? flat : new Date(start.getTime() + 3600000);
+    if (end - start > 36000000) end = new Date(start.getTime() + 36000000);   // 10 h cap
+    closeSession_(sh, {row: t.row, v: t.v}, 'auto: forgot to clock out', end.toISOString());
   });
   return todo.length;
 }
@@ -3642,61 +3581,36 @@ function closePayRow_(sh, open, endAt, note) {
   return {tech: String(open.v[0]), date: String(open.v[1]), start: String(open.v[2]),
           end: end.toISOString(), minutes: mins};
 }
-/* Each person's USUAL finish, from their own recent day punches — the floor
- * the forgotten-clock sweep stamps when there is no later activity to find.
+/* Forgotten DAY clocks close at a FLAT time (Walter 9/24): 6:00 PM for the
+ * shop and admin side, 8:00 PM for the late crew — movers (roster Position
+ * says "Mover") plus Melissa. Nothing else moves the stamp.
  *
- * A flat 6:00 PM is a day-shift assumption. Melissa works 10 to 7, so every
- * forgotten clock-out cost her an hour: 9/3 and 9/7 were both stamped 6:00 PM
- * against a real ~7:00 PM finish (Walter 9/21). Rather than a list of names
- * and times for someone to keep current, each person's own history says when
- * their day ends, and it follows them if their hours change.
+ * Two smarter rules were tried and retired the same week. Ending at the
+ * person's "last activity" (9/16) made the auto-clock-out report hard to
+ * review: Walter could not tell whether a 7:06 PM stamp was the real finish
+ * or just the last thing the app happened to see, and Sadie's evening request
+ * from home was once counted as work. The per-person median finish (9/22)
+ * was invisible to the tech and no easier to check. A flat, known time is
+ * something everyone can reason about: if it says 6:00 (or 8:00), nobody
+ * clocked out, and the admins ask the person. Avery (noon finisher) is the one
+ * a flat 6 PM over-pays — Melissa checks his by hand.
  *
- * Only CLOSED punches the sweep did not invent are counted — including its own
- * 6 PM stamps would drag the floor back toward 6 PM and hold it there.
- * The median is used, so one late night does not move it. At least 3 punches
- * are required, or there is not enough to say.
- *
- * It replaces 6 PM in BOTH directions. A one-directional rail was tried first
- * and was wrong: it protected late finishers like Melissa while quietly
- * over-paying early ones. Avery works 8:00 to 12:07 — a 6 PM floor hands him
- * six hours he did not work every time he forgets (Walter 9/22). 6 PM only
- * remains for people with too little history to say. */
+ * Every stamp still carries the "auto:" note so the review report flags it. */
+function lateCrew_() {
+  var out = moverFirsts_();   // first names, lowercased, from the roster's Position column
+  out['melissa'] = 1;
+  return out;
+}
+function flatFinishHour_(name, crew) {
+  var first = finishKey_(name).split(' ')[0];
+  return crew[first] ? 20 : 18;
+}
 /* One key per person however their name was stamped: punches carry
  * "Alex Martin", "Alex Martin (session expired — unverified)" and
- * "Mark Hales <mark@…>" — left raw, each spelling builds its own history and
- * none of them reaches 3 punches. Same normalising evidenceKey_ uses. */
+ * "Mark Hales <mark@…>". Same normalising evidenceKey_ used. */
 function finishKey_(name) {
   return String(name || '').replace(/<[^>]*>/g, '').replace(/\([^)]*\)/g, ' ')
     .trim().toLowerCase().replace(/\s+/g, ' ');
-}
-function usualFinishIndex_(sh) {
-  var out = {};
-  try {
-    var last = sh.getLastRow();
-    if (last < 2) return out;
-    var from = Math.max(2, last - 400);
-    var vals = sh.getRange(from, 1, last - from + 1, 8).getValues();
-    var mins = {};
-    for (var i = 0; i < vals.length; i++) {
-      var tech = String(vals[i][0] || '').trim();
-      if (!tech || !vals[i][2] || !vals[i][3] || vals[i][7]) continue;   // open or voided
-      if (/auto:/i.test(String(vals[i][6] || ''))) continue;             // a stamp we invented
-      var endAt = new Date(vals[i][3]);
-      if (isNaN(endAt.getTime())) continue;
-      var hm = Utilities.formatDate(endAt, 'America/Denver', 'HH:mm').split(':');
-      var m = Number(hm[0]) * 60 + Number(hm[1]);
-      if (m < 6 * 60) m += 24 * 60;        // a finish after midnight belongs to that day
-      var k = finishKey_(tech);
-      (mins[k] = mins[k] || []).push(m);
-    }
-    for (var k2 in mins) {
-      var a = mins[k2].sort(function (x, y) { return x - y; });
-      if (a.length < 3) continue;
-      var med = a[Math.floor(a.length / 2)];
-      out[k2] = {h: Math.floor(med / 60) % 24, m: med % 60, n: a.length};
-    }
-  } catch (e) { /* no history — every floor stays 6 PM */ }
-  return out;
 }
 
 function sweepForgottenPay_(sh) {
@@ -3712,35 +3626,18 @@ function sweepForgottenPay_(sh) {
     if (Utilities.formatDate(st, 'America/Denver', 'yyyy-MM-dd') === todayStr) continue;
     todo.push({row: from + i, v: vals[i], start: st});
   }
-  if (!todo.length) return;   // the common case — no evidence reads at all
-  var ev = dayEvidenceIndex_(todo.map(function (t) { return evidenceKey_(t.v[0], t.start); }));
-  var usual = usualFinishIndex_(sh);
-  var pad2 = function (n) { return (n < 10 ? '0' : '') + n; };
+  if (!todo.length) return;   // the common case — no roster read at all
+  var crew = lateCrew_();
   todo.forEach(function (t) {
     var start = t.start;
-    var floorAt = new Date(Utilities.formatDate(start, 'America/Denver', "yyyy-MM-dd'T'18:00:00XXX"));
-    var u = usual[finishKey_(t.v[0])], usualUsed = null;
-    if (u) {
-      var uAt = new Date(Utilities.formatDate(start, 'America/Denver',
-        "yyyy-MM-dd'T'" + pad2(u.h) + ':' + pad2(u.m) + ":00XXX"));
-      if (u.h < 6) uAt = new Date(uAt.getTime() + 86400000);   // a past-midnight finish
-      // their own finish replaces 6 PM whether it is later OR earlier; the
-      // floor is only ever reached when nothing later was actually recorded
-      if (uAt > start) { floorAt = uAt; usualUsed = u; }
-    }
-    var six = floorAt;
-    var end = six > start ? six : new Date(start.getTime() + 3600000);
-    var seen = ev[evidenceKey_(t.v[0], start)];
-    var used = null;
-    if (seen && seen.at > end) { end = seen.at; used = seen; }
-    var cap = used ? 57600000 : 43200000;   // 12 h normally; up to 16 h when evidence justifies it
-    if (end - start > cap) { end = new Date(start.getTime() + cap); used = used ? {at: end, what: used.what + ', capped'} : null; }
+    var hour = flatFinishHour_(t.v[0], crew);
+    var flat = new Date(Utilities.formatDate(start, 'America/Denver', "yyyy-MM-dd'T'" + hour + ':00:00XXX'));
+    var end = flat > start ? flat : new Date(start.getTime() + 3600000);   // clocked in after the flat time: +1 h
+    if (end - start > 43200000) end = new Date(start.getTime() + 43200000);   // 12 h cap
     var when = Utilities.formatDate(end, 'America/Denver', 'h:mm a');
-    closePayRow_(sh, {row: t.row, v: t.v}, end.toISOString(), used
-      ? 'auto: forgot to clock out \u2014 ended at last activity ' + when + ' (' + used.what + ') \u2014 review before payroll'
-      : 'auto: forgot to clock out \u2014 stamped ' + when
-        + (usualUsed ? ' (their usual finish, from ' + usualUsed.n + ' recent punches)' : '')
-        + ', no later activity found \u2014 review before payroll');
+    closePayRow_(sh, {row: t.row, v: t.v}, end.toISOString(),
+      'auto: forgot to clock out — stamped ' + when + (hour === 20 ? ' (movers & Melissa)' : '')
+      + ' — nobody clocked out; check the real finish time before payroll');
   });
 }
 

@@ -5133,8 +5133,8 @@ function renderDock() {
   });
 }
 // live tickers. (The 15-minute "still on it?" idle nudge was removed 9/15 —
-// Mark: real tasks run for hours; the 6 PM forgotten-clock sweep on the
-// bridge still catches anyone who never clocks out.)
+// Mark: real tasks run for hours; the next-day forgotten-clock sweep on the
+// bridge (6 PM / 8 PM flat) still catches anyone who never clocks out.)
 setInterval(() => {
   document.querySelectorAll('.cctime').forEach(el => { el.textContent = clockElapsed(el.dataset.start); });
 }, 1000);
@@ -11045,13 +11045,15 @@ function unvoided(rows) { return (rows || []).filter(r => !r.voided); }
 function adjRow(clock, r, label, sub, dateCell) {
   const ed = S.adjEdit && S.adjEdit.clock === clock && S.adjEdit.row === r.row;
   const dt = dateCell ? `<td style="white-space:nowrap">${dateCell}</td>` : '';
-  // the sweep now ends a forgotten punch at the person's last recorded
-  // activity when there is one, and falls back to 6:00 PM — say which
+  // the sweep stamps a FLAT time (Walter 9/24): 6:00 PM, or 8:00 PM for
+  // movers and Melissa — say which. Rows closed by the retired "last
+  // activity" rule (before 9/24) keep their old chip so history still reads.
   const byEvidence = adjAutoClosed(r) && /last activity/i.test(r.note || '');
+  const autoAt = adjAutoClosed(r) && /stamped 8:00 PM/i.test(r.note || '') ? '8 PM' : '6 PM';
   const auto = !adjAutoClosed(r) ? ''
     : byEvidence
       ? ` <span class="autochip" title="${esc(String(r.note || ''))}">⏰ auto · last activity</span>`
-      : ' <span class="autochip" title="nobody clocked out and nothing else was recorded after 6 PM, so the app stamped 6:00 PM — check the real finish time and adjust">⏰ auto 6 PM</span>';
+      : ` <span class="autochip" title="nobody clocked out, so the app stamped ${autoAt === '8 PM' ? '8:00 PM (movers & Melissa)' : '6:00 PM'} — ask them for the real finish time and adjust">⏰ auto ${autoAt}</span>`;
   const voided = String(r.voided || '');
   if (voided) {
     return `<tr class="adjvoided">${dt}<td>${label}</td><td>${sub}</td>
@@ -11505,11 +11507,9 @@ function clockAdjustTable() {
     const autoN = allPay.filter(adjAutoClosed).length;
     const rows = S.payAutoOnly ? allPay.filter(adjAutoClosed) : allPay;
     const autoEv = allPay.filter(r => adjAutoClosed(r) && /last activity/i.test(r.note || '')).length;
-    const autoSix = autoN - autoEv;
     const autoBand = autoN
-      ? `<div class="autoband">⏰ <b>${autoN}</b> punch${autoN === 1 ? '' : 'es'} in the last 14 days ${autoN === 1 ? 'was' : 'were'} closed automatically because nobody clocked out${
-          autoEv ? ` — <b>${autoEv}</b> ended at the person’s last recorded activity` : ''}${
-          autoSix ? `${autoEv ? ' and' : ' —'} <b>${autoSix}</b> stamped <b>6:00 PM</b> with nothing recorded after that, so the real finish time may be later (movers especially)` : ''}. Adjust any that are wrong.
+      ? `<div class="autoband">⏰ <b>${autoN}</b> punch${autoN === 1 ? '' : 'es'} in the last 14 days ${autoN === 1 ? 'was' : 'were'} closed automatically because nobody clocked out — stamped <b>6:00 PM</b> (<b>8:00 PM</b> for movers and Melissa). The stamp is a placeholder, not a finish time: ask the person what time they actually left and adjust.${
+          autoEv ? ` <b>${autoEv}</b> older row${autoEv === 1 ? '' : 's'} ${autoEv === 1 ? 'was' : 'were'} ended at “last activity” under the previous rule.` : ''}
           <button class="cfxclear payautotog">${S.payAutoOnly ? 'show all punches' : 'show only these ' + autoN}</button></div>`
       : '';
     const payMins = rows.reduce((a, r) => a + (String(r.voided || '') ? 0 : (r.minutes || 0)), 0);
