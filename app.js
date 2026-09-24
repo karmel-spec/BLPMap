@@ -4474,6 +4474,12 @@ async function openWorkChecklist(serial, phase) {
   };
   let dense = lsGet('clMode') === 'summary';
   const expanded = new Set();
+  // 📖 handbook panel per step (Walter 9/24): trained techs on the bench sheet
+  // had no way to read the handbook wording for a step — on a desktop the
+  // text lives only in training mode, and on a phone tapping the step to
+  // "see more" checked it instead. The 📖 button opens the same verbatim
+  // handbook body coach mode shows, under the step, without touching the check.
+  const hbOpen = new Set();
   // a skipped step needs the WHY — it shows amber here and on the mini-QC rail
   const saveSkip = (idx, note) => { st.done.delete(idx); st.skips.set(idx, note); clToggle(serial, phase, idx, true, true, note); };
   let skipAsk = null;   // step index currently being asked for a skip reason
@@ -4504,7 +4510,7 @@ async function openWorkChecklist(serial, phase) {
               <button data-req="tune">🎵 Tuning</button>
               <button data-req="admin">📋 Admin</button>
             </div></span>` : ''}
-          <span class="lite" style="font-size:11px">${dense ? 'tap ▸ on a step for the full instructions' : 'every word of each step'}</span>
+          <span class="lite" style="font-size:11px">${dense ? 'tap ▸ on a step for the full instructions' : 'every word of each step'} · 📖 opens the handbook</span>
         </div>
         <div class="clcomplete" ${qcFired && phase === 'Post Sale QC' ? '' : 'hidden'} style="background:#eef6ef;border:1.5px solid #7fc48f;border-radius:10px;padding:8px 11px;margin:0 0 10px;font-size:12.5px;font-weight:700">${qcFired ? '✅ Final QC complete — ready to deliver.' : ''}</div>
         ${work.map(it => {
@@ -4523,10 +4529,19 @@ async function openWorkChecklist(serial, phase) {
             ${(st.notes.get(it.i) || pendNotes.get(it.i)) ? `<div style="font-size:11.5px;color:#274b6d">📝 ${esc(st.notes.get(it.i) || pendNotes.get(it.i))}${pendNotes.has(it.i) ? ' <i style="color:#8a847b">(saves with the check)</i>' : ''}</div>` : ''}
             ${isSkip ? `<div style="font-size:11.5px;color:#9a5b13">⏭ skipped — ${esc(st.skips.get(it.i))} <u>undo</u></div>` : ''}</div>
           ${dense ? `<button class="clexp" data-i="${it.i}" title="${expanded.has(it.i) ? 'hide' : 'show'} the full instructions" style="border:1px solid #cfc9bf;background:none;border-radius:8px;padding:3px 8px;color:#57524b;font-size:13px;flex:0 0 auto;height:26px">${expanded.has(it.i) ? '▾' : '▸'}</button>` : ''}
+          <button class="clhbbtn" data-i="${it.i}" title="${hbOpen.has(it.i) ? 'hide' : 'read'} the handbook for this step" style="border:1px solid ${hbOpen.has(it.i) ? '#9e2020' : '#cfc9bf'};background:${hbOpen.has(it.i) ? '#fbeaea' : 'none'};border-radius:8px;padding:3px 7px;color:#57524b;font-size:12px;flex:0 0 auto;height:26px">📖</button>
           <button class="clnote" data-i="${it.i}" title="add a note on this item" style="border:1px solid #cfdcec;background:none;border-radius:8px;padding:3px 7px;color:#3a6ea5;font-size:12px;flex:0 0 auto;height:26px">📝</button>
           ${canMedia ? `<button class="clmed" data-i="${it.i}" title="attach a training video / photo to this step" style="border:1px solid #cfdcec;background:none;border-radius:8px;padding:3px 7px;color:#3a6ea5;font-size:12px;flex:0 0 auto;height:26px">🎬</button>` : ''}
           ${!isDone && !isSkip ? `<button class="clskip" data-i="${it.i}" style="border:1px solid #cfc9bf;background:none;border-radius:8px;padding:3px 8px;color:#9a5b13;font-size:11px;flex:0 0 auto;height:26px">Skip</button>` : ''}
           </div>
+          ${hbOpen.has(it.i) ? `<div class="clhbpanel" style="background:#faf8f4;border:1px solid #e4dfd5;border-radius:10px;padding:10px 12px;margin:0 2px 10px 30px;cursor:auto">
+            <div style="font-size:10.5px;letter-spacing:1px;color:#8a847b;text-transform:uppercase;margin-bottom:6px">📖 From the Restoration Handbook, word for word</div>
+            ${it.handbook
+              ? `<div class="clhb" style="font-size:14px;line-height:1.6">${glossLinkify(it.handbook)}</div>`
+              : `<div style="font-size:14px;line-height:1.5">${glossLinkify(esc(it.text))}</div>`}
+            ${it.detail ? `<div style="background:#fdf3ec;border-left:3px solid #c9a227;padding:6px 10px;border-radius:0 8px 8px 0;font-size:12.5px;color:#6b5030;margin-top:6px">⚠ ${esc(it.detail)}</div>` : ''}
+            ${isDone || isSkip ? clMediaRow(it) : ''}
+          </div>` : ''}
           ${noteAsk === it.i ? `<div style="display:flex;gap:6px;padding:0 2px 10px 30px">
             <input class="clnotewhy" value="${esc(st.notes.get(it.i) || pendNotes.get(it.i) || '')}" placeholder="note on this item — saves with the checklist" maxlength="200"
               style="flex:1;font:500 12.5px/1.3 inherit;padding:6px 8px;border:1.5px solid #3a6ea5;border-radius:8px">
@@ -4579,6 +4594,14 @@ async function openWorkChecklist(serial, phase) {
         expanded.has(i) ? expanded.delete(i) : expanded.add(i);
         render();
       });
+      ov.querySelectorAll('.clhbbtn').forEach(b => b.onclick = ev => {
+        ev.stopPropagation();
+        const i = +b.dataset.i;
+        hbOpen.has(i) ? hbOpen.delete(i) : hbOpen.add(i);
+        render();
+      });
+      // reading the handbook must never check or uncheck the step
+      ov.querySelectorAll('.clhbpanel').forEach(el => el.onclick = ev => ev.stopPropagation());
       ov.querySelectorAll('.clmode').forEach(b => b.onclick = ev => {
         ev.stopPropagation();
         dense = b.dataset.m === 'summary';
