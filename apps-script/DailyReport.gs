@@ -50,7 +50,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-09-24.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-09-24.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -7502,8 +7502,11 @@ function lateClockNudge(e) {
   var hour = Number(Utilities.formatDate(now, 'America/Denver', 'H'));
   // Movers work past 6 (Mark 9/16). The 6pm pass still skips them, but if a
   // mover is on the clock it books a ONE-SHOT 8pm pass tonight just for them,
-  // so they get a reminder instead of being silently stamped 6:00 PM by the
+  // so they get a reminder instead of being silently stamped by the
   // forgotten-clock sweep next morning. No new installed trigger needed.
+  // The late crew is the same list the sweep uses — movers by roster Position
+  // PLUS Melissa (Walter 9/24) — so she is no longer texted at 6 while still
+  // working, and the 8pm text quotes the 8:00 PM stamp her group actually gets.
   var moverPass = !dry && hour >= 19;
   var props = PropertiesService.getScriptProperties();
   if (!dry) {   // clear last night's one-shot (a project is capped at 20 triggers)
@@ -7517,7 +7520,7 @@ function lateClockNudge(e) {
       }
     } catch (eP) {}
   }
-  var movers = moverFirsts_();
+  var movers = lateCrew_();
   var firstOf = function (n) { return String(n || '').trim().split(/\s+/)[0].toLowerCase(); };
   var late = {}, moversOpen = {};
   var add = function (tech, line) {
@@ -7547,7 +7550,7 @@ function lateClockNudge(e) {
     var msg = moverPass
       ? '\u23f0 BLP Store Map: it\u2019s after 8pm and you\u2019re still clocked in \u2014 ' + group[n].join(' + ')
         + '. Still out on a job? Ignore this. Finished? Open the Store Map and clock out \u2014 otherwise your day gets '
-        + 'recorded as ending at 6:00 PM. Wrong time already saved? Send a fix: ' + APP_URL + '/#fixclock'
+        + 'recorded as ending at 8:00 PM. Wrong time already saved? Send a fix: ' + APP_URL + '/#fixclock'
       : '\u23f0 BLP Store Map: it\u2019s after 6pm and you\u2019re still clocked in \u2014 ' + group[n].join(' + ')
         + '. If you\u2019ve gone home, open the Store Map and clock out, then submit a '
         + 'time-fix request with the time you actually finished: ' + APP_URL + '/#fixclock';
