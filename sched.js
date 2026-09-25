@@ -763,12 +763,12 @@ async function loadProposal(box){
     box.querySelectorAll(".bnanswer").forEach(t=>{ if(t.value.trim()) items.push({title:t.dataset.title,body:t.dataset.body,answer:t.value.trim()}); });
     const out=box.querySelector("#bnOut");
     if(!items.length){ out.className="adjustout err"; out.textContent="Write an answer in at least one box first."; return; }
-    bna.disabled=true; bna.textContent="Working… (usually 30–90s)";
+    bna.disabled=true; bna.textContent="Working… (usually 2–3 min)";
     try{
       const j=await aiJob("bottleneck-resolve-background",
         {key:localStorage.getItem("blp.appkey")||"pianoman",items,
           by:(typeof authUser==="function"&&authUser()&&authUser().name)||localStorage.getItem("blpmgr.name")||"Shop Manager"},
-        s=>{ bna.textContent="Working… "+s+"s (usually 30–90s)"; });
+        s=>{ bna.textContent="Working… "+s+"s (usually 2–3 min)"; });
       if(j.error) throw new Error(j.error);
       clearDrafts(".bnanswer");
       out.className="adjustout ok";
@@ -811,13 +811,13 @@ async function loadProposal(box){
       body:JSON.stringify({fn:fn.startsWith("bottleneck")?"bottleneck":"schedule",payload:{...payload,nonce}})});
     if(r.status>=400) throw new Error("request failed ("+r.status+")");
     const t0=Date.now();
-    while(Date.now()-t0<210000){
+    while(Date.now()-t0<360000){   // 6 min — runs take 2–4 min on a busy bridge (Walter 9/25)
       await new Promise(res=>setTimeout(res,4000));
       if(onTick) onTick(Math.round((Date.now()-t0)/1000));
       const pr=await fetch("https://blpsalesapp.netlify.app/.netlify/functions/adjust-result?nonce="+nonce);
       if(pr.status===200) return pr.json();
     }
-    throw new Error("timed out after 3½ min — the job may still finish; reload in a minute");
+    throw new Error("timed out after 6 min — the job usually still finishes; reload the Planner in a minute and check the History");
   };
   const ahb=box.querySelector("#adjHistBtn"), ahp=box.querySelector("#adjHist");
   if(ahb) ahb.onclick=()=>{
@@ -831,12 +831,12 @@ async function loadProposal(box){
     const globalTxt=(box.querySelector("#adjGlobal").value||"").trim();
     const out=box.querySelector("#adjOut");
     if(!Object.keys(notes).length && !globalTxt){ out.className="adjustout err"; out.textContent="Write a note first — per-tech or in the overall box."; return; }
-    adj.disabled=true; adj.textContent="Thinking… (usually 30–90s)";
+    adj.disabled=true; adj.textContent="Thinking… (usually 2–3 min)";
     try{
       const j=await aiJob("schedule-adjust-background",
         {key:localStorage.getItem("blp.appkey")||"pianoman",notes,global:globalTxt,
           by:(typeof authUser==="function"&&authUser()&&authUser().name)||localStorage.getItem("blpmgr.name")||"Shop Manager"},
-        s=>{ adj.textContent="Thinking… "+s+"s (usually 30–90s)"; });
+        s=>{ adj.textContent="Thinking… "+s+"s (usually 2–3 min)"; });
       if(j.error) throw new Error(j.error);
       clearDrafts(".ptnotes textarea, #adjGlobal");
       out.className="adjustout ok";
