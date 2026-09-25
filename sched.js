@@ -748,10 +748,12 @@ async function loadProposal(box){
       </div>`).join("")}
       ${(plan.bottlenecks||[]).length?`<div class="bnhead"><h4>🛎 Manager Clarification Needed</h4>
         <div class="bnsub">Answer any of these in its box — Claude will make the Store Map / schedule updates, clear the resolved items, and remember any standing rules.</div></div>`:""}
-      <div class="propboxes">${(plan.bottlenecks||[]).map((bn,i)=>
-        `<div class="propbn" data-bi="${i}"><b>⚠ ${esc(bn[0])}</b>${esc(bn[1])}
-           <textarea class="bnanswer" data-title="${esc(bn[0])}" data-body="${esc(bn[1])}"
-             placeholder="Your answer / clarification for Claude… ('put it in spot 84', 'yes it spans both', 'the serial is actually …')"></textarea></div>`).join("")}</div>
+      <div class="propboxes">${(plan.bottlenecks||[]).map((raw,i)=>{
+        // a bottleneck is [title, body]; a stray plain string (9/25) would otherwise render as one-letter headings
+        const bn=Array.isArray(raw)?raw:[String(raw||"").slice(0,90),String(raw||"")];
+        return `<div class="propbn" data-bi="${i}"><b>⚠ ${esc(bn[0])}</b>${esc(bn[1]||"")}
+           <textarea class="bnanswer" data-title="${esc(bn[0])}" data-body="${esc(bn[1]||"")}"
+             placeholder="Your answer / clarification for Claude… ('put it in spot 84', 'yes it spans both', 'the serial is actually …')"></textarea></div>`;}).join("")}</div>
       ${(plan.bottlenecks||[]).length?`<div class="bnbar"><button class="abtn" id="bnApply">🪄 Send answers to Claude</button></div>
       <div class="adjustout" id="bnOut"></div>`:""}
     </div>
