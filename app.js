@@ -5144,7 +5144,14 @@ setInterval(() => {
 }, 1000);
 ['pointerdown', 'keydown'].forEach(ev =>
   addEventListener(ev, () => { CLOCK.lastAct = Date.now(); }, {passive: true}));
-setInterval(fetchClock, 60000);
+// bridge load (Walter 9/25): every open tab used to poll the clock every 60 s,
+// background tabs included — dozens of phones × once a minute was most of the
+// bridge's baseline traffic, and once Google slowed down those requests piled
+// up past its simultaneous-execution cap (HTML error pages, Planner timeouts).
+// Now: every 90 s while the tab is visible, nothing while it is hidden, and one
+// refresh the moment it comes back to the front.
+setInterval(() => { if (!document.hidden) fetchClock(); }, 90000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) fetchClock(); });
 setTimeout(fetchClock, 2500);
 
 /* ---------- 💵 payroll day clock (separate from the per-piano Work Clock) ----
