@@ -119,6 +119,10 @@ function fetchT(url, opts, ms) {
   const t = setTimeout(() => ctrl.abort(), ms || 25000);
   return fetch(url, {...opts, signal: ctrl.signal}).finally(() => clearTimeout(t));
 }
+// Every POST to the bridge goes through here (Walter 9/25): 31 card actions
+// (phase, notes, moves, requests…) were still calling fetch() directly, so
+// when Google served its HTML error page instead of JSON the tech saw a raw
+// "Unexpected token '<'" instead of a retry and a plain "did NOT save" line.
 async function bridgeFetch(url, opts, budgetMs) {
   // budgetMs (optional): a total deadline for all attempts — the clock
   // punches pass 60 s (Mark 9/15) so a tech is told within a minute instead
@@ -2265,7 +2269,7 @@ async function setPaperwork(p, kind, url, name, pop) {
   const pin = wa.pin;
   if (msg) { msg.className = 'pwmsg phmsg'; msg.textContent = 'Saving…'; }
   try {
-    const r = await fetch(BRIDGE_URL, {
+    const r = await bridgeFetch(BRIDGE_URL, {
       method: 'POST', redirect: 'follow',
       headers: {'content-type': 'text/plain;charset=utf-8'},
       body: JSON.stringify({pin, serial: p.serial, action: 'setpaperwork',
@@ -2422,7 +2426,7 @@ async function saveTagSnapshot(p, d) {
   if (!ok) return;                       // printing still works, just unrecorded
   p.tagSnapshot = JSON.stringify(snap);   // optimistic so the thumb appears now
   try {
-    await fetch(BRIDGE_URL, {
+    await bridgeFetch(BRIDGE_URL, {
       method: 'POST', redirect: 'follow',
       headers: {'content-type': 'text/plain;charset=utf-8'},
       body: JSON.stringify({pin, serial: p.serial, action: 'tagsnapshot',
@@ -7184,7 +7188,7 @@ async function setPhase(p, phase, pop, extra) {
   msg.className = 'phmsg'; msg.textContent = 'Saving…';
   if (sel) sel.disabled = true;
   try {
-    const r = await fetch(BRIDGE_URL, {
+    const r = await bridgeFetch(BRIDGE_URL, {
       method: 'POST', redirect: 'follow',
       headers: {'content-type': 'text/plain;charset=utf-8'},
       body: JSON.stringify({pin, serial: p.serial, action: 'setphase', phase,
@@ -7239,7 +7243,7 @@ async function setMedia(p, field, pop, skip) {
   const wrap = btn && btn.closest('.mopts');
   if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
   try {
-    const r = await fetch(BRIDGE_URL, {
+    const r = await bridgeFetch(BRIDGE_URL, {
       method: 'POST', redirect: 'follow',
       headers: {'content-type': 'text/plain;charset=utf-8'},
       body: JSON.stringify({pin, serial: p.serial, action: 'setmedia', field, skip: !!skip, row: p.row, ...authFields()}),
@@ -7338,7 +7342,7 @@ async function toggleTrack(p, track, pop, miscNote) {
   if (btn) btn.classList.toggle('on');
   msg.className = 'trkmsg phmsg'; msg.textContent = 'Saving…';
   try {
-    const r = await fetch(BRIDGE_URL, {
+    const r = await bridgeFetch(BRIDGE_URL, {
       method: 'POST', redirect: 'follow',
       headers: {'content-type': 'text/plain;charset=utf-8'},
       body: JSON.stringify({pin, serial: p.serial, action: 'settrack',
@@ -7406,7 +7410,7 @@ async function saveCabinetry(p, list, pop) {
   edit.cabinetry = p.cabinetry; pendingEdits.set(p.row, edit);
   if (msg) { msg.className = 'cabmsg phmsg'; msg.textContent = 'Saving\u2026'; }
   try {
-    const r = await fetch(BRIDGE_URL, {
+    const r = await bridgeFetch(BRIDGE_URL, {
       method: 'POST', redirect: 'follow',
       headers: {'content-type': 'text/plain;charset=utf-8'},
       body: JSON.stringify({pin, serial: p.serial, action: 'setcabinetry',
@@ -7439,7 +7443,7 @@ async function setKeyService(p, list, pop) {
   const m = $('#pop').querySelector('.keymsg');
   if (m) { m.className = 'keymsg phmsg'; m.textContent = 'Saving...'; }
   try {
-    const r = await fetch(BRIDGE_URL, {
+    const r = await bridgeFetch(BRIDGE_URL, {
       method: 'POST', redirect: 'follow',
       headers: {'content-type': 'text/plain;charset=utf-8'},
       body: JSON.stringify({pin, serial: p.serial, action: 'setkeys',
@@ -7466,7 +7470,7 @@ async function setTypeOverride(p, type, pop) {
   p.typeOverride = type; if (type) p.type = type;
   if (msg) { msg.className = 'typemsg phmsg'; msg.textContent = 'Saving...'; }
   try {
-    const r = await fetch(BRIDGE_URL, {
+    const r = await bridgeFetch(BRIDGE_URL, {
       method: 'POST', redirect: 'follow',
       headers: {'content-type': 'text/plain;charset=utf-8'},
       body: JSON.stringify({pin, serial: p.serial, action: 'settype',
@@ -7504,7 +7508,7 @@ async function setPayPlan(p, plan, pop, why) {
   p.payPlan = plan;
   if (msg) { msg.className = 'paymsg phmsg'; msg.textContent = 'Saving...'; }
   try {
-    const r = await fetch(BRIDGE_URL, {
+    const r = await bridgeFetch(BRIDGE_URL, {
       method: 'POST', redirect: 'follow',
       headers: {'content-type': 'text/plain;charset=utf-8'},
       body: JSON.stringify({pin, serial: p.serial, action: 'setpayplan',
@@ -7545,7 +7549,7 @@ async function setAdminStepState(p, step, state, pop) {
   p.adminSteps = adminStepsSerialize(done, skipped);
   if (p.adminSteps === was) return true;
   try {
-    const r = await fetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+    const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
       headers: {'content-type': 'text/plain;charset=utf-8'},
       body: JSON.stringify({pin, serial: p.serial, action: 'setadminsteps', steps: p.adminSteps, row: p.row, ...authFields()})});
     const j = await r.json();
@@ -7568,7 +7572,7 @@ async function toggleAdminStep(p, step, pop) {
   const m2 = $('#pop').querySelector('.asmsg');
   if (m2) { m2.className = 'asmsg phmsg'; m2.textContent = 'Saving...'; }
   try {
-    const r = await fetch(BRIDGE_URL, {
+    const r = await bridgeFetch(BRIDGE_URL, {
       method: 'POST', redirect: 'follow',
       headers: {'content-type': 'text/plain;charset=utf-8'},
       body: JSON.stringify({pin, serial: p.serial, action: 'setadminsteps',
@@ -7618,7 +7622,7 @@ async function checkPayMilestone(p, pop) {
     + `The piano is currently in ${effectivePhase(p) || 'the shop'}, and the work is moving along beautifully.${payAsk}\n\n`
     + `We'll keep the updates coming as we move into the next phase.\n\nWarmly,\nBrigham Larson Pianos`;   // no cell number — internal texting line only (Brigham 9/11)
   try {
-    const r = await fetch(BRIDGE_URL, {
+    const r = await bridgeFetch(BRIDGE_URL, {
       method: 'POST', redirect: 'follow',
       headers: {'content-type': 'text/plain;charset=utf-8'},
       body: JSON.stringify({pin, serial: p.serial, action: 'paymilestone',
@@ -7833,7 +7837,7 @@ async function toggleDone(p, phase, pop) {
   if (btn) btn.classList.toggle('on');
   msg.className = 'dnmsg phmsg'; msg.textContent = 'Saving…';
   try {
-    const r = await fetch(BRIDGE_URL, {
+    const r = await bridgeFetch(BRIDGE_URL, {
       method: 'POST', redirect: 'follow',
       headers: {'content-type': 'text/plain;charset=utf-8'},
       body: JSON.stringify({pin, serial: p.serial, action: 'setdone',
@@ -7867,7 +7871,7 @@ async function setClientReports(p, enabled, pop) {
   edit.clientReports = p.clientReports; pendingEdits.set(p.row, edit);
   msg.className = 'crmsg phmsg'; msg.textContent = 'Saving…';
   try {
-    const r = await fetch(BRIDGE_URL, {
+    const r = await bridgeFetch(BRIDGE_URL, {
       method: 'POST', redirect: 'follow',
       headers: {'content-type': 'text/plain;charset=utf-8'},
       body: JSON.stringify({pin, serial: p.serial, action: 'setclientreports',
@@ -7901,7 +7905,7 @@ async function setSnooze(p, date, pop) {
   if (cur) cur.textContent = date;
   msg.className = 'snzmsg phmsg'; msg.textContent = 'Saving…';
   try {
-    const r = await fetch(BRIDGE_URL, {
+    const r = await bridgeFetch(BRIDGE_URL, {
       method: 'POST', redirect: 'follow',
       headers: {'content-type': 'text/plain;charset=utf-8'},
       body: JSON.stringify({pin, serial: p.serial, action: 'setsnooze',
@@ -8128,7 +8132,7 @@ async function submitAssign(slotId, ov) {
   btn.disabled = true;
   msg.className = 'tmmsg'; msg.textContent = 'Looking it up in the Piano Log…';
   try {
-    const r = await fetch(BRIDGE_URL, {
+    const r = await bridgeFetch(BRIDGE_URL, {
       method: 'POST', redirect: 'follow',
       headers: {'content-type': 'text/plain;charset=utf-8'},
       body: JSON.stringify({pin, serial, action: 'move', newLocation: slotId, ...authFields()}),
@@ -8146,7 +8150,7 @@ async function submitAssign(slotId, ov) {
       return;
     }
     if (j.error && j.rows) {   // several active rows share the serial — take the first
-      const r2 = await fetch(BRIDGE_URL, {
+      const r2 = await bridgeFetch(BRIDGE_URL, {
         method: 'POST', redirect: 'follow',
         headers: {'content-type': 'text/plain;charset=utf-8'},
         body: JSON.stringify({pin, serial, action: 'move', newLocation: slotId, row: j.rows[0], ...authFields()}),
@@ -8256,7 +8260,7 @@ async function submitAdd(slotId, ov) {
                   size: v('.adsize'), category: v('.adtype'), owner: v('.adowner') || 'BLP',
                   location: loc, temp: isTemp ? 1 : 0};
   try {
-    const r = await fetch(BRIDGE_URL, {
+    const r = await bridgeFetch(BRIDGE_URL, {
       method: 'POST', redirect: 'follow',
       headers: {'content-type': 'text/plain;charset=utf-8'},
       body: JSON.stringify({pin, action: 'addpiano', ...fields, ...authFields()}),
@@ -8278,7 +8282,7 @@ async function submitAdd(slotId, ov) {
         const mbtn = ov.querySelector('.admove');
         mbtn.disabled = true; msg.className = 'tmmsg'; msg.textContent = 'Moving it…';
         try {
-          const r2 = await fetch(BRIDGE_URL, {
+          const r2 = await bridgeFetch(BRIDGE_URL, {
             method: 'POST', redirect: 'follow',
             headers: {'content-type': 'text/plain;charset=utf-8'},
             body: JSON.stringify({pin, action: 'move', serial, row: j.row,
@@ -8391,7 +8395,7 @@ async function submitMoveReq(p, ov) {
   btn.disabled = true;
   msg.className = 'tmmsg'; msg.textContent = 'Adding to the Monday move list…';
   try {
-    const r = await fetch(BRIDGE_URL, {
+    const r = await bridgeFetch(BRIDGE_URL, {
       method: 'POST', redirect: 'follow',
       headers: {'content-type': 'text/plain;charset=utf-8'},
       body: JSON.stringify({pin, serial: p.serial, action: 'movereq', row: p.row,
@@ -8461,7 +8465,7 @@ async function submitService(p, ov, asap) {
   msg.textContent = asap ? `Booking ${techName} ASAP (tomorrow, or Monday if that's a weekend)…`
     : `Finding ${techName}’s next open slot…`;
   try {
-    const r = await fetch(BRIDGE_URL, {
+    const r = await bridgeFetch(BRIDGE_URL, {
       method: 'POST', redirect: 'follow',
       headers: {'content-type': 'text/plain;charset=utf-8'},
       body: JSON.stringify({pin, serial: p.serial, action: 'service', row: p.row,
@@ -8511,7 +8515,7 @@ async function submitCurtis(p, ov) {
   btn.disabled = true;
   msg.className = 'tmmsg'; msg.textContent = 'Adding to the work orders sheet…';
   try {
-    const r = await fetch(BRIDGE_URL, {
+    const r = await bridgeFetch(BRIDGE_URL, {
       method: 'POST', redirect: 'follow',
       headers: {'content-type': 'text/plain;charset=utf-8'},
       body: JSON.stringify({pin, action: 'curtis', ...reqIdent(p, ov),
@@ -8565,7 +8569,7 @@ async function submitAdmin(p, ov) {
   btn.disabled = true;
   msg.className = 'tmmsg'; msg.textContent = when === 'monday' ? 'Adding to the Monday batch…' : 'Emailing…';
   try {
-    const r = await fetch(BRIDGE_URL, {
+    const r = await bridgeFetch(BRIDGE_URL, {
       method: 'POST', redirect: 'follow',
       headers: {'content-type': 'text/plain;charset=utf-8'},
       body: JSON.stringify({pin, action: 'adminreq', ...reqIdent(p, ov),
@@ -8610,7 +8614,7 @@ async function submitGeneric(p, kind, ov) {
   btn.disabled = true;
   msg.className = 'tmmsg'; msg.textContent = 'Sending…';
   try {
-    const r = await fetch(BRIDGE_URL, {
+    const r = await bridgeFetch(BRIDGE_URL, {
       method: 'POST', redirect: 'follow',
       headers: {'content-type': 'text/plain;charset=utf-8'},
       body: JSON.stringify({pin, action: 'teamreq', ...reqIdent(p, ov),
@@ -8701,7 +8705,7 @@ async function submitPrice(p, ov) {
   btn.disabled = true;
   msg.className = 'tmmsg'; msg.textContent = 'Saving the price…';
   try {
-    const r = await fetch(BRIDGE_URL, {
+    const r = await bridgeFetch(BRIDGE_URL, {
       method: 'POST', redirect: 'follow',
       headers: {'content-type': 'text/plain;charset=utf-8'},
       body: JSON.stringify({pin, serial: p.serial, action: 'setprice', row: p.row,
@@ -8732,7 +8736,7 @@ async function submitPriceRequest(p, ov) {
   btn.disabled = true;
   msg.className = 'tmmsg'; msg.textContent = 'Emailing Brigham…';
   try {
-    const r = await fetch(BRIDGE_URL, {
+    const r = await bridgeFetch(BRIDGE_URL, {
       method: 'POST', redirect: 'follow',
       headers: {'content-type': 'text/plain;charset=utf-8'},
       body: JSON.stringify({pin, serial: p.serial, action: 'requestprice', row: p.row, ...authFields()}),
@@ -8806,7 +8810,7 @@ async function submitTune(p, ov) {
   msg.className = 'tmmsg';
   msg.textContent = `Finding ${techName}’s next open slot…`;
   try {
-    const r = await fetch(BRIDGE_URL, {
+    const r = await bridgeFetch(BRIDGE_URL, {
       method: 'POST', redirect: 'follow',
       headers: {'content-type': 'text/plain;charset=utf-8'},
       body: JSON.stringify({pin, serial: p.serial, action: 'tune', techId, techName,
@@ -8876,7 +8880,7 @@ async function submitDuplicate(p, ov) {
   btn.disabled = true;
   msg.className = 'tmmsg'; msg.textContent = 'Marking…';
   try {
-    const r = await fetch(BRIDGE_URL, {
+    const r = await bridgeFetch(BRIDGE_URL, {
       method: 'POST', redirect: 'follow',
       headers: {'content-type': 'text/plain;charset=utf-8'},
       body: JSON.stringify({pin, serial: p.serial, row: p.row, action: 'markduplicate',
@@ -9662,7 +9666,7 @@ async function movePiano(p, dest, pop, confirmed) {
   msg.textContent = 'Updating Piano Log…';
   try {
     // straight to the Apps Script bridge; text/plain avoids CORS preflight
-    const r = await fetch(BRIDGE_URL, {
+    const r = await bridgeFetch(BRIDGE_URL, {
       method: 'POST', redirect: 'follow',
       headers: {'content-type': 'text/plain;charset=utf-8'},
       body: JSON.stringify({pin, serial: p.serial, action: 'move', newLocation: dest, row: p.row, ...authFields()}),
@@ -9725,7 +9729,7 @@ async function queuePiano(p, newPos, pop) {
   msg.className = 'mvmsg qmsg';
   msg.textContent = 'Reordering the shop queue…';
   try {
-    const r = await fetch(BRIDGE_URL, {
+    const r = await bridgeFetch(BRIDGE_URL, {
       method: 'POST', redirect: 'follow',
       headers: {'content-type': 'text/plain;charset=utf-8'},
       body: JSON.stringify({pin, action: 'queue', serial: p.serial,
@@ -10221,7 +10225,7 @@ async function restoreDuplicate(row, serial, btn) {
   if (!ok) { alert('Sign in with Google (☰ menu) or enter the team PIN first.'); return; }
   btn.disabled = true; btn.textContent = 'Restoring…';
   try {
-    const r = await fetch(BRIDGE_URL, {
+    const r = await bridgeFetch(BRIDGE_URL, {
       method: 'POST', redirect: 'follow',
       headers: {'content-type': 'text/plain;charset=utf-8'},
       body: JSON.stringify({pin, serial, row, action: 'unmarkduplicate', ...authFields()}),
