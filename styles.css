@@ -2073,6 +2073,12 @@ tr.daynone td{color:#9aa2ab}
 .mediagrid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}
 .mediagrid .tagbtn{display:flex;flex-direction:column;align-items:flex-start;gap:1px;padding:7px 9px;text-align:left;line-height:1.2}
 .mediagrid .tagbtn small{font-weight:500;opacity:.7;font-size:10px}
+/* 📷 Before/After photos chooser: camera roll vs 13-shot list (Melissa 9/25) */
+.phchoose{position:relative;margin-top:6px;padding:9px 30px 9px 10px;border:1.5px solid #9e2020;border-radius:10px;background:#fdf6f6}
+.phchoose .phchead{font-size:11px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:#9e2020;margin-bottom:6px}
+.phchoose button.maddbtn,.phchoose button.phwiz{display:flex;flex-direction:column;align-items:flex-start;gap:1px;width:100%;text-align:left;font:700 13px/1.25 inherit;padding:8px 10px;margin:4px 0;border:1px solid #cfc9bf;border-radius:8px;background:#fff;color:#2b2f33;cursor:pointer}
+.phchoose button.maddbtn small,.phchoose button.phwiz small{font-weight:500;font-size:10.5px;color:#6f6a63}
+.phchoose .phclose{position:absolute;top:6px;right:6px;border:0;background:none;font-size:14px;color:#8a847b;cursor:pointer;padding:2px 5px}
 /* thumbnail wizard: 16:9 YouTube frame with shaded cut-off bands */
 .thumbwiz .twframe{width:min(360px,92vw);aspect-ratio:16/9;margin:0 auto;border:2.5px dashed #9e2020;border-radius:8px;
   background:#111;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center}

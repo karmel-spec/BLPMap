@@ -1855,7 +1855,9 @@ function mediaCard(p) {
       <button class="tagbtn vidbtn" data-kind="progress">🎬 Progress video</button>
       <input type="file" class="vidin" accept="video/*" capture="environment" hidden>
       <input type="file" class="vidpick" accept="video/*" hidden>
+      <input type="file" class="maddin" accept="image/*" multiple hidden>
     </div>
+    <div class="phchoose" hidden></div>
     <div class="lite" style="font-size:11px;margin-top:2px">Videos open the camera and file the clip in this piano’s Before / After / Progress Video folder, then ask for 5 YouTube-size thumbnails. Saved clip instead:
       <a href="#" class="vidpicklink" data-kind="before">before</a> · <a href="#" class="vidpicklink" data-kind="after">after</a> · <a href="#" class="vidpicklink" data-kind="progress">progress</a>.</div>` : ''}
     <div class="mdmsg"></div>
@@ -6745,9 +6747,32 @@ function wirePop(p) {
       openPop(p.row, S.popAnchor, true);
     } catch (e) { if (pqm) pqm.textContent = ' ✗ ' + e.message; }
   };
+  // 📷 Before / After photos → a two-way chooser (Melissa 9/25, 092525terry59):
+  // camera roll (upload photos already taken, up to 8 at once, into the
+  // Before/After folder) or the guided 13-shot list
   pop.querySelectorAll('.wizbtn').forEach(b => b.onclick = ev => {
     ev.stopPropagation(); popPinned = true;
-    openShotWizard(p, b.dataset.kind);
+    const kind = b.dataset.kind, box = pop.querySelector('.phchoose');
+    if (!box) { openShotWizard(p, kind); return; }
+    if (!box.hidden && box.dataset.kind === kind) { box.hidden = true; return; }
+    box.dataset.kind = kind;
+    box.innerHTML = `<div class="phchead">📷 ${kind === 'before' ? 'Before' : 'After'} photos — how?</div>
+      <button class="maddbtn" data-kind="${kind}">🖼 Camera roll<small>upload photos you already took (up to 8)</small></button>
+      <button class="phwiz" data-kind="${kind}">📋 Shot list<small>walk the 13 guided shots with the camera</small></button>
+      <button class="phclose" title="close">✕</button>`;
+    box.hidden = false;
+    box.querySelector('.phclose').onclick = e2 => { e2.stopPropagation(); box.hidden = true; };
+    box.querySelector('.phwiz').onclick = e2 => { e2.stopPropagation(); box.hidden = true; openShotWizard(p, kind); };
+    // the chooser is built after the card's handlers were wired, so the
+    // camera-roll button opens the multi-photo picker itself; the picker's
+    // onchange reads the kind off the input
+    box.querySelector('.maddbtn').onclick = e2 => {
+      e2.stopPropagation(); box.hidden = true;
+      const fin = pop.querySelector('.maddin'); if (!fin) return;
+      fin.dataset.kind = kind; fin.value = ''; fin.click();
+    };
+    box.onclick = e2 => e2.stopPropagation();
+    place(pop, S.popAnchor);   // card grew
   });
   // 🎥 before / after video: the camera input records, the plain input picks a saved clip
   (() => {
@@ -6769,10 +6794,12 @@ function wirePop(p) {
     let kind = 'before';
     pop.querySelectorAll('.maddbtn').forEach(b => b.onclick = ev => {
       ev.stopPropagation(); popPinned = true;
-      kind = b.dataset.kind; fin.click();
+      kind = b.dataset.kind; fin.value = ''; fin.click();
+      const box = pop.querySelector('.phchoose'); if (box) box.hidden = true;
     });
     fin.onclick = ev => ev.stopPropagation();
     fin.onchange = async () => {
+      if (fin.dataset.kind) kind = fin.dataset.kind;   // set by the Before/After chooser
       const files = [...(fin.files || [])].slice(0, 8);
       if (!files.length) return;
       const msg = pop.querySelector('.mdmsg');
