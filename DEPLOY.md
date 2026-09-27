@@ -96,6 +96,8 @@ change — it is the only reliable way to tell that a paste actually took
 otherwise; it happened 9/9).
 
 ### Bridge deploy log
+Deployed rev `2026-09-27.1` (Version 178) on Sat Sep 27 2026 from karmel@ via Claude in Chrome (clipboard paste, 439,707 UTF-16 units verified against the repo file) — ping `enc` intact, `drive:"ok"`, `secrets:"ok"`, `fn=events` 19 events; first `setcrmid` write (289994 → CRM client 4178) ok. Adds the `setcrmid` action / CRM CLIENT ID column.
+
 Deployed rev `2026-09-17.2` on Wed Sep 17 2026 from karmel@ — verified
 `enc` intact, `drive:"ok"`, `fn=events` returning 18 events, and the
 placeholder PIN rejected. The one-time `{action:'migratephases'}` ran the
