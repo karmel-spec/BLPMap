@@ -123,6 +123,8 @@ function parsePianos(text) {
     ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'PLATE HARDWARE FINISH') : -1;
   const keytopMatIdx = rows[1]
     ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'KEYTOP MATERIAL') : -1;
+  const crmIdIdx = rows[1]
+    ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'CRM CLIENT ID') : -1;
   const scopeNotesIdx = rows[1]
     ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'SCOPE NOTES') : -1;
   const keytopIdx = rows[1]
@@ -215,6 +217,7 @@ function parsePianos(text) {
       plateFinish: plateFinishIdx >= 0 ? col(plateFinishIdx).slice(0, 30) : '',
       keytopMaterial: keytopMatIdx >= 0 ? col(keytopMatIdx).slice(0, 30) : '',
       scopeNotes: scopeNotesIdx >= 0 ? col(scopeNotesIdx).slice(0, 500) : '',
+      crmClientId: crmIdIdx >= 0 ? col(crmIdIdx).trim() : '',
       keytopStatus: keytopIdx >= 0 ? col(keytopIdx).slice(0, 40) : '',
       importantNote: impNoteIdx >= 0 ? col(impNoteIdx).slice(0, 200) : '',
       pianoNotes: pianoNotesIdx >= 0 ? col(pianoNotesIdx).slice(0, 2000) : '',

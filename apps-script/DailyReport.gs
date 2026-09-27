@@ -50,7 +50,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-09-24.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-09-27.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -1400,6 +1400,18 @@ function doPost(e) {
     }
     if (req.action === 'pianonote') {
       return json_(pianoNote_(req, who));
+    }
+    if (req.action === 'setcrmid') {
+      // CRM CLIENT ID header col (auto-created): the CRM is the client master (Brigham 9/26);
+      // the Client Portal writes this so the owner cell is linked to one CRM client.
+      var ciSh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+      var ciF = findPiano_(ciSh, req.serial, req.row);
+      if (ciF.error) return json_(ciF);
+      var ciCol = pianoCol_(ciSh, 'CRM CLIENT ID');
+      var ciVal = String(req.value == null ? '' : req.value).trim();
+      ciSh.getRange(ciF.row, ciCol).setValue(ciVal);
+      logAct_(who, 'CRM client id', ciF.summary || req.serial, ciVal || '(cleared)');
+      return json_({ok: true, row: ciF.row, summary: ciF.summary, crmClientId: ciVal});
     }
     if (req.action === 'setcardfield') {
       // 🎨 plating finish / keytop material (Melissa 9/16, request 091626terry44)
