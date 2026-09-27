@@ -9349,6 +9349,8 @@ function wireNavGates() {
   if (nt) nt.hidden = !isTeamAdmin();
   const na = $('#navAppset');
   if (na) na.hidden = !isSettingsAdmin();
+  const nu = $('#navAutom');
+  if (nu) nu.hidden = !isAutomationsAdmin();
 }
 function isSettingsAdmin() {
   return gateOr(isOwner() || ['melissa@brighamlarsonpianos.com', 'markhales.blp@gmail.com'].includes(userEmail()), 'settings');
@@ -9359,6 +9361,10 @@ function isPayrollAdmin() { return gateOr(PAYROLL_ADMIN_EMAILS.includes(userEmai
 function isTimelogAdmin() { return gateOr(TIMELOG_ADMIN_EMAILS.includes(userEmail()), 'tl_edit'); }
 // 📊 Manager console — the owners and the Lead Manager only (Brigham 9/1)
 function isManagerConsole() { return isOwner() || gateOr(userEmail() === 'markhales.blp@gmail.com', 'manager_console'); }
+// 🤖 Automations register — owners and the Lead Shop Manager only. Same shape
+// as the manager console so Brigham can hand it to someone else from Settings
+// without touching code.
+function isAutomationsAdmin() { return isOwner() || gateOr(userEmail() === 'markhales.blp@gmail.com', 'automations'); }
 // only BLP accounts may sign in — a personal Gmail gets bounced back to
 // Google's account chooser instead of silently half-working
 function blpAccount(email) {
@@ -15251,7 +15257,7 @@ function renderAdmDash() {
 
 /* ---------- views / nav / drawers ---------- */
 function showView(v) {
-  ['map', 'report', 'board', 'cal', 'media', 'shopmap', 'archive', 'dash', 'whiteboard', 'training', 'trainingdoc', 'sched', 'team', 'admdash', 'updates', 'tboard', 'manager', 'appset', 'top10'].forEach(x => $('#view-' + x).hidden = x !== v);
+  ['map', 'report', 'board', 'cal', 'media', 'shopmap', 'archive', 'dash', 'whiteboard', 'training', 'trainingdoc', 'sched', 'team', 'admdash', 'updates', 'tboard', 'manager', 'appset', 'top10', 'autom'].forEach(x => $('#view-' + x).hidden = x !== v);
   if (v === 'archive') renderArchive();
   document.querySelectorAll('.navitem[data-view]').forEach(el =>
     el.classList.toggle('on', el.dataset.view === v));
@@ -15266,6 +15272,7 @@ function showView(v) {
   if (v === 'manager') renderManager();
   if (v === 'appset') renderAppSettings();
   if (v === 'top10') renderTop10();
+  if (v === 'autom') renderAutomations();
 }
 /* 📊 Manager console — the scorecard as its own menu tab */
 function renderManager() {
@@ -15277,6 +15284,157 @@ function renderManager() {
   if (!S.qcRows) loadQcLog();
   if (!S.slRows) loadScoreLog();
   el.innerHTML = scorecardTable();
+}
+/* ---------- 🤖 AUTOMATIONS — the register of everything that runs itself ----
+ * A read-only list, owners + Lead Shop Manager. Three things make it worth
+ * keeping by hand rather than probing live: the jobs live in four different
+ * places (Google's servers, Claude's cloud, Brigham's Mac, Netlify), none of
+ * them answer a common status endpoint, and the useful column is not "did it
+ * run" but "what does it touch and who hears about it".
+ *
+ * WHERE each one actually runs decides how reliable it is, so that is the
+ * first thing on every row:
+ *   google  — Apps Script time trigger on the bridge. Google's servers, always on.
+ *   cloud   — Claude cloud routine. Fires on its own, nothing needs to be open.
+ *   mac     — Claude desktop task. ONLY fires if Brigham's Mac is awake with the
+ *             desktop app open. These are the fragile ones.
+ *   netlify — background function, fires on a request, not a clock.
+ *   human   — not automated at all; listed so the weekly chain reads end to end.
+ *
+ * Keep this in step with apps-script/DailyReport.gs (reinstallAllTriggers is
+ * the production trigger set) and docs/scheduling/weekly-tech-scheduling-rules.md.
+ */
+const AUTOM_HOST = {
+  google: ['Google', 'Apps Script on the bridge — runs on Google’s servers, nothing needs to be open'],
+  cloud: ['Cloud', 'Claude cloud routine — fires on its own, nothing needs to be open'],
+  mac: ['Needs the Mac', 'Claude desktop task — only fires if Brigham’s Mac is awake with the desktop app open'],
+  netlify: ['Netlify', 'Background function — fires on a request, not on a clock'],
+  human: ['Person', 'Not automated — listed so the weekly chain reads end to end'],
+};
+const AUTOMATIONS = [
+  {sec: 'day', icon: '🗺', host: 'google', name: 'Daily Store Map report',
+   when: '6:00 AM · weekdays', job: 'sendDailyReport',
+   reads: 'Store Map /api/data and /data/slots.json',
+   does: 'Builds and emails the daily report. The trigger fires every day; the job returns early on Saturday and Sunday.'},
+  {sec: 'day', icon: '🎯', host: 'google', name: 'Top 10 brief',
+   when: '6:15 AM · daily', job: 'top10Brief',
+   reads: 'Store Map /api/top10',
+   does: 'Builds the ranked one-pager Doc (shop · sales · admin), emails it, and logs an activity row. Same link every day; the live list is under 🎯 Brigham’s Top 10.'},
+  {sec: 'day', icon: '🌅', host: 'google', name: 'Morning briefs — shop & admin',
+   when: '7:45 AM · shop Mon–Fri, admin Mon–Sat, never Sunday', job: 'morningBriefs',
+   reads: 'Store Map, Piano Log, Work Clock',
+   texts: 'Shop brief → Mark, Matthew, Jacob, Brigham, Karmel · Admin brief → Melissa, Brigham, Karmel',
+   does: 'Emails both briefs and texts the doc link. Also takes the daily scorecard snapshot that feeds the trends in the Manager console — if this misses, that day is missing from the trend.'},
+  {sec: 'day', icon: '🕕', host: 'google', name: 'Late-clock nudge',
+   when: '6:00 PM, and 8:00 PM for movers · Mon–Sat', job: 'lateClockNudge',
+   reads: 'Work Clock open punches, roster Position',
+   texts: 'whoever is still clocked in',
+   does: 'Texts anyone still on the clock. Movers (by roster Position) and Melissa skip the 6 PM pass and get an 8 PM one instead, quoting the 8:00 PM stamp. Forgotten clocks close at a flat 6:00 PM, or 8:00 PM for that late crew. Sundays stay quiet.'},
+  {sec: 'day', icon: '🌙', host: 'google', name: 'Shop Manager briefing',
+   when: '6:30 PM · daily', job: 'sendShopManagerReport',
+   reads: 'Store Map, weekly report sheet, Task Status',
+   does: 'The next morning’s standup. Carries the stale-phase detector, which cross-checks what techs wrote in their weekly reports against the phase on each card and flags the ones that never got advanced. Ignores any firing before noon — a stale morning trigger still exists under another Google account and would otherwise double-send.'},
+
+  {sec: 'week', icon: '📋', host: 'mac', name: 'Thursday report sweep',
+   when: 'Thursday 6:00 PM', job: 'thursday-report-sweep',
+   reads: 'this week’s column on the report sheet, Current Team roster',
+   texts: 'whoever has not filed · always Brigham + Karmel',
+   does: 'Chases missing weekly reports. Roster is everyone whose Position says tech, plus Doris; anyone listed in the report_exempt setting is skipped (Victoria). Sends a GO/no-GO summary either way, because the Friday draft is only as good as the reports behind it.'},
+  {sec: 'week', icon: '🤖', host: 'cloud', name: 'Friday schedule draft',
+   when: 'Friday 7:00 AM', job: 'BLP Friday 7 AM — draft next week’s tech schedule',
+   reads: 'report sheet (this week, last week as fallback) · Work Clock actuals · live Store Map · Scheduling Rules, Team Schedule and Tech Calendars tabs · Task Status · the moving, in-store tuning, QC and all tech calendars',
+   writes: 'the Proposal Store — Scheduler → Planner reads it',
+   texts: 'Mark Hales · Brigham · Karmel',
+   does: 'Drafts next week’s Mon–Fri plan for every active tech, sizes the blocks from Work Clock actuals rather than guesses, weaves in pre-booked tunings and QCs without duplicating them, and lists what it could not schedule as bottlenecks. Guardrails: never touches a calendar, never writes to a sheet, never overwrites a draft someone else already saved for the same week, and texts nobody but those three.'},
+  {sec: 'week', icon: '🔔', host: 'mac', name: 'Friday approval nudge',
+   when: 'Friday 4:30 PM', job: 'friday-schedule-approval-nudge',
+   reads: 'the saved proposal (savedAt / applied)',
+   texts: 'Brigham, copy to Karmel',
+   does: 'Runs the review checks over whatever is in the Planner — TENTATIVE blocks, three or more techs on one serial in a day, open bottlenecks, gaps in Tech Calendars, Korban under ten tunings, blocks landing on someone’s day off — then texts the status and a reminder to review and Approve. Logs an App Updates row. Fires whether or not Mark’s revision landed; only the wording changes.'},
+  {sec: 'week', icon: '📧', host: 'google', name: 'Monday admin digest',
+   when: 'Monday 8:00 AM', job: 'mondayAdminDigest',
+   reads: 'WALK AROUND ADMIN NOTES tab on the Piano Log',
+   does: 'Emails every unsent note to info@ in one digest, then marks them sent so nothing goes out twice.'},
+
+  {sec: 'event', icon: '✏️', host: 'netlify', name: 'Planner revision',
+   when: 'when Mark saves a Planner note', job: 'schedule-adjust-background',
+   does: 'Revises the saved draft from a note written in plain English. Takes 30–90 seconds, which is why it is a background function — the Planner polls for the result. A note phrased as a standing rule also appends to the Scheduling Rules tab, and from then on every future draft obeys it. Every run appends to the Adjustment Log (🕘 History in the Planner).'},
+  {sec: 'event', icon: '🧱', host: 'netlify', name: 'Bottleneck resolve',
+   when: 'when a Manager Clarification is answered', job: 'bottleneck-resolve-background',
+   does: 'Same loop as above, aimed at one bottleneck: the answer goes in, the draft comes back with that piano scheduled or the blocker written up properly. Also logged to the Adjustment Log.'},
+  {sec: 'event', icon: '✅', host: 'google', name: 'Approve → tech calendars',
+   when: 'when Brigham presses Approve', job: 'applyschedule',
+   writes: 'every tech’s Google calendar',
+   does: 'The only step that writes to a calendar. Creates each approved block on the tech’s own calendar and stamps the event location with the piano’s current map spot so they can walk straight to it. Existing locations on real appointments are never overwritten.'},
+
+  {sec: 'human', icon: '🧑‍🔧', host: 'human', name: 'Techs file weekly reports',
+   when: 'Thursday by 6:00 PM',
+   does: 'The input the whole chain runs on. A missing report means that tech’s lane gets built from last week instead.'},
+  {sec: 'human', icon: '📝', host: 'human', name: 'Mark revises the draft',
+   when: 'Friday', does: 'In Scheduler → Planner, using the notes boxes and the Manager Clarification answers.'},
+  {sec: 'human', icon: '👍', host: 'human', name: 'Brigham approves',
+   when: 'Friday', does: 'The Approve button in the Planner. Nothing reaches a tech’s calendar until this happens.'},
+
+  {sec: 'off', icon: '🗄', host: 'google', name: 'Friday report chaser',
+   when: 'was Friday 6:15 PM + Saturday 10:00 AM', job: 'fridaySweep',
+   does: 'RETIRED 2026-09-20 (Karmel) when weekly reports moved from Friday to Thursday. The Thursday sweep replaced it. Left here so nobody reinstalls it by accident — reinstallAllTriggers deliberately does not recreate it.'},
+];
+const AUTOM_SECS = [
+  ['day', '⏰ Every day', 'The daily rhythm — reports out in the morning, briefs at 7:45, clocks closed at night.'],
+  ['week', '📅 Every week', 'The scheduling chain: reports in Thursday, draft Friday morning, nudge Friday afternoon.'],
+  ['event', '⚡ When something happens', 'No clock — these fire off a person doing something in the app.'],
+  ['human', '🙋 The human steps', 'Not automated. Here so the weekly chain reads end to end and you can see where it waits on a person.'],
+  ['off', '🗄 Retired', 'Switched off, kept on the list so it does not get rebuilt by mistake.'],
+];
+function renderAutomations() {
+  const el = $('#automBody');
+  if (!el) return;
+  if (!isAutomationsAdmin()) {
+    el.innerHTML = '<div class="empty">Owners and the Lead Shop Manager only.</div>';
+    return;
+  }
+  const timed = AUTOMATIONS.filter(a => a.sec === 'day' || a.sec === 'week');
+  const evented = AUTOMATIONS.filter(a => a.sec === 'event');
+  const onMac = timed.filter(a => a.host === 'mac');
+  const head = `<div class="autsum">
+      <b>${timed.length}</b> jobs run on a clock with nobody starting them, plus
+      <b>${evented.length}</b> that fire when someone does something in the app.
+      ${timed.length - onMac.length} of the ${timed.length} run on servers that are always up.
+      ${onMac.length ? `<span class="autwarn">${onMac.length} only fire if Brigham’s Mac is awake with the desktop app open —
+        ${onMac.map(a => esc(a.name)).join(' and ')}. If a Thursday or Friday text never arrives, that is the first thing to check.</span>`
+    : ''}
+    </div>`;
+  const row = a => {
+    const [hostLabel, hostTip] = AUTOM_HOST[a.host] || ['', ''];
+    const line = (label, val, cls) => val
+      ? `<div class="autline ${cls || ''}"><span class="autlab">${label}</span><span>${esc(val)}</span></div>` : '';
+    return `<div class="autrow">
+        <div class="auttop">
+          <span class="autic">${a.icon}</span>
+          <span class="autname">${esc(a.name)}</span>
+          <span class="authost h-${a.host}" title="${esc(hostTip)}">${esc(hostLabel)}</span>
+          ${a.when ? `<span class="autwhen">${esc(a.when)}</span>` : ''}
+        </div>
+        <div class="autdoes">${esc(a.does)}</div>
+        ${line('reads', a.reads)}
+        ${line('writes', a.writes, 'aw')}
+        ${line('texts', a.texts, 'at')}
+        ${a.job ? `<div class="autjob">${esc(a.job)}</div>` : ''}
+      </div>`;
+  };
+  el.innerHTML = head + AUTOM_SECS.map(([key, label, blurb]) => {
+    const list = AUTOMATIONS.filter(a => a.sec === key);
+    if (!list.length) return '';
+    const open = lsGet('autsec_' + key) !== 'shut';
+    return `<div class="sechead ${open ? '' : 'shut'}" data-asec="${key}">${label}
+        <span class="pc">${list.length}</span><i class="secarrow">${open ? '▾' : '▸'}</i></div>
+      <div class="asecbody" ${open ? '' : 'hidden'}>
+        <p class="autblurb">${esc(blurb)}</p>${list.map(row).join('')}</div>`;
+  }).join('');
+  el.querySelectorAll('.sechead[data-asec]').forEach(h => h.onclick = () => {
+    lsSet('autsec_' + h.dataset.asec, lsGet('autsec_' + h.dataset.asec) === 'shut' ? 'open' : 'shut');
+    renderAutomations();
+  });
 }
 /* ---------- ⚙️ SETTINGS — Design C: Roles Ladder (Brigham 9/4) ---------- */
 const PERM_KEYS = [
@@ -15291,6 +15449,7 @@ const PERM_KEYS = [
   ['prequeue_approve', 'Approve pre-queue pianos'],
   ['price_set', 'Set / edit prices'],
   ['manager_console', 'Manager console (scorecard)'],
+  ['automations', 'Automations register'],
   ['job_costing', 'Job costing report'],
   ['admin_dash', 'Admin dashboard & app requests'],
   ['payroll_report', 'Payroll report'],

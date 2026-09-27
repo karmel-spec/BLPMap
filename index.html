@@ -92,6 +92,7 @@
     <div class="navitem" data-view="admdash" id="navAdmDash" hidden><span class="ic">🛡</span>Admin</div>
     <div class="navitem" data-view="manager" id="navManager" hidden><span class="ic">📊</span>Manager</div>
     <div class="navitem" data-view="top10" id="navTop10" hidden><span class="ic">🎯</span>Brigham's Top 10</div>
+    <div class="navitem" data-view="autom" id="navAutom" hidden><span class="ic">🤖</span>Automations</div>
     <div class="navitem" data-view="appset" id="navAppset" hidden><span class="ic">⚙️</span>Settings</div>
     <div class="crew">
       <b>Synced</b><span id="synced">loading…</span>
@@ -314,6 +315,16 @@
     </div>
   </div>
 
+  <div class="view panelview" id="view-autom" hidden>
+    <div class="panel">
+      <h2 class="ph">🤖 AUTOMATIONS</h2>
+      <p class="pd">Everything that runs on its own — what fires, when, what it reads, what it
+        writes and who it texts. Owners and the Lead Shop Manager only. This is the register, not a
+        control panel: nothing here starts or stops a job.</p>
+      <div id="automBody"></div>
+    </div>
+  </div>
+
   <div class="view panelview" id="view-admdash" hidden>
     <div class="panel">
       <h2 class="ph">🛡 ADMIN DASHBOARD</h2>
@@ -324,7 +335,7 @@
   </div>
 </div>
 
-<script src="app.js?v=459"></script>
+<script src="app.js?v=460"></script>
 <script src="sched.js?v=26"></script>
 <!-- Agent faces (bottom-right) + in-app chat: see "agent chat" in app.js.
      Tapping a face opens a chat window with that Hermes agent (through the
