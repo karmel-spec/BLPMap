@@ -4308,7 +4308,7 @@ function qcQueueTable() {
       <td><b>${esc(r.piano || (p && p.summary) || '#' + r.serial)}</b><br><small>#${esc(r.serial)}</small></td>
       <td>${esc(r.phase)}</td><td>${esc(r.requested_by || '')}</td>
       <td>${esc(qcWhen(r.updated || r.created))}</td>
-      <td>${pass ? '<span class="qcpass">✓ passed</span>' : '<span class="qcfail">🔁 rework</span>'}${r.manager ? ' <small>by ' + esc(first(r.manager)) + '</small>' : ''}</td>
+      <td>${pass ? '<span class="qcpass">✓ passed</span>' : r.status === 'withdrawn' ? '<span class="dim">— withdrawn (piano delivered)</span>' : '<span class="qcfail">🔁 rework</span>'}${r.manager ? ' <small>by ' + esc(first(r.manager)) + '</small>' : ''}</td>
       <td>${canJudge ? `<button class="qcopen" data-id="${r.id}">view</button>` : ''}</td></tr>`;
   };
   return `<div class="qcsum">${pending.length
@@ -7306,7 +7306,10 @@ async function setPhase(p, phase, pop, extra) {
   const gseq = pianoPhases(p) || PHASES;
   // Exit Prep - Admin → Delivered: no photo, no mini-QC tap (Walter 9/28) —
   // only a manager or admin makes that change, once the piano is out the door
-  const gateFree = was === 'Exit Prep - Admin';
+  // …and ANY move to Delivered (Mark 9/28: Weber 33045 set to Delivered from
+  // Refinishing got the mini-QC popup instead — delivering is a manager /
+  // admin call, whatever phase the piano sat in)
+  const gateFree = was === 'Exit Prep - Admin' || phase === 'Delivered';
   if (!(extra && extra.gated) && !gateFree
       && gseq.indexOf(phase) >= 0 && gseq.indexOf(was) >= 0
       && gseq.indexOf(phase) > gseq.indexOf(was)) {
@@ -7344,6 +7347,10 @@ async function setPhase(p, phase, pop, extra) {
     } else if (j.ok) {
       p.phase = j.phase != null ? j.phase : phase;
       edit.phase = p.phase;   // keep protecting until /api/data catches up
+      // a delivered piano has no mini-QC left to do — withdraw any pending
+      // request so it stops glowing in the queue (Mark 9/28, Weber 33045)
+      if (phase === 'Delivered') fetch(PHASEQC_URL, {method: 'POST', headers: {'content-type': 'application/json'},
+        body: JSON.stringify({key: 'pianoman', op: 'withdraw', serial: p.serial, by: clockName() || 'delivery'})}).then(() => loadQcQueue()).catch(() => {});
       msg.className = 'phmsg ok';
       msg.textContent = p.phase ? `✓ Saved — ${p.phase}` : '✓ Phase cleared';
       renderMap();
