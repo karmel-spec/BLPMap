@@ -8262,6 +8262,21 @@ function openPlateTempModal(p) {
     } catch (e) { msg.textContent = '✗ ' + e.message; }
   };
 }
+// a serial one keystroke away from a real one (typo, dropped/extra digit) — active pianos first
+function serialNearMiss(serial) {
+  const a = String(serial || '').trim().toUpperCase(); if (!a) return null;
+  const dist1 = (x, y) => {
+    if (x === y) return false;
+    if (Math.abs(x.length - y.length) > 1) return false;
+    if (x.length === y.length) { let d = 0; for (let i = 0; i < x.length; i++) if (x[i] !== y[i] && ++d > 1) return false; return d === 1; }
+    const [sh, lo] = x.length < y.length ? [x, y] : [y, x];
+    for (let i = 0; i <= sh.length; i++) if (lo.slice(0, i) + lo.slice(i + 1) === sh) return true;
+    return false;
+  };
+  const hits = (S.data.pianos || []).filter(x => dist1(a, String(x.serial || '').trim().toUpperCase()));
+  hits.sort((x, y) => (y.active ? 1 : 0) - (x.active ? 1 : 0));
+  return hits[0] || null;
+}
 function openAssignModal(slotId) {
   popPinned = false; $('#pop').hidden = true;
   const ov = modalShell('assignmodal', `
@@ -8289,6 +8304,23 @@ async function submitAssign(slotId, ov) {
   btn.disabled = true;
   msg.className = 'tmmsg'; msg.textContent = 'Looking it up in the Piano Log…';
   try {
+    // Check the serial against the Piano Log copy we already hold BEFORE
+    // sending (Mark 9/28: 42729 — a typo for 42129 — went out while the bridge
+    // was slow, the relay queued it, and the "not found" never came back;
+    // the card just said "move failed" with no clue why).
+    const known = (S.data.pianos || []).some(x => String(x.serial || '').trim() === serial);
+    if (!known && (S.data.pianos || []).length) {
+      const near = serialNearMiss(serial);
+      msg.className = 'tmmsg err';
+      msg.innerHTML = `That serial isn't in the Piano Log.` + (near
+        ? ` Did you mean <b>${esc(near.serial)}</b> — ${esc(near.summary || '')}${near.location ? ' (spot ' + esc(near.location) + ')' : ''}? <button class="asuse" style="margin-left:6px">Use ${esc(near.serial)}</button>` : '');
+      btn.disabled = false;
+      const use = msg.querySelector('.asuse');
+      if (use) use.onclick = () => { ov.querySelector('.asserial').value = near.serial; msg.textContent = ''; };
+      btn.outerHTML = `<button class="tmgo asnew">＋ Add ${esc(serial)} as a NEW piano at spot ${esc(slotId)}</button>`;
+      ov.querySelector('.asnew').onclick = () => { ov.hidden = true; openAddModal(slotId, serial); };
+      return;
+    }
     const r = await bridgeFetch(BRIDGE_URL, {
       method: 'POST', redirect: 'follow',
       headers: {'content-type': 'text/plain;charset=utf-8'},
