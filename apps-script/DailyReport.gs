@@ -50,7 +50,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-09-28.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-09-28.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -5204,6 +5204,54 @@ function planBlockOnCal_(b) {
   return !/^\s*field\b|\bfield\s*:/i.test(String(b[3] || ''));
 }
 
+/* Calendar event description on Approve (Walter 9/25): the plan note is the
+ * Planner's reasoning for Mark and Brigham ("MOVED per Brigham's note this
+ * week", lane math, report echoes) and was landing on every tech's calendar
+ * verbatim. Techs get only what reads as an instruction — deadlines, today's
+ * buffing list, one-off notes — followed by the APPLIED_TAG line the audit
+ * and purge rely on. The Planner and the Store Map's Weekly Planning view keep
+ * the full note. Everything else in the note is dropped by pattern, so an
+ * instruction that trips a pattern is lost from the calendar (never from the
+ * plan); the DEADLINE / "Today's list" fragment of such a sentence is kept. */
+var CHATTER_RE = [
+  /\b(per|from|after|following)\s+(brigham|mark|melissa|walter|karmel|the\s+manager)('s)?\s+(note|notes|report|instruction|instructions|answer|answers|request|fix|guidance|explicit)/i,
+  /\b(CHANGED|MOVED|NEW|ADDED|REPLACED|RENAMED|RESTRUCTURED|SHIFTED|REASSIGNED|CORRECTED|CORRECTION|REMOVED|SWAPPED|COMPRESSED|EXPEDITE)\b/,
+  /\bpreviously\b|\bprior (pass|draft|round|assignment)\b|\bearlier (round|draft|pass)\b|\bthis (pass|draft|round)\b|\bthis week's note|\blast week's\b|\bthe 9\/\d+ (draft|report)\b|\b(his|her|their) \d+\/\d+ report\b|\b(his|her|their|the) report\b|\breport fix\b/i,
+  /\bbottleneck|\bqueue #\d+|\blane\b|\bestimated days\b|\bmedian\b|\bwork clock\b|\bstanding rule\b|\bstanding (daily|mon|tue)|\bnew standing\b|\brule\b/i,
+  /\bwoven in\b|\bnot duplicated\b|\bpre-?booked\b|\bfallback\b|\bunassigned\b|\bcarry ?over\b|\bnot newly created\b|\balready (scheduled|on (his|her|the))/i,
+  /\bspot <unconfirmed>|\bmap spot not confirmed\b|\bserial (required|confirmation)|\bflagged\b|\bsee bottlenecks\b|\bconfirm(ed)? (this|it) is (expected|ok)/i,
+  /\bHOLD \(|\bApprove must not\b|\bthis week only\b/i,
+  /\b(draft|planner|proposal)\b/i,
+  /\b(closed|marked|reports?|reported) DONE\b|\bstanding (note|block|assignment)\b|\b(estimates?|has|needs) \d+ (days?|hours?)\b|\bcan continue next week\b/i,
+  /\bONE block per day\b|\bmoved (off|to|from|onto)\b|\bto accommodate\b|\bnow (Mon|Tue|Wed|Thu|Fri)\b/i
+];
+function calDescription_(note) {
+  var s = String(note || '').replace(/\s+/g, ' ').trim();
+  s = s.replace(/^spot\s+[^·]*·\s*/i, '');           // live spot rides in Location
+  s = s.replace(/·\s*HOLD \(Walter[^)]*\)[^.]*\.?/g, '');
+  // split into sentences / clauses; keep the ones that read as instructions
+  // sentence split — "8:00 a.m. to 4:00 p.m." and "e.g." are not sentence ends
+  var guarded = s.replace(/\b([ap])\.m\./gi, '$1\u0002m\u0002').replace(/\be\.g\./gi, 'e\u0002g\u0002').replace(/\bvs\./gi, 'vs\u0002');
+  var parts = guarded.replace(/([.!?])\s+/g, '$1\u0001').replace(/\s+·\s+/g, '\u0001').split('\u0001')
+    .map(function (x) { return x.replace(/\u0002/g, '.'); })
+    .map(function (x) { return x.trim(); }).filter(Boolean);
+  var keep = [];
+  for (var i = 0; i < parts.length; i++) {
+    var t = parts[i];
+    var chatter = false;
+    for (var k = 0; k < CHATTER_RE.length; k++) if (CHATTER_RE[k].test(t)) { chatter = true; break; }
+    if (chatter) {
+      // an instruction hiding inside a chatter sentence: keep the DEADLINE / list part only
+      var m = /((?:DEADLINE|Today's list|Deadline)[^.]*\.?)/.exec(t);
+      if (m) keep.push(m[1].trim());
+      continue;
+    }
+    keep.push(t);
+  }
+  var out = keep.join(' ').trim();
+  return out.slice(0, 400);
+}
+
 function applySchedule_(req) {
   // Brigham 2026-09-06: three "Apply selected" taps on the phone raced and
   // each read meta before any wrote it, so the week went out 3x for most
@@ -5293,7 +5341,8 @@ function applyScheduleLocked_(req) {
         var d2 = new Date(start); d2.setDate(d2.getDate() + di); d2.setHours(t2.h, t2.min, 0, 0);
         try {
           var evTitle = String(b[3] || 'Shop work');
-          var opts = {description: (b[4] ? String(b[4]) + '\n' : '')
+          var cleanNote = calDescription_(b[4]);
+          var opts = {description: (cleanNote ? cleanNote + '\n' : '')
             + 'Applied from the Shop Manager schedule proposal (' + plan.week + ')'};
           var spot = spotFor_(evTitle);
           if (spot) opts.location = spot;
