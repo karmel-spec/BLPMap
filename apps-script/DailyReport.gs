@@ -50,7 +50,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-09-28.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-09-28.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -8361,7 +8361,36 @@ function setPlateStatus_(req) {
   }
   if (col < 0) { sh.getRange(2, last + 1).setValue('PLATE STATUS'); col = last + 1; }
   sh.getRange(found.row, col).setValue(val);
-  return {ok: true, row: found.row, summary: found.summary, plateStatus: val};
+  var out = {ok: true, row: found.row, summary: found.summary, plateStatus: val};
+  // Back in piano ⇒ the plate has left storage (Walter 9/28): free its rack
+  // slat (the "12p" token on the CABINETRY cell) and clear any written-in temp
+  // spot, so the rack and the Plate Queue stop showing a plate that is gone.
+  if (val === 'Back in piano' || val === 'In piano') {
+    try {
+      var freed = [], tempCleared = false;
+      var cabCol = -1, tmpCol = -1;
+      for (var c2 = 0; c2 < hdr.length; c2++) {
+        var h = String(hdr[c2] || '').trim().toUpperCase();
+        if (h === 'CABINETRY') cabCol = c2 + 1;
+        if (h === 'PLATE TEMP SPOT') tmpCol = c2 + 1;
+      }
+      if (cabCol > 0) {
+        var cab = String(sh.getRange(found.row, cabCol).getValue() || '');
+        var toks = cab.split(',').map(function (t) { return t.trim(); }).filter(Boolean);
+        var keep = toks.filter(function (t) { if (/^\d+p$/i.test(t)) { freed.push(t.toUpperCase()); return false; } return true; });
+        if (freed.length) sh.getRange(found.row, cabCol).setValue(keep.join(', '));
+      }
+      if (tmpCol > 0 && String(sh.getRange(found.row, tmpCol).getValue() || '').trim()) {
+        sh.getRange(found.row, tmpCol).setValue(''); tempCleared = true;
+      }
+      if (freed.length || tempCleared) {
+        out.freedSlats = freed; out.tempCleared = tempCleared;
+        logAct_(String((req._g && (req._g.name || req._g.email)) || req.who || 'Store Map'), 'Plate storage freed', found.summary || req.serial,
+          (freed.length ? 'slat ' + freed.join(', ') : '') + (freed.length && tempCleared ? ' + ' : '') + (tempCleared ? 'temp spot' : '') + ' — plate back in piano');
+      }
+    } catch (ePS) { out.storageNote = 'plate storage not cleared: ' + String(ePS).slice(0, 120); }
+  }
+  return out;
 }
 
 /* Make a Drive file readable by anyone with the link (REST — DriveApp's

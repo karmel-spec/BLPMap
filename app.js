@@ -6071,7 +6071,8 @@ function wirePop(p) {
       const j = await r.json();
       if (j.error) throw new Error(j.error);
       p.plateStatus = plsel.value;
-      msg.textContent = '✓ saved';
+      plateBackHome(p, plsel.value);
+      msg.textContent = (j.freedSlats && j.freedSlats.length) ? '✓ saved — slat ' + j.freedSlats.join(', ') + ' freed' : '✓ saved';
       setTimeout(() => { if (msg.isConnected) msg.textContent = ''; }, 1800);
     } catch (e) { msg.textContent = '✗ ' + e.message; }
     plsel.disabled = false;
@@ -7337,6 +7338,14 @@ function parseCabToken(str) {
 }
 function cabTokens(p) {
   return (p.cabinetry || '').split(',').map(t => t.trim()).filter(Boolean);
+}
+// Back in piano ⇒ the bridge frees the plate's rack slat + temp spot (Walter
+// 9/28); mirror that locally so the rack and Plate Queue repaint at once
+function plateBackHome(p, status) {
+  if (status !== 'Back in piano' && status !== 'In piano') return;
+  p.plateTemp = '';
+  p.cabinetry = cabTokens(p).filter(t => !/^\d+p$/i.test(t)).join(', ');
+  try { renderMap(); } catch (e) {}
 }
 function cabPretty(tok) {
   const m = /^(\d)-(?:([LR])?([TF1-6]))$/i.exec(tok.trim());
@@ -9876,6 +9885,7 @@ function openSlotPop(id) {
           .then(r => r.json()).then(j => {
             if (j.error) throw new Error(j.error);
             px.plateStatus = pc.dataset.val;
+            plateBackHome(px, pc.dataset.val);
             openSlotPop(id);   // repaint with the new selection
           }).catch(e => { if (msg) { msg.className = 'pcmsg phmsg err'; msg.textContent = '✗ ' + e.message; } });
         return;
