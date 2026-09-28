@@ -5435,7 +5435,7 @@ function startTempPlace(p, floor) {
         body: JSON.stringify({pin: wa.pin, action: 'move', serial: p.serial, row: p.row,
           newLocation: locStr, ...authFields()})});
       const j = await r.json();
-      if (!j.moved) throw new Error(j.error || 'move failed');
+      if (!j.moved && !j.queued) throw new Error(j.error || 'move failed');   // queued = saved, lands in minutes (bridge slow)
       p.location = locStr;
       S.tempPlace = null; bar.remove();
       renderMap();
@@ -8313,11 +8313,11 @@ async function submitAssign(slotId, ov) {
         body: JSON.stringify({pin, serial, action: 'move', newLocation: slotId, row: j.rows[0], ...authFields()}),
       });
       const j2 = await r2.json();
-      if (!j2.moved) throw new Error(j2.error || 'move failed');
+      if (!j2.moved && !j2.queued) throw new Error(j2.error || 'move failed');   // queued = saved, lands in minutes (bridge slow)
       finishAssign(j2, serial, slotId, ov, msg);
       return;
     }
-    if (!j.moved) throw new Error(j.error || 'move failed');
+    if (!j.moved && !j.queued) throw new Error(j.error || 'move failed');   // queued = saved, lands in minutes (bridge slow)
     finishAssign(j, serial, slotId, ov, msg);
   } catch (e) {
     msg.className = 'tmmsg err'; msg.textContent = '✗ ' + e.message;
@@ -8446,7 +8446,7 @@ async function submitAdd(slotId, ov) {
               newLocation: slotId, ...authFields()}),
           });
           const j2 = await r2.json();
-          if (!j2.moved) throw new Error(j2.error || 'move failed');
+          if (!j2.moved && !j2.queued) throw new Error(j2.error || 'move failed');   // queued = saved, lands in minutes (bridge slow)
           const p = S.data.pianos.find(x => x.row === j.row)
             || S.data.pianos.find(x => (x.serial || '').toLowerCase() === serial.toLowerCase());
           if (p) {
