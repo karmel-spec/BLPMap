@@ -8546,13 +8546,13 @@ function openCleaningModal(p) {
     <p class="pd">Assigned to <b>Myrrhanda Lamping</b> · <b>2 hours</b> · the next working day, first thing (8:00). If she already has a piano scheduled then, it moves two hours later (still ending by 4:00) so the cleaning comes first.</p>
     <label>Anything she should know? (optional)</label>
     <textarea class="clnnotes" rows="3" placeholder="inside the case too, keys sticky from spilled drink, customer picks up Friday…"></textarea>
-    <button class="tmgo clngo">Add to Myrrhanda's calendar</button>
+    <button class="tmgo clngo">Add to cleaning calendar.</button>
     <div class="tmmsg"></div>`);
   ov.querySelector('.clngo').onclick = async () => {
     const msg = ov.querySelector('.tmmsg'), btn = ov.querySelector('.clngo');
     const {pin, ok} = writeAuth();
     if (!ok) { msg.className = 'tmmsg err'; msg.textContent = 'Sign in with Google (☰ menu) to make changes — actions are logged under your name.'; return; }
-    btn.disabled = true; msg.className = 'tmmsg'; msg.textContent = 'Booking Myrrhanda for the next working day…';
+    btn.disabled = true; msg.className = 'tmmsg'; msg.textContent = 'Booking the cleaning…';
     try {
       const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
         headers: {'content-type': 'text/plain;charset=utf-8'},
@@ -8562,8 +8562,8 @@ function openCleaningModal(p) {
       if (j.error === 'unauthorized') { lsDel('blpPin'); throw new Error('Not authorized — sign in again from the ☰ menu.'); }
       if (!j.scheduled) throw new Error(j.error || 'scheduling failed');
       msg.className = 'tmmsg ok';
-      msg.textContent = `✓ Cleaning booked: ${j.date}, ${j.time}–${j.endTime} on Myrrhanda's calendar.`
-        + (j.moved && j.moved.length ? ` Her other work that day: ${j.moved.join('; ')}.` : '')
+      msg.textContent = `✓ Cleaning booked: ${j.date}, ${j.time}`
+        + (j.moved && j.moved.length ? ` — her other work that day: ${j.moved.join('; ')}.` : '')
         + (j.notMoved && j.notMoved.length ? ` Could not move (guest invite): ${j.notMoved.join('; ')}.` : '');
       setTimeout(() => { ov.hidden = true; }, 4000);
     } catch (e) { msg.className = 'tmmsg err'; msg.textContent = '✗ ' + e.message; btn.disabled = false; }
