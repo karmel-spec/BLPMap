@@ -10,6 +10,11 @@
   status = 200
 
 [[redirects]]
+  from = "/api/timeclock"
+  to = "/.netlify/functions/timeclock"
+  status = 200
+
+[[redirects]]
   from = "/api/slots"
   to = "/.netlify/functions/slots"
   status = 200

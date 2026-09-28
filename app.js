@@ -3866,9 +3866,12 @@ function clockElapsed(startIso) {
   const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), ss = s % 60;
   return (h ? h + ':' : '') + String(m).padStart(h ? 2 : 1, '0') + ':' + String(ss).padStart(2, '0');
 }
-async function fetchClock() {
+// fresh=true right after a punch: skips the shared 25 s cache on /api/timeclock
+// so the tech sees their own change at once (Walter 9/28 — the poll moved off
+// the bridge onto a cached Netlify endpoint to cut the bridge's baseline load)
+async function fetchClock(fresh) {
   try {
-    const r = await fetch(BRIDGE_URL + '?fn=timeclock', {redirect: 'follow'});
+    const r = await fetch('/api/timeclock' + (fresh === true ? '?fresh=1' : ''), {cache: 'no-store'});
     const j = await r.json();
     if (!j.open) return;
     CLOCK.all = j.open; CLOCK.today = j.todayMinutes || {}; CLOCK.allAt = Date.now();
@@ -4142,7 +4145,7 @@ async function punchVerify(action, p, phase, fallbackMsg) {
           CLOCK.open = {tech: clockName(), serial: p.serial, phase: hit.phase || phase, start: hit.start};
           CLOCK.nudged = false; CLOCK.lastAct = Date.now();
           try { renderClockChip(); renderDock(); } catch (eR) { console.warn('dock render', eR); }
-          setTimeout(fetchClock, 4000);
+          setTimeout(() => fetchClock(true), 4000);
           return {ok: true, open: CLOCK.open, verified: 'from the Time Log'};
         }
       } else if (action === 'clockout') {
@@ -4150,7 +4153,7 @@ async function punchVerify(action, p, phase, fallbackMsg) {
         if (!stillOpen) {
           CLOCK.open = null; CLOCK.lastAct = Date.now();
           try { renderClockChip(); renderDock(); } catch (eR) { console.warn('dock render', eR); }
-          setTimeout(fetchClock, 4000);
+          setTimeout(() => fetchClock(true), 4000);
           return {ok: true, verified: 'from the Time Log'};
         }
       }
