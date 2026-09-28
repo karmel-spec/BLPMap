@@ -7287,7 +7287,10 @@ async function setPhase(p, phase, pop, extra) {
   // requires a tech progress photo first (QC, marketing, client updates),
   // plus optional phase notes routed to the card / managers / Brigham
   const gseq = pianoPhases(p) || PHASES;
-  if (!(extra && extra.gated)
+  // Exit Prep - Admin → Delivered: no photo, no mini-QC tap (Walter 9/28) —
+  // only a manager or admin makes that change, once the piano is out the door
+  const gateFree = was === 'Exit Prep - Admin';
+  if (!(extra && extra.gated) && !gateFree
       && gseq.indexOf(phase) >= 0 && gseq.indexOf(was) >= 0
       && gseq.indexOf(phase) > gseq.indexOf(was)) {
     openPhaseGateModal(p, phase, was, pop);
