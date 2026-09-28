@@ -3871,8 +3871,14 @@ function clockElapsed(startIso) {
 // the bridge onto a cached Netlify endpoint to cut the bridge's baseline load)
 async function fetchClock(fresh) {
   try {
-    const r = await fetch('/api/timeclock' + (fresh === true ? '?fresh=1' : ''), {cache: 'no-store'});
-    const j = await r.json();
+    let r = await fetch('/api/timeclock' + (fresh === true ? '?fresh=1' : ''), {cache: 'no-store'});
+    let j = await r.json().catch(() => ({}));
+    if (!j.open) {
+      // the cached endpoint had nothing to give (cold instance while the bridge
+      // is slow): ask the bridge directly this once, as the app always used to
+      r = await fetch(BRIDGE_URL + '?fn=timeclock', {redirect: 'follow'});
+      j = await r.json();
+    }
     if (!j.open) return;
     CLOCK.all = j.open; CLOCK.today = j.todayMinutes || {}; CLOCK.allAt = Date.now();
     const me = clockName().toLowerCase();
