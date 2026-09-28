@@ -4569,6 +4569,7 @@ async function openWorkChecklist(serial, phase) {
             <span style="font-size:10px;letter-spacing:1px;color:#9e2020;text-transform:uppercase">${esc(it.section)}</span><br>
             ${showFull ? esc(it.text) : `<b>${esc(qcShort(it.text))}</b>`}${it.detail && showFull && !isDone && !isSkip ? `<div style="font-size:11.5px;color:#9a5b13">⚠ ${esc(it.detail)}</div>` : ''}
             ${!isDone && !isSkip ? clMediaRow(it) : ''}
+            ${isQcRequestStep(it) ? qcStepBtnHTML(p, phase, st) : ''}
             ${(st.notes.get(it.i) || pendNotes.get(it.i)) ? `<div style="font-size:11.5px;color:#274b6d">📝 ${esc(st.notes.get(it.i) || pendNotes.get(it.i))}${pendNotes.has(it.i) ? ' <i style="color:#8a847b">(saves with the check)</i>' : ''}</div>` : ''}
             ${isSkip ? `<div style="font-size:11.5px;color:#9a5b13">⏭ skipped — ${esc(st.skips.get(it.i))} <u>undo</u></div>` : ''}</div>
           ${dense ? `<button class="clexp" data-i="${it.i}" title="${expanded.has(it.i) ? 'hide' : 'show'} the full instructions" style="border:1px solid #cfc9bf;background:none;border-radius:8px;padding:3px 8px;color:#57524b;font-size:13px;flex:0 0 auto;height:26px">${expanded.has(it.i) ? '▾' : '▸'}</button>` : ''}
@@ -4637,6 +4638,9 @@ async function openWorkChecklist(serial, phase) {
         expanded.has(i) ? expanded.delete(i) : expanded.add(i);
         render();
       });
+      { const qb = ov.querySelector('.clqcbox'); if (qb) { qb.onclick = e => e.stopPropagation();
+          const it0 = work.find(isQcRequestStep);
+          wireQcStepBtn(ov, p, phase, st, () => { if (it0 && !st.done.has(it0.i)) save(it0.i, true); render(); }); } }
       ov.querySelectorAll('.clhbbtn').forEach(b => b.onclick = ev => {
         ev.stopPropagation();
         const i = +b.dataset.i;
@@ -4758,6 +4762,7 @@ async function openWorkChecklist(serial, phase) {
           ${/cabinetry|shelf/i.test((it.handbook || it.text).replace(/<[^>]+>/g, ' '))
             ? `<div style="margin-top:10px"><button class="csvbtn clcabbtn" style="background:#5b4a8a">🗄 Assign the cabinetry shelf now</button>
                <span style="font-size:11px;color:#8a847b;margin-left:8px">${(cabTokens(p) || []).length ? 'on: ' + esc(cabTokens(p).join(', ')) : 'records which rack + shelf this piano\'s cabinetry is on'}</span></div>` : ''}
+          ${isQcRequestStep(it) ? qcStepBtnHTML(p, phase, st) : ''}
         </div>
         ${st.skips.has(it.i) ? `<div style="background:#fdf6e3;border-radius:8px;padding:8px 10px;font-size:12.5px;color:#9a5b13;margin-top:8px">⏭ This step is skipped — ${esc(st.skips.get(it.i))}</div>` : ''}
         <div style="display:flex;gap:8px;margin-top:12px">
@@ -4771,6 +4776,8 @@ async function openWorkChecklist(serial, phase) {
           : !st.done.has(it.i) && !st.skips.has(it.i)
             ? `<button class="clskipask" style="background:none;border:none;color:#9a5b13;font-size:12px;margin-top:8px;text-decoration:underline;cursor:pointer">⏭ Skip</button>` : ''}`;
       ov.querySelector('.dsx').onclick = close;
+      // requesting it IS doing the step: tick it too, then render the ✓ state
+      wireQcStepBtn(ov, p, phase, st, () => { if (!st.done.has(it.i)) save(it.i, true); render(); });
       const cabBtn = ov.querySelector('.clcabbtn');
       if (cabBtn) cabBtn.onclick = () => openCabModal(p, ov);
       const shot = ov.querySelector('.clshotfile');
@@ -4811,6 +4818,45 @@ async function openWorkChecklist(serial, phase) {
   }
 }
 /* ---- mini-QC request + C-rail inspection ---- */
+// 📨 Request the mini-QC right from the checklist step that says to (Hunter
+// 9/24, 092426rawlings07) — no trip to the phase dropdown. The next phase is
+// the one after this phase in the piano's own track.
+const isQcRequestStep = it => /\brequest\b[^.]*\bmini-?qc\b/i.test(String((it && it.text) || ''));
+function qcNextPhase(p, phase) {
+  const seq = pianoPhases(p) || PHASES;
+  const i = seq.indexOf(phase);
+  return i >= 0 && i < seq.length - 1 ? seq[i + 1] : '';
+}
+function qcStepBtnHTML(p, phase, st) {
+  if (!qcGated(phase)) return '';
+  const nxt = qcNextPhase(p, phase);
+  if (st && st.request && st.request.status !== 'rework') return `<div class="clqcbox ok">✓ Mini-QC already requested — the inspector has the link.</div>`;
+  // after a 🔁 rework verdict the tech fixes it and asks again from the same step
+  const again = st && st.request && st.request.status === 'rework';
+  return `<div class="clqcbox">${again ? '<div style="font-size:12px;color:#9a5b13;font-weight:700;margin-bottom:5px">🔁 The last mini-QC came back as rework — once it’s fixed, request it again:</div>' : ''}<button class="csvbtn clqcgo" style="background:#3a6ea5">📨 Request Mini-QC ${again ? 'again' : 'now'}${nxt ? ` <small style="font-weight:600;opacity:.85">(${esc(phase)} → ${esc(nxt)})</small>` : ''}</button>
+    <span class="clqcmsg phmsg" style="display:block;margin-top:4px;font-size:12px"></span></div>`;
+}
+function wireQcStepBtn(root, p, phase, st, onDone) {
+  const b = root.querySelector('.clqcgo'); if (!b) return;
+  b.onclick = async ev => {
+    ev.stopPropagation();
+    const m = root.querySelector('.clqcmsg');
+    const nxt = qcNextPhase(p, phase);
+    if (!nxt) { m.className = 'clqcmsg phmsg err'; m.textContent = '✗ No next phase on this piano’s track — request it from the phase dropdown.'; return; }
+    if (!clockName()) { m.className = 'clqcmsg phmsg err'; m.textContent = 'Sign in first (☰ menu).'; return; }
+    b.disabled = true; b.textContent = 'Requesting…';
+    try {
+      const j = await requestMiniQc(p, nxt, phase);
+      if (!j.ok) throw new Error(j.error || 'failed');
+      st.request = {status: 'pending'};
+      m.className = 'clqcmsg phmsg ok';
+      m.textContent = j.existing ? '✓ Already requested — the inspector has the link.' : '✓ Requested — the inspector just got a text with the inspection link.';
+      b.textContent = '✓ Mini-QC requested';
+      if (typeof loadQcQueue === 'function') loadQcQueue();
+      if (onDone) setTimeout(onDone, 1800);
+    } catch (e) { m.className = 'clqcmsg phmsg err'; m.textContent = '✗ ' + e.message; b.disabled = false; b.innerHTML = '📨 Request Mini-QC now'; }
+  };
+}
 async function requestMiniQc(p, nextPhase, was) {
   const r = await fetch(PHASEQC_URL, {method: 'POST', headers: {'content-type': 'application/json'},
     body: JSON.stringify({key: 'pianoman', op: 'request', serial: p.serial,
