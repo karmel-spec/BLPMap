@@ -2879,7 +2879,7 @@ function printShopTag(p) {
       document.querySelectorAll('.lgn').forEach(cb => cb.addEventListener('change', () => {
         const picked = [...document.querySelectorAll('.lgn:checked')].map(c => NOTE_SEGS[+c.dataset.i]).filter(Boolean);
         let txt = picked.join(' \u00b7 ');
-        if (txt.length > 300) txt = txt.slice(0, 300).replace(/\s+\S*$/, '') + '\u2026';
+        if (txt.length > 350) txt = txt.slice(0, 350).replace(/\s+\S*$/, '') + '\u2026';
         const cell = t1.querySelector('.rw.note b');
         if (cell) cell.textContent = txt || '\u2014';
         sync();
