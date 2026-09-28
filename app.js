@@ -2499,14 +2499,20 @@ function tagSplitNotes(raw) {
     if (hit) (routed[hit[0]] = routed[hit[0]] || []).push(tagWcut(x, 120));
     else rest.push(x);
   }
-  return {routed, rest: rest.join(' \u00b7 ')};
+  return {routed, rest: rest.join(' \u00b7 '), restList: rest};
 }
 function shopTagFields(p) {
   const blob = p.owner || '';
   const plan = (p.plan || '').trim();
   const notes = (p.planNotes || '').trim().replace(/\s*\n+\s*/g, '  \u00b7  ');
   const sn = tagSplitNotes(notes);
-  const xtra = k => sn.routed[k] ? ' \u2014 ' + tagWcut(sn.routed[k].join(' \u00b7 '), 140) : '';
+  // Log notes no longer print on their own (Melissa 9/26, 092626terry63): a
+  // client's card number and "[client] is unhappy with the finish" both went
+  // out on tags. Every note segment is offered as a checkbox on the print
+  // preview instead, unticked, and only ticked lines land in the Notes row.
+  const xtra = () => '';
+  const noteSegs = [...sn.restList, ...Object.keys(sn.routed).flatMap(k => sn.routed[k])]
+    .map(t => tagWcut(t, 160));
   const kt = keyTokens(p);
   const mark = k => kt.length ? (kt.includes(k) ? 'Yes' : 'No') : '\u2014';
   return {
@@ -2538,7 +2544,8 @@ function shopTagFields(p) {
     bench: (/^y/i.test(p.bench || '') ? 'Yes'
       : /^n/i.test(p.bench || '') ? 'No'
       : (p.bench ? p.bench.slice(0, 26) : '\u2014')) + xtra('bench'),
-    notes: tagWcut(sn.rest, 300) || '\u2014',
+    notes: '\u2014',
+    noteSegs,
     qr: mapLink(p),
   };
 }
@@ -2758,6 +2765,11 @@ function printShopTag(p) {
            -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .bar { display: flex; align-items: center; gap: 14px; padding: 10px 16px; background: #17171b;
            color: #e8e4dd; font-size: 13px; position: sticky; top: 0; }
+    .lognotes { background: #fff7e0; border: 1px solid #e6c860; border-radius: 8px; margin: 10px 16px 0; padding: 8px 12px; font-size: 12.5px; }
+    .lognotes b { display: block; margin-bottom: 4px; }
+    .lognotes label { display: flex; gap: 7px; align-items: flex-start; padding: 3px 0; cursor: pointer; }
+    .lognotes input { margin-top: 3px; }
+    @media print { .lognotes { display: none; } }
     .bar button { background: #B43333; color: #fff; border: 0; border-radius: 6px;
                   padding: 8px 18px; font: inherit; font-weight: 700; cursor: pointer; }
     .xclose { margin-left: auto; background: #3a3f45 !important; }
@@ -2826,6 +2838,10 @@ function printShopTag(p) {
     <div class="bar"><b>Shop tag</b> — click any field to edit, tap 1·2·3 to set the refinishing level
       <label style="display:flex;align-items:center;gap:5px;font-weight:400"><input type="checkbox" id="dup" checked onchange="document.body.classList.toggle('duplex',this.checked);document.querySelector('.bar button').textContent=this.checked?'🖨 Print double-sided':'🖨 Print — 2 per page'"> double-sided <small style="color:#9aa">(pick “two-sided” in the print dialog)</small></label>
       <button onclick="doPrint()">🖨 Print double-sided</button><button class="xclose" onclick="window.close()" title="close this preview">✕ Close</button></div>
+    ${(d.noteSegs && d.noteSegs.length) ? `<div class="lognotes">
+      <b>📝 Notes from the log — nothing prints unless you tick it.</b> Leave anything private or unkind unticked.
+      ${d.noteSegs.map((t, i) => `<label><input type="checkbox" class="lgn" data-i="${i}"> ${esc(t)}</label>`).join('')}
+    </div>` : ''}
     <div class="sheet">${tag}<div class="cut">✂ cut</div>${tag.replace('class="tag"', 'class="tag copy2"')}</div>
     <div class="sheet s2">${tag.replace('class="tag"', 'class="tag copy2"')}<div class="cut">✂ cut</div>${tag.replace('class="tag"', 'class="tag copy2"')}</div>
     <script>
@@ -2853,6 +2869,16 @@ function printShopTag(p) {
         if (!i) return;
         [...i.parentElement.children].forEach(x => x.classList.toggle('on', x === i));
       });
+      // ticked log notes → the Notes row (untouched notes never print)
+      const NOTE_SEGS = ${JSON.stringify(d.noteSegs || [])};
+      document.querySelectorAll('.lgn').forEach(cb => cb.addEventListener('change', () => {
+        const picked = [...document.querySelectorAll('.lgn:checked')].map(c => NOTE_SEGS[+c.dataset.i]).filter(Boolean);
+        let txt = picked.join(' \u00b7 ');
+        if (txt.length > 300) txt = txt.slice(0, 300).replace(/\s+\S*$/, '') + '\u2026';
+        const cell = t1.querySelector('.rw.note b');
+        if (cell) cell.textContent = txt || '\u2014';
+        sync();
+      }));
     <\/script>
   </body></html>`);
   w.document.close();
