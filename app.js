@@ -4513,6 +4513,7 @@ async function openWorkChecklist(serial, phase) {
               <button data-req="touchup">🖌 Finish touch-up</button>
               <button data-req="brigham">🗒 Brigham task</button>
               <button data-req="service">🔧 Service</button>
+              <button data-req="cleaning">🧹 Cleaning</button>
               <button data-req="tune">🎵 Tuning</button>
               <button data-req="admin">📋 Admin</button>
             </div></span>` : ''}
@@ -4623,6 +4624,7 @@ async function openWorkChecklist(serial, phase) {
           if (k === 'touchup') openGenericModal(p, 'Touch Up');
           else if (k === 'brigham') openBrighamModal(p);
           else if (k === 'service') openServiceModal(p);
+          else if (k === 'cleaning') openCleaningModal(p);
           else if (k === 'tune') openTuneModal(p);
           else if (k === 'admin') openAdminModal(p);
         });
@@ -5796,6 +5798,7 @@ function popHTML(p) {
         <button data-req="move">🚚 Move</button>
         <button data-req="tune">🎵 Tuning</button>
         <button data-req="service">🔧 Service</button>
+        <button data-req="cleaning">🧹 Cleaning</button>
         <button data-req="curtis">🎨 Curtis Harper</button>
         <button data-req="admin">📋 Admin</button>
         <button data-req="touchup">🖌 Touch Up</button>
@@ -6510,6 +6513,7 @@ function wirePop(p) {
     if (kind === 'move') openMoveModal(p);
     else if (kind === 'tune') openTuneModal(p);
     else if (kind === 'service') openServiceModal(p);
+    else if (kind === 'cleaning') openCleaningModal(p);
     else if (kind === 'curtis') openCurtisModal(p);
     else if (kind === 'price') openPriceModal(p);
     else if (kind === 'admin') openAdminModal(p);
@@ -8527,6 +8531,43 @@ async function submitService(p, ov, asap) {
     msg.className = 'tmmsg err'; msg.textContent = '✗ ' + e.message;
     btns.forEach(b => b.disabled = false);
   }
+}
+
+/* ---------- 🧹 Cleaning request (Walter 9/28) ----------
+ * Always Myrrhanda, always two hours, on the next working day first thing —
+ * her other applied work that day slides two hours later. The bridge does
+ * the calendar work (scheduleCleaning_) and texts her. */
+function openCleaningModal(p) {
+  popPinned = false; $('#pop').hidden = true;
+  const ov = modalShell('cleanmodal', `
+    <span class="x">✕</span>
+    <h3>🧹 Request Cleaning</h3>
+    ${pianoHeader(p)}
+    <p class="pd">Assigned to <b>Myrrhanda Lamping</b> · <b>2 hours</b> · the next working day, first thing (8:00). If she already has a piano scheduled then, it moves two hours later so the cleaning comes first.</p>
+    <label>Anything she should know? (optional)</label>
+    <textarea class="clnnotes" rows="3" placeholder="inside the case too, keys sticky from spilled drink, customer picks up Friday…"></textarea>
+    <button class="tmgo clngo">Add to Myrrhanda's calendar</button>
+    <div class="tmmsg"></div>`);
+  ov.querySelector('.clngo').onclick = async () => {
+    const msg = ov.querySelector('.tmmsg'), btn = ov.querySelector('.clngo');
+    const {pin, ok} = writeAuth();
+    if (!ok) { msg.className = 'tmmsg err'; msg.textContent = 'Sign in with Google (☰ menu) to make changes — actions are logged under your name.'; return; }
+    btn.disabled = true; msg.className = 'tmmsg'; msg.textContent = 'Booking Myrrhanda for the next working day…';
+    try {
+      const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+        headers: {'content-type': 'text/plain;charset=utf-8'},
+        body: JSON.stringify({pin, serial: p.serial, action: 'cleaning', row: p.row,
+          notes: ov.querySelector('.clnnotes').value.trim(), ...authFields()})});
+      const j = await r.json();
+      if (j.error === 'unauthorized') { lsDel('blpPin'); throw new Error('Not authorized — sign in again from the ☰ menu.'); }
+      if (!j.scheduled) throw new Error(j.error || 'scheduling failed');
+      msg.className = 'tmmsg ok';
+      msg.textContent = `✓ Cleaning booked: ${j.date}, ${j.time}–${j.endTime} on Myrrhanda's calendar — she's been texted.`
+        + (j.moved && j.moved.length ? ` Moved 2 h later: ${j.moved.join('; ')}.` : '')
+        + (j.notMoved && j.notMoved.length ? ` Could not move (guest invite): ${j.notMoved.join('; ')}.` : '');
+      setTimeout(() => { ov.hidden = true; }, 4000);
+    } catch (e) { msg.className = 'tmmsg err'; msg.textContent = '✗ ' + e.message; btn.disabled = false; }
+  };
 }
 
 /* ---------- Curtis Harper request (work-orders spreadsheet) ---------- */

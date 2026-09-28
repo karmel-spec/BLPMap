@@ -50,7 +50,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-09-28.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-09-28.4';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -858,6 +858,14 @@ function doPost(e) {
         sv.summary || req.serial,
         (sv.tech || '') + ' · ' + (sv.date || '') + ' ' + (sv.time || '') + ' · ' + (req.minutes || 60) + ' min');
       return json_(sv);
+    }
+    if (req.action === 'cleaning') {
+      // 🧹 cleaning request (Walter 9/28): Myrrhanda, two hours, next working day
+      var cl = scheduleCleaning_(req, who);
+      if (cl.scheduled && !cl.dryrun) logAct_(who, 'Cleaning scheduled', cl.summary || req.serial,
+        'Myrrhanda · ' + cl.date + ' ' + cl.time + '–' + cl.endTime
+        + (cl.moved && cl.moved.length ? ' · moved 2 h later: ' + cl.moved.join('; ') : ''));
+      return json_(cl);
     }
     if (req.action === 'movereq') {
       var mv = requestMove_(req, who);
@@ -2897,6 +2905,83 @@ function scheduleServiceAsap_(req) {
           minutes: minutes,
           date: Utilities.formatDate(start, tz, 'EEE, MMM d'),
           time: Utilities.formatDate(start, tz, 'h:mm a'),
+          summary: found.summary, title: title};
+}
+
+/* 🧹 Cleaning request (Walter 9/28): a piano-card action that books
+ * Myrrhanda for a TWO-HOUR cleaning on the next working day (tomorrow; a
+ * Saturday/Sunday rolls to Monday), on her OWN calendar — cleaning is shop
+ * work, not a tuning or a QC, so no organizer calendar. Starts 8:00, or right
+ * after any fixed (non-Apply) event that overlaps 8–10: a field stop, a
+ * personal appointment, an "off". Blocks the weekly Approve put on her
+ * calendar that day and that end after the cleaning starts all slide two
+ * hours later, in order, so the cleaning comes first and nothing is lost.
+ * Events she is only a GUEST on (QC calendar invites) cannot be moved and are
+ * reported instead. She gets a text. req: {serial, row?, notes?, dryrun?} */
+var CLEANING_TECH = 'Myrrhanda';
+function scheduleCleaning_(req, who) {
+  var tz = 'America/Denver';
+  var map = techCalMap_();
+  var techId = map[CLEANING_TECH.toLowerCase()] || map['myrrhanda lamping'] || '';
+  if (!techId) return {error: 'Myrrhanda has no calendar on the Tech Calendars tab'};
+  var cal = null;
+  try { cal = calById_(techId); } catch (eC) {}
+  if (!cal) return {error: 'no access to ' + techId};
+  var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+  var found = findPiano_(sh, req.serial, req.row);
+  if (found.error) return found;
+  // next working day
+  var day = new Date(Date.now() + 86400000);
+  var dow = Number(Utilities.formatDate(day, tz, 'u'));
+  if (dow === 6) day = new Date(day.getTime() + 2 * 86400000);
+  else if (dow === 7) day = new Date(day.getTime() + 1 * 86400000);
+  var y = Utilities.formatDate(day, tz, 'yyyy-MM-dd');
+  var evs = cal.getEvents(new Date(y + 'T00:00:00'), new Date(y + 'T23:59:59'));
+  var applied = [], fixed = [];
+  evs.forEach(function (ev) {
+    if (ev.isAllDayEvent()) return;
+    var d = ''; try { d = String(ev.getDescription() || ''); } catch (eD) {}
+    (d.indexOf(APPLIED_TAG) >= 0 ? applied : fixed).push(ev);
+  });
+  // 8:00, pushed past any fixed event that overlaps the two-hour window
+  var start = new Date(y + 'T08:00:00'), guard = 0, again = true;
+  while (again && guard++ < 10) {
+    again = false;
+    var endTry = new Date(start.getTime() + 7200000);
+    for (var i = 0; i < fixed.length; i++) {
+      var fs = fixed[i].getStartTime(), fe = fixed[i].getEndTime();
+      if (fs < endTry && fe > start) { start = new Date(fe.getTime()); again = true; }
+    }
+  }
+  var end = new Date(start.getTime() + 7200000);
+  // applied blocks that end after the cleaning starts slide two hours later
+  var moved = [], stuck = [];
+  applied.sort(function (a, b) { return a.getStartTime() - b.getStartTime(); }).forEach(function (ev) {
+    var es = ev.getStartTime(), ee = ev.getEndTime();
+    if (ee <= start) return;
+    var ns = new Date(es.getTime() + 7200000), ne = new Date(ee.getTime() + 7200000);
+    var label = String(ev.getTitle() || '').slice(0, 40) + ' → ' + Utilities.formatDate(ns, tz, 'h:mm a');
+    if (req.dryrun) { moved.push(label); return; }
+    try { ev.setTime(ns, ne); moved.push(label); }
+    catch (eM) { stuck.push(String(ev.getTitle() || '').slice(0, 40)); }
+  });
+  var title = 'Cleaning: ' + (found.summary || 'piano') + ' SN ' + req.serial
+    + (found.location ? ' @ spot ' + found.location : '') + ' — Myrrhanda Lamping';
+  var desc = 'Requested via BLP Store Map (' + Utilities.formatDate(new Date(), tz, 'MMM d, h:mm a') + ')'
+    + '\nAssigned to: Myrrhanda Lamping\nTime allotted: 120 minutes';
+  if (req.notes && String(req.notes).trim()) desc += '\n\nCleaning request:\n' + String(req.notes).trim();
+  desc += '\n\nPiano Log: https://pianologapp.netlify.app/#piano=' + encodeURIComponent(req.serial);
+  var dateS = Utilities.formatDate(start, tz, 'EEE, MMM d'), timeS = Utilities.formatDate(start, tz, 'h:mm a'), endS = Utilities.formatDate(end, tz, 'h:mm a');
+  if (!req.dryrun) {
+    cal.createEvent(title, start, end, {description: desc, location: String(found.location || '')});
+    try {
+      notifyTeam_([CLEANING_TECH], '\ud83e\uddf9 BLP Store Map: a cleaning was added to your calendar — ' + dateS + ' ' + timeS + '–' + endS
+        + ': ' + (found.summary || req.serial) + (found.location ? ' (spot ' + found.location + ')' : '')
+        + (moved.length ? '. Your other work that day moved 2 hours later to make room.' : '') + '.');
+    } catch (eT) {}
+  }
+  return {ok: true, scheduled: true, dryrun: !!req.dryrun, tech: 'Myrrhanda Lamping', minutes: 120,
+          date: dateS, time: timeS, endTime: endS, moved: moved, notMoved: stuck,
           summary: found.summary, title: title};
 }
 
