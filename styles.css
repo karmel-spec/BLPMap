@@ -1683,7 +1683,12 @@ button:disabled{opacity:.55;cursor:progress}
 #schedBody .propblock .bn{font-size:10px;color:#8a6a00;font-style:italic}
 #schedBody .propboxes{padding:10px 16px 16px}
 #schedBody .propbn{background:#fdf3ec;border:1px solid #eecfae;border-radius:8px;padding:8px 11px;font-size:12px;color:#6b5030;margin-top:8px}
-#schedBody .propbn b{display:block;margin-bottom:2px}
+#schedBody .propbn b{display:block;margin-bottom:2px;padding-right:96px}
+/* ✕ Dismiss on a Manager Clarification (Walter 9/25) */
+#schedBody .propbn{position:relative}
+#schedBody .bndismiss{position:absolute;top:7px;right:8px;border:1px solid #d9b98f;background:#fff;color:#6b5030;border-radius:6px;font:700 11px/1 inherit;padding:5px 7px;cursor:pointer}
+#schedBody .bndismiss.arm{background:#9e2020;border-color:#9e2020;color:#fff}
+#schedBody .bndismiss:disabled{opacity:.6;cursor:default}
 #schedBody .bnhead{margin-top:20px;padding-top:14px;border-top:2px solid var(--line-soft)}
 #schedBody .bnhead h4{margin:0;font-size:15px;color:#7a3c10}
 #schedBody .bnhead .bnsub{font-size:12px;color:var(--mut2);margin-top:3px}

@@ -752,7 +752,7 @@ async function loadProposal(box){
       <div class="propboxes">${(plan.bottlenecks||[]).map((raw,i)=>{
         // a bottleneck is [title, body]; a stray plain string (9/25) would otherwise render as one-letter headings
         const bn=Array.isArray(raw)?raw:[String(raw||"").slice(0,90),String(raw||"")];
-        return `<div class="propbn" data-bi="${i}"><b>⚠ ${esc(bn[0])}</b>${esc(bn[1]||"")}
+        return `<div class="propbn" data-bi="${i}"><button class="bndismiss" data-title="${esc(bn[0])}" title="Close this item by hand — no AI run">✕ Dismiss</button><b>⚠ ${esc(bn[0])}</b>${esc(bn[1]||"")}
            <textarea class="bnanswer" data-title="${esc(bn[0])}" data-body="${esc(bn[1]||"")}"
              placeholder="Your answer / clarification for Claude… ('put it in spot 84', 'yes it spans both', 'the serial is actually …')"></textarea></div>`;}).join("")}</div>
       ${(plan.bottlenecks||[]).length?`<div class="bnbar"><button class="abtn" id="bnApply">🪄 Send answers to Claude</button></div>
@@ -867,6 +867,46 @@ async function loadProposal(box){
     const nm=(typeof authUser==="function"&&authUser()&&authUser().name)||localStorage.getItem("blpmgr.name")||"Shop Manager";
     return {ok:a.ok,body:{pin:a.pin||"pianoman",key:"pianoman",user:{name:nm+" (Shop Manager)"},...(window.authFields?authFields():{})}};
   };
+  // ✕ Dismiss (Walter 9/25): close a Manager Clarification by hand. Runs take
+  // 2–4 min through the AI; an item the manager already handled should not
+  // need one. Two taps (arm, then confirm), then the CURRENT plan is fetched,
+  // the item removed by normalised title (same rule the AI jobs use) and the
+  // plan saved under the manager's name — nothing else in the plan changes.
+  const normTitle=t=>String(t||"").replace(/^\s*(✅|⚠|RESOLVED|DONE|CLOSED)[:\s—–-]*/i,"")
+    .replace(/[\u2018\u2019\u201B]/g,"'").replace(/[\u201C\u201D]/g,'"').replace(/[\u2010-\u2015]/g,"-")
+    .replace(/\s+/g," ").trim().toLowerCase();
+  box.querySelectorAll(".bndismiss").forEach(b=>b.onclick=async ev=>{
+    ev.stopPropagation();
+    const say=(cls,msg)=>{ const o=box.querySelector("#bnOut")||box.querySelector("#applyOut"); if(o){ o.className="adjustout "+cls; o.textContent=msg; } };
+    if(meta.fallback){ say("err","✗ The bridge is not answering right now — the plan can't be changed from a cached copy."); return; }
+    if(!b.classList.contains("arm")){ b.classList.add("arm"); b.textContent="Dismiss? tap again"; setTimeout(()=>{ if(!b.disabled){ b.classList.remove("arm"); b.textContent="✕ Dismiss"; } },4000); return; }
+    const au=schedAuth();
+    if(!au.ok){ say("err","✗ Sign in with Google (☰ menu) first — the change is saved under your name."); return; }
+    b.disabled=true; b.textContent="Dismissing…";
+    try{
+      const r=await fetch(CONFIG.STOREMAP_BRIDGE+"?fn=proposal&_="+Date.now(),{redirect:"follow",signal:AbortSignal.timeout(45000)});
+      const j=await r.json();
+      if(!j||!j.ok||!j.plan) throw new Error((j&&j.error)||"the bridge did not return the plan");
+      const pl=parsePlan(j.plan);
+      const want=normTitle(b.dataset.title);
+      const before=(pl.bottlenecks||[]).length;
+      pl.bottlenecks=(pl.bottlenecks||[]).filter(x=>normTitle(Array.isArray(x)?x[0]:x)!==want);
+      if(pl.bottlenecks.length===before) throw new Error("that item is no longer on the current plan — reload the Planner");
+      const nm=String((au.body.user&&au.body.user.name)||"Shop Manager").replace(/ \(Shop Manager\)$/,"");
+      const sv=await fetch(CONFIG.STOREMAP_BRIDGE,{method:"POST",redirect:"follow",headers:{"content-type":"text/plain;charset=utf-8"},
+        body:JSON.stringify({...au.body,action:"saveproposal",plan:JSON.stringify(pl),week:pl.week||(j.meta&&j.meta.week)||"",weekStart:pl.weekStart||(j.meta&&j.meta.weekStart)||"",
+          user:{name:(nm+" (dismissed: "+b.dataset.title).slice(0,76)+")"}})});
+      const sj=await sv.json();
+      if(!sj||sj.error) throw new Error((sj&&sj.error)||"save failed");
+      const card=b.closest(".propbn"); if(card) card.remove();
+      if(!box.querySelector(".propbn")) box.querySelectorAll(".bnhead,.bnbar").forEach(el=>el.remove());
+      try{ const c=JSON.parse(localStorage.getItem(CACHE_KEY)||"null"); if(c&&c.plan){ c.plan.bottlenecks=pl.bottlenecks; localStorage.setItem(CACHE_KEY,JSON.stringify(c)); } }catch(e){}
+      say("ok","✓ Dismissed — "+b.dataset.title.slice(0,80));
+    }catch(e){
+      b.disabled=false; b.classList.remove("arm"); b.textContent="✕ Dismiss";
+      say("err","✗ Couldn't dismiss — "+e.message);
+    }
+  });
   const doApply=async(techs)=>{
     ab.disabled=true; ab.textContent="Applying…";
     const out=box.querySelector("#applyOut");
