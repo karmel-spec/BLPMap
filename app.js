@@ -4892,9 +4892,24 @@ async function openQcRail(id) {
   const miscItems = [];   // typed-in extra items awaiting their first verdict
   // Brigham 9/17: the inspection is a clocked piano session. Start clocks the
   // inspector into this piano (under THEIR name, even on a tech's phone);
-  // Approve / Send back — or closing the rail — clocks them out again.
+  // Approve / Send back clocks them out again (closing the rail does not).
   let inspecting = false, clockedByRail = false, qcStartAt = '', startMsg = '', startErr = false;
   const qcPhase = 'Mini-QC: ' + q.phase;
+  // Resume (Mark 9/28): switching views on a phone closes this rail while the
+  // inspector is still clocked into the piano. Reopening used to ask them to
+  // clock in all over again. Now an open "Mini-QC" session on this piano under
+  // the signed-in name is picked up as the running inspection — and closing
+  // the rail no longer clocks anyone out; only Approve / Send back do.
+  if (canJudge && q.status === 'pending') {
+    try { await fetchClock(true); } catch (e) {}
+    const me = (clockName() || '').toLowerCase();
+    const mine = (CLOCK.all || []).find(o => String(o.serial) === String(q.serial)
+      && /^Mini-QC/i.test(o.phase || '') && String(o.tech || '').toLowerCase() === me);
+    if (mine) {
+      inspecting = true; clockedByRail = true; inspector = mine.tech;
+      qcStartAt = new Date(mine.start).toLocaleTimeString('en-US', {hour: 'numeric', minute: '2-digit'});
+    }
+  }
   const qcClock = async action => {
     const same = inspector && clockName() && inspector.toLowerCase() === clockName().toLowerCase();
     if (same) {
@@ -4965,7 +4980,9 @@ async function openQcRail(id) {
     return L.length ? `<div class="qclinks">${L.join('')}</div>` : '';
   };
   const WHO_SUGGEST = ['Brigham Larson', 'Karmel Larson', 'Mark Hales', 'Matthew Wessman', 'Jacob Mower', 'Melissa Terry'];
-  const close = () => { clearInterval(poll); ov.remove(); if (inspecting && live.status === 'pending') endInspection(); };
+  // closing the rail keeps the inspector's clock running (Mark 9/28) — they are
+  // still on the piano; Approve / Send back end the session
+  const close = () => { clearInterval(poll); ov.remove(); };
   const render = () => {
       // Curtis 9/17 (request 091726biggs04): re-rendering reset the sheet to the top on every tap — keep the scroll position
       const _ps = ov.querySelector('.dsheet'); const _keep = _ps ? _ps.scrollTop : 0;
