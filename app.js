@@ -544,6 +544,7 @@ function tasksBox(p) {
       <select class="cfsel" data-f="keytopMaterial">
         <option value="" ${!(p.keytopMaterial || '').trim() ? 'selected' : ''}>— not set —</option>
         ${CARD_FIELD_OPTS.keytopMaterial.map(v => `<option ${p.keytopMaterial === v ? 'selected' : ''}>${esc(v)}</option>`).join('')}
+        ${(p.keytopMaterial || '').trim() && !CARD_FIELD_OPTS.keytopMaterial.includes(p.keytopMaterial) ? `<option selected value="${esc(p.keytopMaterial)}">${esc(p.keytopMaterial)} (old — pick clean or replace)</option>` : ''}
       </select></div>${cfSuggest(p, 'keytopMaterial')}<div class="cfmsg-keytopMaterial phmsg"></div>
     ${orderChipsRow(p, 'bass', 'Bass strings')}
     ${decalsRow(p)}
@@ -10454,7 +10455,8 @@ const PLATE_STAGES = ['In piano', 'Removed', 'Plate storage — BEFORE',
 // mirrors the bridge's PLATE_HW_STATUSES; stored in PLATE HARDWARE STATUS
 const PLATE_HW_STAGES = ['Needs buffing', 'In buffing queue', 'Buffing', 'Buffed', 'Installed'];
 // 🎨 finish choices (Melissa 9/16, request 091626terry44) — mirrors CARD_FIELDS in the bridge
-const CARD_FIELD_OPTS = {plateFinish: ['Brass', 'Nickel', 'Copper'], keytopMaterial: ['White Acrylic', 'Off-white Acrylic', 'Ivory']};
+// keytops: two ivory choices (Melissa 9/25, 092526terry62) — what Marcelo does differs
+const CARD_FIELD_OPTS = {plateFinish: ['Brass', 'Nickel', 'Copper'], keytopMaterial: ['White Acrylic', 'Off-white Acrylic', 'Ivory - clean & leave as is', 'Ivory - replace damaged keys']};
 const CARD_FIELD_LABEL = {plateFinish: 'Plating finish', keytopMaterial: 'Keytop material'};
 // read the scope of work / notes and propose a finish when none is set yet
 function cfGuess(p, f) {
@@ -10468,7 +10470,9 @@ function cfGuess(p, f) {
     return '';
   }
   if (/off[- ]?white|antique[- ]white|cream(?:y)?\s+(?:acrylic|keytops?)/i.test(txt)) return 'Off-white Acrylic';
-  if (/\bivor(?:y|ies)\b/i.test(txt) && !/\b(remove|strip|replace)\w*\s+(?:the\s+)?ivor/i.test(txt)) return 'Ivory';
+  if (/\b(replace|repair|fix|patch)\w*\s+(?:the\s+|any\s+)?(?:damaged|broken|chipped|cracked|missing)\s+(?:ivor|keys?|keytops?)/i.test(txt)
+      && /\bivor(?:y|ies)\b/i.test(txt)) return 'Ivory - replace damaged keys';
+  if (/\bivor(?:y|ies)\b/i.test(txt) && !/\b(remove|strip|replace)\w*\s+(?:the\s+)?ivor/i.test(txt)) return 'Ivory - clean & leave as is';
   if (/\bacrylic\b/i.test(txt)) return 'White Acrylic';
   return '';
 }
