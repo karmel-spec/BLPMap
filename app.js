@@ -9872,10 +9872,15 @@ async function movePiano(p, dest, pop, confirmed) {
       msg.className = 'mvmsg err'; msg.textContent = '✗ Wrong PIN — click Move to try again.';
       return;
     }
-    if (j.moved) {
+    if (j.moved || j.queued) {
+      // queued (Mark 9/28, 160095 "update failed" three times): the relay
+      // saved the move durably because the bridge was slow — it lands within
+      // minutes. Say so instead of failing, and don't invite a retry.
+      if (!j.moved) j.location = dest;
       msg.className = 'mvmsg ok';
-      msg.textContent = `✓ Moved from ${j.previous || '—'} to ${j.location}`
-        + (known ? '' : ' (not a numbered map spot — it will show in reports)');
+      msg.textContent = j.moved
+        ? `✓ Moved from ${j.previous || '—'} to ${j.location}` + (known ? '' : ' (not a numbered map spot — it will show in reports)')
+        : `⏳ Saved — the bridge is slow right now; the move to ${dest} lands within a few minutes. No need to retry.`;
       applyBumps(j.bumped);
       if (j.bumped && j.bumped.length) {
         msg.textContent += ` — bumped ${j.bumped.map(b => b.summary || 'a piano').join(', ')} to the attic`;
