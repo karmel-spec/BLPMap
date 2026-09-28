@@ -8562,9 +8562,8 @@ function openCleaningModal(p) {
       if (j.error === 'unauthorized') { lsDel('blpPin'); throw new Error('Not authorized — sign in again from the ☰ menu.'); }
       if (!j.scheduled) throw new Error(j.error || 'scheduling failed');
       msg.className = 'tmmsg ok';
-      msg.textContent = `✓ Cleaning booked: ${j.date}, ${j.time}`
-        + (j.moved && j.moved.length ? ` — her other work that day: ${j.moved.join('; ')}.` : '')
-        + (j.notMoved && j.notMoved.length ? ` Could not move (guest invite): ${j.notMoved.join('; ')}.` : '');
+      // just the booking (Walter 9/28): that her piano time shortens that day is understood
+      msg.textContent = `✓ Cleaning booked: ${j.date}, ${j.time}`;
       setTimeout(() => { ov.hidden = true; }, 4000);
     } catch (e) { msg.className = 'tmmsg err'; msg.textContent = '✗ ' + e.message; btn.disabled = false; }
   };
