@@ -2917,7 +2917,11 @@ function scheduleServiceAsap_(req) {
  * calendar that day and that end after the cleaning starts all slide two
  * hours later, in order, so the cleaning comes first and nothing is lost.
  * Events she is only a GUEST on (QC calendar invites) cannot be moved and are
- * reported instead. She gets a text. req: {serial, row?, notes?, dryrun?} */
+ * reported instead. The moved blocks never run past 4:00 PM — her day stays
+ * eight hours, so a block that ended at 4:00 gets two hours shorter rather
+ * than later, and one squeezed out entirely is removed and reported. No text
+ * for now (Walter 9/28): she sees it when she reviews her day.
+ * req: {serial, row?, notes?, dryrun?} */
 var CLEANING_TECH = 'Myrrhanda';
 function scheduleCleaning_(req, who) {
   var tz = 'America/Denver';
@@ -2954,16 +2958,26 @@ function scheduleCleaning_(req, who) {
     }
   }
   var end = new Date(start.getTime() + 7200000);
-  // applied blocks that end after the cleaning starts slide two hours later
+  // applied blocks that end after the cleaning starts slide two hours later,
+  // capped at 4:00 PM so her day stays eight hours
   var moved = [], stuck = [];
+  var fourPm = new Date(y + 'T16:00:00');
   applied.sort(function (a, b) { return a.getStartTime() - b.getStartTime(); }).forEach(function (ev) {
     var es = ev.getStartTime(), ee = ev.getEndTime();
     if (ee <= start) return;
-    var ns = new Date(es.getTime() + 7200000), ne = new Date(ee.getTime() + 7200000);
-    var label = String(ev.getTitle() || '').slice(0, 40) + ' → ' + Utilities.formatDate(ns, tz, 'h:mm a');
+    var ns = new Date(es.getTime() + 7200000);
+    var ne = new Date(Math.min(ee.getTime() + 7200000, fourPm.getTime()));
+    var name = String(ev.getTitle() || '').slice(0, 40);
+    if (ns.getTime() >= ne.getTime() - 15 * 60000) {   // nothing left before 4:00 PM
+      var lbl = name + ' → removed (no room before 4:00 PM)';
+      if (req.dryrun) { moved.push(lbl); return; }
+      try { ev.deleteEvent(); moved.push(lbl); } catch (eX) { stuck.push(name); }
+      return;
+    }
+    var label = name + ' → ' + Utilities.formatDate(ns, tz, 'h:mm a') + '–' + Utilities.formatDate(ne, tz, 'h:mm a');
     if (req.dryrun) { moved.push(label); return; }
     try { ev.setTime(ns, ne); moved.push(label); }
-    catch (eM) { stuck.push(String(ev.getTitle() || '').slice(0, 40)); }
+    catch (eM) { stuck.push(name); }
   });
   var title = 'Cleaning: ' + (found.summary || 'piano') + ' SN ' + req.serial
     + (found.location ? ' @ spot ' + found.location : '') + ' — Myrrhanda Lamping';
@@ -2974,11 +2988,7 @@ function scheduleCleaning_(req, who) {
   var dateS = Utilities.formatDate(start, tz, 'EEE, MMM d'), timeS = Utilities.formatDate(start, tz, 'h:mm a'), endS = Utilities.formatDate(end, tz, 'h:mm a');
   if (!req.dryrun) {
     cal.createEvent(title, start, end, {description: desc, location: String(found.location || '')});
-    try {
-      notifyTeam_([CLEANING_TECH], '\ud83e\uddf9 BLP Store Map: a cleaning was added to your calendar — ' + dateS + ' ' + timeS + '–' + endS
-        + ': ' + (found.summary || req.serial) + (found.location ? ' (spot ' + found.location + ')' : '')
-        + (moved.length ? '. Your other work that day moved 2 hours later to make room.' : '') + '.');
-    } catch (eT) {}
+    // no text for now (Walter 9/28) — the calendar is the notice
   }
   return {ok: true, scheduled: true, dryrun: !!req.dryrun, tech: 'Myrrhanda Lamping', minutes: 120,
           date: dateS, time: timeS, endTime: endS, moved: moved, notMoved: stuck,
