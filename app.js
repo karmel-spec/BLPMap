@@ -1102,6 +1102,10 @@ function applyPending() {
       if ((p.phasesDone || '') === edit.phasesDone) delete edit.phasesDone;
       else { p.phasesDone = edit.phasesDone; stillPending = true; }
     }
+    if ('cabinetry' in edit) {   // plate slats / cabinetry shelves (Mark 9/28)
+      if (edit.cabinetry == null || (p.cabinetry || '') === edit.cabinetry) delete edit.cabinetry;
+      else { p.cabinetry = edit.cabinetry; stillPending = true; }
+    }
     if ('clientReports' in edit) {
       if ((p.clientReports || '') === edit.clientReports) delete edit.clientReports;
       else { p.clientReports = edit.clientReports; stillPending = true; }
@@ -7576,12 +7580,18 @@ async function saveCabinetry(p, list, pop) {
     const j = await r.json();
     if (j.error === 'unauthorized') { lsDel('blpPin'); throw new Error('Not authorized'); }
     if (!j.ok) throw new Error(j.error || 'save failed');
-    p.cabinetry = j.cabinetry; edit.cabinetry = j.cabinetry;
+    // a queued-ack (bridge slow) carries no cabinetry field — keep what we
+    // just set rather than blanking the rack until the feed catches up
+    // (Mark 9/28: plates "wouldn't show they had moved")
+    if (typeof j.cabinetry === 'string') { p.cabinetry = j.cabinetry; edit.cabinetry = j.cabinetry; }
+    if (msg) { msg.className = 'cabmsg phmsg ok'; msg.textContent = j.queued ? '\u23f3 saved \u2014 the bridge is slow, it lands within a few minutes' : '\u2713 saved'; }
     if (!$('#pop').hidden) openPop(p.row, S.popAnchor, true);   // refresh card if visible
+    return true;
   } catch (e) {
     p.cabinetry = was;
     delete edit.cabinetry; if (!Object.keys(edit).length) pendingEdits.delete(p.row);
     if (msg) { msg.className = 'cabmsg phmsg err'; msg.textContent = '\u2717 ' + e.message; }
+    return false;
   }
 }
 function keyTokens(p) {
@@ -8191,12 +8201,12 @@ function openPlateAssignModal(slotId) {
     if (!sn) { msg.className = 'tmmsg err'; msg.textContent = 'Type a serial number first.'; return; }
     const p = S.data.pianos.find(x => x.active && (x.serial || '').toLowerCase() === sn.toLowerCase());
     if (!p) { msg.className = 'tmmsg err'; msg.textContent = 'No active piano with that serial.'; return; }
-    const list = cabTokens(p);
+    // a plate lives on ONE slat: putting it at 7p takes it off 3p (Mark 9/28)
+    const list = cabTokens(p).filter(t => !/^\d+p$/i.test(t) || t.toLowerCase() === slotId.toLowerCase());
     if (!list.includes(slotId)) list.push(slotId);
     msg.className = 'tmmsg'; msg.textContent = 'Saving\u2026';
-    await saveCabinetry(p, list, {querySelector: () => null});
-    ov.hidden = true;
-    renderMap();
+    const okSave = await saveCabinetry(p, list, {querySelector: () => msg});   // errors show here, not lost
+    if (okSave) { renderMap(); setTimeout(() => { ov.hidden = true; }, 900); }
   };
   ov.querySelector('.plsn').focus();
 }
