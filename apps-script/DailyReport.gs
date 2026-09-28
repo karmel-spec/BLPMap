@@ -5226,7 +5226,7 @@ var CHATTER_RE = [
   /\bONE block per day\b|\bmoved (off|to|from|onto)\b|\bto accommodate\b|\bnow (Mon|Tue|Wed|Thu|Fri)\b/i,
   // a wrap target is the tech's own estimate from their report, used to size the
   // week — not a commitment to put on their calendar (Walter 9/28)
-  /\bwrap (target|day|up)\b|\bfinish (by|target)\b|\bdays? to finish\b/i
+  /\bwrap (target|day|up|pushed|moved|bumped)\b|\bfinish (by|target)\b|\bdays? to finish\b|\bpushed to (Mon|Tue|Wed|Thu|Fri)/i
 ];
 function calDescription_(note) {
   var s = String(note || '').replace(/\s+/g, ' ').trim();
