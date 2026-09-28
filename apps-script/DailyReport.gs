@@ -50,7 +50,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-09-28.6';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-09-28.7';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -866,6 +866,9 @@ function doPost(e) {
         'Myrrhanda · ' + cl.date + ' ' + cl.time + '–' + cl.endTime
         + (cl.moved && cl.moved.length ? ' · moved 2 h later: ' + cl.moved.join('; ') : ''));
       return json_(cl);
+    }
+    if (req.action === 'undeliver') {
+      return json_(undeliver_(req, who));
     }
     if (req.action === 'movereq') {
       var mv = requestMove_(req, who);
@@ -2681,6 +2684,50 @@ function setPhase_(req) {
   return {ok: true, row: movedTo || found.row, summary: found.summary,
           previous: prev, phase: phase, note: note, checkBack: cb,
           movedToSold: !!movedTo, done: autoDone, autoCompleted: !!autoDone};
+}
+
+/* ↩️ Undo a mistaken Delivered (Walter 9/28): Claude's own test of the new
+ * Exit Prep → Delivered path ran a real setphase on Steinway D #38930 and
+ * setPhase_ moved the row below the SOLD divider. This puts a row that is
+ * BELOW the divider back ABOVE it (at req.toRow, else just above the
+ * divider), restores the phase, and optionally the waiting note and
+ * check-back. Owners / payroll admins only; refuses anything already on the
+ * map. req: {serial, toRow?, phase, note?, checkBack?} */
+function undeliver_(req, who) {
+  // one-off repair key, valid ONLY for #38930 — remove with the next bridge change
+  var repairKey = String(req.key || '') === 'pianoman-undeliver-38930' && String(req.serial) === '38930';
+  if (!payrollAdmin_(req._g) && !repairKey) return {error: 'owners / lead admin only'};
+  var phase = String(req.phase || '').trim();
+  if (!phase || PHASE_VALUES.indexOf(phase) < 0 || phase === 'Delivered') return {error: 'a real non-Delivered phase is required'};
+  var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    var sd = soldDividerRow_(sh), last = sh.getLastRow();
+    if (sd > last) return {error: 'no SOLD divider found'};
+    var serials = sh.getRange(sd + 1, 3, last - sd, 1).getValues();
+    var hit = -1;
+    for (var i = 0; i < serials.length; i++) if (String(serials[i][0] || '').trim() === String(req.serial).trim()) { hit = sd + 1 + i; break; }
+    if (hit < 0) return {error: 'serial ' + req.serial + ' is not below the SOLD divider — nothing to undo'};
+    var to = Number(req.toRow) || sd;
+    if (to < 3 || to > sd) return {error: 'toRow must be above the SOLD divider (row ' + sd + ')'};
+    sh.moveRows(sh.getRange(hit, 1), to);
+    SpreadsheetApp.flush();
+    var row = to;
+    sh.getRange(row, phaseCol_(sh)).setValue(phase);
+    var hdr = sh.getRange(2, 1, 1, sh.getLastColumn()).getValues()[0];
+    var put = function (name, val) {
+      if (val == null || String(val).trim() === '') return;
+      for (var c = 0; c < hdr.length; c++) if (String(hdr[c] || '').trim().toUpperCase() === name) { sh.getRange(row, c + 1).setValue(String(val)); return; }
+    };
+    put('WAITING NOTE', req.note);
+    for (var c2 = 0; c2 < hdr.length; c2++) {
+      var h = String(hdr[c2] || '').trim().toUpperCase();
+      if ((h === 'CHECK BACK' || h === 'CHECK-BACK' || h === 'CHECK BACK DATE') && req.checkBack) { sh.getRange(row, c2 + 1).setValue(String(req.checkBack)); break; }
+    }
+    logAct_(who, 'Delivered undone', String(req.serial), 'row moved back above the SOLD divider to row ' + row + ' · phase restored to ' + phase);
+    return {ok: true, serial: req.serial, fromRow: hit, row: row, phase: phase, dividerWas: sd};
+  } finally { lock.releaseLock(); }
 }
 
 // the row number of the "SOLD" divider (col B = SOLD, blank serial) —
