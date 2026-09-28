@@ -4209,7 +4209,8 @@ const QC_PHASES = ['CAP', 'PRSB - Downbearing'];
 // below does not apply to them either:
 //   Post Sale QC — the pre-delivery final QC is itself the check (Mark 9/8)
 //   Chip/1st/2nd Tuning, QC & Assembly — Mark 9/16
-const QC_NEVER = ['Post Sale QC', 'Chip Tuning', '1st Tuning', '2nd Tuning', 'QC & Assembly'];
+//   Exit Prep - Admin — only a manager or admin moves a piano to Delivered (Walter 9/28)
+const QC_NEVER = ['Post Sale QC', 'Chip Tuning', '1st Tuning', '2nd Tuning', 'QC & Assembly', 'Exit Prep - Admin'];
 // phases that carry a digital checklist (worksheet + progress pill). QC &
 // Assembly keeps its worksheet even though it no longer gates.
 // 9/17 (Brigham): the handbook trio (bench steps + training view + mini-QC) now
