@@ -723,6 +723,7 @@ async function loadProposal(box){
         ${meta.applied?"✓ Applied to calendars":stale?"Past week — cannot apply":meta.fallback?"Apply (bridge not answering)":(meta.appliedTechs&&meta.appliedTechs.length?"✅ Approve more — "+meta.appliedTechs.length+" of "+((plan&&plan.techs)||[]).length+" applied":"✅ Approve — apply to live tech calendars")}</button>
       ${(meta.appliedTechs&&meta.appliedTechs.length)?`<button class="applybtn ghost" id="checkSched" title="Count this week's applied events on each tech's real calendar and flag duplicates">🧹 Check calendars</button>`:""}
     </div>
+    <div id="applyOut"></div>
     <div class="propbody">
       <div class="adjustbar">
         <textarea id="adjGlobal" placeholder="Overall notes to Claude for this week — adjustments across techs, and standing rules ('from now on…', 'always…', 'never…') that should be remembered for every future week."></textarea>
@@ -757,7 +758,6 @@ async function loadProposal(box){
       ${(plan.bottlenecks||[]).length?`<div class="bnbar"><button class="abtn" id="bnApply">🪄 Send answers to Claude</button></div>
       <div class="adjustout" id="bnOut"></div>`:""}
     </div>
-    <div id="applyOut"></div>
   </div>`;
   const bna=box.querySelector("#bnApply");
   if(bna) bna.onclick=async()=>{
@@ -966,6 +966,7 @@ async function loadProposal(box){
     };
     box.querySelector("#applyGo2").onclick=go;
     box.querySelector("#applyCancel").onclick=()=>{ out.innerHTML=""; };
+    out.scrollIntoView({block:"nearest",behavior:"smooth"});
   };
 }
 function renderPlanner(){
