@@ -50,7 +50,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-09-27.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-09-28.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -5223,6 +5223,9 @@ function applyScheduleLocked_(req) {
     only = {};
     req.techs.forEach(function (n) { only[String(n).toLowerCase()] = true; });
   }
+  // days:[1,2] (Mon=0) limits the apply to those weekdays — used with
+  // force:true to re-create days the off-day check wrongly skipped (9/28)
+  var onlyDays = Array.isArray(req.days) && req.days.length ? req.days.map(Number) : null;
   var done = {};
   (got.meta.appliedTechs || []).forEach(function (n) { done[String(n).toLowerCase()] = true; });
   if (!only && got.meta.applied && !req.force) {
@@ -5275,6 +5278,7 @@ function applyScheduleLocked_(req) {
       // Wednesday + Friday although his calendar says "Curtis off Wednesdays
       // and Fridays". The tech's own calendar wins — a day it marks off is
       // skipped and reported, whatever the proposal says.
+      if (onlyDays && onlyDays.indexOf(di) < 0) return;
       var dayAt = new Date(start); dayAt.setDate(dayAt.getDate() + di);
       var off = calOffMarker_(cal, dayAt);
       if (off && (blocks || []).some(planBlockOnCal_)) {
@@ -5390,6 +5394,19 @@ function calOffMarker_(cal, day) {
       if (NOT_OFF_RE.test(t)) continue;
       // "Dentist — out 1-3pm": a stated time range is a partial absence, not a day off
       if (/\d{1,2}(?::\d{2})?\s*(?:am|pm)?\s*[-–—]\s*\d{1,2}/i.test(t)) continue;
+      // A TIMED event is only a day off if it covers the working day: an
+      // all-day marker, or one that starts by mid-morning and runs 4+ hours.
+      // "McKinly Off (Orchestra rehearsal)" 5–6 PM and "McKinly Off" 4:30 PM
+      // blanked his Tue/Wed shop afternoons on 9/28 (Walter) — those are
+      // evening absences, not days off.
+      try {
+        if (!evs[i].isAllDayEvent()) {
+          var st = evs[i].getStartTime(), en = evs[i].getEndTime();
+          var startH = Number(Utilities.formatDate(st, 'America/Denver', 'H')) + Number(Utilities.formatDate(st, 'America/Denver', 'm')) / 60;
+          var hours = (en - st) / 3600000;
+          if (startH >= 12 || hours < 4) continue;
+        }
+      } catch (e2) {}
       if (OFF_TITLE_RE.test(t)) return t.trim();
     }
   } catch (e) { /* calendar unreadable — don't block the apply */ }
