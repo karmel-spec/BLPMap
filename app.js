@@ -4159,7 +4159,7 @@ async function punchVerify(action, p, phase, fallbackMsg) {
       }
     } catch (e2) { /* feed unreachable — fall through to the honest message */ }
   }
-  setTimeout(fetchClock, 2500);
+  setTimeout(() => fetchClock(true), 2500);   // after a punch: bypass the shared cache
   return {error: fallbackMsg};
 }
 /* ========= PHASE CHECKLISTS + MINI-QC (CAP pilot, Brigham 9/3) =========
