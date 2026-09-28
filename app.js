@@ -5763,7 +5763,7 @@ function popHTML(p) {
         <div class="scopemsg phmsg"></div>
         <div class="lite" style="font-size:11px">saves here AND into 📝 Notes below${String(p.scopeNotes || '').includes('📜') ? ' · the 📜 contract text above stays put' : ''}</div>
       </span></div>
-    ${isPayrollAdmin() || isOwner() ? `<div class="row"><button class="ctrbtn">📜 Owner contract & selections</button></div>
+    ${isContractViewer() ? `<div class="row"><button class="ctrbtn">📜 Owner contract & selections</button></div>
       <div class="ctrout"></div>` : ''}`) : '';
   // Client email update reports: a clear ON / OFF switch (Brigham 9/18) —
   // always shown for a piano with a serial. Blank = "not set" (amber, off
@@ -5787,7 +5787,7 @@ function popHTML(p) {
       <div class="pbarlbl">${next ? `next payment milestone at ${next}%` : 'all payment milestones reached'}${+p.payMilestone ? ` · last emailed at ${esc(p.payMilestone)}%` : ''}</div>`;
   })() : '';
   const asDone = adminStepsOf(p), asSkipped = adminSkippedOf(p);
-  const contractBlock = p.serial && (isPayrollAdmin() || isOwner())
+  const contractBlock = p.serial && isContractViewer()
     ? `<div class="row"><button class="ctrbtn">📜 Owner contract & selections</button></div><div class="ctrout"></div>`
     : '';
   // 🏷 Tags section is emitted as open/close halves (its body holds literal
@@ -9525,6 +9525,8 @@ function isSettingsAdmin() {
 function isOwner() { return OWNER_EMAILS.includes(userEmail()); }
 function isAdminUser() { return ADMIN_EMAILS.includes(userEmail()); }
 function isPayrollAdmin() { return gateOr(PAYROLL_ADMIN_EMAILS.includes(userEmail()), 'payroll_edit'); }
+// 📜 contract links: payroll admins + Lisa (Lisa 9/23, 092326litton07) — no payroll rights come with it
+function isContractViewer() { return isPayrollAdmin() || isOwner() || gateOr(['lisa@brighamlarsonpianos.com'].includes(userEmail()), 'contracts_view'); }
 function isTimelogAdmin() { return gateOr(TIMELOG_ADMIN_EMAILS.includes(userEmail()), 'tl_edit'); }
 // 📊 Manager console — the owners and the Lead Manager only (Brigham 9/1)
 function isManagerConsole() { return isOwner() || gateOr(userEmail() === 'markhales.blp@gmail.com', 'manager_console'); }

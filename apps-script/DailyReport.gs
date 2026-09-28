@@ -50,7 +50,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-09-28.5';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-09-28.6';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -1135,7 +1135,7 @@ function doPost(e) {
       // 📜 owner's form selections + contract files (Brigham 9/4).
       // OWNERS + LEAD ADMIN ONLY — the response row also holds payment
       // details; those columns are NEVER read or returned here.
-      if (!payrollAdmin_(req._g)) return json_({error: 'Contracts are for owners and the lead admin only.'});
+      if (!contractViewer_(req._g)) return json_({error: 'Contracts are for owners, the lead admin and Lisa only.'});
       var ctSerial = String(req.serial || '').replace(/\D/g, '');
       var ctOwner = String(req.owner || '').toLowerCase();
       var ctSh = SpreadsheetApp.openById(PIANO_LOG_ID).getSheetByName('Restoration Contracts');
@@ -4009,6 +4009,18 @@ var TIMELOG_ADMIN_EMAILS = OWNER_EMAILS.concat(
   ['markhales.blp@gmail.com', 'matthewwessman.blp@gmail.com', 'jacobmower.blp@gmail.com']);
 function blpAccount_(g) {
   return g && g.email && (/@brighamlarsonpianos\.com$/i.test(g.email) || /\.blp@gmail\.com$/i.test(g.email));
+}
+/* 📜 Owner contracts & selections (Lisa 9/23, 092326litton07): Lisa needs the
+ * contract links without payroll-edit rights, so contracts get their own
+ * check. Everyone who could see them still can (payroll admins); Lisa is
+ * added by email; anyone else can be granted +contracts_view on the Role
+ * Assignments tab. */
+var CONTRACT_VIEW_EMAILS = ['lisa@brighamlarsonpianos.com'];
+function contractViewer_(g) {
+  if (payrollAdmin_(g)) return true;
+  var ph = permHas_(g, 'contracts_view');
+  if (ph !== null) return ph;
+  return !!(g && g.email && CONTRACT_VIEW_EMAILS.indexOf(g.email.toLowerCase()) >= 0);
 }
 function payrollAdmin_(g) {
   var ph = permHas_(g, 'payroll_edit');
