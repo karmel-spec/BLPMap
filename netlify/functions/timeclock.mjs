@@ -18,7 +18,9 @@ let inflight = null;
 
 async function fromBridge() {
   const ctl = new AbortController();
-  const t = setTimeout(() => ctl.abort(), 40000);
+  // give up before Netlify's own ~26 s function limit turns a slow bridge into
+  // a bare 504 page — a clean 502 (or the stale copy) is what the app expects
+  const t = setTimeout(() => ctl.abort(), 20000);
   try {
     const r = await fetch(BRIDGE_URL + '?fn=timeclock', { redirect: 'follow', signal: ctl.signal });
     const j = await r.json();                       // Google's HTML error page throws here
