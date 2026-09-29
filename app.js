@@ -16113,6 +16113,9 @@ if (appsTopBtn) {
       // (Brigham 9/4) — checked at open time so it follows account switches
       const at = $('#appsAdminTraining');
       if (at) at.hidden = !adminTrainingOk();
+      // 💰 BK Finance (Larson family books) is for the owners only
+      const bk = $('#appsBkFinance');
+      if (bk) bk.hidden = !OWNER_EMAILS.includes(userEmail());
       placeTopMenu(appsTopBtn, m);
     }
   };
