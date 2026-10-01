@@ -11161,6 +11161,9 @@ function payTimeTable() {
     // that started before the period is silent: those already-paid hours
     // count toward the 40, so overtime they cause lands in this period.
     const rangeTxt = f.from && f.to ? `${f.from} → ${f.to}` : f.from ? `from ${f.from}` : f.to ? `through ${f.to}` : 'no date range set';
+    // regular is shown as total minus overtime (both already rounded) so the
+    // three columns always add up to the cent on a payroll sheet
+    const regDec = t => (Number(hDec(t.inMins)) - Number(hDec(t.ot))).toFixed(2);
     const flags = t => [t.open ? `${t.open} punch still open — no clock-out` : '',
                         t.auto ? `${t.auto} auto clock-out${t.auto > 1 ? 's' : ''} — review` : ''].filter(Boolean).join(' · ');
     main = `<div class="lite" style="font-size:12px;margin:-4px 0 8px">Pay period <b>${esc(rangeTxt)}</b> · one line per person · hours are decimal (8h 30m = 8.50)
@@ -11168,7 +11171,7 @@ function payTimeTable() {
         the period is checked in full, so overtime it causes shows here even though its earlier hours were paid last period.
         ${!f.from ? '<b>Set a from date</b> so the week before it is looked back at.' : ''}</div>
       <table><tr><th>TEAM MEMBER</th><th>REGULAR HOURS</th><th>OVERTIME HOURS</th><th>TOTAL HOURS</th><th>NOTES</th></tr>
-      ${pw.totals.map(t => `<tr><td>${esc(t.who)}</td><td>${hDec(t.reg)}</td>
+      ${pw.totals.map(t => `<tr><td>${esc(t.who)}</td><td>${regDec(t)}</td>
         <td${t.ot ? ' style="color:#a33;font-weight:600"' : ''}>${hDec(t.ot)}</td><td>${hDec(t.inMins)}</td>
         <td class="lite" style="font-size:11.5px">${esc(flags(t))}</td></tr>`).join('')
        || '<tr><td colspan="5" class="empty">No payroll punches in this range yet.</td></tr>'}</table>
@@ -11183,7 +11186,7 @@ function payTimeTable() {
         Keep the pay periods back-to-back (the next one starts the day after this one ends). Hourly, non-exempt team members only.</div>`;
     CSV_EXPORTS.payot = () => ['payroll-regular-overtime.csv',
       [['Team member', 'Pay period', 'Regular hours', 'Overtime hours', 'Total hours', 'Notes'],
-       ...pw.totals.map(t => [t.who, `${f.from || ''} → ${f.to || ''}`, hDec(t.reg), hDec(t.ot), hDec(t.inMins), flags(t)])]];
+       ...pw.totals.map(t => [t.who, `${f.from || ''} → ${f.to || ''}`, regDec(t), hDec(t.ot), hDec(t.inMins), flags(t)])]];
   } else if (f.group === 'day') {
     main = `<table><tr><th>DATE</th><th>TEAM MEMBER</th><th>CLOCK IN</th><th>CLOCK OUT</th><th>HOURS</th><th>NOTE</th></tr>
       ${rows.map(r => `<tr${/auto|mi from store/.test(r.note) ? ' style="color:#a33"' : ''}>
