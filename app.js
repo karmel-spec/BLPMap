@@ -8226,7 +8226,7 @@ function openPlateWhereModal(p, cond) {
   const ov = modalShell('platewheremodal', `
     <span class="x">✕</span>
     <h3>⚙️ Where is the plate?</h3>
-    <p class="pd"><b>${esc(pianoLabel(p))}</b> — ${/after/i.test(cond) ? 'AFTER ✨ refinished' : 'BEFORE refinishing'}.
+    <p class="pd"><b>${pianoLabel(p)}</b> — ${/after/i.test(cond) ? 'AFTER ✨ refinished' : 'BEFORE refinishing'}.
       Tap its rack slat, or WALL when it doesn’t fit the rack.</p>
     <div class="pwgrid">${slats.map(id => { const h = holders(id);
       return `<button class="trk pwslat ${mine === id ? 'on' : ''} ${h.length ? 'taken' : ''}" data-id="${id}"
