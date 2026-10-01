@@ -11489,7 +11489,7 @@ function adjRow(clock, r, label, sub, dateCell) {
   const auto = !adjAutoClosed(r) ? ''
     : byEvidence
       ? ` <span class="autochip" title="${esc(String(r.note || ''))}">⏰ auto · last activity</span>`
-      : ` <span class="autochip" title="nobody clocked out, so the app stamped ${autoAt === '8 PM' ? '8:00 PM (movers & Melissa)' : '6:00 PM'} — ask them for the real finish time and adjust">⏰ auto ${autoAt}</span>`;
+      : ` <span class="autochip" title="nobody clocked out, so the app stamped ${autoAt === '8 PM' ? '8:00 PM (late crew — movers are no longer auto-closed)' : '6:00 PM'} — ask them for the real finish time and adjust">⏰ auto ${autoAt}</span>`;
   const voided = String(r.voided || '');
   if (voided) {
     return `<tr class="adjvoided">${dt}<td>${label}</td><td>${sub}</td>

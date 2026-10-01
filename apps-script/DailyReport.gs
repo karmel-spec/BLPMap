@@ -50,7 +50,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-09-28.7';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-01.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -166,6 +166,12 @@ function doGet(e) {
   }
   // late-clock nudge: dry-run preview by default; &send=1 (key-gated)
   // actually fires the sweep — for a manual evening run
+  if (e && e.parameter && e.parameter.fn === 'movernudge') {
+    try {
+      var doSendM = e.parameter.send === '1' && e.parameter.key === TEAM_PIN;
+      return json_(moverMorningNudge(doSendM ? null : {dry: true}));
+    } catch (err) { return json_({error: String(err)}); }
+  }
   if (e && e.parameter && e.parameter.fn === 'latesweep') {
     try {
       var doSend = e.parameter.send === '1' && e.parameter.key === TEAM_PIN;
@@ -2694,9 +2700,7 @@ function setPhase_(req) {
  * check-back. Owners / payroll admins only; refuses anything already on the
  * map. req: {serial, toRow?, phase, note?, checkBack?} */
 function undeliver_(req, who) {
-  // one-off repair key, valid ONLY for #38930 — remove with the next bridge change
-  var repairKey = String(req.key || '') === 'pianoman-undeliver-38930' && String(req.serial) === '38930';
-  if (!payrollAdmin_(req._g) && !repairKey) return {error: 'owners / lead admin only'};
+  if (!payrollAdmin_(req._g)) return {error: 'owners / lead admin only'};
   var phase = String(req.phase || '').trim();
   if (!phase || PHASE_VALUES.indexOf(phase) < 0 || phase === 'Delivered') return {error: 'a real non-Delivered phase is required'};
   var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
@@ -3603,8 +3607,9 @@ function sweepForgottenClocks_() {
     todo.push({row: from + i, v: vals[i], start: st});
   }
   if (!todo.length) return 0;
-  var crew = lateCrew_();
+  var crew = lateCrew_(), movers = moverFirsts_();
   todo.forEach(function (t) {
+    if (movers[finishKey_(t.v[0]).split(' ')[0]]) return;   // movers: no auto clock-out (see sweepForgottenPay_)
     var start = t.start;
     var hour = flatFinishHour_(t.v[0], crew);
     var flat = new Date(Utilities.formatDate(start, 'America/Denver', "yyyy-MM-dd'T'" + hour + ':00:00XXX'));
@@ -3781,8 +3786,12 @@ function sweepForgottenPay_(sh) {
     todo.push({row: from + i, v: vals[i], start: st});
   }
   if (!todo.length) return;   // the common case — no roster read at all
-  var crew = lateCrew_();
+  var crew = lateCrew_(), movers = moverFirsts_();
   todo.forEach(function (t) {
+    // movers get NO auto clock-out (Walter 10/1, 093026terry70): their jobs
+    // run past any flat time — the punch stays open and the 10 AM text
+    // (moverMorningNudge) asks them to clock out and send a fix
+    if (movers[finishKey_(t.v[0]).split(' ')[0]]) return;
     var start = t.start;
     var hour = flatFinishHour_(t.v[0], crew);
     var flat = new Date(Utilities.formatDate(start, 'America/Denver', "yyyy-MM-dd'T'" + hour + ':00:00XXX'));
@@ -3790,7 +3799,7 @@ function sweepForgottenPay_(sh) {
     if (end - start > 43200000) end = new Date(start.getTime() + 43200000);   // 12 h cap
     var when = Utilities.formatDate(end, 'America/Denver', 'h:mm a');
     closePayRow_(sh, {row: t.row, v: t.v}, end.toISOString(),
-      'auto: forgot to clock out — stamped ' + when + (hour === 20 ? ' (movers & Melissa)' : '')
+      'auto: forgot to clock out — stamped ' + when + (hour === 20 ? ' (late crew)' : '')
       + ' — nobody clocked out; check the real finish time before payroll');
   });
 }
@@ -7588,13 +7597,14 @@ function reinstallAllTriggers() {
  *  mode=nudgeonly — just the digest + nudge, leave report/briefs alone. */
 function fixTriggers_(mode) {
   if (mode !== 'ensureall' && mode !== 'nudgeonly' && mode !== 'fridayonly'
-    && mode !== 'briefsonly' && mode !== 'nofriday') return {error: 'mode?'};
+    && mode !== 'briefsonly' && mode !== 'nofriday' && mode !== 'movernudge') return {error: 'mode?'};
   var mine = ScriptApp.getProjectTriggers();
   var removed = [];
   mine.forEach(function (t) {
     var h = t.getHandlerFunction();
     var kill = mode === 'ensureall'
-      ? ['sendDailyReport', 'sendShopManagerReport', 'morningBriefs', 'mondayAdminDigest', 'lateClockNudge', 'fridaySweep'].indexOf(h) >= 0
+      ? ['sendDailyReport', 'sendShopManagerReport', 'morningBriefs', 'mondayAdminDigest', 'lateClockNudge', 'fridaySweep', 'moverMorningNudge'].indexOf(h) >= 0
+      : mode === 'movernudge' ? h === 'moverMorningNudge'
       : (mode === 'fridayonly' || mode === 'nofriday') ? h === 'fridaySweep'
       : mode === 'briefsonly' ? ['sendShopManagerReport', 'morningBriefs'].indexOf(h) >= 0
       : ['mondayAdminDigest', 'lateClockNudge'].indexOf(h) >= 0;
@@ -7609,7 +7619,12 @@ function fixTriggers_(mode) {
     ScriptApp.newTrigger('morningBriefs').timeBased()
       .everyDays(1).atHour(7).nearMinute(45).inTimezone('America/Denver').create();
   }
-  if (mode !== 'fridayonly' && mode !== 'nofriday') {
+  // movers' 10 AM "still clocked in" text (Walter 10/1)
+  if (mode === 'ensureall' || mode === 'movernudge') {
+    ScriptApp.newTrigger('moverMorningNudge').timeBased()
+      .everyDays(1).atHour(10).inTimezone('America/Denver').create();
+  }
+  if (mode !== 'fridayonly' && mode !== 'nofriday' && mode !== 'movernudge') {
     ScriptApp.newTrigger('mondayAdminDigest').timeBased()
       .onWeekDay(ScriptApp.WeekDay.MONDAY).atHour(8).inTimezone('America/Denver').create();
     ScriptApp.newTrigger('lateClockNudge').timeBased()
@@ -7634,8 +7649,10 @@ function setupLateClockNudge() {
     .everyDays(1).atHour(18).inTimezone('America/Denver').create();
   Logger.log('lateClockNudge trigger installed (daily, 6-7pm Denver)');
 }
+var MOVERS_MEMO = null;
 function moverFirsts_() {
   // mover first names from the BLP TEAM roster's Position column
+  if (MOVERS_MEMO) return MOVERS_MEMO;
   var out = {};
   try {
     var r = UrlFetchApp.fetch(
@@ -7648,6 +7665,7 @@ function moverFirsts_() {
       }
     }
   } catch (e) {}
+  MOVERS_MEMO = out;
   return out;
 }
 /* ---------- Retired Friday-report chaser (Brigham 8/28; retired Karmel 2026-09-20) ----------
@@ -7781,8 +7799,13 @@ function lateClockNudge(e) {
   }
   var group = moverPass ? moversOpen : late;
   var names = Object.keys(group);
+  var moverOnly = moverFirsts_();
   names.forEach(function (n) {
-    var msg = moverPass
+    var msg = moverPass && moverOnly[firstOf(n)]
+      ? '\u23f0 BLP Store Map: it\u2019s after 8pm and you\u2019re still clocked in \u2014 ' + group[n].join(' + ')
+        + '. Still out on a job? Ignore this. Finished? Open the Store Map and clock out. '
+        + 'Movers are never clocked out automatically \u2014 if it\u2019s still open in the morning you\u2019ll get a text at 10 to clock out and send a fix.'
+      : moverPass
       ? '\u23f0 BLP Store Map: it\u2019s after 8pm and you\u2019re still clocked in \u2014 ' + group[n].join(' + ')
         + '. Still out on a job? Ignore this. Finished? Open the Store Map and clock out \u2014 otherwise your day gets '
         + 'recorded as ending at 8:00 PM. Wrong time already saved? Send a fix: ' + APP_URL + '/#fixclock'
@@ -7814,6 +7837,52 @@ function lateClockNudge(e) {
     notifyTeam_(['Brigham', 'Karmel'], sum.slice(0, 1100));
   }
   return {ok: true, texted: names, moverPass: moverPass, eightPmBooked: booked};
+}
+
+/* Movers' morning text (Walter 10/1, 093026terry70): movers are never
+ * clocked out automatically — a mover still clocked in from a previous day
+ * (day clock or piano clock) gets ONE text at 10 AM: clock out, clock in for
+ * today, and send a time-clock fix with the real finish time. Mon–Sat; the
+ * Monday pass covers Saturday night. Installed trigger: moverMorningNudge
+ * daily at 10 (fixTriggers_ 'ensureall' / 'movernudge').
+ * Dry run: ?fn=movernudge · live: &send=1&key=<pin>. */
+function moverMorningNudge(e) {
+  var dry = e && e.dry;
+  var now = new Date();
+  var dow = Number(Utilities.formatDate(now, 'America/Denver', 'u'));
+  if (dow === 7 && !dry) return {ok: true, skipped: 'Sunday'};
+  var movers = moverFirsts_();
+  var todayStr = Utilities.formatDate(now, 'America/Denver', 'yyyy-MM-dd');
+  var firstOf = function (n) { return String(n || '').trim().split(/\s+/)[0].toLowerCase(); };
+  var since = function (iso) { return Utilities.formatDate(new Date(iso), 'America/Denver', 'EEE M/d h:mm a'); };
+  var open = {}, skipped = [];
+  var add = function (tech, start, line) {
+    if (!start || Utilities.formatDate(new Date(start), 'America/Denver', 'yyyy-MM-dd') === todayStr) return;
+    if (!movers[firstOf(tech)]) { skipped.push(tech); return; }
+    (open[tech] = open[tech] || []).push(line + ' since ' + since(start));
+  };
+  try {
+    (payrollState_().open || []).forEach(function (o) { add(o.tech, o.start, '\ud83d\udd54 day clock'); });
+  } catch (e1) {}
+  try {
+    (timeClockState_().open || []).forEach(function (o) {
+      add(o.tech, o.start, (o.serial === 'MGMT' ? '\ud83e\uddd1\u200d\ud83d\udcbc ' : o.serial === 'TIDY' ? '\ud83e\uddf9 ' : '\ud83c\udfb9 ') + (o.piano || o.serial));
+    });
+  } catch (e2) {}
+  var names = Object.keys(open);
+  if (dry) return {ok: true, dry: true, wouldText: names.map(function (n) { return {name: n, open: open[n]}; }),
+                   openButNotMovers: skipped};
+  names.forEach(function (n) {
+    notifyTeam_([n], '\u23f0 BLP Store Map: you\u2019re still clocked in from last night \u2014 ' + open[n].join(' + ')
+      + '. Please open the Store Map and clock out now, clock in again for today, and send a time-clock fix '
+      + 'with the time you actually finished: ' + APP_URL + '/#fixclock');
+    logAct_('Store Map (auto)', 'Mover morning nudge', n, open[n].join(' + ').slice(0, 140));
+  });
+  if (names.length) {   // standing rule (Brigham 8/28): every batch of team texts gets a summary to both
+    notifyTeam_(['Brigham', 'Karmel'], ('\u23f0 Mover morning nudge (10am): texted ' + names.length + ' \u2014 '
+      + names.map(function (n) { return n.split(/\s+/)[0] + ' (' + open[n].join(' + ') + ')'; }).join('; ')).slice(0, 1100));
+  }
+  return {ok: true, texted: names};
 }
 
 function lateNudgesRecent_() {
