@@ -11068,8 +11068,9 @@ function payrollWeeks(f) {
   }).sort((a, b) => a.who.localeCompare(b.who) || a.sun.localeCompare(b.sun));
   const tot = {};
   weeks.forEach(w => {
-    const t = tot[w.who] = tot[w.who] || {who: w.who, reg: 0, ot: 0, inMins: 0, weeks: 0};
-    t.reg += w.reg; t.ot += w.ot; t.inMins += w.inMins; t.weeks++;
+    const t = tot[w.who] = tot[w.who] || {who: w.who, reg: 0, ot: 0, inMins: 0, weeks: 0, open: 0, auto: 0, otWeeks: []};
+    t.reg += w.reg; t.ot += w.ot; t.inMins += w.inMins; t.weeks++; t.open += w.open; t.auto += w.auto;
+    if (w.ot) t.otWeeks.push(weekSpanLabel(w.sun).replace(/^Sun /, '') + ' ' + hDec(w.ot));
   });
   return {weeks, totals: Object.values(tot).sort((a, b) => a.who.localeCompare(b.who))};
 }
@@ -11148,41 +11149,41 @@ function payTimeTable() {
       : `<button class="csvbtn paymode" data-group="ot" style="background:#1d4ed8" title="Sunday–Saturday weeks with regular and overtime hours for the pay period you set above">💵 Regular / overtime weeks</button>`,
     `<button class="csvbtn" data-csv="paydays">⬇ CSV — punches</button>`,
     `<button class="csvbtn" data-csv="paytotals">⬇ CSV — totals</button>`,
-    f.group === 'ot' ? `<button class="csvbtn" data-csv="payot">⬇ CSV — payroll weeks (reg / OT)</button>` : '',
+    f.group === 'ot' ? `<button class="csvbtn" data-csv="payot">⬇ CSV — regular / overtime</button>` : '',
     showTl ? `<button class="csvbtn" data-csv="paysessions">⬇ CSV — piano sessions</button>` : '',
   ].filter(Boolean));
   // day rows + grouped totals
   let main;
   const pw = f.group === 'ot' ? payrollWeeks(f) : null;
   if (pw) {
+    // Walter 10/1: ONE line per person for the pay period — regular, overtime,
+    // total — and only hours inside the period. The look-back to the week
+    // that started before the period is silent: those already-paid hours
+    // count toward the 40, so overtime they cause lands in this period.
     const rangeTxt = f.from && f.to ? `${f.from} → ${f.to}` : f.from ? `from ${f.from}` : f.to ? `through ${f.to}` : 'no date range set';
-    main = `<div class="lite" style="font-size:12px;margin:-4px 0 8px">Pay period <b>${esc(rangeTxt)}</b> · Sunday–Saturday workweeks ·
-        hours are decimal (8h 30m = 8.50). Every week touching the range is counted in full: hours before the range were paid last
-        period and only count toward the 40; hours in the range are regular until the week reaches 40, overtime after that.
+    const flags = t => [t.open ? `${t.open} punch still open — no clock-out` : '',
+                        t.auto ? `${t.auto} auto clock-out${t.auto > 1 ? 's' : ''} — review` : ''].filter(Boolean).join(' · ');
+    main = `<div class="lite" style="font-size:12px;margin:-4px 0 8px">Pay period <b>${esc(rangeTxt)}</b> · one line per person · hours are decimal (8h 30m = 8.50)
+        and only hours inside the pay period are counted. Overtime is anything over 40 in a Sunday–Saturday week; a week that started before
+        the period is checked in full, so overtime it causes shows here even though its earlier hours were paid last period.
         ${!f.from ? '<b>Set a from date</b> so the week before it is looked back at.' : ''}</div>
-      <table><tr><th>TEAM MEMBER</th><th>WEEK</th><th>BEFORE RANGE<br><small>(already paid)</small></th><th>IN RANGE</th>
-        <th>REGULAR</th><th>OVERTIME</th><th>WEEK TOTAL</th><th>NOTES</th></tr>
-      ${pw.weeks.map(w => `<tr${w.ot ? ' style="font-weight:600"' : ''}><td>${esc(w.who)}</td><td style="white-space:nowrap">${esc(weekSpanLabel(w.sun))}</td>
-        <td>${w.prior ? hDec(w.prior) : '—'}</td><td>${hDec(w.inMins)}</td><td>${hDec(w.reg)}</td>
-        <td${w.ot ? ' style="color:#a33"' : ''}>${w.ot ? hDec(w.ot) : '0.00'}</td><td>${hDec(w.prior + w.inMins + w.after)}</td>
-        <td class="lite" style="font-size:11.5px">${esc(w.notes.join(' · '))}</td></tr>`).join('')
-       || '<tr><td colspan="8" class="empty">No payroll punches in this range yet.</td></tr>'}</table>
-      <h4 class="bfhd">Pay-period totals — regular / overtime</h4>
-      <table><tr><th>TEAM MEMBER</th><th>WEEKS</th><th>REGULAR HOURS</th><th>OVERTIME HOURS</th><th>TOTAL HOURS</th></tr>
-      ${pw.totals.map(t => `<tr><td>${esc(t.who)}</td><td>${t.weeks}</td><td>${hDec(t.reg)}</td>
-        <td${t.ot ? ' style="color:#a33;font-weight:600"' : ''}>${hDec(t.ot)}</td><td>${hDec(t.inMins)}</td></tr>`).join('')
-       || '<tr><td colspan="5" class="empty">—</td></tr>'}</table>
+      <table><tr><th>TEAM MEMBER</th><th>REGULAR HOURS</th><th>OVERTIME HOURS</th><th>TOTAL HOURS</th><th>NOTES</th></tr>
+      ${pw.totals.map(t => `<tr><td>${esc(t.who)}</td><td>${hDec(t.reg)}</td>
+        <td${t.ot ? ' style="color:#a33;font-weight:600"' : ''}>${hDec(t.ot)}</td><td>${hDec(t.inMins)}</td>
+        <td class="lite" style="font-size:11.5px">${esc(flags(t))}</td></tr>`).join('')
+       || '<tr><td colspan="5" class="empty">No payroll punches in this range yet.</td></tr>'}</table>
+      <details style="margin:6px 0 10px"><summary class="lite" style="font-size:12px;cursor:pointer">Show the weeks behind these numbers</summary>
+      <table style="margin-top:6px"><tr><th>TEAM MEMBER</th><th>WEEK</th><th>IN PERIOD</th><th>REGULAR</th><th>OVERTIME</th><th>NOTES</th></tr>
+      ${pw.weeks.map(w => `<tr><td>${esc(w.who)}</td><td style="white-space:nowrap">${esc(weekSpanLabel(w.sun))}</td>
+        <td>${hDec(w.inMins)}</td><td>${hDec(w.reg)}</td><td${w.ot ? ' style="color:#a33"' : ''}>${hDec(w.ot)}</td>
+        <td class="lite" style="font-size:11.5px">${esc(w.notes.join(' · '))}</td></tr>`).join('')}</table></details>
       <div class="lite" style="font-size:11.5px;margin:6px 0 12px">Utah has no overtime law of its own — the federal FLSA applies: time-and-a-half for
         every hour over 40 in a fixed Sunday–Saturday workweek, each week on its own (never averaged, never cut at a month end), and the
         overtime for a week that straddles two pay periods is paid with the period the week <i>ends</i> in — which is what the look-back does.
-        Keep the ranges back-to-back (the next one starts the day after this one ends). Hourly, non-exempt team members only.</div>`;
-    CSV_EXPORTS.payot = () => ['payroll-weeks-regular-overtime.csv',
-      [['Team member', 'Week (Sun–Sat)', 'Week starts', 'Week ends', 'Hours before range (already paid)', 'Hours in range',
-        'Regular hours', 'Overtime hours', 'Week total hours', 'Notes'],
-       ...pw.weeks.map(w => [w.who, weekSpanLabel(w.sun), w.sun, w.satDay, hDec(w.prior), hDec(w.inMins), hDec(w.reg), hDec(w.ot),
-         hDec(w.prior + w.inMins + w.after), w.notes.join(' · ')]),
-       [], ['PAY-PERIOD TOTALS', `${f.from || ''} → ${f.to || ''}`, '', '', '', 'Hours in range', 'Regular hours', 'Overtime hours', 'Total hours', ''],
-       ...pw.totals.map(t => [t.who, '', '', '', '', hDec(t.inMins), hDec(t.reg), hDec(t.ot), hDec(t.inMins), `${t.weeks} week${t.weeks === 1 ? '' : 's'}`])]];
+        Keep the pay periods back-to-back (the next one starts the day after this one ends). Hourly, non-exempt team members only.</div>`;
+    CSV_EXPORTS.payot = () => ['payroll-regular-overtime.csv',
+      [['Team member', 'Pay period', 'Regular hours', 'Overtime hours', 'Total hours', 'Notes'],
+       ...pw.totals.map(t => [t.who, `${f.from || ''} → ${f.to || ''}`, hDec(t.reg), hDec(t.ot), hDec(t.inMins), flags(t)])]];
   } else if (f.group === 'day') {
     main = `<table><tr><th>DATE</th><th>TEAM MEMBER</th><th>CLOCK IN</th><th>CLOCK OUT</th><th>HOURS</th><th>NOTE</th></tr>
       ${rows.map(r => `<tr${/auto|mi from store/.test(r.note) ? ' style="color:#a33"' : ''}>
