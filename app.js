@@ -11141,6 +11141,11 @@ function payTimeTable() {
        <option value="day" ${!showTl ? 'selected' : ''}>Day clock only (payroll)</option>
        <option value="all" ${showTl ? 'selected' : ''}>+ piano & category sessions</option></select>`,
     showTl ? fSel('pay', 'cat', f.cat, cats, 'All categories / phases') : '',
+    // Walter 10/1: the regular/overtime view sat only inside the grouping
+    // dropdown and nobody found it — a plain button switches to it and back
+    f.group === 'ot'
+      ? `<button class="csvbtn paymode" data-group="day" style="background:#4b5563" title="back to the daily punches">← Daily punches</button>`
+      : `<button class="csvbtn paymode" data-group="ot" style="background:#1d4ed8" title="Sunday–Saturday weeks with regular and overtime hours for the pay period you set above">💵 Regular / overtime weeks</button>`,
     `<button class="csvbtn" data-csv="paydays">⬇ CSV — punches</button>`,
     `<button class="csvbtn" data-csv="paytotals">⬇ CSV — totals</button>`,
     f.group === 'ot' ? `<button class="csvbtn" data-csv="payot">⬇ CSV — payroll weeks (reg / OT)</button>` : '',
@@ -12880,6 +12885,11 @@ function renderReport() {
     ev.stopPropagation();
     const mk = CSV_EXPORTS[b.dataset.csv];
     if (mk) { const [name, rows] = mk(); downloadCsv(name, rows); }
+  });
+  body.querySelectorAll('.paymode').forEach(b => b.onclick = ev => {
+    ev.stopPropagation();
+    (S.payF || (S.payF = {})).group = b.dataset.group;
+    renderReport();
   });
   body.querySelectorAll('.actf').forEach(el => {
     const apply = () => {
