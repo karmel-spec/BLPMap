@@ -10956,19 +10956,52 @@ async function loadBriefs() {
 }
 
 /* ---------- payroll + job-costing reports (Time Log + Payroll Clock) ------ */
+/* Payroll Clock + Time Log rows come from salesapp2's clock-history feed
+ * first (Walter 10/1): the Sheets API through the service account reads both
+ * tabs in about a second, where the bridge's fn=payrollrows / fn=timelog reads
+ * of the same tabs were taking 10–90 s under Google's throttling — that wait
+ * is what held Time Clock Adjustments on "Loading clocks…". ?full=1 returns
+ * the bridge's own row shape (sheet row, date, source, note, void stamp), so
+ * the punch editors and every report work unchanged. One call fills both
+ * clocks; the bridge stays as the fallback when the feed is down. */
+const CLOCK_FEED_URL = 'https://blpsalesapp.netlify.app/.netlify/functions/clock-history?key=pianoman&full=1&days=365';
+let clockFeedP = null;
+function clockFeed() {
+  if (!clockFeedP) clockFeedP = (async () => {
+    const r = await fetchT(CLOCK_FEED_URL, {}, 15000);
+    const j = await r.json();
+    // j.full guards against an older feed answering without row numbers
+    if (!j || !j.ok || !j.full || !Array.isArray(j.pay) || !Array.isArray(j.tl)) throw new Error((j && j.error) || 'clock feed down');
+    const payCut = Date.now() - 190 * 86400000;   // the windows the bridge calls used
+    return {pay: j.pay.filter(r => new Date(r.start) >= payCut), tl: j.tl};
+  })().finally(() => { clockFeedP = null; });
+  return clockFeedP;
+}
 async function loadPayroll() {
   try {
-    const r = await fetch(BRIDGE_URL + '?fn=payrollrows&days=190', {redirect: 'follow'});
-    S.payRows = (await r.json()).rows || [];
-  } catch (e) { S.payRows = []; }
+    const f = await clockFeed();
+    S.payRows = f.pay;
+    if (!S.tlRows) S.tlRows = f.tl;
+  } catch (e0) {
+    try {
+      const r = await fetch(BRIDGE_URL + '?fn=payrollrows&days=190', {redirect: 'follow'});
+      S.payRows = (await r.json()).rows || [];
+    } catch (e) { S.payRows = []; }
+  }
   if (!S.tlRows) loadTimeLog(); else renderReport();
   if (S.view === 'manager') renderManager();
 }
 async function loadTimeLog() {
   try {
-    const r = await fetch(BRIDGE_URL + '?fn=timelog&days=365', {redirect: 'follow'});
-    S.tlRows = (await r.json()).rows || [];
-  } catch (e) { S.tlRows = []; }
+    const f = await clockFeed();
+    S.tlRows = f.tl;
+    if (!S.payRows) S.payRows = f.pay;
+  } catch (e0) {
+    try {
+      const r = await fetch(BRIDGE_URL + '?fn=timelog&days=365', {redirect: 'follow'});
+      S.tlRows = (await r.json()).rows || [];
+    } catch (e) { S.tlRows = []; }
+  }
   renderReport();
   if (S.view === 'manager') renderManager();
 }
@@ -11575,9 +11608,13 @@ function adjPatchLocal(clock, row, start, end, extra) {
 }
 async function refreshClocksQuiet() {
   try {
-    const [p, t] = await Promise.all([
-      fetch(BRIDGE_URL + '?fn=payrollrows&days=190', {redirect: 'follow'}).then(r => r.json()),
-      fetch(BRIDGE_URL + '?fn=timelog&days=365', {redirect: 'follow'}).then(r => r.json())]);
+    let p, t;
+    try { const f = await clockFeed(); p = {rows: f.pay}; t = {rows: f.tl}; }   // fast feed first (see loadPayroll)
+    catch (e0) {
+      [p, t] = await Promise.all([
+        fetch(BRIDGE_URL + '?fn=payrollrows&days=190', {redirect: 'follow'}).then(r => r.json()),
+        fetch(BRIDGE_URL + '?fn=timelog&days=365', {redirect: 'follow'}).then(r => r.json())]);
+    }
     if (p && p.rows) S.payRows = p.rows;
     if (t && t.rows) S.tlRows = t.rows;
     renderReport();
@@ -11644,7 +11681,10 @@ function cfxToast(msg) {
   clearTimeout(cfxToast._t); cfxToast._t = setTimeout(() => el.classList.remove('on'), 4500);
 }
 function clockAdjustTable() {
-  if (!S.fixRows || !S.payRows || !S.tlRows) return '<div class="empty">Loading clocks…</div>';
+  if (!S.payRows || !S.tlRows) return '<div class="empty">Loading clocks…</div>';
+  // the fix-request list still comes from the bridge (fn=clockfixes, ~7 s);
+  // the punch tables no longer wait for it — the list fills in when it lands
+  const fixRows = S.fixRows || [];
   // Mark (lead manager) can edit shop-side DAY punches too — the bridge
   // enforces the lane (never admins' rows, never his own)
   const me = (authUser() || {}).email || '';
@@ -11690,7 +11730,7 @@ function clockAdjustTable() {
   // filter bar: status · team member · clock · text · date range. Default
   // view is unchanged (open requests + the 8 most recently handled).
   const f = S.cfxF || (S.cfxF = {st: '', who: '', clock: '', q: '', from: '', to: ''});
-  const since = S.fixRows.filter(cfxSinceLaunch);
+  const since = fixRows.filter(cfxSinceLaunch);
   const whos = [...new Set(since.map(cfxWho))].sort((a, b) => a.localeCompare(b));
   const stOf = r => r.status === 'open' ? 'open' : /dup/i.test(r.status) ? 'duplicate' : 'resolved';
   const q = f.q.trim().toLowerCase();
@@ -11724,12 +11764,13 @@ function clockAdjustTable() {
   // duplicate instead of fixing the punch twice
   const fxKey = r => (r.who.replace(/<[^>]*>/g, '').trim() + '|' + String(r.note || '').trim().toLowerCase().replace(/\s+/g, ' ')).toLowerCase();
   const fxCount = {};
-  S.fixRows.filter(cfxSinceLaunch).forEach(r => { const k = fxKey(r); fxCount[k] = (fxCount[k] || 0) + 1; });
+  fixRows.filter(cfxSinceLaunch).forEach(r => { const k = fxKey(r); fxCount[k] = (fxCount[k] || 0) + 1; });
   const isDup = r => fxCount[fxKey(r)] > 1;
   const fixes = `<h4 class="bfhd">Fix requests from the team</h4>
     <div class="lite" style="font-size:12px;margin:-4px 0 8px">These are OPEN — ✎ Apply opens the punch, fix it, then "Mark resolved" clears the row and <b>texts the team member that their clock is fixed</b>. A re-sent copy of a request you already applied → "Duplicate" archives it without a text.</div>
     ${fxBar}
     <table><tr><th>WHEN</th><th>WHO</th><th>CLOCK</th><th>WHAT NEEDS FIXING</th><th>STATUS</th></tr>
+    ${S.fixRows ? '' : '<tr><td colspan="5" class="lite">Loading fix requests…</td></tr>'}
     ${openFix.map(r => `<tr${isDup(r) ? ' class="cfxdupl"' : ''}><td style="white-space:nowrap">${esc(r.when)}</td><td>${esc(r.who.replace(/<[^>]*>/g, ''))}</td>
        <td style="white-space:nowrap">${canPay || canTl
          // Mark 9/8: re-type a request filed under the wrong clock (and set
