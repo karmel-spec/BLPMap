@@ -11014,6 +11014,65 @@ function weekKey(day) {   // Monday of that week
   return d.toISOString().slice(0, 10);
 }
 function monthKey(day) { return day.slice(0, 7); }
+/* Payroll weeks — regular vs overtime (Melissa 10/1, 100126terry75).
+ * Utah has no state overtime law; the federal FLSA applies: overtime is
+ * every hour over 40 in a FIXED, recurring 7-day workweek (here Sunday–
+ * Saturday), each week judged on its own — never averaged, and never split
+ * by the calendar month or the pay period. So for the range Melissa asks for
+ * (her pay period), every Sun–Sat week that touches it is counted in FULL:
+ * hours before the range were already paid as regular last period and only
+ * count toward the 40; hours inside the range are regular up to whatever is
+ * left of the 40, overtime after that. A week that runs past the end of the
+ * range is settled the same way next period (FLSA 29 CFR 778.106: overtime
+ * is paid on the payday for the period in which the workweek ENDS). Ranges
+ * must be consecutive — the next one starts the day after this one ends. */
+function sunWeekKey(day) {   // Sunday of that week (yyyy-mm-dd)
+  const d = new Date(day + 'T12:00');
+  d.setDate(d.getDate() - d.getDay());
+  return d.toISOString().slice(0, 10);
+}
+function weekSpanLabel(sun) {
+  const a = new Date(sun + 'T12:00'), b = new Date(sun + 'T12:00'); b.setDate(b.getDate() + 6);
+  const f = d => d.toLocaleDateString('en-US', {month: 'short', day: 'numeric'});
+  return `Sun ${f(a)} – Sat ${f(b)}`;
+}
+function payrollWeeks(f) {
+  const OT_AT = 40 * 60;
+  const all = unvoided(S.payRows).filter(r => !f.who || techName(r.tech) === f.who);
+  const wk = {};
+  all.forEach(r => {
+    if (!r.date) return;
+    const who = techName(r.tech) || r.tech, sun = sunWeekKey(r.date), k = who + '|' + sun;
+    const g = wk[k] = wk[k] || {who, sun, prior: 0, inMins: 0, after: 0, open: 0, auto: 0, days: new Set()};
+    const m = r.minutes || 0;
+    if (f.from && r.date < f.from) g.prior += m;
+    else if (f.to && r.date > f.to) g.after += m;
+    else {
+      g.inMins += m; g.days.add(r.date);
+      if (!r.end) g.open++;
+      if (/auto/.test(r.note || '')) g.auto++;
+    }
+  });
+  const weeks = Object.values(wk).filter(g => g.inMins > 0 || g.open > 0).map(g => {
+    const allow = Math.max(0, OT_AT - g.prior);           // regular hours still available this week
+    const ot = Math.max(0, g.inMins - allow);
+    const reg = g.inMins - ot;
+    const satDay = (() => { const d = new Date(g.sun + 'T12:00'); d.setDate(d.getDate() + 6); return d.toISOString().slice(0, 10); })();
+    const notes = [];
+    if (g.prior) notes.push(`${hDec(g.prior)} h before the range already paid — counted toward the 40`);
+    if (f.to && satDay > f.to) notes.push('week runs past the range — hours after it settle next period');
+    if (g.after) notes.push(`${hDec(g.after)} h after the range on the clock already`);
+    if (g.open) notes.push(`${g.open} punch still open — no clock-out`);
+    if (g.auto) notes.push(`${g.auto} auto clock-out${g.auto > 1 ? 's' : ''} — review`);
+    return {...g, allow, ot, reg, satDay, notes};
+  }).sort((a, b) => a.who.localeCompare(b.who) || a.sun.localeCompare(b.sun));
+  const tot = {};
+  weeks.forEach(w => {
+    const t = tot[w.who] = tot[w.who] || {who: w.who, reg: 0, ot: 0, inMins: 0, weeks: 0};
+    t.reg += w.reg; t.ot += w.ot; t.inMins += w.inMins; t.weeks++;
+  });
+  return {weeks, totals: Object.values(tot).sort((a, b) => a.who.localeCompare(b.who))};
+}
 function hDec(mins) { return (mins / 60).toFixed(2); }
 function inRange(day, f) { return (!f.from || day >= f.from) && (!f.to || day <= f.to); }
 // ISO → value for a <input type=datetime-local>, in Denver time
@@ -11076,18 +11135,50 @@ function payTimeTable() {
     `<select class="rptf" data-scope="pay" data-f="group">
        <option value="day" ${f.group === 'day' ? 'selected' : ''}>Daily punches</option>
        <option value="week" ${f.group === 'week' ? 'selected' : ''}>Weekly totals</option>
-       <option value="month" ${f.group === 'month' ? 'selected' : ''}>Monthly totals</option></select>`,
+       <option value="month" ${f.group === 'month' ? 'selected' : ''}>Monthly totals</option>
+       <option value="ot" ${f.group === 'ot' ? 'selected' : ''}>Payroll weeks — regular / overtime</option></select>`,
     `<select class="rptf" data-scope="pay" data-f="detail" title="Melissa: day clock is all payroll needs · Mark & owners: every piano / management / cleaning session too">
        <option value="day" ${!showTl ? 'selected' : ''}>Day clock only (payroll)</option>
        <option value="all" ${showTl ? 'selected' : ''}>+ piano & category sessions</option></select>`,
     showTl ? fSel('pay', 'cat', f.cat, cats, 'All categories / phases') : '',
     `<button class="csvbtn" data-csv="paydays">⬇ CSV — punches</button>`,
     `<button class="csvbtn" data-csv="paytotals">⬇ CSV — totals</button>`,
+    f.group === 'ot' ? `<button class="csvbtn" data-csv="payot">⬇ CSV — payroll weeks (reg / OT)</button>` : '',
     showTl ? `<button class="csvbtn" data-csv="paysessions">⬇ CSV — piano sessions</button>` : '',
   ].filter(Boolean));
   // day rows + grouped totals
   let main;
-  if (f.group === 'day') {
+  const pw = f.group === 'ot' ? payrollWeeks(f) : null;
+  if (pw) {
+    const rangeTxt = f.from && f.to ? `${f.from} → ${f.to}` : f.from ? `from ${f.from}` : f.to ? `through ${f.to}` : 'no date range set';
+    main = `<div class="lite" style="font-size:12px;margin:-4px 0 8px">Pay period <b>${esc(rangeTxt)}</b> · Sunday–Saturday workweeks ·
+        hours are decimal (8h 30m = 8.50). Every week touching the range is counted in full: hours before the range were paid last
+        period and only count toward the 40; hours in the range are regular until the week reaches 40, overtime after that.
+        ${!f.from ? '<b>Set a from date</b> so the week before it is looked back at.' : ''}</div>
+      <table><tr><th>TEAM MEMBER</th><th>WEEK</th><th>BEFORE RANGE<br><small>(already paid)</small></th><th>IN RANGE</th>
+        <th>REGULAR</th><th>OVERTIME</th><th>WEEK TOTAL</th><th>NOTES</th></tr>
+      ${pw.weeks.map(w => `<tr${w.ot ? ' style="font-weight:600"' : ''}><td>${esc(w.who)}</td><td style="white-space:nowrap">${esc(weekSpanLabel(w.sun))}</td>
+        <td>${w.prior ? hDec(w.prior) : '—'}</td><td>${hDec(w.inMins)}</td><td>${hDec(w.reg)}</td>
+        <td${w.ot ? ' style="color:#a33"' : ''}>${w.ot ? hDec(w.ot) : '0.00'}</td><td>${hDec(w.prior + w.inMins + w.after)}</td>
+        <td class="lite" style="font-size:11.5px">${esc(w.notes.join(' · '))}</td></tr>`).join('')
+       || '<tr><td colspan="8" class="empty">No payroll punches in this range yet.</td></tr>'}</table>
+      <h4 class="bfhd">Pay-period totals — regular / overtime</h4>
+      <table><tr><th>TEAM MEMBER</th><th>WEEKS</th><th>REGULAR HOURS</th><th>OVERTIME HOURS</th><th>TOTAL HOURS</th></tr>
+      ${pw.totals.map(t => `<tr><td>${esc(t.who)}</td><td>${t.weeks}</td><td>${hDec(t.reg)}</td>
+        <td${t.ot ? ' style="color:#a33;font-weight:600"' : ''}>${hDec(t.ot)}</td><td>${hDec(t.inMins)}</td></tr>`).join('')
+       || '<tr><td colspan="5" class="empty">—</td></tr>'}</table>
+      <div class="lite" style="font-size:11.5px;margin:6px 0 12px">Utah has no overtime law of its own — the federal FLSA applies: time-and-a-half for
+        every hour over 40 in a fixed Sunday–Saturday workweek, each week on its own (never averaged, never cut at a month end), and the
+        overtime for a week that straddles two pay periods is paid with the period the week <i>ends</i> in — which is what the look-back does.
+        Keep the ranges back-to-back (the next one starts the day after this one ends). Hourly, non-exempt team members only.</div>`;
+    CSV_EXPORTS.payot = () => ['payroll-weeks-regular-overtime.csv',
+      [['Team member', 'Week (Sun–Sat)', 'Week starts', 'Week ends', 'Hours before range (already paid)', 'Hours in range',
+        'Regular hours', 'Overtime hours', 'Week total hours', 'Notes'],
+       ...pw.weeks.map(w => [w.who, weekSpanLabel(w.sun), w.sun, w.satDay, hDec(w.prior), hDec(w.inMins), hDec(w.reg), hDec(w.ot),
+         hDec(w.prior + w.inMins + w.after), w.notes.join(' · ')]),
+       [], ['PAY-PERIOD TOTALS', `${f.from || ''} → ${f.to || ''}`, '', '', '', 'Hours in range', 'Regular hours', 'Overtime hours', 'Total hours', ''],
+       ...pw.totals.map(t => [t.who, '', '', '', '', hDec(t.inMins), hDec(t.reg), hDec(t.ot), hDec(t.inMins), `${t.weeks} week${t.weeks === 1 ? '' : 's'}`])]];
+  } else if (f.group === 'day') {
     main = `<table><tr><th>DATE</th><th>TEAM MEMBER</th><th>CLOCK IN</th><th>CLOCK OUT</th><th>HOURS</th><th>NOTE</th></tr>
       ${rows.map(r => `<tr${/auto|mi from store/.test(r.note) ? ' style="color:#a33"' : ''}>
         <td>${esc(r.date)}</td><td>${esc(r.tech)}</td><td>${fmtT(r.start)}</td>
