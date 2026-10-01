@@ -1121,6 +1121,13 @@ function applyPending() {
       if ((p.keytopStatus || '') === edit.keytopStatus) delete edit.keytopStatus;
       else { p.keytopStatus = edit.keytopStatus; stillPending = true; }
     }
+    // plate condition (Jacob 10/1, 100126mower24): BEFORE/AFTER tapped on a
+    // rack slat went blank again on the next poll (the relay had queued the
+    // write), so it looked dead on phones and got tapped again and again
+    if ('plateStatus' in edit) {
+      if ((p.plateStatus || '') === edit.plateStatus) delete edit.plateStatus;
+      else { p.plateStatus = edit.plateStatus; stillPending = true; }
+    }
     if (!stillPending) pendingEdits.delete(row);
   }
   persistEdits();
@@ -6191,6 +6198,7 @@ function wirePop(p) {
       const j = await r.json();
       if (j.error) throw new Error(j.error);
       p.plateStatus = plsel.value;
+      notePlateEdit(p, plsel.value);
       plateBackHome(p, plsel.value);
       msg.textContent = (j.freedSlats && j.freedSlats.length) ? '✓ saved — slat ' + j.freedSlats.join(', ') + ' freed' : '✓ saved';
       setTimeout(() => { if (msg.isConnected) msg.textContent = ''; }, 1800);
@@ -8280,7 +8288,7 @@ function openPlateTempModal(p) {
             plateStatus: cond, ...authFields()})});
       }
       const px = S.data.pianos.find(x => x.serial === serial || String(x.serial || '').replace(/\D/g, '') === serial.replace(/\D/g, ''));
-      if (px) { px.plateTemp = loc; if (cond) px.plateStatus = cond; }
+      if (px) { px.plateTemp = loc; if (cond) { px.plateStatus = cond; notePlateEdit(px, cond); } }
       msg.textContent = `✓ Saved — ${j.summary || serial}'s plate spot is on the card.`;
       setTimeout(() => ov.remove(), 1800);
     } catch (e) { msg.textContent = '✗ ' + e.message; }
@@ -10089,19 +10097,32 @@ function openSlotPop(id) {
       if (pc) {
         const px = S.data.pianos.find(x => x.row === +pc.dataset.row);
         const msg = pop.querySelector(`.pcmsg[data-row="${pc.dataset.row}"]`);
+        if (pop.dataset.plateBusy === String(px.row)) return;   // a save is already in flight — one tap is enough
         const wa = writeAuth();
         if (!wa.ok) { if (msg) { msg.className = 'pcmsg phmsg err'; msg.textContent = 'sign in first'; } return; }
-        if (msg) msg.textContent = '…';
+        pop.dataset.plateBusy = String(px.row);
+        pop.querySelectorAll(`.platecond[data-row="${px.row}"]`).forEach(b => { b.disabled = true; b.style.opacity = '.6'; });
+        if (msg) { msg.className = 'pcmsg phmsg'; msg.textContent = 'saving…'; }
+        const val = pc.dataset.val;
         bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
           headers: {'content-type': 'text/plain;charset=utf-8'},
           body: JSON.stringify({pin: wa.pin, action: 'setplatestatus', serial: px.serial, row: px.row,
-            plateStatus: pc.dataset.val, ...authFields()})})
+            plateStatus: val, ...authFields()})}, 60000)
           .then(r => r.json()).then(j => {
             if (j.error) throw new Error(j.error);
-            px.plateStatus = pc.dataset.val;
-            plateBackHome(px, pc.dataset.val);
+            px.plateStatus = val;
+            notePlateEdit(px, val);          // survives the next data poll (the relay may still be applying it)
+            plateBackHome(px, val);
+            delete pop.dataset.plateBusy;
             openSlotPop(id);   // repaint with the new selection
-          }).catch(e => { if (msg) { msg.className = 'pcmsg phmsg err'; msg.textContent = '✗ ' + e.message; } });
+            renderMap();       // rack lettering colour follows
+            const m2 = pop.querySelector(`.pcmsg[data-row="${px.row}"]`);
+            if (m2) { m2.className = 'pcmsg phmsg ok'; m2.textContent = j.queued ? '✓ saved (applying)' : '✓ saved'; setTimeout(() => { if (m2.isConnected) m2.textContent = ''; }, 2500); }
+          }).catch(e => {
+            delete pop.dataset.plateBusy;
+            pop.querySelectorAll(`.platecond[data-row="${px.row}"]`).forEach(b => { b.disabled = false; b.style.opacity = ''; });
+            if (msg) { msg.className = 'pcmsg phmsg err'; msg.textContent = '✗ ' + e.message; }
+          });
         return;
       }
       if (ev.target.closest('.addhere')) { pop.hidden = true; openPlateAssignModal(id); } };
@@ -10620,6 +10641,11 @@ function cfSuggest(p, f) {
   if (!g) return '';
   return `<div class="cfsug" data-f="${f}" data-v="${esc(g)}">✨ From the scope notes: <b>${esc(g)}</b>
     <button class="cfsuguse">use</button></div>`;
+}
+// remember a just-saved plate status across data polls (see applyPending)
+function notePlateEdit(p, val) {
+  if (!p || !p.row) return;
+  const e = pendingEdits.get(p.row) || {}; e.plateStatus = val; pendingEdits.set(p.row, e);
 }
 // map-rack lettering colour for a stored plate (on the dark slat tile)
 function plateInkColor(p) {
