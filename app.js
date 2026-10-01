@@ -11417,6 +11417,24 @@ function techName(t) {
   return String(t || '').replace(/<[^>]*>/g, '').replace(/\([^)]*\)/g, ' ')
     .trim().replace(/\s+/g, ' ');
 }
+/* Names on the clock, one spelling each (Walter 10/1): the missed-punch
+ * forms offer them as you type and snap what was typed to the known
+ * spelling — "mckinly" would otherwise file a punch under a brand-new
+ * person, and payroll would never add the two up. */
+function adjKnownNames() {
+  return [...new Set([...(S.payRows || []).map(r => r.tech), ...(S.tlRows || []).map(r => r.tech)]
+    .map(techName).filter(t => t && !/^claude\b/i.test(t)))].sort((a, b) => a.localeCompare(b));
+}
+function adjCanonName(typed) {
+  const key = x => String(x || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  const k = key(typed);
+  if (!k) return null;
+  const names = adjKnownNames();
+  const exact = names.find(n => key(n) === k);
+  if (exact) return exact;
+  const first = names.filter(n => key(n).split(' ')[0] === k);   // a lone first name, if it's only one person's
+  return first.length === 1 ? first[0] : null;
+}
 
 function adjAutoClosed(r) {
   const n = String(r.note || '');
@@ -11969,7 +11987,7 @@ function clockAdjustTable() {
     // at the top of the report (Mark 9/8): a forgotten day punch is the most
     // common fix and shouldn't need a scroll past every table to reach
     payAdd = `<div class="rfbar adjaddbar" data-clock="pay"><b>+ missed day punch:</b>
-        <input type="text" class="a-tech" placeholder="team member name">
+        <input type="text" class="a-tech" placeholder="team member name" list="adjtechs" autocomplete="off">
         <span class="rfd">in <input type="datetime-local" class="a-start"></span>
         <span class="rfd">out <input type="datetime-local" class="a-end"></span>
         <button class="csvbtn adjaddbtn">Add</button><span class="adjmsg phmsg"></span></div>`;
@@ -11990,14 +12008,15 @@ function clockAdjustTable() {
     // top of the report too (Mark 9/8, request 090826hales38): it used to be
     // the very last thing on the page
     tlAdd = `<div class="rfbar adjaddbar" data-clock="piano"><b>+ missed piano session:</b>
-        <input type="text" class="a-tech" placeholder="tech name">
+        <input type="text" class="a-tech" placeholder="tech name" list="adjtechs" autocomplete="off">
         <input type="text" class="a-serial" placeholder="piano serial · or TIDY / MGMT">
         <input type="text" class="a-phase" placeholder="phase">
         <span class="rfd">in <input type="datetime-local" class="a-start"></span>
         <span class="rfd">out <input type="datetime-local" class="a-end"></span>
         <button class="csvbtn adjaddbtn">Add</button><span class="adjmsg phmsg"></span></div>`;
   }
-  return payAdd + tlAdd + fixes + pay + tl;
+  const techList = (payAdd || tlAdd) ? `<datalist id="adjtechs">${adjWhos.map(w => `<option value="${esc(w)}">`).join('')}</datalist>` : '';
+  return techList + payAdd + tlAdd + fixes + pay + tl;
 }
 
 /* 📦 Delivered-archive report — same rows as the old sidebar view (click a
@@ -12815,9 +12834,24 @@ function renderReport() {
     const bar = b.closest('.adjaddbar'), clock = bar.dataset.clock;
     const val = c => { const el = bar.querySelector(c); return el ? el.value.trim() : ''; };
     const msg = bar.querySelector('.adjmsg');
-    const tech = val('.a-tech'), start = val('.a-start'), end = val('.a-end');
+    let tech = val('.a-tech');
+    const start = val('.a-start'), end = val('.a-end');
     if (!tech || !start) { msg.textContent = 'name and start time required'; return; }
     if (clock === 'piano' && !val('.a-serial')) { msg.textContent = 'piano serial required'; return; }
+    // snap to the known spelling ("mckinly" → "McKinly …"); a name nobody has
+    // clocked under takes a second press, so a typo can't make a new person
+    const canon = adjCanonName(tech);
+    if (canon) {
+      tech = canon;
+      const inp = bar.querySelector('.a-tech'); if (inp) inp.value = canon;
+      delete bar.dataset.unknownok;
+    } else if (bar.dataset.unknownok !== tech) {
+      msg.textContent = `"${tech}" isn't a name on the clock — pick it from the list as you type, or press Add again to file it under this new name`;
+      msg.classList.add('adjerr');
+      bar.dataset.unknownok = tech;
+      return;
+    }
+    delete bar.dataset.unknownok;
     if (adjExpired()) {
       adjStashAndRenew({add: {clock, tech, serial: val('.a-serial'), phase: val('.a-phase'), start, end, fromFix: bar.dataset.fromfix || null}});
       return;
