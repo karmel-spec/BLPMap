@@ -3243,8 +3243,14 @@ function renderMap() {
       if (plates.length) {
         const pt = '⚙ ' + plates.map(px => px.serial || '?').join(' · ');
         const pfs2 = Math.max(7, Math.min(sl.h * 0.5, ((sl.w - numW - 8) * 1.7) / Math.max(pt.length, 4)));
+        // lettering coloured by plate condition (Jacob 10/1, 100126mower22):
+        // green = refinished (storage AFTER / back in piano), red = awaiting
+        // refinishing (storage BEFORE / removed), lilac = out at Curtis Harper
         s += `<text x="${sl.x + numW + (sl.w - numW) / 2}" y="${sl.y + sl.h / 2 + pfs2 * 0.36}"
-              text-anchor="middle" class="phnum" font-size="${pfs2}">${esc(pt)}</text>`;
+              text-anchor="middle" class="phnum" font-size="${pfs2}">⚙ ${plates.map((px, i) => {
+                const c = plateInkColor(px);
+                return (i ? ' · ' : '') + `<tspan${c ? ` style="fill:${c}"` : ''}>${esc(px.serial || '?')}</tspan>`;
+              }).join('')}</text>`;
       }
       if (n) {
         const availW = sl.w - numW - 10;
@@ -10062,8 +10068,9 @@ function openSlotPop(id) {
     };
     pop.innerHTML = `<span class="x">✕</span>
       <span class="tag">PLATE SPOT ${esc(id)}</span>
-      ${holders.length ? `<h3>⚙️ Plate stored here</h3>` + holders.map(x =>
+      ${holders.length ? `<h3>⚙️ Plate stored here</h3><div class="lite" style="font-size:11px;margin:-4px 0 6px">On the map: <b style="color:#2f7d4f">green</b> = refinished · <b style="color:#a03030">red</b> = awaiting refinishing</div>` + holders.map(x =>
           `<div class="row" style="display:block">• <b>${esc(x.summary || x.serial)}</b>${x.location ? ' — piano at spot ' + esc(x.location) : ''}
+             ${/after|back in/i.test(x.plateStatus || '') ? ' <b style="color:#2f7d4f">✓ refinished</b>' : /before|removed/i.test(x.plateStatus || '') ? ' <b style="color:#a03030">awaiting refinishing</b>' : ''}
              <i class="platedel" data-row="${x.row}" style="cursor:pointer;color:#9e2020">✕ remove</i><br>
              <span class="lite" style="font-size:11px">plate condition:</span>${condBtns(x)}
              <span class="pcmsg phmsg" data-row="${x.row}" style="font-size:11px"></span></div>`).join('')
@@ -10613,6 +10620,14 @@ function cfSuggest(p, f) {
   if (!g) return '';
   return `<div class="cfsug" data-f="${f}" data-v="${esc(g)}">✨ From the scope notes: <b>${esc(g)}</b>
     <button class="cfsuguse">use</button></div>`;
+}
+// map-rack lettering colour for a stored plate (on the dark slat tile)
+function plateInkColor(p) {
+  const st = String((p && p.plateStatus) || '').trim();
+  if (/after|back in/i.test(st)) return '#6fe09a';          // refinished
+  if (/before|removed/i.test(st)) return '#ff7b7b';         // awaiting refinishing
+  if (/curtis/i.test(st)) return '#d2b4f5';                 // out at the plating shop
+  return '';
 }
 function plateBadge(v) {
   v = (v || '').trim();
