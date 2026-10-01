@@ -11122,8 +11122,11 @@ function payTimeTable() {
   if (f.detail === undefined) f.detail = seesDetail ? 'all' : 'day';
   if (f.cat === undefined) f.cat = '';
   const techs = [...new Set([...S.payRows.map(r => techName(r.tech)), ...S.tlRows.map(r => techName(r.tech))].filter(Boolean))].sort();
+  // chronological, not sheet order (Melissa 10/1, 100126terry71): punches
+  // added later through the adjustments form sit at the bottom of the sheet
   const rows = unvoided(S.payRows).filter(r =>
-    (!f.who || techName(r.tech) === f.who) && inRange(r.date, f));
+    (!f.who || techName(r.tech) === f.who) && inRange(r.date, f))
+    .sort((a, b) => a.date.localeCompare(b.date) || new Date(a.start) - new Date(b.start));
   // Work Clock sessions, same member + range (+ category when chosen)
   const tlAll = unvoided(S.tlRows).filter(r =>
     (!f.who || techName(r.tech) === f.who) && inRange(denverDay(r.start), f));
