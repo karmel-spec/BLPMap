@@ -10973,7 +10973,7 @@ function clockFeed() {
     // j.full guards against an older feed answering without row numbers
     if (!j || !j.ok || !j.full || !Array.isArray(j.pay) || !Array.isArray(j.tl)) throw new Error((j && j.error) || 'clock feed down');
     const payCut = Date.now() - 190 * 86400000;   // the windows the bridge calls used
-    return {pay: j.pay.filter(r => new Date(r.start) >= payCut), tl: j.tl};
+    return {pay: j.pay.filter(r => new Date(r.start) >= payCut), tl: j.tl, fixes: Array.isArray(j.fixes) ? j.fixes : null};
   })().finally(() => { clockFeedP = null; });
   return clockFeedP;
 }
@@ -11220,10 +11220,16 @@ function jobCostTable() {
 
 /* ---------- 🛠 time clock adjustments (permission-gated edit surface) ------ */
 async function loadClockFixes() {
-  try {
-    const r = await fetch(BRIDGE_URL + '?fn=clockfixes', {redirect: 'follow'});
-    S.fixRows = (await r.json()).rows || [];
-  } catch (e) { S.fixRows = []; }
+  try {   // fast feed first (see loadPayroll) — the bridge's fn=clockfixes was the last 7–25 s wait on the adjustments report
+    const f = await clockFeed();
+    if (!f.fixes) throw new Error('feed has no fix list');
+    S.fixRows = f.fixes;
+  } catch (e0) {
+    try {
+      const r = await fetch(BRIDGE_URL + '?fn=clockfixes', {redirect: 'follow'});
+      S.fixRows = (await r.json()).rows || [];
+    } catch (e) { S.fixRows = []; }
+  }
   renderReport();
 }
 function toLocalInput(iso) {
@@ -11682,8 +11688,7 @@ function cfxToast(msg) {
 }
 function clockAdjustTable() {
   if (!S.payRows || !S.tlRows) return '<div class="empty">Loading clocks…</div>';
-  // the fix-request list still comes from the bridge (fn=clockfixes, ~7 s);
-  // the punch tables no longer wait for it — the list fills in when it lands
+  // the punch tables don't wait for the fix-request list — it fills in when it lands
   const fixRows = S.fixRows || [];
   // Mark (lead manager) can edit shop-side DAY punches too — the bridge
   // enforces the lane (never admins' rows, never his own)
