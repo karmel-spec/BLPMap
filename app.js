@@ -11421,18 +11421,36 @@ function techName(t) {
  * forms offer them as you type and snap what was typed to the known
  * spelling — "mckinly" would otherwise file a punch under a brand-new
  * person, and payroll would never add the two up. */
+const adjNameKey = x => String(x || '').toLowerCase().replace(/[^a-z]/g, '');
 function adjKnownNames() {
-  return [...new Set([...(S.payRows || []).map(r => r.tech), ...(S.tlRows || []).map(r => r.tech)]
-    .map(techName).filter(t => t && !/^claude\b/i.test(t)))].sort((a, b) => a.localeCompare(b));
+  // one spelling per person: the one their punches carry most often (a
+  // sign-in name, not a one-off typed one — "Mckinly Lopp" ×1 loses to
+  // "McKinly Lopp" ×84), plus the Team roster for anyone who hasn't clocked yet
+  const cnt = {};
+  [...(S.payRows || []), ...(S.tlRows || [])].forEach(r => {
+    const n = techName(r.tech);
+    if (!n || /^claude\b/i.test(n)) return;
+    const k = adjNameKey(n);
+    (cnt[k] = cnt[k] || {}); cnt[k][n] = (cnt[k][n] || 0) + 1;
+  });
+  const best = {};
+  Object.entries(cnt).forEach(([k, v]) => { best[k] = Object.entries(v).sort((a, b) => b[1] - a[1])[0][0]; });
+  let roster = (typeof TEAM !== 'undefined' && TEAM.roster) || null;
+  if (!roster) { try { roster = (JSON.parse(lsGet('blpTeam1') || 'null') || {}).roster || null; } catch (e) {} }
+  ((roster && roster['Current Team']) || []).slice(1).forEach(r => {
+    const full = (String(r[0] || '').trim() + ' ' + String(r[1] || '').trim()).trim().replace(/\s+/g, ' ');
+    const k = adjNameKey(full);
+    if (full && k && !best[k]) best[k] = full;
+  });
+  return Object.values(best).sort((a, b) => a.localeCompare(b));
 }
 function adjCanonName(typed) {
-  const key = x => String(x || '').trim().toLowerCase().replace(/\s+/g, ' ');
-  const k = key(typed);
+  const k = adjNameKey(typed);
   if (!k) return null;
   const names = adjKnownNames();
-  const exact = names.find(n => key(n) === k);
+  const exact = names.find(n => adjNameKey(n) === k);
   if (exact) return exact;
-  const first = names.filter(n => key(n).split(' ')[0] === k);   // a lone first name, if it's only one person's
+  const first = names.filter(n => adjNameKey(n.split(' ')[0]) === k);   // a lone first name, if it's only one person's
   return first.length === 1 ? first[0] : null;
 }
 
@@ -12015,7 +12033,7 @@ function clockAdjustTable() {
         <span class="rfd">out <input type="datetime-local" class="a-end"></span>
         <button class="csvbtn adjaddbtn">Add</button><span class="adjmsg phmsg"></span></div>`;
   }
-  const techList = (payAdd || tlAdd) ? `<datalist id="adjtechs">${adjWhos.map(w => `<option value="${esc(w)}">`).join('')}</datalist>` : '';
+  const techList = (payAdd || tlAdd) ? `<datalist id="adjtechs">${adjKnownNames().map(w => `<option value="${esc(w)}">`).join('')}</datalist>` : '';
   return techList + payAdd + tlAdd + fixes + pay + tl;
 }
 
