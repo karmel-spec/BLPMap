@@ -845,6 +845,7 @@ async function setKeytopStatusBridge(p, val) {
   const j = await r.json();
   if (j.error) throw new Error(j.error);
   p.keytopStatus = val;
+  const ke = pendingEdits.get(p.row) || {}; ke.keytopStatus = val; pendingEdits.set(p.row, ke);
 }
 // after a drag: In Progress rows keep their status; every "In Key Queue"
 // row (and any Evaluate row dragged above one) gets its new #n
@@ -1113,6 +1114,12 @@ function applyPending() {
     if ('checkBack' in edit) {
       if ((p.checkBack || '') === edit.checkBack) delete edit.checkBack;
       else { p.checkBack = edit.checkBack; stillPending = true; }
+    }
+    // keytop status (Mark 10/1): "Done" flipped back to "In Progress" on the
+    // next 2.5-min poll because the 2-min /api/data copy hadn't caught up
+    if ('keytopStatus' in edit) {
+      if ((p.keytopStatus || '') === edit.keytopStatus) delete edit.keytopStatus;
+      else { p.keytopStatus = edit.keytopStatus; stillPending = true; }
     }
     if (!stillPending) pendingEdits.delete(row);
   }
@@ -6249,6 +6256,7 @@ function wirePop(p) {
         const j = await r.json();
         if (j.error) throw new Error(j.error);
         p.keytopStatus = val;
+        const ke = pendingEdits.get(p.row) || {}; ke.keytopStatus = val; pendingEdits.set(p.row, ke);
         msg.textContent = '✓ saved';
         setTimeout(() => { if (msg.isConnected) msg.textContent = ''; }, 1800);
       } catch (e) { msg.textContent = '✗ ' + e.message; }
