@@ -6202,6 +6202,8 @@ function wirePop(p) {
       plateBackHome(p, plsel.value);
       msg.textContent = (j.freedSlats && j.freedSlats.length) ? '✓ saved — slat ' + j.freedSlats.join(', ') + ' freed' : '✓ saved';
       setTimeout(() => { if (msg.isConnected) msg.textContent = ''; }, 1800);
+      // into storage → ask where the plate went (slat or wall) — Jacob 10/1
+      if (/^Plate storage — (BEFORE|AFTER)$/.test(plsel.value)) openPlateWhereModal(p, plsel.value);
     } catch (e) { msg.textContent = '✗ ' + e.message; }
     plsel.disabled = false;
   };
@@ -8207,6 +8209,65 @@ function attachSerialSuggest(inp, onPick) {
 
 /* ＋ on a plate rack slat (1p-18p): the plate is assigned by the piano's
    serial — the piano itself stays wherever it is on the floor */
+/* Where is the plate? (Jacob 10/1, 100126mower24): choosing BEFORE or AFTER
+ * storage on the card asks where the plate went — a rack slat (1p–18p, taken
+ * ones show whose plate is there) or WALL for plates that don't fit the rack
+ * (rides the PLATE TEMP SPOT cell). A slat pick clears a wall note and vice versa. */
+function rackSlatIds() {
+  const ids = [];
+  for (const f of ((S.map && S.map.floors) || [])) for (const sl of (f.slots || [])) if (/^\d+p$/.test(sl.id)) ids.push(sl.id);
+  return [...new Set(ids)].sort((a, b) => parseInt(a) - parseInt(b));
+}
+function openPlateWhereModal(p, cond) {
+  const slats = rackSlatIds();
+  const holders = id => S.data.pianos.filter(x => x.active && x.row !== p.row && cabTokens(x).includes(id));
+  const mine = cabTokens(p).find(t => /^\d+p$/.test(t)) || '';
+  const onWall = /^wall/i.test(p.plateTemp || '');
+  const ov = modalShell('platewheremodal', `
+    <span class="x">✕</span>
+    <h3>⚙️ Where is the plate?</h3>
+    <p class="pd"><b>${esc(pianoLabel(p))}</b> — ${/after/i.test(cond) ? 'AFTER ✨ refinished' : 'BEFORE refinishing'}.
+      Tap its rack slat, or WALL when it doesn’t fit the rack.</p>
+    <div class="pwgrid">${slats.map(id => { const h = holders(id);
+      return `<button class="trk pwslat ${mine === id ? 'on' : ''} ${h.length ? 'taken' : ''}" data-id="${id}"
+        title="${h.length ? 'holds ' + esc(h.map(x => x.serial).join(', ')) : 'free'}">${id}${h.length ? `<small>${esc(h.map(x => x.serial).join(', '))}</small>` : ''}</button>`; }).join('')}</div>
+    <div style="display:flex;gap:8px;margin:10px 0 4px;flex-wrap:wrap">
+      <button class="trk pwwall ${onWall ? 'on' : ''}" title="leaning on the wall — doesn’t fit the rack">🧱 WALL</button>
+      <button class="trk pwskip">skip for now</button></div>
+    <div class="tmmsg"></div>`);
+  const msg = ov.querySelector('.tmmsg');
+  const close = () => { ov.hidden = true; };
+  const busy = on => ov.querySelectorAll('button').forEach(b => { b.disabled = on; });
+  const refreshCard = () => { renderMap(); if (!$('#pop').hidden) openPop(p.row, S.popAnchor, true); };
+  const setTemp = async val => {
+    const wa = writeAuth(); if (!wa.ok) throw new Error('Sign in first.');
+    const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+      headers: {'content-type': 'text/plain;charset=utf-8'},
+      body: JSON.stringify({pin: wa.pin, action: 'setplatetemp', serial: p.serial, row: p.row, value: val, ...authFields()})});
+    const j = await r.json(); if (j.error) throw new Error(j.error);
+    p.plateTemp = val;
+  };
+  ov.querySelectorAll('.pwslat').forEach(b => b.onclick = async () => {
+    const id = b.dataset.id;
+    busy(true); msg.className = 'tmmsg'; msg.textContent = 'Saving…';
+    const list = cabTokens(p).filter(t => !/^\d+p$/i.test(t)); list.push(id);   // one slat per plate
+    const okSave = await saveCabinetry(p, list, {querySelector: () => msg});
+    if (okSave && (p.plateTemp || '').trim()) { try { await setTemp(''); } catch (e) { /* slat saved; the wall note clears itself next time */ } }
+    busy(false);
+    if (okSave) { refreshCard(); msg.className = 'tmmsg ok'; msg.textContent = `✓ plate at ${id}`; setTimeout(close, 900); }
+  });
+  ov.querySelector('.pwwall').onclick = async () => {
+    busy(true); msg.className = 'tmmsg'; msg.textContent = 'Saving…';
+    try {
+      await setTemp('Wall');
+      if (cabTokens(p).some(t => /^\d+p$/i.test(t))) await saveCabinetry(p, cabTokens(p).filter(t => !/^\d+p$/i.test(t)), {querySelector: () => null});
+      refreshCard();
+      msg.className = 'tmmsg ok'; msg.textContent = '✓ plate on the wall'; setTimeout(close, 900);
+    } catch (e) { msg.className = 'tmmsg err'; msg.textContent = '✗ ' + e.message; }
+    busy(false);
+  };
+  ov.querySelector('.pwskip').onclick = close;
+}
 function openPlateAssignModal(slotId) {
   serialDatalist();
   const ov = modalShell('platemodal', `

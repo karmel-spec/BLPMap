@@ -2212,3 +2212,11 @@ body.qdragging{user-select:none}
 .clqcbox{margin-top:10px;cursor:auto}
 .clqcbox.ok{background:#eef6ef;border:1.5px solid #7fc48f;border-radius:10px;padding:8px 11px;font-size:12.5px;font-weight:700;color:#2f5d3a}
 .clqcbox .clqcgo small{font-size:11px}
+
+/* "Where is the plate?" — rack slat picker + WALL (Jacob 10/1) */
+.pwgrid{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-top:6px}
+.pwgrid .pwslat{border-radius:8px;padding:6px 2px;font-size:12px;line-height:1.15}
+.pwgrid .pwslat small{display:block;font-size:9px;font-weight:600;opacity:.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pwgrid .pwslat.taken{border-style:dashed}
+.pwgrid .pwslat.on small{opacity:.9}
+@media (max-width:420px){.pwgrid{grid-template-columns:repeat(4,1fr)}}
