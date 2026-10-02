@@ -178,7 +178,14 @@ function parsePianos(text) {
     if (['SHOPIFY', 'ADMIN', 'WEB'].includes(summary.toUpperCase())
         || ['ADMIN', 'LOCATION / STATUS'].includes(col(20).toUpperCase())
         || col(21).includes('Arrival Date')) continue;
-    const status = col(18), loc = col(20), ol = col(1).toLowerCase();
+    const status = col(18), ol = col(1).toLowerCase();
+    let loc = col(20);
+    // the CURRENTLY RENTED section is the truth (Melissa 10/1, 100126terry76):
+    // a row moved there is off the premises even if column U still holds its
+    // old spot — show it in the RENTED zone, not on that spot. The spot text
+    // is kept in the label so it reads "Rented — was at 136" on the card and
+    // column U still has the number for when the piano comes back.
+    if (/^currently rented/i.test(section) && !/rent/i.test(loc)) loc = 'Rented' + (loc ? ' — was at ' + loc : '');
     // keyboard stands are inventory, not pianos — keep them off the map
     if (/\bstand\b/i.test(summary) || serial.trim().toLowerCase() === 'stand') continue;
     // section-header/status-note rows with no serial (room labels, "go to X
