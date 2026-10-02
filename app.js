@@ -6024,6 +6024,7 @@ function popHTML(p) {
     ${p.serial ? '' : tracker}
     ${phaser}
     ${tasksBox(p)}
+    ${wbCardRow(p)}
     ${(p.phase || '').startsWith('Waiting') ? `<div class="row waitnote">Waiting on
         <b>${esc(p.waitNote || p.phase.replace('Waiting on ', ''))}</b>
         ${p.checkBack ? `<span class="wncb">· check back <b class="snzcur">${esc(p.checkBack)}</b></span>` : ''}
@@ -13997,10 +13998,46 @@ async function wbPost(body) {
   const j = await r.json();
   if (!j.ok) throw new Error(j.error || ('HTTP ' + r.status));
 }
+/* Tie a part order to a piano (Hunter 10/1, 100126rawlings08): the Parts
+ * column takes an optional serial; it's stored in the item's note as
+ * "for <piano> #<serial>", which the Shop App shows as plain text and this
+ * board shows as a tap-to-open chip. Older items that typed the serial into
+ * the text ("… (for Clarendon 10568)") are recognised the same way. */
+function wbTiedPiano(r) {
+  const m = /#(\S+)/.exec(String(r.note || ''));
+  const bySn = sn => S.data && S.data.pianos.find(p => p.active && String(p.serial || '').toLowerCase() === String(sn).toLowerCase());
+  if (m) { const p = bySn(m[1]); if (p) return p; }
+  for (const tok of String(r.item || '').split(/[^A-Za-z0-9]+/)) {
+    if (tok.length >= 4 && /\d/.test(tok)) { const p = bySn(tok); if (p) return p; }
+  }
+  return null;
+}
+function wbTieChip(r) {
+  const p = wbTiedPiano(r);
+  if (!p) return '';
+  return `<button class="wbpiano" data-row="${p.row}" title="open this piano's card">🎹 ${esc(pianoName(p))} <small>#${esc(p.serial)}</small></button>`;
+}
+function wbCardRow(p) {
+  if (!p.serial) return '';
+  const rows = wbRowsFor(p);
+  if (rows === null) { if (!WB.loading) wbFetch(true); return ''; }
+  if (!rows.length) return '';
+  return `<div class="row" style="display:block"><span>🔩 Parts on the whiteboard</span>
+    ${rows.map(r => `<div class="wbcardrow"><span class="wtxt">${esc(r.item)}</span>
+      <span class="wbstate ${r.ordered ? 'on' : ''}">${r.ordered ? '📦 ordered ' + esc((r.orderedAt || '').split(' · ')[0]) : 'requested ' + esc(r.added || '')}</span></div>`).join('')}</div>`;
+}
+// open whiteboard items tied to one piano — for its card
+function wbRowsFor(p) {
+  if (!WB.rows) return null;
+  return WB.rows.filter(r => !r.arrived && (wbTiedPiano(r) || {}).row === p.row);
+}
 function wbItemHTML(r) {
+  const tied = wbTiedPiano(r);
+  const noteIsTie = tied && /^for\b.*#\S+$/.test(String(r.note || '').trim());
   return `<div class="wbitem ${r.arrived ? 'done' : ''}" data-row="${r.row}">
     <span style="flex:1"><span class="wtxt">${esc(r.item)}</span>
-      ${r.note ? `<span class="wnote">${esc(r.note)}</span>` : ''}
+      ${r.note && !noteIsTie ? `<span class="wnote">${esc(r.note)}</span>` : ''}
+      ${tied ? `<span class="wnote">${wbTieChip(r)}</span>` : ''}
       <span class="wmeta">${esc(r.by)}${r.added ? ' · ' + esc(r.added) : ''}</span></span>
     <span style="display:flex;gap:5px;flex-direction:column;align-items:flex-end">
       <button class="tpillw ${r.ordered ? 'on' : ''}" data-row="${r.row}" data-act="ordered" data-on="${r.ordered ? '1' : ''}"
@@ -14019,6 +14056,7 @@ function wbBoardHTML() {
       const arrived = inCol.filter(r => r.arrived);
       return `<div class="wbcol"><h3>${esc(col)}${note ? `<small>${esc(note)}</small>` : ''}</h3>
         <div class="wbadd"><input maxlength="200" placeholder="what do we need?" data-col="${esc(col)}">
+          ${col === 'Parts' ? `<input class="wbfor" maxlength="20" placeholder="for piano (serial)…" data-col="${esc(col)}" title="optional — ties this order to a piano">` : ''}
           <button data-col="${esc(col)}">+ add</button></div>
         ${open.map(wbItemHTML).join('') || `<div class="wbnone">nothing on the board</div>`}
         ${ordered.length ? `<div class="wbsect">📦 Ordered — waiting to arrive</div>` + ordered.map(wbItemHTML).join('') : ''}
@@ -14029,15 +14067,29 @@ function wbBoardHTML() {
 }
 function wbWire(v) {
   const rerender = renderWhiteboard, refetch = () => wbFetch(true);
+  v.querySelectorAll('.wbfor').forEach(i => attachSerialSuggest(i));
+  v.querySelectorAll('.wbpiano').forEach(c => c.onclick = ev => {
+    ev.stopPropagation();
+    const p = S.data.pianos.find(x => x.row === +c.dataset.row);
+    if (p) { switchView('map'); focusPiano(p); openPop(p.row, S.popAnchor, true); }
+  });
   v.querySelectorAll('.wbadd button').forEach(b => b.onclick = async () => {
-    const inp = v.querySelector(`.wbadd input[data-col="${b.dataset.col}"]`);
+    const inp = v.querySelector(`.wbadd input[data-col="${b.dataset.col}"]:not(.wbfor)`);
     const item = inp.value.trim(); if (!item) { inp.focus(); return; }
+    const forInp = v.querySelector(`.wbfor[data-col="${b.dataset.col}"]`);
+    const sn = forInp ? forInp.value.trim().split(/\s/)[0] : '';
+    let note = '';
+    if (sn) {
+      const tp = S.data.pianos.find(x => x.active && String(x.serial || '').toLowerCase() === sn.toLowerCase());
+      if (!tp) { const m = v.querySelector('.wbmsg'); if (m) { m.className = 'wbmsg err'; m.textContent = `✗ No active piano with serial ${sn} — pick it from the list as you type, or clear the box.`; } forInp.focus(); return; }
+      note = `for ${pianoName(tp)} #${tp.serial}`;
+    }
     b.disabled = true;
     try {
-      await wbPost({action: 'add', column: b.dataset.col, item});
-      WB.rows.push({row: 0, column: b.dataset.col, item, note: '', by: wbWho(),
+      await wbPost({action: 'add', column: b.dataset.col, item, note});
+      WB.rows.push({row: 0, column: b.dataset.col, item, note, by: wbWho(),
         added: new Date().toLocaleDateString('en-US'), ordered: false, orderedAt: '', arrived: false, arrivedAt: ''});
-      inp.value = ''; rerender(); refetch();
+      inp.value = ''; if (forInp) forInp.value = ''; rerender(); refetch();
     } catch (e) { const m = v.querySelector('.wbmsg'); if (m) { m.className = 'wbmsg err'; m.textContent = '✗ ' + (e.message || e); } b.disabled = false; }
   });
   v.querySelectorAll('.tpillw').forEach(btn => btn.onclick = async ev => {
