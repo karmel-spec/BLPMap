@@ -10153,7 +10153,7 @@ function openSlotPop(id) {
     pop.innerHTML = `<span class="x">✕</span>
       <span class="tag">PLATE SPOT ${esc(id)}</span>
       ${holders.length ? `<h3>⚙️ ${holders.length === 1 ? esc(plateHeadline(holders[0])) : holders.length + ' plates stored here'}</h3><div class="lite" style="font-size:11px;margin:-4px 0 6px">On the map: <b style="color:#2f7d4f">green</b> = refinished · <b style="color:#a03030">red</b> = awaiting refinishing</div>` + holders.map(x =>
-          `<div class="row" style="display:block">• <b>${esc(plateIdLine(x))}</b>${x.location ? ' — piano at spot ' + esc(x.location) : ''}
+          `<div class="row" style="display:block">${holders.length > 1 ? `• <b>${esc(plateIdLine(x))}</b>${x.location ? ' — ' : ''}` : ''}${x.location ? 'Piano at spot ' + esc(x.location) : ''}
              ${/after|back in/i.test(x.plateStatus || '') ? ' <b style="color:#2f7d4f">✓ refinished</b>' : /before|removed/i.test(x.plateStatus || '') ? ' <b style="color:#a03030">awaiting refinishing</b>' : ''}
              <i class="platedel" data-row="${x.row}" style="cursor:pointer;color:#9e2020">✕ remove</i><br>
              <span class="lite" style="font-size:11px">plate condition:</span>${condBtns(x)}
@@ -10720,9 +10720,8 @@ function cfSuggest(p, f) {
 }
 // slat popup wording (Walter 10/2): headline = make + type ("Decker Bros
 // Upright"), line = year · make · #serial — the long summary stays on the card
-function plateHeadline(p) {
-  const t = String(p.type || '').trim();
-  return [String(p.make || '').trim(), t ? t[0].toUpperCase() + t.slice(1).toLowerCase() : ''].filter(Boolean).join(' ')
+function plateHeadline(p) {   // "1888 Decker Bros #20349"
+  return [String(p.year || '').trim(), String(p.make || '').trim(), '#' + String(p.serial || '')].filter(x => x && x !== '#').join(' ')
     || String(p.summary || p.serial || '');
 }
 function plateIdLine(p) {
