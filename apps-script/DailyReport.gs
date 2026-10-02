@@ -50,7 +50,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-01.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-02.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -431,6 +431,27 @@ function scheduleTuning_(req) {
   var techName = String(req.techName || (techCal ? techCal.getName() : techId))
     .replace(/^\d+\s*-\s*/, '').trim();
   var title = 'Tuning: ' + (found.summary || 'piano') + ' #' + req.serial;
+  // one tuning per piano at a time (Walter 10/2): if this serial already has
+  // an upcoming Tuning event on the master calendar, hand that back instead
+  // of booking a second slot (a retried request double-booked 76197 on 10/1).
+  // force:true skips the check (a deliberate second tuning).
+  if (!req.force && !req.dryrun) {
+    try {
+      var exist = master.getEvents(new Date(), new Date(Date.now() + 42 * 86400000), {search: '#' + req.serial});
+      var hit = null;
+      for (var xe = 0; xe < exist.length; xe++) {
+        var xt = exist[xe].getTitle();
+        if (xt.indexOf('Tuning') === 0 && xt.indexOf('#' + req.serial) >= 0 && (!hit || exist[xe].getStartTime() < hit.getStartTime())) hit = exist[xe];
+      }
+      if (hit) {
+        var hs = hit.getStartTime(), hm = /—\s*([^—]+)$/.exec(hit.getTitle());
+        return {ok: true, scheduled: true, already: true, tech: hm ? hm[1].trim() : techName,
+                date: Utilities.formatDate(hs, tz, 'EEE, MMM d'), iso: Utilities.formatDate(hs, tz, 'yyyy-MM-dd'),
+                hhmm: Utilities.formatDate(hs, tz, 'HH:mm'), time: Utilities.formatDate(hs, tz, 'h:mm a'),
+                summary: found.summary, title: title};
+      }
+    } catch (eX) { /* calendar read hiccup — book as before */ }
+  }
   var slot = techId === TUNING_CAL ? korbanSlot_(searchCal, tz) : openGap_(searchCal, tz, techName);
   if (!slot) return {error: 'no open slot found on ' + techName + "'s calendar in the next 6 weeks"};
   var desc = 'Requested via BLP Store Map ('
@@ -463,10 +484,13 @@ function scheduleTuning_(req) {
 }
 
 /* cancel upcoming tuning events for a serial across the tuning calendars
-   (master, legacy master, Korban's own) — {serial, dryrun?} */
+   (master, legacy master, Korban's own) — {serial, dryrun?, date?}
+   date (yyyy-MM-dd, Denver) limits it to that day's event — to drop ONE of
+   two bookings (Walter 10/2). */
 function deleteTuning_(req) {
   var serial = String(req.serial || '').trim();
   if (!serial) return {error: 'serial required'};
+  var onlyDay = String(req.date || '').trim();
   var cals = [MASTER_TUNING_CAL, 'pianotuning.blp@gmail.com', TUNING_CAL];
   var now = new Date();
   var horizon = new Date(now.getTime() + 90 * 86400000);
@@ -478,6 +502,7 @@ function deleteTuning_(req) {
     for (var k = 0; k < evs.length; k++) {
       var t = evs[k].getTitle();
       if (t.indexOf('Tuning') !== 0 || t.indexOf(serial) < 0) continue;
+      if (onlyDay && Utilities.formatDate(evs[k].getStartTime(), 'America/Denver', 'yyyy-MM-dd') !== onlyDay) continue;
       removed.push({cal: cals[i], title: t,
         start: Utilities.formatDate(evs[k].getStartTime(), 'America/Denver', 'EEE MMM d h:mm a'),
         desc: evs[k].getDescription()});
@@ -816,7 +841,7 @@ function doPost(e) {
     }
     if (req.action === 'tune') {
       var t = scheduleTuning_(req);
-      if (t.scheduled) logAct_(who, 'Tuning scheduled', t.summary || req.serial,
+      if (t.scheduled && !t.already) logAct_(who, 'Tuning scheduled', t.summary || req.serial,
         (t.date || '') + ' ' + (t.time || ''));
       return json_(t);
     }

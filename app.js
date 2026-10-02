@@ -123,11 +123,19 @@ function fetchT(url, opts, ms) {
 // (phase, notes, moves, requests…) were still calling fetch() directly, so
 // when Google served its HTML error page instead of JSON the tech saw a raw
 // "Unexpected token '<'" instead of a retry and a plain "did NOT save" line.
+// Actions that CREATE something (a calendar event, a request row) are never
+// resent on an ambiguous answer (Walter 10/2): Curtis's one tuning request
+// for Steinway 76197 booked Korban twice because the first run succeeded but
+// Google answered with its HTML page, and the retry booked the next free slot.
+const ONE_SHOT_ACTIONS = /^(tune|service|cleaning|timeoff|trainreq|teamreq|suggest|taskcard)$/;
+const ONE_SHOT_MSG = 'Google answered with an error page instead of a result, so this was NOT sent again — it may still have gone through. Check the calendar or list before trying again.';
 async function bridgeFetch(url, opts, budgetMs) {
   // budgetMs (optional): a total deadline for all attempts — the clock
   // punches pass 60 s (Mark 9/15) so a tech is told within a minute instead
   // of ~2½. Other writes keep the default 4 × 25 s.
   const deadline = budgetMs ? Date.now() + budgetMs : Infinity;
+  let oneShot = false;
+  try { oneShot = ONE_SHOT_ACTIONS.test(JSON.parse(opts && opts.body || '{}').action || ''); } catch (e) {}
   // durable-relay branch: whitelisted piano-log writes
   try {
     const body = JSON.parse(opts && opts.body || '{}');
@@ -143,8 +151,9 @@ async function bridgeFetch(url, opts, budgetMs) {
     const remaining = deadline - Date.now();
     if (remaining < 3000) throw new Error('bridge budget exhausted');
     let r;
-    try { r = await fetchT(url, opts, Math.min(25000, remaining)); }
+    try { r = await fetchT(url, opts, Math.min(oneShot ? 40000 : 25000, remaining)); }
     catch (e) {
+      if (oneShot) throw new Error(ONE_SHOT_MSG);   // a timeout is ambiguous too — never book twice
       if (a === 3 || deadline - Date.now() < 4000) throw e;
       await new Promise(res => setTimeout(res, 1000 * (a + 1)));
       continue;
@@ -154,8 +163,12 @@ async function bridgeFetch(url, opts, budgetMs) {
     // hand that to a caller's r.json() ("Unexpected token '<'" popups, 9/3):
     // treat it like a failed attempt and retry
     try { j = await r.clone().json(); }
-    catch (e) { await new Promise(res => setTimeout(res, 1200 * (a + 1))); continue; }
+    catch (e) {
+      if (oneShot) throw new Error(ONE_SHOT_MSG);
+      await new Promise(res => setTimeout(res, 1200 * (a + 1))); continue;
+    }
     if (!(j && j.service && !j.error)) return r;   // real action result
+    if (oneShot) throw new Error(ONE_SHOT_MSG);     // Google misrouted to the ping — same ambiguity
     await new Promise(res => setTimeout(res, 1200 * (a + 1)));
   }
   return new Response(JSON.stringify({error:
@@ -9143,7 +9156,9 @@ async function submitTune(p, ov) {
     }
     if (!j.scheduled) throw new Error(j.error || 'scheduling failed');
     msg.className = 'tmmsg ok';
-    msg.textContent = `✓ Scheduled with ${j.tech || techName}: ${j.date} at ${j.time} — `
+    msg.textContent = j.already
+      ? `Already on the calendar with ${j.tech || techName}: ${j.date} at ${j.time} — nothing new was booked. Cancel that one first if it needs to change.`
+      : `✓ Scheduled with ${j.tech || techName}: ${j.date} at ${j.time} — `
       + `on their calendar and the master tuning calendar.`;
     // reflect immediately: piano turns blue, card gains its scheduled row
     S.data.tunings = S.data.tunings || {upcoming: [], past: []};
