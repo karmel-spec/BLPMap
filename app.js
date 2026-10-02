@@ -5761,7 +5761,7 @@ function popHTML(p) {
     : '';
   const tuner = '';   // tuning now lives in the Request menu
   const photo = p.serial
-    ? `<input type="file" class="photoin" accept="image/*" hidden>
+    ? `<input type="file" class="photoin" accept="image/*" multiple hidden>
        <div class="photomsg"></div>`
     : '';
   const effPh = effectivePhase(p);
@@ -9509,9 +9509,13 @@ function openThumbWizard(p, kind, sess, pop) {
   ov.innerHTML = `<div class="tvbox swbox"><div class="swhint" style="padding:30px;text-align:center">Video saved — opening the camera for its thumbnails…</div></div>`;
   ensureCam().then(render);
 }
+// Tech photos take a whole batch at once (Walter 10/2: CAP alone is 30–40
+// shots) — pick as many as you like from the camera roll; they upload one
+// after another with a running count, and the card says how many landed.
+const TECH_PHOTO_MAX = 60;
 async function uploadPhoto(p, input, pop) {
-  const f = input.files && input.files[0];
-  if (!f) return;
+  const files = [...(input.files || [])].slice(0, TECH_PHOTO_MAX);
+  if (!files.length) return;
   // the card has two 📸 buttons (Media + Shop Progress) — mirror status to
   // every .photomsg so feedback shows next to whichever one was tapped
   const msgNodes = [...pop.querySelectorAll('.photomsg')];
@@ -9522,26 +9526,37 @@ async function uploadPhoto(p, input, pop) {
   popPinned = true;
   const {pin, ok} = writeAuth();
   if (!ok) { msg.className = 'photomsg err'; msg.textContent = 'Sign in with Google (☰ menu) to make changes — actions are logged under your name.'; return; }
-  try {
-    msg.className = 'photomsg'; msg.textContent = 'Preparing photo…';
-    const dataUrl = await downscalePhoto(f, 1800, 0.85);
-    msg.textContent = 'Uploading to the piano’s Tech folder…';
-    const j = await photoPost({pin, action: 'photo', serial: p.serial, row: p.row,
-      stage: effectivePhase(p) || '', mime: 'image/jpeg',
-      data: dataUrl.split(',')[1], ...authFields()});
-    if (j.error === 'unauthorized') {
-      lsDel('blpPin');
-      msg.className = 'photomsg err'; msg.textContent = '✗ Not authorized — sign in again (☰ menu), then retry.';
-    } else if (j.error) {
-      msg.className = 'photomsg err'; msg.textContent = '✗ ' + j.error;
-    } else if (!j.saved) {
-      msg.className = 'photomsg err';
-      msg.textContent = '✗ The photo did not save — try again; if it keeps failing, send a 💡 request with this message.';
-    } else {
-      msg.className = 'photomsg ok'; msg.textContent = `✓ Saved as ${j.name}`;
+  const total = files.length, names = [], failed = [];
+  const stage = effectivePhase(p) || '';
+  for (let i = 0; i < total; i++) {
+    const f = files[i];
+    const n = total > 1 ? ` ${i + 1}/${total}` : '';
+    try {
+      msg.className = 'photomsg'; msg.textContent = `Preparing photo${n}…`;
+      const dataUrl = await downscalePhoto(f, 1800, 0.85);
+      msg.textContent = `Uploading photo${n} to the piano’s Tech folder…${total > 1 ? ' keep this open' : ''}`;
+      const j = await photoPost({pin, action: 'photo', serial: p.serial, row: p.row,
+        stage, mime: 'image/jpeg', data: dataUrl.split(',')[1], ...authFields()});
+      if (j.error === 'unauthorized') {
+        lsDel('blpPin');
+        msg.className = 'photomsg err'; msg.textContent = '✗ Not authorized — sign in again (☰ menu), then retry.';
+        input.value = '';
+        return;
+      }
+      if (j.error) throw new Error(j.error);
+      if (!j.saved) throw new Error('did not save');
+      names.push(j.name);
+    } catch (e) {
+      failed.push({name: f.name || `photo ${i + 1}`, why: (e && e.message) || String(e)});
+      if (total === 1) { msg.className = 'photomsg err'; msg.textContent = '✗ ' + ((e && e.message) || e); input.value = ''; return; }
     }
-  } catch (e) {
-    msg.className = 'photomsg err'; msg.textContent = '✗ ' + (e.message || e);
+  }
+  if (!failed.length) {
+    msg.className = 'photomsg ok';
+    msg.textContent = total === 1 ? `✓ Saved as ${names[0]}` : `✓ ${total} photos saved to the Tech folder (${stage || 'no phase'})`;
+  } else {
+    msg.className = 'photomsg err';
+    msg.textContent = `${names.length} of ${total} saved — ${failed.length} did not (${failed[0].why}). Pick the missing ones and try again.`;
   }
   input.value = '';   // allow taking another photo right away
 }
