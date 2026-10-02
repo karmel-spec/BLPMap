@@ -4247,7 +4247,8 @@ const QC_PHASES = ['CAP', 'PRSB - Downbearing'];
 //   Post Sale QC — the pre-delivery final QC is itself the check (Mark 9/8)
 //   Chip/1st/2nd Tuning, QC & Assembly — Mark 9/16
 //   Exit Prep - Admin — only a manager or admin moves a piano to Delivered (Walter 9/28)
-const QC_NEVER = ['Post Sale QC', 'Chip Tuning', '1st Tuning', '2nd Tuning', 'QC & Assembly', 'Exit Prep - Admin'];
+const QC_NEVER = ['Post Sale QC', 'Chip Tuning', '1st Tuning', '2nd Tuning', 'QC & Assembly', 'Exit Prep - Admin',
+  'New Arrival - Admin'];   // leaving New Arrival is an admin step — no mini-QC, no photo (Walter 10/2)
 // phases that carry a digital checklist (worksheet + progress pill). QC &
 // Assembly keeps its worksheet even though it no longer gates.
 // 9/17 (Brigham): the handbook trio (bench steps + training view + mini-QC) now
@@ -7350,7 +7351,7 @@ async function setPhase(p, phase, pop, extra) {
   // …and ANY move to Delivered (Mark 9/28: Weber 33045 set to Delivered from
   // Refinishing got the mini-QC popup instead — delivering is a manager /
   // admin call, whatever phase the piano sat in)
-  const gateFree = was === 'Exit Prep - Admin' || phase === 'Delivered';
+  const gateFree = was === 'Exit Prep - Admin' || was === 'New Arrival - Admin' || phase === 'Delivered';
   if (!(extra && extra.gated) && !gateFree
       && gseq.indexOf(phase) >= 0 && gseq.indexOf(was) >= 0
       && gseq.indexOf(phase) > gseq.indexOf(was)) {
