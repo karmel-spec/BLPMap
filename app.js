@@ -11770,10 +11770,23 @@ function cfxMatch(fx) {
   const dayNum = d => new Date(d + 'T12:00').getTime();
   // prefer the auto-closed / still-open punch, then the longest one that day
   const rank = r => (/auto:|forgot to clock out/i.test(r.note || '') || !r.end ? 100000 : 0) + (r.minutes || 0);
+  // …but when the note names a time, the punch nearest that time wins
+  // (Walter 10/2: "clock in 12:44 PM" was landing on the morning punch, whose
+  // 12:01 clock-out then sat before the prefilled start)
+  const toMin = t => { const [h, mm] = String(t).split(':').map(Number); return h * 60 + mm; };
+  const timeDist = r => {
+    let best = Infinity;
+    if (times.in) best = Math.min(best, Math.abs(toMin(dayLocal(r.start).slice(11)) - toMin(times.in)));
+    if (times.out) best = Math.min(best, r.end ? Math.abs(toMin(dayLocal(r.end).slice(11)) - toMin(times.out)) : 90);
+    return best;
+  };
+  const order = hits => (times.in || times.out)
+    ? hits.sort((a, b) => timeDist(a) - timeDist(b) || rank(b) - rank(a))
+    : hits.sort((a, b) => rank(b) - rank(a));
   const cands = named.length ? named : [filed];
   let pick = null, exact = false, date = cands[0];
   for (const d of cands) {
-    const hits = rows.filter(r => dayOf(r) === d).sort((a, b) => rank(b) - rank(a));
+    const hits = order(rows.filter(r => dayOf(r) === d));
     if (hits.length) { pick = hits[0]; exact = true; date = d; break; }
   }
   // "forgot to clock in" / "clock me in" style → there is nothing to edit, add one
@@ -12779,8 +12792,15 @@ function renderReport() {
       const pre = {start: m.times.in ? day + 'T' + m.times.in : '',
         end: !live && !backwards && m.times.out ? day + 'T' + m.times.out : ''};
       const filled = [pre.start && 'start', pre.end && 'end'].filter(Boolean);
+      // a prefilled start after this punch's own clock-out means the note is
+      // about a different punch — say so instead of offering a backwards edit
+      const after = pre.start && !live && m.pick.end && new Date(pre.start) >= new Date(m.pick.end);
+      const others = unvoided(m.clock === 'pay' ? S.payRows : S.tlRows)
+        .filter(r => r.row !== m.pick.row && denverDay(r.start) === day && techName(r.tech) === techName(m.pick.tech))
+        .map(r => `${fmtT(r.start)}–${r.end ? fmtT(r.end) : 'open'}`);
       S.adjEdit = {clock: m.clock, row: m.pick.row, pre, fromFix: fx.row,
         hint: (m.exact ? '' : 'nearest punch (no punch on the day named) — ')
+          + (after ? `⚠ that start is after this punch's clock-out (${fmtT(m.pick.end)}) — probably a different punch${others.length ? ' (also that day: ' + others.join(', ') + ')' : ''}. ` : '')
           + (live ? 'still clocked in — leave end blank. ' : '')
           + (filled.length ? `${filled.join(' + ')} prefilled from the note — check, then Save. ` : '') + req};
       renderReport();
