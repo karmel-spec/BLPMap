@@ -10728,6 +10728,11 @@ function plateHeadline(p) {   // "1888 Decker Bros #20349"
 function plateIdLine(p) {
   return [String(p.year || '').trim(), String(p.make || '').trim(), '#' + String(p.serial || '')].filter(x => x && x !== '#').join(' · ');
 }
+// the live (open, unvoided) day punch for a person, if any
+function adjOpenPunchFor(name) {
+  const k = adjNameKey(name);
+  return unvoided(S.payRows).find(r => !r.end && adjNameKey(techName(r.tech)) === k) || null;
+}
 // remember a just-saved plate status across data polls (see applyPending)
 function notePlateEdit(p, val) {
   if (!p || !p.row) return;
@@ -13008,6 +13013,17 @@ function renderReport() {
       return;
     }
     delete bar.dataset.unknownok;
+    // one OPEN day punch per person (Mark 10/2): adding a 7:45 start with no
+    // clock-out beside his live 7:50 punch made a double clock-in. The bridge
+    // refuses too; this just says so before the round trip.
+    if (clock === 'pay' && !end) {
+      const openRow = adjOpenPunchFor(tech);
+      if (openRow) {
+        msg.className = 'adjmsg phmsg adjerr';
+        msg.textContent = `${tech} is already clocked in since ${fmtT(openRow.start)} (${openRow.date}) — edit that punch with its ✎ instead of adding a second open one, or give this one a clock-out time.`;
+        return;
+      }
+    }
     if (adjExpired()) {
       adjStashAndRenew({add: {clock, tech, serial: val('.a-serial'), phase: val('.a-phase'), start, end, fromFix: bar.dataset.fromfix || null}});
       return;
