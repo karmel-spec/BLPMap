@@ -916,6 +916,11 @@ body{top:0!important}
 .dsheet td{padding:8px 4px;border-bottom:1px solid #f0ece2;color:#2b2f33}
 .dsheet td small{color:#8a847b}
 .dsx{float:right;border:none;background:none;font-size:16px;color:#8a847b;cursor:pointer}
+/* the ✕ on a bottom sheet stays reachable while the sheet scrolls (Mark 10/2,
+   100226hales47: after a mini-QC pass the rail's ✕ had scrolled off the top) */
+.dsheet>.dsx{position:sticky;top:-16px;float:none;display:block;margin:-16px -16px 0 auto;width:max-content;
+  padding:14px 16px 8px;background:#fff;z-index:3;border-radius:0 18px 0 12px;line-height:1}
+.dsheet>.dsx+h3{clear:none}
 
 /*/* My Dashboard on wide screens (>=860px): a real web layout — roster card + records
    in a left rail, bench + tools spread on the right. Same DOM as mobile. */
