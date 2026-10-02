@@ -50,7 +50,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-02.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-02.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -5426,6 +5426,11 @@ var CHATTER_RE = [
 ];
 function calDescription_(note) {
   var s = String(note || '').replace(/\s+/g, ' ').trim();
+  s = s.replace(/[\u2019\u2018]/g, "'");               // curly apostrophes → straight, so "Today's list" is recognised
+  // planner metadata inside a job line — "(queue #27, PRSB — Downbearing)" —
+  // is dropped on its own so the job itself survives (Walter 10/2: Korban's
+  // whole Today's list vanished because "queue #27" read as chatter)
+  s = s.replace(/\s*\((?:queue|lane|est\.?|estimated)[^)]*\)/gi, '');
   s = s.replace(/^spot\s+[^·]*·\s*/i, '');           // live spot rides in Location
   s = s.replace(/·\s*HOLD \(Walter[^)]*\)[^.]*\.?/g, '');
   // split into sentences / clauses; keep the ones that read as instructions
