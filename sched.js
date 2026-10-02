@@ -772,9 +772,16 @@ async function loadProposal(box){
           by:(typeof authUser==="function"&&authUser()&&authUser().name)||localStorage.getItem("blpmgr.name")||"Shop Manager"},
         s=>{ bna.textContent="Working… "+s+"s (usually 2–3 min)"; });
       if(j.error) throw new Error(j.error);
-      clearDrafts(".bnanswer");
-      out.className="adjustout ok";
-      out.innerHTML="✓ Answers processed"
+      // the board only changes when the plan save landed (Walter 10/2: a failed
+      // save showed "Answers processed" while every question stayed) — say so,
+      // keep the typed answers, and name any item the AI couldn't match
+      const boardOk=j.planSaved!==false;
+      if(boardOk) clearDrafts(".bnanswer");
+      const unmatched=(j.bottlenecks_unmatched||[]);
+      out.className="adjustout "+(boardOk?"ok":"err");
+      out.innerHTML=(boardOk?"✓ Answers processed":"⚠ Answers were read and the card changes went through, but the clarification board was NOT updated (the plan save failed on the Google bridge) — your answers are still in the boxes; tap Send again in a minute.")
+        +(boardOk&&j.bottlenecks_cleared?` <span class="lite">— ${j.bottlenecks_cleared} clarification${j.bottlenecks_cleared===1?"":"s"} cleared</span>`:"")
+        +(unmatched.length?`<div style="margin-top:6px;color:#8a6a00"><b>⚠ Still on the board (the AI's title didn't match):</b><ul>${unmatched.map(c=>`<li>${esc(c)} — use ✕ Dismiss</li>`).join("")}</ul></div>`:"")
         +(j.executed&&j.executed.length?"<ul>"+j.executed.map(c=>`<li>${esc(c)}</li>`).join("")+"</ul>":"")
         +(j.rules_saved&&j.rules_saved.length?`<div style="margin-top:6px"><b>📌 Remembered for future weeks:</b><ul>${j.rules_saved.map(c=>`<li>${esc(c)}</li>`).join("")}</ul></div>`:"")
         +(j.followups&&j.followups.length?`<div style="margin-top:6px"><b>👤 Still needs a human:</b><ul>${j.followups.map(c=>`<li>${esc(c)}</li>`).join("")}</ul></div>`:"")
