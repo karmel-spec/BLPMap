@@ -13395,16 +13395,16 @@ async function loadMyClock(name, days) {
     const fr = await fetch('https://blpsalesapp.netlify.app/.netlify/functions/clock-history?key=pianoman&days=' + want);
     const fj = await fr.json();
     if (!fj.ok) throw new Error(fj.error || 'fast feed down');
-    MYCLOCK.pay = (fj.pay || []).filter(r => myClockMatch(r.tech, name));
-    MYCLOCK.tl = (fj.tl || []).filter(r => myClockMatch(r.tech, name));
+    MYCLOCK.pay = (fj.pay || []).filter(r => myClockMatch(r.tech, name) && !r.voided);
+    MYCLOCK.tl = (fj.tl || []).filter(r => myClockMatch(r.tech, name) && !r.voided);
   } catch (e0) {
     try {
       const [pr, tr] = await Promise.all([
         fetch(BRIDGE_URL + '?fn=payrollrows&days=' + want, {redirect: 'follow'}).then(r => r.json()),
         fetch(BRIDGE_URL + '?fn=timelog&days=' + want, {redirect: 'follow'}).then(r => r.json()),
       ]);
-      MYCLOCK.pay = (pr.rows || []).filter(r => myClockMatch(r.tech, name));
-      MYCLOCK.tl = (tr.rows || []).filter(r => myClockMatch(r.tech, name));
+      MYCLOCK.pay = (pr.rows || []).filter(r => myClockMatch(r.tech, name) && !r.voided);   // a voided punch is not a punch (Mark 10/2)
+      MYCLOCK.tl = (tr.rows || []).filter(r => myClockMatch(r.tech, name) && !r.voided);
     } catch (e) { MYCLOCK.pay = MYCLOCK.pay || []; MYCLOCK.tl = MYCLOCK.tl || []; }
   }
   // payroll day-clock officially began 9/1/2026 — trial punches before
