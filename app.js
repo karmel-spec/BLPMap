@@ -5327,7 +5327,10 @@ async function fetchPayroll(force) {
     if (!j.ok) return;
     PAY.at = Date.now();
     const me = clockName().toLowerCase();
-    PAY.open = (j.open || []).find(o => (o.tech || '').toLowerCase() === me) || null;
+    // the LATEST open punch for me (Mark 10/5: a stale open row from Friday was
+    // shown over today's), and never a voided one if the bridge still lists it
+    PAY.open = (j.open || []).filter(o => (o.tech || '').toLowerCase() === me && !o.voided)
+      .sort((a, b) => new Date(b.start) - new Date(a.start))[0] || null;
     PAY.today = (j.today || []).filter(t => (t.tech || '').toLowerCase() === me);
     if (S.view === 'dash') renderDash();
   } catch (e) { /* offline — keep last */ }

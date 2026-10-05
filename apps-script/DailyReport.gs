@@ -50,7 +50,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-02.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-05.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -3781,7 +3781,12 @@ function closePayRow_(sh, open, endAt, note) {
  *
  * Every stamp still carries the "auto:" note so the review report flags it. */
 function lateCrew_() {
-  var out = moverFirsts_();   // first names, lowercased, from the roster's Position column
+  // a COPY of the mover list plus Melissa. Since 10/1 moverFirsts_ memoises
+  // its object per execution; adding Melissa straight onto it made every
+  // later moverFirsts_() call say she was a mover, so the flat-time sweep
+  // skipped her and her Friday 10/2 punch was never closed (Walter 10/5).
+  var m = moverFirsts_(), out = {};
+  for (var k in m) out[k] = 1;
   out['melissa'] = 1;
   return out;
 }
@@ -3972,10 +3977,11 @@ function payrollState_() {
   var todayStr = Utilities.formatDate(new Date(), 'America/Denver', 'yyyy-MM-dd');
   if (last >= 2) {
     var from = Math.max(2, last - 200);
-    var vals = sh.getRange(from, 1, last - from + 1, 5).getValues();
+    var vals = sh.getRange(from, 1, last - from + 1, 8).getValues();
     for (var i = 0; i < vals.length; i++) {
       var v = vals[i];
       if (!v[0] || !v[2]) continue;
+      if (v[7]) continue;   // a voided punch is not open (Mark 10/5: his voided Friday 7:50 showed as his live day on Monday)
       if (v[2] && !v[3]) open.push({tech: String(v[0]), start: String(v[2])});
       if (String(v[1]) === todayStr || (v[1] instanceof Date &&
           Utilities.formatDate(v[1], 'America/Denver', 'yyyy-MM-dd') === todayStr)) {
