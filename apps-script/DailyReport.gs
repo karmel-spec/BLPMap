@@ -50,7 +50,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-05.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-05.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -5497,6 +5497,22 @@ function applyScheduleLocked_(req) {
   try { tuneMaster = calById_(MASTER_TUNING_CAL); } catch (eM) {}
   var qcCal = null;
   try { qcCal = calById_(SERVICE_CAL); } catch (eQ) {}
+  // Already-booked guard (Walter 10/5): a tuning the Store Map request form
+  // already put on the master calendar for this week is NOT created again,
+  // whatever slot the plan drew it in. Korban's week of 10/5 went out with
+  // five pianos doubled (and shifted) because Approve never looked. The
+  // match is serial + kind — "Tuning" vs "1st/2nd/Chip Tuning" — so a 2nd
+  // tuning on Friday still goes out when the first is booked Wednesday.
+  var bookedTunes = [];
+  try {
+    if (tuneMaster) {
+      var wk0 = new Date((plan.weekStart || got.meta.weekStart) + 'T00:00:00');
+      var wk1 = new Date(wk0); wk1.setDate(wk1.getDate() + 7);
+      tuneMaster.getEvents(wk0, wk1).forEach(function (ev) {
+        bookedTunes.push({key: tuneKey_(ev.getTitle()), when: Utilities.formatDate(ev.getStartTime(), 'America/Denver', 'EEE h:mm a')});
+      });
+    }
+  } catch (eB) { bookedTunes = []; }
   // standing rule (Brigham 2026-08-17): every scheduled piano event carries the
   // piano's CURRENT map spot in the Google event's location field (bare value)
   var spotBySerial = {};
@@ -5530,7 +5546,7 @@ function applyScheduleLocked_(req) {
     var cal;
     try { cal = calById_(calId); } catch (e) { cal = null; }   // subscribes if only shared
     if (!cal) { results.push({tech: tch.name, error: 'no access to ' + calId}); return; }
-    var made = 0, failed = 0, offDays = [], tuned = 0, tuneFellBack = 0, fieldHeld = 0, qcRouted = 0, qcFellBack = 0;
+    var made = 0, failed = 0, offDays = [], tuned = 0, tuneFellBack = 0, fieldHeld = 0, qcRouted = 0, qcFellBack = 0, alreadyBooked = [];
     (tch.days || []).forEach(function (blocks, di) {
       // Melissa 9/7 (request 090726terry22): the draft put Curtis on
       // Wednesday + Friday although his calendar says "Curtis off Wednesdays
@@ -5584,6 +5600,11 @@ function applyScheduleLocked_(req) {
            * serial, so search-by-serial works on it. */
           var orgCal = (b[2] === 'tune' && !isField) ? tuneMaster
                      : (b[2] === 'qc' && !isField) ? qcCal : null;
+          if (orgCal === tuneMaster && tuneMaster) {
+            var tk = tuneKey_(evTitle);
+            var hit = tk.serial ? bookedTunes.filter(function (x) { return x.key.serial === tk.serial && x.key.kind === tk.kind; })[0] : null;
+            if (hit) { alreadyBooked.push(tk.serial + ' — already on the tuning calendar ' + hit.when); return; }
+          }
           var placed = false;
           if (orgCal) {
             try {
@@ -5608,6 +5629,7 @@ function applyScheduleLocked_(req) {
       });
     });
     var res = {tech: tch.name, events: made, failed: failed};
+    if (alreadyBooked.length) res.alreadyBooked = alreadyBooked;
     if (tuned) res.onTuningCal = tuned;
     if (tuneFellBack) res.tuningFellBackToOwnCal = tuneFellBack;
     if (fieldHeld) res.fieldKeptOffCalendar = fieldHeld;
@@ -5635,6 +5657,26 @@ function applyScheduleLocked_(req) {
  * their description are touched — hand-made calendar entries are ignored.
  * dedupe:true deletes the extras (keeps one per title/start/end). */
 var APPLIED_TAG = 'Applied from the Shop Manager schedule proposal';
+/* serial + kind of a tuning event title, for the already-booked guard:
+ * "Tuning: 1893 Steinway Upright … #76197 — Korban" → {76197, tuning};
+ * "Kohler & Campbell IJRIG0092 — Tuning" → {IJRIG0092, tuning};
+ * "Steinway 76197 — 2nd Tuning" → {76197, 2nd}. */
+function tuneKey_(title) {
+  var t = String(title || '');
+  var kindM = /\b(chip|1st|2nd)\s+tuning/i.exec(t);
+  var kind = kindM ? kindM[1].toLowerCase() : 'tuning';
+  var serial = '';
+  var hash = /#([A-Za-z0-9\/-]{3,})/.exec(t);
+  if (hash) serial = hash[1];
+  else {
+    var head = t.split(/\s[—–-]\s/)[0];
+    var toks = head.replace(/[(),:]/g, ' ').split(/\s+/).filter(function (w) {
+      return w.length >= 3 && /\d/.test(w) && !/["']/.test(w) && !/^(18|19|20)\d\d$/.test(w);
+    });
+    if (toks.length) serial = toks[toks.length - 1];
+  }
+  return {serial: serial.toUpperCase(), kind: kind};
+}
 /* Is this day marked OFF on the tech's own calendar? Looks for an event
  * whose title says so ("Curtis off Wednesdays and Fridays", "PTO", "out
  * sick", "vacation", holidays…) — any length, all-day or not. Returns the
