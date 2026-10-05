@@ -9307,6 +9307,9 @@ async function submitBrigham(p, ov) {
  * the service ping instead of running the action, retry, and if it keeps
  * happening say so plainly instead of "the bridge needs an update". */
 async function photoPost(body) {
+  // one id per photo across retries (Alisa 10/5): the bridge files it once and
+  // answers the retry with the same name instead of a second copy
+  if (!body.uploadId) body.uploadId = 'ph-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
   for (let a = 0; a < 3; a++) {
     try {
       const r = await fetchT(BRIDGE_URL, {method: 'POST', redirect: 'follow',

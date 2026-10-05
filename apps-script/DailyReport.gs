@@ -50,7 +50,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-05.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-05.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -191,9 +191,15 @@ function doGet(e) {
     catch (err) { return json_({error: String(err), rows: []}); }
   }
   // Tech photo folder for one piano — the Store Map's Media section links here
+  if (e && e.parameter && e.parameter.fn === 'mediaaudit') {
+    var mkey = String(e.parameter.key || '');
+    if (mkey !== TEAM_PIN && mkey.toLowerCase() !== 'pianoman') return json_({error: 'unauthorized'});
+    try { return json_(mediaAudit_(e.parameter.limit)); }
+    catch (err) { return json_({error: String(err)}); }
+  }
   if (e && e.parameter && e.parameter.fn === 'editqueue') {
     if (String(e.parameter.key || '') !== 'pianoman' && e.parameter.key !== TEAM_PIN) return json_({error: 'unauthorized'});
-    try { return json_(editQueue_(e.parameter.hours)); } catch (errQ) { return json_({error: String(errQ)}); }
+    try { return json_(editQueue_(e.parameter.hours, e.parameter.retry === '1')); } catch (errQ) { return json_({error: String(errQ)}); }
   }
   if (e && e.parameter && e.parameter.fn === 'techfolder') {
     try {
@@ -1496,6 +1502,9 @@ function doPost(e) {
     if (req.action === 'videosession') return json_(videoSession_(req, who));
     if (req.action === 'videodone') return json_(videoDone_(req, who));
     if (req.action === 'videothumb') return json_(videoThumb_(req, who));
+    if (req.action === 'mediarepair') {
+      return json_(mediaRepair_(req, who));
+    }
     if (req.action === 'photo') {
       var pt = savePhoto_(req, who);
       if (pt.saved) logAct_(who,
@@ -1587,6 +1596,15 @@ function cardMedia_(req, who) {
 }
 function savePhoto_(req, who) {
   if (!req.data) return {error: 'no image data'};
+  // one upload id = one file (Alisa 10/5): the app retries a photo post when
+  // Google answers with its error page, and the first post had usually
+  // landed — Melissa's After shots of Lester 66823 came through 2–3× each
+  var upId = String(req.uploadId || '').trim();
+  var upCache = upId ? CacheService.getScriptCache() : null;
+  if (upCache) {
+    var prevUp = upCache.get('up_' + upId);
+    if (prevUp) { try { var pj = JSON.parse(prevUp); pj.duplicate = true; return pj; } catch (eU) {} }
+  }
   var ss = SpreadsheetApp.openById(PIANO_LOG_ID);
   var sh = pianoSheet_(ss);
   var found = findPiano_(sh, req.serial, req.row);
@@ -1632,8 +1650,10 @@ function savePhoto_(req, who) {
   if (req.share) { try { shareAnyoneWithLink_(file.getId()); } catch (e2) {} }
   if (kind === 'before' || kind === 'after') notifyBaPhoto_(kind, serial, found, tech, who, req.stage);
   if (kind === 'before-edited' || kind === 'after-edited') { try { shareAnyoneWithLink_(file.getId()); } catch (e3) {} }
-  return {ok: true, saved: true, name: name, link: file.getUrl(),
+  var resultUp = {ok: true, saved: true, name: name, link: file.getUrl(),
           id: file.getId(), folder: tech.getName(), summary: found.summary};
+  if (upCache) { try { upCache.put('up_' + upId, JSON.stringify(resultUp), 21600); } catch (eU2) {} }
+  return resultUp;
 }
 
 /* 📸 Before/After photo email (Alisa 9/11, request 091126miller01): the
@@ -1756,20 +1776,42 @@ function editedFolderFor_(sh, row, serial, kind) {
  * hours (from the PHOTO LOG) that the photo-editing cron should process:
  * kind comes from the file's parent folder name, and each item carries the
  * Edited folder id (created on demand). The cron keeps its own "done" list. */
-function editQueue_(hours) {
+function editQueue_(hours, retry) {
   var ss = SpreadsheetApp.openById(PIANO_LOG_ID);
   var log = ss.getSheetByName(PHOTO_LOG_TAB);
   if (!log || log.getLastRow() < 2) return {ok: true, items: []};
   var since = Date.now() - Math.max(1, Math.min(720, Number(hours) || 48)) * 3600000;   // up to 30 days for backfills
   var last = log.getLastRow(), from = Math.max(2, last - 300);
-  var vals = log.getRange(from, 1, last - from + 1, 7).getValues();
+  ensureCol_(log, 8, 'Edit served');
+  var vals = log.getRange(from, 1, last - from + 1, 8).getValues();
   var sh = pianoSheet_(ss);
   var out = [], cache = {};
+  // Serve each original ONCE (Alisa 10/5, 100526miller12): the editing routine
+  // asked for "the last 48 h" every run and relied on its own done-list, which
+  // evidently reset — Lester 66823's After set was edited twice in 30 minutes,
+  // one shot becoming four files. Column H stamps when an original was handed
+  // out; it is handed out again only after 6 h with no edited output for that
+  // piano+kind since, or with ?retry=1.
+  retry = !!retry;
+  var editedSince = {};   // serial|kind → latest "Edited …" log time
+  for (var e0 = 0; e0 < vals.length; e0++) {
+    var st0 = String(vals[e0][3] || '');
+    if (/^edited\s+(before|after)/i.test(st0)) {
+      var k0 = String(vals[e0][1] || '').trim() + '|' + (/before/i.test(st0) ? 'before' : 'after');
+      var w0 = vals[e0][0] instanceof Date ? vals[e0][0].getTime() : Date.parse(vals[e0][0]);
+      if (w0 && (!editedSince[k0] || w0 > editedSince[k0])) editedSince[k0] = w0;
+    }
+  }
+  var served = [];
   for (var i = vals.length - 1; i >= 0 && out.length < 40; i--) {
     var when = vals[i][0] instanceof Date ? vals[i][0] : new Date(vals[i][0]);
     if (isNaN(when) || when.getTime() < since) continue;
     var stage = String(vals[i][3] || '');
     if (/edited/i.test(stage)) continue;
+    var servedAt = vals[i][7] instanceof Date ? vals[i][7].getTime() : (vals[i][7] ? Date.parse(vals[i][7]) : 0);
+    // handed out less than 6 h ago → not again (unless ?retry=1); the
+    // "edited since it was served" check follows once the kind is known
+    if (servedAt && !retry && Date.now() - servedAt < 6 * 3600000) continue;
     var link = String(vals[i][6] || '');
     var m = /\/d\/([-\w]+)/.exec(link) || /[?&]id=([-\w]+)/.exec(link);
     if (!m) continue;
@@ -1783,6 +1825,8 @@ function editQueue_(hours) {
     if (/edited|tech|paperwork/i.test(parentName)) continue;
     if (/before/i.test(parentName)) kind = 'before'; else if (/after/i.test(parentName)) kind = 'after'; else continue;
     var serial = String(vals[i][1] || '').trim();
+    if (servedAt && !retry && editedSince[serial + '|' + kind] && editedSince[serial + '|' + kind] > servedAt) continue;   // already edited since it was served
+    served.push(from + i);
     var key = serial + '|' + kind, edited = cache[key];
     if (!edited) {
       try {
@@ -1795,23 +1839,94 @@ function editQueue_(hours) {
               by: String(vals[i][4] || ''), file: String(vals[i][5] || ''), fileId: m[1], kind: kind,
               editedFolderId: edited.id, row: edited.row, location: edited.location});
   }
-  return {ok: true, items: out};
+  // stamp the originals just handed out
+  if (served.length && !retry) {
+    var stamp = new Date().toISOString();
+    served.forEach(function (r) { try { log.getRange(r, 8).setValue(stamp); } catch (eS) {} });
+  }
+  return {ok: true, items: out, served: served.length};
+}
+/* ?fn=mediaaudit&key=… — Piano Log rows whose BEFORE/AFTER PHOTOS cell links
+ * a VIDEO folder (the misfiling Alisa reported 10/5). action:'mediarepair'
+ * {serial, kind, dryrun?} moves the image files out of that video folder into
+ * the piano's real photo folder (found or created) and rewrites the cell. */
+function mediaAudit_(limit) {
+  var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+  var last = sh.getLastRow(), sd = soldDividerRow_(sh);
+  var end = Math.min(last, sd > 3 ? sd : last);
+  var out = [], looked = 0;
+  var cols = {before: mediaCol_(sh, 'bphoto'), after: mediaCol_(sh, 'aphoto')};
+  var vals = sh.getRange(3, 1, end - 2, Math.max(cols.before, cols.after)).getValues();
+  for (var i = 0; i < vals.length && out.length < (Number(limit) || 60); i++) {
+    var serial = String(vals[i][2] || '').trim();
+    if (!serial) continue;
+    ['before', 'after'].forEach(function (kind) {
+      var cell = String(vals[i][cols[kind] - 1] || '');
+      var m = /folders\/([A-Za-z0-9_-]+)/.exec(cell);
+      if (!m) return;
+      looked++;
+      try {
+        var f = DriveApp.getFolderById(m[1]);
+        var nm = f.getName();
+        if (!isVideoFolderName_(nm)) return;
+        var n = 0, it = f.getFiles();
+        while (it.hasNext()) { if (/^image\//.test(String(it.next().getMimeType()))) n++; }
+        out.push({row: i + 3, serial: serial, kind: kind, folder: nm, images: n});
+      } catch (eF) {}
+    });
+  }
+  return {ok: true, looked: looked, wrong: out};
+}
+function mediaRepair_(req, who) {
+  var serial = String(req.serial || '').trim(), kind = String(req.kind || '').toLowerCase();
+  if (!serial || (kind !== 'before' && kind !== 'after')) return {error: 'serial and kind (before|after) required'};
+  var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+  var found = findPiano_(sh, serial, req.row);
+  if (found.error) return found;
+  var col = mediaCol_(sh, kind === 'before' ? 'bphoto' : 'aphoto');
+  var cell = String(sh.getRange(found.row, col).getValue() || '');
+  var m = /folders\/([A-Za-z0-9_-]+)/.exec(cell);
+  if (!m) return {error: 'no folder link in the ' + kind.toUpperCase() + ' PHOTOS cell'};
+  var bad = DriveApp.getFolderById(m[1]);
+  if (!isVideoFolderName_(bad.getName())) return {ok: true, nothingToDo: true, folder: bad.getName()};
+  var moved = [], it = bad.getFiles();
+  var files = [];
+  while (it.hasNext()) { var f = it.next(); if (/^image\//.test(String(f.getMimeType()))) files.push(f); }
+  if (req.dryrun) return {ok: true, dryrun: true, from: bad.getName(), wouldMove: files.map(function (f) { return f.getName(); })};
+  var good = mediaFolderFor_(sh, found.row, serial, kind);   // ignores the video link now, finds/creates the photos folder, rewrites the cell
+  if (!good || good.getId() === bad.getId()) return {error: 'could not resolve a photo folder'};
+  files.forEach(function (f) { try { f.moveTo(good); moved.push(f.getName()); } catch (eM) {} });
+  // the Edited subfolder, if the editor already made one inside the video folder, comes along too
+  var eds = bad.getFoldersByName('Edited');
+  var editedMoved = 0;
+  if (eds.hasNext()) {
+    var ed = eds.next();
+    var target = good.getFoldersByName('Edited').hasNext() ? good.getFoldersByName('Edited').next() : good.createFolder('Edited');
+    var ei = ed.getFiles();
+    while (ei.hasNext()) { try { ei.next().moveTo(target); editedMoved++; } catch (eE) {} }
+    try { var ecol = pianoCol_(sh, kind === 'before' ? 'BEFORE PHOTOS (EDITED)' : 'AFTER PHOTOS (EDITED)'); if (ecol) sh.getRange(found.row, ecol).setValue(target.getUrl()); } catch (eC) {}
+  }
+  logAct_(who, 'Photo folder repaired', found.summary || serial, kind + ': ' + moved.length + ' photo(s)' + (editedMoved ? ' + ' + editedMoved + ' edited' : '') + ' moved from "' + bad.getName() + '" to "' + good.getName() + '"');
+  return {ok: true, from: bad.getName(), to: good.getName(), moved: moved, editedMoved: editedMoved, cell: good.getUrl()};
 }
 function mediaFolderRead_(sh, row, serial, kind) {
   var col = mediaCol_(sh, kind === 'before' ? 'bphoto' : 'aphoto');
   var cell = String(sh.getRange(row, col).getValue() || '');
   var m = /folders\/([A-Za-z0-9_-]+)/.exec(cell);
-  if (m) { try { return DriveApp.getFolderById(m[1]); } catch (e) {} }
+  if (m) { try { var lk = DriveApp.getFolderById(m[1]); if (!isVideoFolderName_(lk.getName())) return lk; } catch (e) {} }
   var tech = techFolderFor_(sh, row, serial);
   if (!tech) return null;
   var parentIt = tech.getParents();
   var parent = parentIt.hasNext() ? parentIt.next() : tech;
   var re = kind === 'before' ? /before/i : /after/i;
-  var it = parent.getFolders();
+  var it = parent.getFolders(), loose2 = null;
   while (it.hasNext()) {
-    var f2 = it.next();
-    if (re.test(f2.getName())) return f2;
+    var f2 = it.next(), nm2 = f2.getName();
+    if (!re.test(nm2) || isVideoFolderName_(nm2)) continue;
+    if (/photo/i.test(nm2)) return f2;
+    if (!loose2) loose2 = f2;
   }
+  if (loose2) return loose2;
   return null;
 }
 
@@ -1822,11 +1937,22 @@ function mediaFolderRead_(sh, row, serial, kind) {
  * cell (col 14 = before, col 16 = after) if there is one; otherwise create
  * a "Before Photos"/"After Photos" subfolder beside Tech and write its link
  * back into the cell — which also flips the card's media state to done. */
+// a PHOTO folder is never a video folder (Alisa 10/5, 100526miller12): the
+// "after-ish" reuse below matched "After Video" first once video folders
+// existed (9/17), so After photos — and their AI edits — were filed into the
+// video folder and its link was written into the AFTER PHOTOS column.
+function isVideoFolderName_(n) { return /video/i.test(String(n || '')); }
 function mediaFolderFor_(sh, row, serial, kind) {
   var col = mediaCol_(sh, kind === 'before' ? 'bphoto' : 'aphoto');   // by header — the columns moved (9/14)
   var cell = String(sh.getRange(row, col).getValue() || '');
   var m = /folders\/([A-Za-z0-9_-]+)/.exec(cell);
-  if (m) { try { return DriveApp.getFolderById(m[1]); } catch (e) {} }
+  if (m) {
+    try {
+      var linked = DriveApp.getFolderById(m[1]);
+      if (!isVideoFolderName_(linked.getName())) return linked;
+      // the cell points at a video folder — fall through, find/create the real one, rewrite the cell
+    } catch (e) {}
+  }
   var tech = techFolderFor_(sh, row, serial);
   if (!tech) return null;
   var parentIt = tech.getParents();
@@ -1836,18 +1962,21 @@ function mediaFolderFor_(sh, row, serial, kind) {
   // 8/28: no duplicate folders). Hand-made names count: "Before", "BEFORE
   // pics", "22947 Before Photos", "Before & After"…
   var re = kind === 'before' ? /before/i : /after/i;
-  var folder = null;
+  var folder = null, loose = null;
   var it = parent.getFolders();
   while (it.hasNext()) {
-    var f2 = it.next();
-    if (re.test(f2.getName())) { folder = f2; break; }
+    var f2 = it.next(), nm = f2.getName();
+    if (!re.test(nm) || isVideoFolderName_(nm)) continue;
+    if (/photo/i.test(nm)) { folder = f2; break; }   // "After Photos" beats "After & Before"
+    if (!loose) loose = f2;
   }
+  if (!folder) folder = loose;
   if (!folder && serial && String(serial).length >= 4) {
     // …or one filed elsewhere in Drive under the serial number
     var q = DriveApp.searchFolders('title contains ' + JSON.stringify(String(serial)));
     while (q.hasNext()) {
       var cand = q.next();
-      if (re.test(cand.getName())) { folder = cand; break; }
+      if (re.test(cand.getName()) && !isVideoFolderName_(cand.getName())) { folder = cand; break; }
     }
   }
   if (!folder) folder = parent.createFolder(name);
