@@ -50,7 +50,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-06.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-06.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -2315,7 +2315,7 @@ var PHASE_VALUES = ['New Arrival - Admin', 'Assessment', 'CAP',
   'Lacquer Soundboard', 'Restringing',
   'Chip Tuning', 'DHRT', '1st Tuning', 'Refinishing', 'QC & Assembly',
   '2nd Tuning', 'Exit Prep - Admin', 'Delivered',
-  'In Queue', 'Paused', 'For Sale', 'Sale Pending', 'Sold', 'Post Sale QC',
+  'In Queue', 'Paused', 'Player Piano Work', 'For Sale', 'Sale Pending', 'Sold', 'Post Sale QC',
   'Waiting on Brigham', 'Waiting on Curtis Harper', 'Waiting on Customer', 'Waiting on OTHER',
   // track-sheet steps outside the master 14 (refurbishing/repair tracks) —
   // the app's normTrackPhase canonicalizes the Sequence-sheet wording to
@@ -2683,7 +2683,7 @@ function saleSweep_(who) {
   var bass = sh.getRange(1, 39, n, 1).getValues();     // task cells (settaskcell cols)
   var dec = sh.getRange(1, 40, n, 1).getValues();
   var today = Utilities.formatDate(new Date(), 'America/Denver', 'M/d/yy');
-  var KEEP = /^(Waiting|Sale Pending|Sold|Paused|Post Sale QC)/i;
+  var KEEP = /^(Waiting|Sale Pending|Sold|Paused|Player Piano Work|Post Sale QC)/i;
   var counts = {pianos: 0, phase: 0, keys: 0, plate: 0, bass: 0, decals: 0};
   for (var r = 2; r < n; r++) {   // data starts row 3 (index 2)
     if (!String(serials[r][0] || '').trim() && !String(stat[r][0] || '').trim()) continue;

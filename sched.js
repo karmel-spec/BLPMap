@@ -1192,6 +1192,7 @@ const PHASES=[
   {id:"QC",       ph:"QC & Assembly",            en:"QC & Assembly",      es:"QC y ensamblaje",     code:"", hb:["QC Checklist (doc)","Storing Cabinetry (§14)","Hardware (§3)"]},
   {id:"TUNING2",  ph:"2nd Tuning",               en:"2nd Tuning",         es:"2.ª afinación",       code:"", hb:[]},
   {id:"EXIT",     ph:"Exit Prep - Admin",        en:"Exit Prep",          es:"Preparación de salida", code:"", hb:[]},
+  {id:"PLAYER",   ph:"Player Piano Work",        en:"Player Piano Work",  es:"Trabajo de pianola",  code:"", hb:[]},
   {id:"WAITING",  ph:"",                         en:"Waiting / Paused",   es:"En espera / pausa",   code:"", hb:[]},
   {id:"FORSALE",  ph:"For Sale",                 en:"For Sale",           es:"En venta",            code:"", hb:[]},
   {id:"SALEPEND", ph:"Sale Pending",             en:"Sale Pending",       es:"Venta pendiente",     code:"", hb:[]},

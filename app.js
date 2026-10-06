@@ -38,7 +38,9 @@ const PHASE_NUMS = (() => {
 // not migrated yet still draws its icon instead of losing it
 PHASE_NUMS['PRSBa - Pre-Plate'] = PHASE_NUMS['PRSB - Downbearing'];
 PHASE_NUMS['PRSBb - Plate In'] = PHASE_NUMS['PRSB - Notching and Pins'];
-const PHASE_STATES = ['In Queue', 'Paused', 'For Sale', 'Sale Pending', 'Sold', 'Post Sale QC',
+// Player Piano Work (Mark 10/6, 100626hales49): player-system work lives
+// outside the numbered sequence, like Paused / Waiting on
+const PHASE_STATES = ['In Queue', 'Paused', 'Player Piano Work', 'For Sale', 'Sale Pending', 'Sold', 'Post Sale QC',
   'Waiting on Brigham', 'Waiting on Curtis Harper', 'Waiting on Customer', 'Waiting on OTHER'];
 // work tracks (multi-select, stored comma-separated in the TRACK column)
 const TRACKS = ['Rebuild', 'Hybrid', 'Refurbish', 'Refinish', 'Technology', 'Old Player', 'Storage', 'Misc'];   // unnumbered states; For Sale turns the icon green
@@ -78,6 +80,7 @@ function phaseLabels(phase, p) {
     return {full: q, short: 'Q'};
   }
   if (phase === 'Paused') return {full: 'P', short: 'P'};
+  if (phase === 'Player Piano Work') return {full: 'PW', short: 'PW'};
   if (phase === 'Waiting on Brigham') return {full: 'WB', short: 'W'};
   if (phase === 'Waiting on Curtis Harper') return {full: 'WC', short: 'W'};
   if (phase === 'Waiting on Customer') return {full: 'WCu', short: 'W'};
@@ -4277,7 +4280,7 @@ function trainPhaseName(phase) {
 const QC_ALL_UNTIL = new Date('2026-10-04T00:00:00-06:00').getTime();
 function qcGated(was) {
   const w = String(was || '').trim();
-  if (!w || /^(waiting|in queue|paused|for sale|sale pending|sold|delivered)/i.test(w)) return false;
+  if (!w || /^(waiting|in queue|paused|player piano work|for sale|sale pending|sold|delivered)/i.test(w)) return false;
   if (QC_NEVER.includes(w)) return false;
   return QC_PHASES.includes(w) || Date.now() < QC_ALL_UNTIL;
 }
@@ -16508,6 +16511,7 @@ const LEGEND_LISTS = {
   client:   {t: '⚫ Client / consigned', f: p => ownerClass(p) !== 'blp'},
   q:        {t: 'Q-# In Queue',          f: p => effectivePhase(p) === 'In Queue' || (!effectivePhase(p) && !!p.queuePos)},
   paused:   {t: 'P · Paused',            f: p => effectivePhase(p) === 'Paused'},
+  pw:       {t: 'PW · Player Piano Work', f: p => effectivePhase(p) === 'Player Piano Work'},
   wb:       {t: 'WB · Waiting on Brigham',        f: p => effectivePhase(p) === 'Waiting on Brigham'},
   wc:       {t: 'WC · Waiting on Curtis Harper',  f: p => effectivePhase(p) === 'Waiting on Curtis Harper'},
   wcu:      {t: 'WCu · Waiting on Customer',      f: p => effectivePhase(p) === 'Waiting on Customer'},
