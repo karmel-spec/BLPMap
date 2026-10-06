@@ -50,7 +50,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-05.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-06.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -1550,6 +1550,23 @@ function doPost(e) {
     var current = String(sh.getRange(row, 21).getValue() || '');
     if (req.action === 'move' && req.newLocation != null && String(req.newLocation).trim()) {
       var dest = String(req.newLocation).trim();
+      // a queued re-send (Walter 10/6): the relay worker replays a move whose
+      // first attempt timed out — usually it HAD landed (Mark's four moves
+      // that morning were each re-sent 2-3x as "47 → 47"). Never let a late
+      // copy undo a newer move: already there → no-op (no write, no bump,
+      // no log line); moved since it was queued → skipped as stale.
+      if (req.replayOf) {
+        if (current.toLowerCase() === dest.toLowerCase()) {
+          return json_({ok: true, moved: true, noop: true, replay: true, row: row,
+                        summary: summary, previous: current, location: current, bumped: []});
+        }
+        var since = locChangedSince_(summary, req.serial, req.queuedAt);
+        if (since) {
+          return json_({ok: true, moved: false, stale: true, replay: true, row: row,
+                        summary: summary, location: current,
+                        reason: 'not applied — the piano was moved after this was queued (' + since + ')'});
+        }
+      }
       sh.getRange(row, 21).setValue(dest);
       logAct_(who, 'Moved', summary || req.serial,
         (current || '(blank)') + ' → ' + dest);
@@ -2945,6 +2962,33 @@ function verifyGoogle_(tok) {
  * "ACTIVITY LOG" tab in the Piano Log spreadsheet (created on first use).
  * ?fn=activity returns the most recent 300 entries, newest first.
  */
+/* Has this piano's location changed (moved / bumped / sent to SOLD) since
+ * `queuedAt`? Reads the ACTIVITY LOG tail newest-first and stops at the first
+ * entry older than the queue time. Returns a short description or ''. */
+function locChangedSince_(summary, serial, queuedAt) {
+  var t = Date.parse(String(queuedAt || ''));
+  if (!t) return '';
+  try {
+    var sh = SpreadsheetApp.openById(PIANO_LOG_ID).getSheetByName('ACTIVITY LOG');
+    if (!sh || sh.getLastRow() < 2) return '';
+    var n = Math.min(800, sh.getLastRow() - 1);
+    var vals = sh.getRange(sh.getLastRow() - n + 1, 1, n, 5).getValues();
+    var LOC = {'Moved': 1, 'Bumped to attic': 1, 'Moved to SOLD section': 1};
+    serial = String(serial || '').trim();
+    for (var i = vals.length - 1; i >= 0; i--) {
+      var v = vals[i];
+      var when = v[0] instanceof Date ? v[0].getTime() : Date.parse(String(v[0]));
+      if (when && when < t) break;
+      if (!LOC[String(v[2] || '')]) continue;
+      var cell = String(v[3] || '');
+      if (!((summary && cell === summary) || (serial && cell.indexOf(serial) >= 0))) continue;
+      return String(v[2]) + ' ' + String(v[4] || '').slice(0, 40) + ' by ' + String(v[1] || '?').split(' (')[0]
+        + ' at ' + Utilities.formatDate(new Date(when), 'America/Denver', 'M/d h:mm a');
+    }
+  } catch (e) {}
+  return '';
+}
+
 function logAct_(who, action, piano, detail) {
   try {
     var ss = SpreadsheetApp.openById(PIANO_LOG_ID);
