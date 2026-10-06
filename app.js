@@ -10719,7 +10719,7 @@ const PLATE_STAGES = ['In piano', 'Removed', 'Plate storage — BEFORE',
 const PLATE_HW_STAGES = ['Needs buffing', 'In buffing queue', 'Buffing', 'Buffed', 'Installed'];
 // 🎨 finish choices (Melissa 9/16, request 091626terry44) — mirrors CARD_FIELDS in the bridge
 // keytops: two ivory choices (Melissa 9/25, 092526terry62) — what Marcelo does differs
-const CARD_FIELD_OPTS = {plateFinish: ['Brass', 'Nickel', 'Copper'], keytopMaterial: ['White Acrylic', 'Off-white Acrylic', 'Ivory - clean & leave as is', 'Ivory - replace damaged keys']};
+const CARD_FIELD_OPTS = {plateFinish: ['Brass', 'Nickel', 'Copper', 'No electroplating'], keytopMaterial: ['White Acrylic', 'Off-white Acrylic', 'Ivory - clean & leave as is', 'Ivory - replace damaged keys']};
 const CARD_FIELD_LABEL = {plateFinish: 'Plating finish', keytopMaterial: 'Keytop material'};
 // read the scope of work / notes and propose a finish when none is set yet
 function cfGuess(p, f) {
@@ -10727,6 +10727,8 @@ function cfGuess(p, f) {
     .filter(Boolean).join(' \n ');
   if (!txt.trim()) return '';
   if (f === 'plateFinish') {
+    // Melissa 10/6 (100626terry82): some plates keep their hardware as is
+    if (/\b(?:no|skip|without|not)\s+(?:re-?|electro-?)?plat(?:e|ed|ing)\b|\bdo(?:n'?t| not)\s+(?:re-?|electro-?)?plate\b/i.test(txt)) return 'No electroplating';
     if (/\bnickel\b/i.test(txt)) return 'Nickel';
     if (/\bcopper\b/i.test(txt)) return 'Copper';
     if (/\bbrass\b/i.test(txt)) return 'Brass';

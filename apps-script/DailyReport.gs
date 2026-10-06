@@ -50,7 +50,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-06.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-06.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -8797,7 +8797,7 @@ var PLATE_HW_STATUSES = ['', 'Needs buffing', 'In buffing queue', 'Buffing', 'Bu
 // color the plating shop should do (Korban orders by it) and the keytop
 // material Marcelo should fit. Header-created Piano Log columns.
 var CARD_FIELDS = {
-  plateFinish:    {header: 'PLATE HARDWARE FINISH', values: ['', 'Brass', 'Nickel', 'Copper'], label: 'Plate hardware finish'},
+  plateFinish:    {header: 'PLATE HARDWARE FINISH', values: ['', 'Brass', 'Nickel', 'Copper', 'No electroplating'], label: 'Plate hardware finish'},
   // two ivory choices (Melissa 9/25, 092526terry62); plain 'Ivory' stays valid
   // for the rows saved before the split
   keytopMaterial: {header: 'KEYTOP MATERIAL', values: ['', 'White Acrylic', 'Off-white Acrylic', 'Ivory - clean & leave as is', 'Ivory - replace damaged keys', 'Ivory'], label: 'Keytop material'}
