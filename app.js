@@ -5071,7 +5071,7 @@ async function openQcRail(id) {
           ${qcLinks(it.text)}${qcPaper(it.text)}
           ${vd && vd.note ? `<div style="font-size:11.5px;color:${vd.verdict === 'fail' ? '#9e2020' : '#274b6d'};margin:3px 0 0 2px">↳ ${esc(vd.note)}${vd.by ? ` <span style="color:#8a847b">— ${esc(String(vd.by).split(' ')[0])}</span>` : ''}</div>` : ''}
           ${open ? `<div class="qcnotebox" data-t="${esc(it.text)}">
-              <textarea class="qcnotetxt" maxlength="300" rows="2" placeholder="${noteMode.get(it.text) === 'fail' ? 'What needs rework on this item? (required)' : 'Note on this item (optional)'}">${esc(noteDraft.get(it.text) || (vd && vd.note) || '')}</textarea>
+              <textarea class="qcnotetxt" maxlength="1000" rows="3" placeholder="${noteMode.get(it.text) === 'fail' ? 'What needs rework on this item? (required)' : 'Note on this item (optional)'}">${esc(noteDraft.get(it.text) || (vd && vd.note) || '')}</textarea>
               <div style="display:flex;gap:6px;margin-top:5px">
                 ${noteMode.get(it.text) === 'fail'
                   ? `<button class="qcnsave" data-v="fail" style="background:#9e2020;color:#fff;border:0;border-radius:7px;padding:5px 10px;font-weight:700">Save ✗ needs rework</button>`
@@ -5082,12 +5082,12 @@ async function openQcRail(id) {
       ${canJudge && !settled ? `<div class="qcmisc">
         <span style="font-size:10px;letter-spacing:1px;color:#8a847b;text-transform:uppercase">Miscellaneous</span>
         <div class="qcmiscrow">
-          <input class="qcmisctxt" maxlength="160" ${inspecting ? '' : 'disabled'} placeholder="anything out of the ordinary — e.g. cracked key slip, missing caster…">
+          <input class="qcmisctxt" maxlength="300" ${inspecting ? '' : 'disabled'} placeholder="anything out of the ordinary — e.g. cracked key slip, missing caster…">
           <button class="qcmiscp" title="passes" ${inspecting ? '' : 'disabled style="opacity:.4"'}>✓ Pass</button>
           <button class="qcmiscf" title="needs rework" ${inspecting ? '' : 'disabled style="opacity:.4"'}>✗ Rework</button></div></div>` : ''}
       ${canJudge && !settled ? `<div style="margin-top:14px">
         <label style="font-size:11px;letter-spacing:1px;color:#8a847b;text-transform:uppercase">📝 Note to the tech (optional)</label>
-        <textarea class="qcgen" maxlength="400" rows="2" placeholder="Goes on the rework card and in the text — praise, context, what to watch next time…">${esc(genNote)}</textarea>
+        <textarea class="qcgen" maxlength="1500" rows="3" placeholder="Goes on the rework card and in the text — praise, context, what to watch next time…">${esc(genNote)}</textarea>
         <div style="display:flex;gap:8px;margin-top:8px">
         <button class="csvbtn qcpass" ${all ? '' : 'disabled style="opacity:.45"'}>✅ Approve — advance to ${esc(q.next_phase)}</button>
         <button class="csvbtn qcback" ${anyFail ? '' : 'disabled'} style="background:#9e2020;${anyFail ? '' : 'opacity:.45'}">🔁 Send back</button></div>
@@ -5108,15 +5108,20 @@ async function openQcRail(id) {
     const sendVerdict = async (item, verdict, note) => {
       if (!inspecting || !needWho()) return;
       const r = await fetch(PHASEQC_URL, {method: 'POST', headers: {'content-type': 'application/json'},
-        body: JSON.stringify({key: 'pianoman', op: 'verdict', id: q.id, item, verdict, note: String(note || '').slice(0, 300), manager: inspector || clockName()})});
+        body: JSON.stringify({key: 'pianoman', op: 'verdict', id: q.id, item, verdict, note: String(note || '').slice(0, 1000), manager: inspector || clockName()})});
       const j = await r.json();
       noteOpen.delete(item); noteDraft.delete(item); noteMode.delete(item);
       if (j.verdicts) { live.verdicts = j.verdicts; render(); }
     };
     const keepGen = () => { const g = ov.querySelector('.qcgen'); if (g) genNote = g.value; };
+    // comment boxes grow with the text (Jacob 10/5: longer notes didn't fit)
+    ov.querySelectorAll('.qcnotetxt,.qcgen').forEach(ta => {
+      const fit = () => { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight + 3, 340) + 'px'; };
+      ta.addEventListener('input', fit); fit();
+    });
     const miscIn = ov.querySelector('.qcmisctxt');
     const miscGo = verdict => {
-      const txt = (miscIn.value || '').trim().slice(0, 160);
+      const txt = (miscIn.value || '').trim().slice(0, 300);
       if (!txt) { miscIn.focus(); miscIn.style.borderColor = '#9e2020'; return; }
       if (shown.some(it => it.text.toLowerCase() === txt.toLowerCase())) { miscIn.style.borderColor = '#9e2020'; miscIn.title = 'already on the list'; return; }
       miscItems.push(txt);
@@ -5153,7 +5158,7 @@ async function openQcRail(id) {
       keepGen();
       if (!needWho()) return;
       const r = await fetch(PHASEQC_URL, {method: 'POST', headers: {'content-type': 'application/json'},
-        body: JSON.stringify({key: 'pianoman', op: 'finalize', id: q.id, outcome, note: String(genNote || '').slice(0, 400), manager: inspector || clockName(), pin: writeAuth().pin || 'pianoman'})});
+        body: JSON.stringify({key: 'pianoman', op: 'finalize', id: q.id, outcome, note: String(genNote || '').slice(0, 1500), manager: inspector || clockName(), pin: writeAuth().pin || 'pianoman'})});
       const j = await r.json();
       if (j.ok) { live.status = j.status; await endInspection(); render(); setTimeout(() => { close(); location.reload(); }, 1600); }
     };
