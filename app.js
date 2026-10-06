@@ -11290,7 +11290,7 @@ function payTimeTable() {
   const f = S.payF || (S.payF = {who: '', from: '', to: '', group: 'day', detail: seesDetail ? 'all' : 'day', cat: ''});
   if (f.detail === undefined) f.detail = seesDetail ? 'all' : 'day';
   if (f.cat === undefined) f.cat = '';
-  const techs = [...new Set([...S.payRows.map(r => techName(r.tech)), ...S.tlRows.map(r => techName(r.tech))].filter(Boolean))].sort();
+  const techs = [...new Set([...unvoided(S.payRows).map(r => techName(r.tech)), ...unvoided(S.tlRows).map(r => techName(r.tech))].filter(Boolean))].sort();
   // chronological, not sheet order (Melissa 10/1, 100126terry71): punches
   // added later through the adjustments form sit at the bottom of the sheet
   const rows = unvoided(S.payRows).filter(r =>
@@ -11439,7 +11439,7 @@ function payTimeTable() {
 function jobCostTable() {
   if (!S.tlRows) return '<div class="empty">Loading the Work Clock ledger…</div>';
   const f = S.jcF || (S.jcF = {q: '', tech: '', phase: '', from: '', to: ''});
-  const techs = [...new Set(S.tlRows.map(r => techName(r.tech)).filter(Boolean))].sort();
+  const techs = [...new Set(unvoided(S.tlRows).map(r => techName(r.tech)).filter(Boolean))].sort();
   const phases = [...new Set(S.tlRows.map(r => r.phase).filter(Boolean))].sort();
   const q = f.q.trim().toLowerCase();
   const rows = unvoided(S.tlRows).filter(r =>
@@ -11599,7 +11599,7 @@ function adjKnownNames() {
   // sign-in name, not a one-off typed one — "Mckinly Lopp" ×1 loses to
   // "McKinly Lopp" ×84), plus the Team roster for anyone who hasn't clocked yet
   const cnt = {};
-  [...(S.payRows || []), ...(S.tlRows || [])].forEach(r => {
+  [...unvoided(S.payRows), ...unvoided(S.tlRows)].forEach(r => {
     const n = techName(r.tech);
     if (!n || /^claude\b/i.test(n)) return;
     const k = adjNameKey(n);
@@ -12033,7 +12033,9 @@ function clockAdjustTable() {
    * match, so one entry covers every spelling. Claude's own probe accounts
    * are left out of the picker (their rows still show unfiltered). */
   const adjName = techName;
-  const adjWhos = [...new Set([...(S.payRows || []).map(r => r.tech), ...(S.tlRows || []).map(r => r.tech)]
+  // names only on voided punches drop out (Melissa 10/6, 100626terry83: a
+  // voided 'Alisa Merrill' and 'Mckinly Lopp' punch kept them in the list)
+  const adjWhos = [...new Set([...unvoided(S.payRows).map(r => r.tech), ...unvoided(S.tlRows).map(r => r.tech)]
     .map(adjName).filter(t => t && !/^claude\b/i.test(t)))].sort((a, b) => a.localeCompare(b));
   const adjKeep = (r, clock) => {
     if (S.adjEdit && S.adjEdit.clock === clock && S.adjEdit.row === r.row) return true;   // never hide a row being edited
@@ -12146,7 +12148,7 @@ function clockAdjustTable() {
     const isPast = S.payDay < todayYmd;
     const dayList = S.payRows.filter(r => r.date === S.payDay)
       .sort((x, y) => String(x.tech).localeCompare(String(y.tech)) || new Date(x.start) - new Date(y.start));
-    const knownTechs = [...new Set(S.payRows.filter(r => new Date(r.start) >= Date.now() - 30 * 86400000).map(r => r.tech))].sort();
+    const knownTechs = [...new Set(unvoided(S.payRows).filter(r => new Date(r.start) >= Date.now() - 30 * 86400000).map(r => r.tech))].sort();
     const punched = new Set(dayList.map(r => r.tech));
     const noPunch = knownTechs.filter(t => !punched.has(t));
     const dayIssues = dayList.filter(r => !String(r.voided || '') && ((!r.end && isPast) || adjAutoClosed(r)));
