@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-07.9';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-07.10';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -9202,7 +9202,11 @@ var REFINISH_SHEET_ID = '1bfF4pmuGv7TefVlDG4lo_04gRjiX9QYerK4o9qih6kc';   // Dor
 function touchUpToDoris_(req, found, name, sh, dry) {
   var tz = 'America/Denver', res = {};
   var notes = String(req.notes || '').trim();
-  try {
+  // sheetOnly (10/7 backfill): the calendar half already went through — add the
+  // refinishing-sheet row without booking a second event; requester names who
+  // asked when the bridge is called with the PIN instead of a sign-in
+  if (req.sheetOnly) { res.calendar = 'skipped (sheetOnly)'; if (req.requester) name = String(req.requester).slice(0, 40); }
+  else try {
     var cid = techCalMap_()['doris'] || '';
     var cal = cid ? calById_(cid) : null;
     if (!cal) res.calendarError = "Doris's calendar isn't reachable from the bridge";
