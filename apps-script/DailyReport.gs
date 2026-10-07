@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-07.8';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-07.9';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -9167,9 +9167,11 @@ function teamRequest_(req, who) {
   var logUrl = 'https://pianologapp.netlify.app/#piano=' + encodeURIComponent(req.serial);
   // the regular Touch Up goes to Doris (Walter 10/7): an hour on her calendar
   // plus a row on her refinishing sheet. Curtis touch-ups stay on the Curtis
-  // Harper request. Brigham still gets the email below as a heads-up.
+  // Harper request. No email to Brigham for touch-ups (Walter 10/7); other
+  // team requests (Priority Scheduling…) still email him.
   var doris = /^touch ?up$/i.test(kind) ? touchUpToDoris_(req, found, name, sh, !!req.dryrun) : null;
   if (req.dryrun) return {ok: true, dryrun: true, summary: found.summary, doris: doris};
+  if (doris) return {ok: true, summary: found.summary, doris: doris};
   MailApp.sendEmail({
     to: PRICE_REQUEST_TO,
     subject: '📌 ' + kind + ' request: ' + (found.summary || 'piano') + ' — SN ' + req.serial,
