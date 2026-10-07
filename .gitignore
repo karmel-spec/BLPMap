@@ -5,3 +5,4 @@ config.json
 node_modules/
 tech-dash-designs.html
 .claude/
+apps-script/clasp/Code.js
