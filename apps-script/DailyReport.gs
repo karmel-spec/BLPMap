@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-07.12';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-07.13';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -984,7 +984,7 @@ function doPost(e) {
     if (req.action === 'emailpdf') {
       // send a handout PDF by email (Walter 10/7) — PDFs only, ≤10 MB, and only
       // to a fixed list of store addresses, so the PIN can't mail anyone else
-      var EMAIL_PDF_TO = ['karmel@brighamlarsonpianos.com', 'brigham@brighamlarsonpianos.com', 'shop@brighamlarsonpianos.com'];
+      var EMAIL_PDF_TO = ['karmel@brighamlarsonpianos.com', 'brigham@brighamlarsonpianos.com', 'shop@brighamlarsonpianos.com', 'markhales.blp@gmail.com'];
       if (String(req.pin || '').toLowerCase() !== 'pianoman' && req.pin !== TEAM_PIN) return json_({error: 'unauthorized'});
       var pto = String(req.to || '').trim().toLowerCase();
       if (EMAIL_PDF_TO.indexOf(pto) < 0) return json_({error: 'recipient not allowed'});
