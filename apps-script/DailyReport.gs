@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-07.11';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-07.12';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -980,6 +980,25 @@ function doPost(e) {
       if (rq.ok) logAct_(who, 'Price requested', rq.summary || req.serial,
         'email sent to ' + PRICE_REQUEST_TO);
       return json_(rq);
+    }
+    if (req.action === 'emailpdf') {
+      // send a handout PDF by email (Walter 10/7) — PDFs only, ≤10 MB, and only
+      // to a fixed list of store addresses, so the PIN can't mail anyone else
+      var EMAIL_PDF_TO = ['karmel@brighamlarsonpianos.com', 'brigham@brighamlarsonpianos.com', 'shop@brighamlarsonpianos.com'];
+      if (String(req.pin || '').toLowerCase() !== 'pianoman' && req.pin !== TEAM_PIN) return json_({error: 'unauthorized'});
+      var pto = String(req.to || '').trim().toLowerCase();
+      if (EMAIL_PDF_TO.indexOf(pto) < 0) return json_({error: 'recipient not allowed'});
+      var pb = String(req.b64 || '');
+      if (!pb || pb.length > 14000000) return json_({error: 'missing or too-large PDF'});
+      var bytes = Utilities.base64Decode(pb);
+      var head = String.fromCharCode.apply(null, bytes.slice(0, 5));
+      if (head !== '%PDF-') return json_({error: 'not a PDF'});
+      var pname = String(req.filename || 'handout.pdf').replace(/[^\w .-]/g, '').slice(0, 80) || 'handout.pdf';
+      MailApp.sendEmail({to: pto, subject: String(req.subject || pname).slice(0, 150),
+        body: String(req.body || '').slice(0, 4000), name: 'BLP Store Map',
+        attachments: [Utilities.newBlob(bytes, 'application/pdf', pname)]});
+      logAct_(who, 'Handout emailed', pname, 'to ' + pto);
+      return json_({ok: true, sent: true, to: pto, filename: pname, bytes: bytes.length});
     }
     if (req.action === 'curtismove') {   // one-time fix, 10/7 — key-gated like the other admin fixes
       if (String(req.pin || '').toLowerCase() !== 'pianoman' && req.pin !== TEAM_PIN) return json_({error: 'unauthorized'});
