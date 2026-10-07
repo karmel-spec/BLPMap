@@ -752,8 +752,10 @@ function needRefQ() {
         cells.push(cur);
         const brand = (cells[1] || '').trim(), serial = (cells[2] || '').trim();
         if (!brand || !serial || /^brand$/i.test(brand)) return;
+        // notes + sheen ride along (Walter 10/7) so Doris needn't open the sheet
         out.push({pri: out.length + 1, brand, serial,
-          loc: (cells[3] || '').trim(), lvl: (cells[4] || '').trim(), req: (cells[5] || '').trim()});
+          loc: (cells[3] || '').trim(), lvl: (cells[4] || '').trim(), req: (cells[5] || '').trim(),
+          notes: (cells[6] || '').trim(), sheen: (cells[7] || '').trim()});
       });
       REFQ.rows = out; REFQ.at = Date.now();
       renderMap();
@@ -820,7 +822,9 @@ const QDEFS = {
     sub: 'from the refinishing sheet (its row order = priority)', empty: 'The refinishing sheet is empty — nothing queued.',
     natural: () => (REFQ.rows || []).map(x => {
       const p = S.data.pianos.find(pp => pp.active && qn(pp.serial) === qn(x.serial));
-      return {serial: x.serial, p, badge: '', sub: x.req || '',
+      const det = [x.notes ? `<div class="qdet">📝 ${esc(x.notes)}</div>` : '',
+                   x.sheen ? `<div class="qdet">✨ Sheen: ${esc(x.sheen)}</div>` : ''].join('');
+      return {serial: x.serial, p, badge: '', sub: x.req || '', detail: det,
         main: `${esc(x.brand)} <span class="lite">#${esc(x.serial)}</span>`,
         right: (x.lvl ? `<span class="lite" style="font-weight:700">L${esc(x.lvl)}</span>` : '') + `<span class="lite">${esc(x.loc || (p ? p.location || '' : ''))}</span>`};
     })},
@@ -896,7 +900,7 @@ function openQueueSheet(key) {
       ${canEdit ? `<div class="qtools"><button class="qadd" type="button">＋ Add a piano</button><span class="qmsg"></span></div>` : ''}
       <div class="qlist">${items.map((it, i) => `<div class="kqrow" data-serial="${esc(it.serial)}" ${it.p ? `data-row="${it.p.row}"` : ''} style="display:flex;gap:10px;align-items:center;padding:8px 2px;border-top:1px solid #f0ece5;${it.p ? 'cursor:pointer' : 'opacity:.8'}">
         ${canEdit ? '<span class="qgrab" title="drag to reorder">⠿</span>' : ''}<span class="qpos">#${i + 1}</span>${it.badge}
-        <span style="flex:1">${it.main}${it.sub ? `<div class="lite" style="font-size:11px;white-space:normal;line-height:1.4">${esc(it.sub)}</div>` : ''}</span>${it.right}
+        <span style="flex:1">${it.main}${it.sub ? `<div class="lite" style="font-size:11px;white-space:normal;line-height:1.4">${esc(it.sub)}</div>` : ''}${it.detail || ''}</span>${it.right}
         ${canEdit && it.manual ? '<button class="qdel" type="button" title="remove from this queue">✕</button>' : ''}</div>`).join('')
         || `<div class="empty">${def.empty}</div>`}</div></div>`;
     ov.querySelector('.dsx').onclick = () => ov.remove();
