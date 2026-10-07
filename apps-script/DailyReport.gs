@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-07.5';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-07.6';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -394,11 +394,16 @@ function doGet(e) {
  */
 function tunings_() {
   var cache = CacheService.getScriptCache();
-  var hit = cache.get('tunings');
+  var hit = cache.get('tunings2');
   if (hit) return JSON.parse(hit);
   var tz = 'America/Denver';
   var now = new Date();
   var past = [], upcoming = [], seenCal = 0;
+  // every booking is written to the tech's calendar AND the master one, so the
+  // same appointment came back twice (Walter 10/7). Drop a copy that another
+  // calendar already gave us; two identical events on ONE calendar are a real
+  // double booking and both stay listed.
+  var seenOn = {};   // date|time|serial digits -> index of the calendar it came from
   var lastBy = {};   // digit-run -> newest past tuning date, over the FULL
                      // 540-day window (past[] itself is capped at 800 rows,
                      // which silently hid tunings older than ~10 months)
@@ -415,6 +420,9 @@ function tunings_() {
       var rec = [Utilities.formatDate(st, tz, 'yyyy-MM-dd'),
                  Utilities.formatDate(st, tz, 'HH:mm'),
                  t.slice(0, 70)];
+      var dk = rec[0] + '|' + rec[1] + '|' + (t.match(/\d{5,}/g) || []).join(',');
+      if (dk in seenOn && seenOn[dk] !== c) continue;
+      seenOn[dk] = c;
       if (st < now) {
         past.push(rec);
         var runs = t.match(/\d{5,}/g) || [];
@@ -428,7 +436,7 @@ function tunings_() {
   var bySt = function (a, b) { return (a[0] + a[1]) < (b[0] + b[1]) ? -1 : 1; };
   past.sort(bySt); upcoming.sort(bySt);
   var out = {upcoming: upcoming, past: past.slice(-800), lastBySerial: lastBy};
-  try { cache.put('tunings', JSON.stringify(out), 1800); } catch (ig) {}
+  try { cache.put('tunings2', JSON.stringify(out), 1800); } catch (ig) {}
   return out;
 }
 
@@ -498,7 +506,7 @@ function scheduleTuning_(req) {
     master.createEvent(title + ' — ' + techName, slot.start, slot.end,
       {description: desc, location: String(found.location || ''),
        guests: techId, sendInvites: true});
-    try { CacheService.getScriptCache().remove('tunings'); } catch (ig) {}
+    try { CacheService.getScriptCache().remove('tunings2'); } catch (ig) {}
   }
   return {ok: true, scheduled: true, dryrun: !!req.dryrun, tech: techName,
           date: Utilities.formatDate(slot.start, tz, 'EEE, MMM d'),
@@ -534,7 +542,7 @@ function deleteTuning_(req) {
       if (!req.dryrun) { try { evs[k].deleteEvent(); } catch (ig) {} }
     }
   }
-  if (!req.dryrun && removed.length) { try { CacheService.getScriptCache().remove('tunings'); } catch (ig) {} }
+  if (!req.dryrun && removed.length) { try { CacheService.getScriptCache().remove('tunings2'); } catch (ig) {} }
   return {ok: true, dryrun: !!req.dryrun, removed: removed};
 }
 
