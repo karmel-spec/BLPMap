@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-07.4';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-07.5';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -784,7 +784,30 @@ function findPiano_(sh, serial, rowOverride) {
           location: String(sh.getRange(row, 21).getValue() || '')};
 }
 
+/* Moving-calendar events, cached (Walter 10/7): downloading the movers' ICS
+ * took 15–34 s of bridge time on EVERY call, and the map's data feed asks on
+ * every cache miss of every server instance — those long calls were holding
+ * the bridge's execution slots while everything else waited in line.
+ * Fresh copy for 5 min; a 6-hour copy is served while another call is already
+ * refreshing, or when the download fails. Calendar edits show within ~5 min. */
 function fetchEvents_() {
+  var c = CacheService.getScriptCache();
+  var hit = c.get('mvEv5');
+  if (hit) { try { return JSON.parse(hit); } catch (eH) {} }
+  var stale = c.get('mvEvStale');
+  if (stale && c.get('mvEvBusy')) { try { return JSON.parse(stale); } catch (eS) {} }
+  c.put('mvEvBusy', '1', 90);
+  try {
+    var ev = fetchEventsLive_();
+    var str = JSON.stringify(ev);
+    if (str.length < 95000) { c.put('mvEv5', str, 300); c.put('mvEvStale', str, 21600); }
+    return ev;
+  } catch (err) {
+    if (stale) { try { return JSON.parse(stale); } catch (eP) {} }
+    throw err;
+  } finally { try { c.remove('mvEvBusy'); } catch (eR) {} }
+}
+function fetchEventsLive_() {
   var tz = 'America/Denver';
   var text = UrlFetchApp.fetch(MOVING_ICS).getContentText().replace(/\r?\n[ \t]/g, '');
   var todayStr = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
