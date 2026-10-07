@@ -5824,6 +5824,7 @@ function popHTML(p) {
            ${PHASE_STATES.filter(ph => ph !== 'In Queue').map(ph =>
              `<option value="${esc(ph)}" ${effPh === ph ? 'selected' : ''}>${esc(ph)}</option>`).join('')}
          </select></div>${gotoLine(p, effPh)}<div class="phmsg"></div>
+       ${p.handoffId ? `<div class="phnhist" style="font-size:11px;background:#fbf1dc;border:1px solid #c89a3c;border-radius:6px;padding:6px 9px;margin:4px 0">🏆 Sold in the Sales App — not here yet. <a href="https://blpsalesapp.netlify.app/leads/${encodeURIComponent(p.leadId || '')}" target="_blank" rel="noreferrer">Lead ↗</a>${p.portalProjectId ? ` · <a href="https://blpclientportal.netlify.app/admin/projects/${esc(p.portalProjectId)}" target="_blank" rel="noreferrer">Client Portal project ↗</a>` : ''}</div>` : ''}
        ${(p.phaseNotes || '').trim() ? `<div class="phnhist" style="font-size:11px;color:#6f6a63;background:#faf8f4;border-radius:6px;padding:6px 9px;margin:4px 0;white-space:pre-wrap">📝 ${esc(String(p.phaseNotes).slice(0, 500))}</div>` : ''}`
     : '';
   const colors = p.serial

@@ -385,6 +385,7 @@ export default async (req) => {
     ]);
     if (csvR.status === 'rejected') throw csvR.reason;
     const pianos = parsePianos(csvR.value);
+    try { await mergeComing(pianos); } catch (e) { console.warn('[data] won_coming merge skipped:', String(e).slice(0, 120)); }
     const events = eventsR.status === 'fulfilled' ? eventsR.value : [];   // calendar down: pianos still ship
     const tunings = (tuningsR.status === 'fulfilled' && tuningsR.value.upcoming)
       ? tuningsR.value : { upcoming: [], past: [] };                     // tuning calendar unavailable: degrade gracefully
@@ -403,4 +404,40 @@ export default async (req) => {
 };
 
 // shared with top10.mjs (Brigham's Top 10 brief)
+/* ---------- "piano coming" from Sales App WON handoffs ----------
+ * Shop projects sold in the Sales App (public.won_coming view in Supabase:
+ * branch=shop, not yet arrived) show in the FRONT DOOR / PARKING LOT zone
+ * as "Coming Soon" pianos until the serial shows up in the Piano Log. */
+const SB_URL = (process.env.SUPABASE_URL || 'https://ismacawxfvvllfinibbf.supabase.co').replace(/\/$/, '');
+const SB_KEY = process.env.SUPABASE_ANON_KEY || 'sb_publishable_MamcjSX0CHTdYlpKDWSkmQ_-nbuQ1z-';
+async function mergeComing(pianos) {
+  const r = await fetch(SB_URL + '/rest/v1/won_coming?select=*&order=created_at.desc', { headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY }, signal: AbortSignal.timeout(6000) });
+  if (!r.ok) throw new Error('won_coming ' + r.status);
+  const rows = await r.json();
+  if (!rows.length || !pianos.length) return;
+  const have = new Set(pianos.filter(p => p.active && p.serial).map(p => p.serial.trim().toLowerCase()));
+  const tmpl = pianos[0];
+  const blank = Object.fromEntries(Object.keys(tmpl).map(k => {
+    const v = tmpl[k];
+    return [k, typeof v === 'boolean' ? false : typeof v === 'number' ? 0 : v && typeof v === 'object' ? (Array.isArray(v) ? [] : {}) : ''];
+  }));
+  rows.forEach((h, i) => {
+    if (h.serial && have.has(String(h.serial).trim().toLowerCase())) return; // it's here — the real row shows instead
+    const sold = h.created_at ? new Date(h.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
+    const promise = [h.track && h.track !== 'nd' ? h.track : '', h.queue_start && h.queue_start !== 'nd' ? 'starts in ' + h.queue_start : '', h.complete_by && h.complete_by !== 'nd' ? 'done in ' + h.complete_by : ''].filter(Boolean).join(' · ');
+    pianos.push({
+      ...blank, row: 900000 + i, section: 'WON — PIANO COMING', owner: h.lead_name || 'Client',
+      serial: h.serial || '', summary: (h.piano || (h.lead_name + "'s piano")) + ' — ' + (h.lead_name || ''),
+      type: pianoType(h.piano_type || '', (h.piano_type || '') + ' ' + (h.piano || '')),
+      status: 'Sold — piano coming', location: 'Coming Soon — sold ' + sold + (h.closed_by ? ' by ' + h.closed_by : ''),
+      phase: '', phasesDone: '', track: h.track && h.track !== 'nd' ? h.track : '', archived: false, active: true, isSlot: false, isNew: false,
+      entered: h.created_at ? String(h.created_at).slice(0, 10) : null,
+      waitNote: promise, phaseNotes: '🏆 Sold ' + sold + (h.closed_by ? ' by ' + h.closed_by : '') + (promise ? ' · ' + promise : '') + (h.summary_text ? '\n' + String(h.summary_text).slice(0, 500) : ''),
+      scopeNotes: h.summary_text ? String(h.summary_text).slice(0, 500) : '',
+      tasks: { ...blank.tasks }, logExtras: {}, queuePos: 0, queueTotal: 0,
+      coming: true, handoffId: h.id, leadId: h.lead_id || '', portalProjectId: h.portal_project_id || '',
+    });
+  });
+}
+
 export { parsePianos, PIANO_LOG_CSV };
