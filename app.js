@@ -755,7 +755,7 @@ function needRefQ() {
         // notes + sheen ride along (Walter 10/7) so Doris needn't open the sheet
         out.push({pri: out.length + 1, brand, serial,
           loc: (cells[3] || '').trim(), lvl: (cells[4] || '').trim(), req: (cells[5] || '').trim(),
-          notes: (cells[6] || '').trim(), sheen: (cells[7] || '').trim(), bench: (cells[8] || '').trim()});
+          notes: (cells[6] || '').trim(), sheen: (cells[7] || '').trim(), bench: (cells[8] || '').trim(), decal: (cells[9] || '').trim()});
       });
       REFQ.rows = out; REFQ.at = Date.now();
       renderMap();
@@ -824,7 +824,8 @@ const QDEFS = {
       const p = S.data.pianos.find(pp => pp.active && qn(pp.serial) === qn(x.serial));
       const det = [x.notes ? `<div class="qdet">📝 ${esc(x.notes)}</div>` : '',
                    x.sheen ? `<div class="qdet">✨ Sheen: ${esc(x.sheen)}</div>` : '',
-                   x.bench ? `<div class="qdet">🪑 Bench: ${esc(x.bench)}</div>` : ''].join('');
+                   x.bench ? `<div class="qdet">🪑 Bench: ${esc(x.bench)}</div>` : '',
+                   x.decal ? `<div class="qdet">🏷 Decal: ${esc(x.decal)}</div>` : ''].join('');
       return {serial: x.serial, p, badge: '', sub: x.req || '', detail: det,
         main: `${esc(x.brand)} <span class="lite">#${esc(x.serial)}</span>`,
         right: (x.lvl ? `<span class="lite" style="font-weight:700">L${esc(x.lvl)}</span>` : '') + `<span class="lite">${esc(x.loc || (p ? p.location || '' : ''))}</span>`};
