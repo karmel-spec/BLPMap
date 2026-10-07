@@ -17277,8 +17277,11 @@ async function renderBuffing(force) {
            <button class="bufgo bufalt" data-k="${k}" data-op="done" ${busy ? 'disabled' : ''}>Already done</button></span>`}</div>`;
   };
   const openP = d.plates.filter(p => !p.done).length, openH = d.hardware.filter(h => !h.done).length;
+  const lr = BUF.lastRemoved;
   el.innerHTML = `<div class="bufmeta">${openP} plate${openP === 1 ? '' : 's'} · ${openH} piano${openH === 1 ? '' : 's'} with hardware to prep
-      <button class="csvbtn bufreload">↻ refresh</button></div>
+      <button class="csvbtn bufreload">↻ refresh</button>
+      ${lr ? `<span class="bufok">✓ ${esc(lr.item.label)} marked already done <button class="bufundo bufundolast" ${BUF.busy.has('last') ? 'disabled' : ''}>undo</button></span>` : ''}
+      ${BUF.err.last ? `<span class="bufs buferr">✗ ${esc(BUF.err.last)}</span>` : ''}</div>
     <h3 class="bufh">Plate screws</h3>
     <div class="buflist">${d.plates.map(plateRow).join('') || '<div class="bufrow"><div class="buft"><div class="bufs">No plates waiting on screws 🎉</div></div></div>'}</div>
     <h3 class="bufh">Visible hardware · furthest along first</h3>
@@ -17297,7 +17300,18 @@ async function renderBuffing(force) {
     } catch (e) { BUF.err[k] = e.message || String(e); return false; }
     finally { BUF.busy.delete(k); }
   };
-  el.querySelectorAll('.bufgo, .bufundo').forEach(b => b.onclick = async () => {
+  // "Already done" drops the row at once (Mark 10/7); the last one can be put back
+  const ul = el.querySelector('.bufundolast');
+  if (ul) ul.onclick = async () => {
+    const r = BUF.lastRemoved; if (!r) return;
+    if (await post('last', {op: 'done', on: false, serial: r.item.serial, mapRow: r.item.mapRow})) {
+      r.item.done = ''; delete r.item.doneOp;
+      d.hardware.splice(Math.min(r.idx, d.hardware.length), 0, r.item);
+      BUF.lastRemoved = null;
+    }
+    renderBuffing();
+  };
+  el.querySelectorAll('.bufgo, .bufundo:not(.bufundolast)').forEach(b => b.onclick = async () => {
     const k = b.dataset.k, undo = b.classList.contains('bufundo');
     const isPlate = k[0] === 'p', item = (isPlate ? d.plates : d.hardware)[+k.slice(1)];
     if (!item) return;
@@ -17309,7 +17323,11 @@ async function renderBuffing(force) {
       if (!undo) BUF.prevHw[item.curtisRow] = item.plateHw || '';
     }
     const ok = await post(k, body);
-    if (ok) {
+    if (ok && !isPlate && !undo && op === 'done') {
+      const idx = d.hardware.indexOf(item);
+      if (idx >= 0) d.hardware.splice(idx, 1);
+      BUF.lastRemoved = {item, idx};
+    } else if (ok) {
       if (undo) { item.done = ''; delete item.doneOp; }
       else { item.done = isPlate ? (clockName() || 'done') : ({prepped: 'Prepped for shipping', buffed: 'Buffed', done: 'Already done'}[op]); item.doneOp = op; }
     }
