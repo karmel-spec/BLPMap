@@ -50,7 +50,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-07.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-07.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -3829,6 +3829,7 @@ function sweepForgottenClocks_() {
   }
   if (!todo.length) return 0;
   var crew = lateCrew_(), movers = moverFirsts_();
+  if (!MOVERS_KNOWN) { cache.remove('clocksweep'); return 0; }   // roster unreadable — never guess who is a mover
   todo.forEach(function (t) {
     if (movers[finishKey_(t.v[0]).split(' ')[0]]) return;   // movers: no auto clock-out (see sweepForgottenPay_)
     var start = t.start;
@@ -4013,6 +4014,7 @@ function sweepForgottenPay_(sh) {
   }
   if (!todo.length) return;   // the common case — no roster read at all
   var crew = lateCrew_(), movers = moverFirsts_();
+  if (!MOVERS_KNOWN) return;   // roster unreadable — close nothing rather than stamp a mover (10/7)
   todo.forEach(function (t) {
     // movers get NO auto clock-out (Walter 10/1, 093026terry70): their jobs
     // run past any flat time — the punch stays open and the 10 AM text
@@ -7939,10 +7941,11 @@ function setupLateClockNudge() {
   Logger.log('lateClockNudge trigger installed (daily, 6-7pm Denver)');
 }
 var MOVERS_MEMO = null;
+var MOVERS_KNOWN = false;   // true once the list came from the roster or its saved copy
 function moverFirsts_() {
   // mover first names from the BLP TEAM roster's Position column
   if (MOVERS_MEMO) return MOVERS_MEMO;
-  var out = {};
+  var out = {}, live = false;
   try {
     var r = UrlFetchApp.fetch(
       'https://blpsalesapp.netlify.app/.netlify/functions/team-roster?key=pianoman',
@@ -7953,7 +7956,22 @@ function moverFirsts_() {
         out[String(rows[i][0] || '').trim().toLowerCase()] = 1;
       }
     }
+    live = rows.length > 1;
   } catch (e) {}
+  // a failed roster read used to come back as "no movers", and the next
+  // forgotten-clock sweep stamped Josh and Thayne out at 6:00 PM on 10/5
+  // (Walter 10/7). Keep the last good list and fall back to it; with none,
+  // MOVERS_KNOWN stays false and the sweeps close nothing this run.
+  var props = PropertiesService.getScriptProperties();
+  if (live) {
+    MOVERS_KNOWN = true;
+    try { props.setProperty('MOVERS_LAST', JSON.stringify(out)); } catch (eS) {}
+  } else {
+    try {
+      var saved = JSON.parse(props.getProperty('MOVERS_LAST') || 'null');
+      if (saved) { out = saved; MOVERS_KNOWN = true; }
+    } catch (eR) {}
+  }
   MOVERS_MEMO = out;
   return out;
 }
