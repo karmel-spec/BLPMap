@@ -16053,7 +16053,7 @@ const PERM_KEYS = [
 ];
 const SETTING_FIELDS = [
   ['✨ Korban\'s buffing text', [
-    ['buffing_text', 'Daily 11 AM buffing text (on / off)'],
+    ['buffing_text', 'Daily 11 AM buffing text (blank = on · off = pause)'],
     ['buffing_text_to', 'Text goes to (name — blank = Korban)'],
   ]],
   ['📵 Quiet hours (texting)', [
