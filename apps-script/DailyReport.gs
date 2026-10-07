@@ -50,7 +50,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-06.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-07.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -853,6 +853,7 @@ function doPost(e) {
     }
     if (req.action === 'setphase') {
       var ph = setPhase_(req);
+      if (ph.noop || ph.stale) return json_(ph);   // queued re-send that changes nothing
       if (ph.ok) logAct_(who, 'Phase change', ph.summary || req.serial,
         (ph.previous || '(none)') + ' → ' + (ph.phase || '(none)'));
       if (ph.ok && ph.movedToSold) logAct_(who, 'Moved to SOLD section', ph.summary || req.serial,
@@ -2771,6 +2772,25 @@ function setPhase_(req) {
   if (phase && PHASE_VALUES.indexOf(phase) < 0) return {error: 'unknown phase: ' + phase};
   var col = phaseCol_(sh);
   var prev = String(sh.getRange(found.row, col).getValue() || '');
+  // a queued re-send (Walter 10/7): the relay worker kept replaying phase
+  // changes every 5 min for hours (Lester 185231 "1st Tuning → 1st Tuning"
+  // since 7:28) because the bridge answered slower than its budget. Already
+  // in that phase → no-op (no write, no side effects, no log line); phase
+  // changed after it was queued → skipped as stale, never undoing it.
+  if (req.replayOf) {
+    var sameExtras = !(req.note != null && String(req.note).trim()) && !req.checkBack;
+    if (prev === phase && sameExtras) {
+      return {ok: true, noop: true, replay: true, row: found.row, summary: found.summary,
+              previous: prev, phase: phase};
+    }
+    if (prev !== phase) {
+      var since = changedSince_(found.summary, req.serial, req.queuedAt,
+        {'Phase change': 1, 'Moved to SOLD section': 1, 'Phases auto-completed': 1});
+      if (since) return {ok: true, stale: true, replay: true, row: found.row, summary: found.summary,
+        previous: prev, phase: prev,
+        reason: 'not applied — the phase was changed after this was queued (' + since + ')'};
+    }
+  }
   sh.getRange(found.row, col).setValue(phase);
   // waiting note: why we're waiting — stored in a WAITING NOTE column,
   // written with Waiting phases and cleared when the piano moves on
@@ -2966,6 +2986,10 @@ function verifyGoogle_(tok) {
  * `queuedAt`? Reads the ACTIVITY LOG tail newest-first and stops at the first
  * entry older than the queue time. Returns a short description or ''. */
 function locChangedSince_(summary, serial, queuedAt) {
+  return changedSince_(summary, serial, queuedAt, {'Moved': 1, 'Bumped to attic': 1, 'Moved to SOLD section': 1});
+}
+// same check for any set of ACTIVITY LOG actions (phase replays, 10/7)
+function changedSince_(summary, serial, queuedAt, LOC) {
   var t = Date.parse(String(queuedAt || ''));
   if (!t) return '';
   try {
@@ -2973,7 +2997,6 @@ function locChangedSince_(summary, serial, queuedAt) {
     if (!sh || sh.getLastRow() < 2) return '';
     var n = Math.min(800, sh.getLastRow() - 1);
     var vals = sh.getRange(sh.getLastRow() - n + 1, 1, n, 5).getValues();
-    var LOC = {'Moved': 1, 'Bumped to attic': 1, 'Moved to SOLD section': 1};
     serial = String(serial || '').trim();
     for (var i = vals.length - 1; i >= 0; i--) {
       var v = vals[i];
