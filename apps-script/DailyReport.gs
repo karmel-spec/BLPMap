@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-07.7';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-07.8';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -981,6 +981,13 @@ function doPost(e) {
         'email sent to ' + PRICE_REQUEST_TO);
       return json_(rq);
     }
+    if (req.action === 'curtismove') {   // one-time fix, 10/7 — key-gated like the other admin fixes
+      if (String(req.pin || '').toLowerCase() !== 'pianoman' && req.pin !== TEAM_PIN) return json_({error: 'unauthorized'});
+      var cm = curtisMoveStranded_(!!req.dryrun);
+      if (!req.dryrun && cm.moved && cm.moved.length) logAct_(who, 'Curtis sheet tidy', cm.moved.length + ' rows',
+        cm.moved.map(function (m) { return m.piano + ' → ' + m.to; }).join('; ').slice(0, 300));
+      return json_(cm);
+    }
     if (req.action === 'curtis') {
       var ch = curtisRequest_(req, who);
       if (ch.ok && !ch.dryrun) logAct_(who, 'Curtis Harper request', ch.summary || req.serial,
@@ -1003,7 +1010,7 @@ function doPost(e) {
     }
     if (req.action === 'teamreq') {
       var tr = teamRequest_(req, who);
-      if (tr.ok) logAct_(who, String(req.kind || 'Team') + ' request', tr.summary || req.serial,
+      if (tr.ok && !tr.dryrun) logAct_(who, String(req.kind || 'Team') + ' request', tr.summary || req.serial,
         String(req.notes || '').slice(0, 200));
       return json_(tr);
     }
@@ -3435,14 +3442,71 @@ function curtisRequest_(req, who) {
   try { css = SpreadsheetApp.openById(CURTIS_SHEET_ID); }
   catch (e) { return {error: 'the Curtis Harper work orders sheet is not shared with the bridge account (brigham@)'}; }
   var tab = css.getSheetByName(CURTIS_TAB) || css.getSheets()[0];
-  tab.appendRow([
+  var rowVals = [
     ownership, '',                                                        // Ownership, Priority
     Utilities.formatDate(new Date(), 'America/Denver', 'M/d/yy'),         // DATE REQUESTED
     String(found.location || ''),                                         // location
     (found.summary || 'Piano') + ' ' + String(req.serial || ''),          // PIANO/SERIAL #
     issue + (name && name.indexOf('Team') !== 0 ? ' [' + name + ']' : ''),// Issue
-  ]);
-  return {ok: true, summary: found.summary, tab: tab.getName()};
+  ];
+  // into its SECTION, not the bottom (Walter 10/7): appendRow put every new
+  // request under "Work is completed, but not yet paid & received", where it
+  // read as finished work. Plates go at the end of the Plates list; touch-ups,
+  // decals and anything else at the end of "In store, small projects".
+  var plate = /^plate/i.test(ctype);
+  var at = curtisSectionEnd_(tab, plate ? 'plates' : 'small');
+  if (at > 0) {
+    tab.insertRowAfter(at);
+    tab.getRange(at + 1, 1, 1, rowVals.length).setValues([rowVals]);
+    if (plate) { try { tab.getRange(at + 1, 14).insertCheckboxes(); } catch (eCb) {} }   // N: Korban's screws box
+  } else {
+    tab.appendRow(rowVals);   // section banners missing — old behaviour rather than nothing
+  }
+  return {ok: true, summary: found.summary, tab: tab.getName(), row: at > 0 ? at + 1 : tab.getLastRow(),
+          section: at > 0 ? (plate ? 'Plates' : 'In store, small projects') : 'bottom (sections not found)'};
+}
+
+/* Last row of a section on Curtis's Requested tab: 'plates' ends just above
+ * the "Small/medium sized in-store repairs" line, 'small' just above
+ * "Larger projects". Returns 0 when the marker isn't found. */
+function curtisSectionEnd_(tab, which) {
+  var vals = tab.getRange(1, 1, Math.max(1, tab.getLastRow()), 1).getValues();
+  var re = which === 'plates' ? /^\s*small\/medium/i : /^\s*larger projects/i;
+  for (var i = 0; i < vals.length; i++) {
+    if (re.test(String(vals[i][0] || ''))) return i;   // row i+1 is the marker → section ends at row i
+  }
+  return 0;
+}
+/* One-time fix (Walter 10/7): move the app's requests that appendRow left at
+ * the bottom (Melissa flagged them "<<Are these new…") into their sections.
+ * ?dryrun=1 lists what would move. Plate issues → Plates; others → small. */
+function curtisMoveStranded_(dry) {
+  var tab = SpreadsheetApp.openById(CURTIS_SHEET_ID).getSheetByName(CURTIS_TAB);
+  var find = function () {   // stranded rows below the "Work is completed" banner, top first
+    var vals = tab.getRange(1, 1, tab.getLastRow(), 7).getValues(), done = 0, rows = [];
+    for (var i = 0; i < vals.length; i++) {
+      if (/^\s*-+\s*work is completed/i.test(String(vals[i][0] || ''))) done = i + 1;
+      else if (done && /^<<\s*are these new/i.test(String(vals[i][6] || ''))) {
+        var issue = String(vals[i][5] || '');
+        rows.push({row: i + 1, piano: String(vals[i][4] || '').slice(0, 50), issue: issue.slice(0, 60),
+                   which: /^\s*plate\b/i.test(issue) ? 'plates' : 'small'});
+      }
+    }
+    return rows;
+  };
+  var list = find(), out = [];
+  if (dry) return {ok: true, dryrun: true, wouldMove: list.map(function (r) {
+    return {row: r.row, piano: r.piano, issue: r.issue, to: r.which === 'plates' ? 'Plates' : 'In store, small projects'}; })};
+  for (var guard = 0; guard < 20; guard++) {
+    var cur = find();
+    if (!cur.length) break;
+    var r = cur[0], end = curtisSectionEnd_(tab, r.which);
+    if (!end) { out.push({piano: r.piano, error: 'section not found'}); break; }
+    tab.moveRows(tab.getRange(r.row + ':' + r.row), end + 1);   // becomes the section's last row
+    if (r.which === 'plates') { try { tab.getRange(end + 1, 14).insertCheckboxes(); } catch (eCb) {} }
+    out.push({piano: r.piano, issue: r.issue, to: r.which === 'plates' ? 'Plates' : 'In store, small projects', nowRow: end + 1});
+  }
+  return {ok: true, moved: out};
 }
 
 /**
@@ -9101,6 +9165,11 @@ function teamRequest_(req, who) {
   var kind = String(req.kind || 'Team').slice(0, 40);
   var name = String(who || '').replace(/\s*<[^>]*>\s*/, '').replace(/\s*\(.*\)\s*$/, '');
   var logUrl = 'https://pianologapp.netlify.app/#piano=' + encodeURIComponent(req.serial);
+  // the regular Touch Up goes to Doris (Walter 10/7): an hour on her calendar
+  // plus a row on her refinishing sheet. Curtis touch-ups stay on the Curtis
+  // Harper request. Brigham still gets the email below as a heads-up.
+  var doris = /^touch ?up$/i.test(kind) ? touchUpToDoris_(req, found, name, sh, !!req.dryrun) : null;
+  if (req.dryrun) return {ok: true, dryrun: true, summary: found.summary, doris: doris};
   MailApp.sendEmail({
     to: PRICE_REQUEST_TO,
     subject: '📌 ' + kind + ' request: ' + (found.summary || 'piano') + ' — SN ' + req.serial,
@@ -9118,7 +9187,52 @@ function teamRequest_(req, who) {
       + (req.notes ? '\n\n' + String(req.notes).trim() : '') + '\n\nRequested by ' + (name || 'the team'),
     name: 'BLP Store Map',
   });
-  return {ok: true, summary: found.summary, sentTo: PRICE_REQUEST_TO};
+  var outTR = {ok: true, summary: found.summary, sentTo: PRICE_REQUEST_TO};
+  if (doris) outTR.doris = doris;
+  return outTR;
+}
+
+var REFINISH_SHEET_ID = '1bfF4pmuGv7TefVlDG4lo_04gRjiX9QYerK4o9qih6kc';   // Doris's refinishing sheet (first tab)
+/* Touch Up → Doris: the first open hour in her 8–4 workday (same finder the
+ * service requests use) on her own calendar, and a "Touch-up" row at the end
+ * of her refinishing list, laid out like the rows already there:
+ * blank | brand | serial | spot | (level) | request | notes. */
+function touchUpToDoris_(req, found, name, sh, dry) {
+  var tz = 'America/Denver', res = {};
+  var notes = String(req.notes || '').trim();
+  try {
+    var cid = techCalMap_()['doris'] || '';
+    var cal = cid ? calById_(cid) : null;
+    if (!cal) res.calendarError = "Doris's calendar isn't reachable from the bridge";
+    else {
+      var slot = openGap_(cal, tz, 'Doris', 60);
+      if (!slot) res.calendarError = 'no open hour on her calendar in the next 6 weeks';
+      else {
+        var title = 'Touch up: ' + (found.summary || 'piano') + (req.serial ? ' SN ' + req.serial : '')
+          + (found.location ? ' @ spot ' + found.location : '');
+        var desc = 'Requested via BLP Store Map by ' + (name || 'the team') + ' ('
+          + Utilities.formatDate(new Date(), tz, 'MMM d, h:mm a') + ')'
+          + (notes ? '\n\nTouch-up request:\n' + notes : '')
+          + (req.serial ? '\n\nPiano Log: https://pianologapp.netlify.app/#piano=' + encodeURIComponent(req.serial) : '');
+        if (!dry) cal.createEvent(title, slot.start, slot.end, {description: desc, location: String(found.location || '')});
+        res.calendar = Utilities.formatDate(slot.start, tz, 'EEE, MMM d h:mm a');
+      }
+    }
+  } catch (eC) { res.calendarError = String(eC).slice(0, 120); }
+  try {
+    var ss = SpreadsheetApp.openById(REFINISH_SHEET_ID);
+    var tab = ss.getSheets().filter(function (t) { return t.getSheetId() === 0; })[0] || ss.getSheets()[0];
+    var make = found.row ? String(sh.getRange(found.row, 6).getValue() || '').trim() : '';
+    var brand = make || String(found.summary || '').split('/')[0].trim();
+    var row = ['', brand, String(req.serial || ''), String(found.location || ''), '', 'Touch-up',
+      (notes || 'touch-up') + ' [' + (name || 'team') + ' ' + Utilities.formatDate(new Date(), tz, 'M/d') + ']'];
+    if (!dry) { tab.appendRow(row); res.sheetRow = tab.getLastRow(); }
+    res.sheet = ss.getName() + ' → ' + tab.getName();
+  } catch (eS) {
+    res.sheetError = /permission|access|not found/i.test(String(eS))
+      ? "the refinishing sheet isn't shared with the bridge account (karmel@) as an editor" : String(eS).slice(0, 120);
+  }
+  return res;
 }
 
 // "please set a price" email to Brigham, from the For Sale popup

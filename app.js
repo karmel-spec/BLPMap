@@ -8968,7 +8968,7 @@ function openGenericModal(p, kind) {
     ${pianoHeader(p)}
     <label>What do you need?</label>
     <textarea class="gnotes" rows="3" placeholder="describe the ${esc(kind.toLowerCase())} request…"></textarea>
-    <button class="tmgo ggo">Send to Brigham</button>
+    <button class="tmgo ggo">${kind === 'Touch Up' ? 'Send to Doris' : 'Send to Brigham'}</button>
     <div class="tmmsg"></div>`);
   ov.querySelector('.ggo').onclick = () => submitGeneric(p, kind, ov);
   ov.querySelector('.gnotes').focus();
@@ -8991,8 +8991,14 @@ async function submitGeneric(p, kind, ov) {
     if (j.error === 'unauthorized') { lsDel('blpPin'); throw new Error('Not authorized — sign in again from the ☰ menu.'); }
     if (!j.ok) throw new Error(j.error || 'request failed');
     msg.className = 'tmmsg ok';
-    msg.textContent = `✓ ${kind} request emailed to Brigham and logged.`;
-    setTimeout(() => { ov.hidden = true; }, 2000);
+    // Touch Up → Doris's calendar + refinishing sheet (Walter 10/7)
+    const dz = j.doris;
+    msg.textContent = dz
+      ? '✓ Touch-up sent to Doris — ' + [dz.calendar ? 'on her calendar ' + dz.calendar : '✗ calendar: ' + (dz.calendarError || 'not added'),
+          dz.sheetRow ? 'added to her refinishing sheet' : '✗ refinishing sheet: ' + (dz.sheetError || 'not added')].join(' · ')
+      : `✓ ${kind} request emailed to Brigham and logged.`;
+    if (dz && (dz.calendarError || dz.sheetError)) msg.className = 'tmmsg err';
+    setTimeout(() => { ov.hidden = true; }, dz ? 5000 : 2000);
   } catch (e) {
     msg.className = 'tmmsg err'; msg.textContent = '✗ ' + e.message;
     btn.disabled = false;
