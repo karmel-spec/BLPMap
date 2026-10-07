@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Store Map — Brigham Larson Pianos</title>
 <link rel="icon" href="assets/blp-logo.png">
-<link rel="stylesheet" href="styles.css?v=228">
+<link rel="stylesheet" href="styles.css?v=229">
 </head>
 <body>
 
@@ -95,6 +95,7 @@
     <div class="navitem" data-view="admdash" id="navAdmDash" hidden><span class="ic">🛡</span>Admin</div>
     <div class="navitem" data-view="manager" id="navManager" hidden><span class="ic">📊</span>Manager</div>
     <div class="navitem" data-view="top10" id="navTop10" hidden><span class="ic">🎯</span>Brigham's Top 10</div>
+    <div class="navitem" data-view="buffing" id="navBuffing" hidden><span class="ic">🔧</span>Buffing list</div>
     <div class="navitem" data-view="appset" id="navAppset" hidden><span class="ic">⚙️</span>Settings</div>
     <div class="crew">
       <b>Synced</b><span id="synced">loading…</span>
@@ -317,6 +318,16 @@
     </div>
   </div>
 
+  <div class="view panelview" id="view-buffing" hidden>
+    <div class="panel">
+      <h2 class="ph">🔧 BUFFING LIST</h2>
+      <p class="pd">Korban's hardware queue in one place. Plate screws follow Curtis's priority order;
+        visible hardware joins the list when a piano moves past CAP, furthest along first. Tap a
+        row when it's done — every tap can be undone today.</p>
+      <div id="buffingBody"></div>
+    </div>
+  </div>
+
   <div class="view panelview" id="view-admdash" hidden>
     <div class="panel">
       <h2 class="ph">🛡 ADMIN DASHBOARD</h2>
@@ -327,7 +338,7 @@
   </div>
 </div>
 
-<script src="app.js?v=514"></script>
+<script src="app.js?v=515"></script>
 <script src="sched.js?v=33"></script>
 <!-- Agent faces (bottom-right) + in-app chat: see "agent chat" in app.js.
      Tapping a face opens a chat window with that Hermes agent (through the
