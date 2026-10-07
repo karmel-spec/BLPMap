@@ -411,6 +411,8 @@ async function boot() {
    lists the tasks with mark-off pills; per-piano marks live on the Piano
    Log's "Task Status" tab via the piano-tasks bridge. */
 const PIANO_TASKS_API = 'https://blpsalesapp.netlify.app/.netlify/functions/piano-tasks';
+// buffing list state — declared up here because the map's ✨ Buffing Queue tile reads it on any render
+const BUF = {data: null, at: 0, loading: false, busy: new Set(), prevHw: {}, err: {}};
 const PLATING_REQUEST_API = 'https://blpsalesapp.netlify.app/.netlify/functions/plating-request';
 let TRACKDEFS = null;
 // live from the Sequence sheet (10-min server cache) so Brigham's tab edits
@@ -3531,6 +3533,20 @@ function renderMap() {
       <text x="${pxq + pw / 2}" y="${pyq + 58}" text-anchor="middle" class="kqtxt kqcount" font-size="13">${pq} in queue ›</text>
     </g>`;
   }
+  // ✨ Buffing Queue box on the 2nd floor, just under spot 189a (Walter 10/7) —
+  // tap for the Buffing List report (Korban's plate screws + visible hardware)
+  if (S.floor === 1) {
+    if (!BUF.data && !BUF.loading) loadBuffing().then(() => { if (S.floor === 1) renderMap(); }).catch(() => {});
+    const b189 = f.slots.find(z => /^189a$/i.test(z.id));
+    const bw = 170, bh = 78;
+    const bx = b189 ? b189.x : 1166, by = b189 ? b189.y + b189.h + 24 : 212;
+    const bn = BUF.data ? BUF.data.plates.filter(x => !x.done).length + BUF.data.hardware.filter(x => !x.done).length : null;
+    s += `<g class="bqbtn" style="cursor:pointer">
+      <rect x="${bx}" y="${by}" width="${bw}" height="${bh}" rx="8" class="kqrect"/>
+      <text x="${bx + bw / 2}" y="${by + 31}" text-anchor="middle" class="kqtxt" font-size="20">✨ <tspan font-weight="800" font-size="15">Buffing Queue</tspan></text>
+      <text x="${bx + bw / 2}" y="${by + 58}" text-anchor="middle" class="kqtxt kqcount" font-size="13">${bn == null ? 'loading…' : bn + ' in queue ›'}</text>
+    </g>`;
+  }
   S.drawW = drawW; S.drawH = drawH;
 
   const svg = $('#plan');
@@ -3602,6 +3618,11 @@ function renderMap() {
   if (rqb) rqb.addEventListener('click', ev => { ev.stopPropagation(); openRefinishQ(); });
   const pqb = svg.querySelector('.pqbtn');
   if (pqb) pqb.addEventListener('click', ev => { ev.stopPropagation(); openPlateQ(); });
+  const bqb = svg.querySelector('.bqbtn');
+  if (bqb) bqb.addEventListener('click', ev => {
+    ev.stopPropagation();
+    S.openReport = 'buffing'; preloadReport('buffing'); switchView('report'); renderReport();
+  });
   sizePlan();
   // cards open on CLICK only (082726hales16) — hover-open made panning the
   // map spray cards everywhere; hover now just shows the cursor affordance
@@ -12632,7 +12653,7 @@ const REPORT_DEFS = () => [
      try { return taskQueueLists().reduce((s, q) => s + q.list.length, 0); } catch (e) { return null; } })(),
    desc: 'Eight ordered to-do queues — key service, plates to Curtis Harper, refinishing on deck, plating + buffing, plate hardware buffing (Korban), decals, bass strings, and the showroom tuning queue for Korban (most-overdue first, from the tuning calendars). Each shows who’s NEXT and everyone behind them. Click any row to jump to the piano.',
    html: taskQueuesTable},
-  {id: 'buffing', sec: 'shop', icon: '🔧', title: 'BUFFING LIST', count: (() => {
+  {id: 'buffing', sec: 'shop', icon: '✨', title: 'BUFFING LIST', count: (() => {
      try { return BUF.data ? BUF.data.plates.filter(p => !p.done).length + BUF.data.hardware.filter(h => !h.done).length : null; } catch (e) { return null; } })(),
    desc: 'Korban\u2019s hardware queue. Plate screws come from Curtis\u2019s sheet in his priority order; a piano\u2019s visible hardware joins the list when it moves past CAP, furthest along first. Anyone can mark a row done, and every tap can be undone the same day. Korban gets the top of both lists by text at 11 AM on workdays.',
    html: () => '<div id="buffingBody"><div class="empty">Building the list…</div></div>'},
@@ -16016,7 +16037,7 @@ const PERM_KEYS = [
   ['settings', 'This Settings page'],
 ];
 const SETTING_FIELDS = [
-  ['🔧 Korban\'s buffing text', [
+  ['✨ Korban\'s buffing text', [
     ['buffing_text', 'Daily 11 AM buffing text (on / off)'],
     ['buffing_text_to', 'Text goes to (name — blank = Korban)'],
   ]],
@@ -17231,7 +17252,6 @@ const TOP10 = {data: null, at: 0, loading: false};
  * list and every tap live in salesapp2 buffing-list; the 11 AM text links
  * here (#report=buffing). A Shop Report, open to everyone (Walter 10/7). */
 const BUFFING_API = 'https://blpsalesapp.netlify.app/.netlify/functions/buffing-list';
-const BUF = {data: null, at: 0, loading: false, busy: new Set(), prevHw: {}, err: {}};
 async function loadBuffing() {
   BUF.loading = true;
   try {
