@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-07.6';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-07.7';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -5803,6 +5803,23 @@ function applyScheduleLocked_(req) {
     try { cal = calById_(calId); } catch (e) { cal = null; }   // subscribes if only shared
     if (!cal) { results.push({tech: tch.name, error: 'no access to ' + calId}); return; }
     var made = 0, failed = 0, offDays = [], tuned = 0, tuneFellBack = 0, fieldHeld = 0, qcRouted = 0, qcFellBack = 0, alreadyBooked = [];
+    // Already-on-the-calendar guard (Walter 10/7): Korban's 3–4 "Vacuum/sweep/mop"
+    // came out twice a day for weeks — a standing event on his calendar plus
+    // the copy Approve made from the Scheduling Rules. Any block whose title
+    // (letters and digits only) and start time match an event already on the
+    // tech's calendar that week is skipped and reported; invitations from the
+    // in-store / QC calendars count too, since they show on the tech's calendar.
+    // Blocks Approve creates are added as it goes, so a plan that lists the
+    // same block twice makes it once.
+    var onCal = {}, alreadyOn = [];
+    var calKey_ = function (title, when) {
+      return String(title || '').toLowerCase().replace(/[^a-z0-9]+/g, '') + '|' + Math.round(when.getTime() / 60000);
+    };
+    try {
+      var gw0 = new Date((plan.weekStart || got.meta.weekStart) + 'T00:00:00');
+      var gw1 = new Date(gw0); gw1.setDate(gw1.getDate() + 7);
+      cal.getEvents(gw0, gw1).forEach(function (ev) { onCal[calKey_(ev.getTitle(), ev.getStartTime())] = 1; });
+    } catch (eG) { onCal = {}; }
     (tch.days || []).forEach(function (blocks, di) {
       // Melissa 9/7 (request 090726terry22): the draft put Curtis on
       // Wednesday + Friday although his calendar says "Curtis off Wednesdays
@@ -5823,6 +5840,11 @@ function applyScheduleLocked_(req) {
         var d2 = new Date(start); d2.setDate(d2.getDate() + di); d2.setHours(t2.h, t2.min, 0, 0);
         try {
           var evTitle = String(b[3] || 'Shop work');
+          var ck = calKey_(evTitle, d1);
+          if (onCal[ck]) {
+            alreadyOn.push(Utilities.formatDate(d1, 'America/Denver', 'EEE h:mm a') + ' ' + evTitle.slice(0, 40));
+            return;
+          }
           var cleanNote = calDescription_(b[4]);
           var opts = {description: (cleanNote ? cleanNote + '\n' : '')
             + 'Applied from the Shop Manager schedule proposal (' + plan.week + ')'};
@@ -5880,12 +5902,14 @@ function applyScheduleLocked_(req) {
             if (b[2] === 'tune') tuneFellBack++;
             if (b[2] === 'qc') qcFellBack++;
           }
+          onCal[ck] = 1;
           made++;
         } catch (e) { failed++; }
       });
     });
     var res = {tech: tch.name, events: made, failed: failed};
     if (alreadyBooked.length) res.alreadyBooked = alreadyBooked;
+    if (alreadyOn.length) res.alreadyOnCalendar = alreadyOn;
     if (tuned) res.onTuningCal = tuned;
     if (tuneFellBack) res.tuningFellBackToOwnCal = tuneFellBack;
     if (fieldHeld) res.fieldKeptOffCalendar = fieldHeld;

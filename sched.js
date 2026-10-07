@@ -930,6 +930,7 @@ async function loadProposal(box){
       // proposal's blocks were NOT put on it (Melissa 9/7 — Curtis Wed/Fri)
       out.innerHTML="✓ Applied — "+j.results.map(x=>`<b>${esc(x.tech)}</b>: ${x.events!=null?x.events+" events":esc(x.skipped||x.error||"?")}`
         +(x.alreadyBooked&&x.alreadyBooked.length?` <span style="color:#8a6a00">· not re-created (already booked): ${x.alreadyBooked.map(esc).join("; ")}</span>`:"")
+        +(x.alreadyOnCalendar&&x.alreadyOnCalendar.length?` <span style="color:#8a6a00">· already on the calendar, not added again: ${x.alreadyOnCalendar.map(esc).join("; ")}</span>`:"")
         +(x.offDays&&x.offDays.length?` <span style="color:#9e2020">· skipped ${x.offDays.map(o=>esc(o.day)).join(", ")} — calendar says “${esc(x.offDays[0].why)}”</span>`:"")).join(" · ");
       if(j.applied){ ab.textContent="✓ Applied to calendars"; }
       else { ab.disabled=false; ab.textContent="✅ Approve — apply to live tech calendars"; }
