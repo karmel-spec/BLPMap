@@ -17229,7 +17229,9 @@ const TOP10 = {data: null, at: 0, loading: false};
 const BUFFING_API = 'https://blpsalesapp.netlify.app/.netlify/functions/buffing-list';
 const BUF = {data: null, at: 0, loading: false, busy: new Set(), prevHw: {}, err: {}};
 function buffingOk() {
-  return gateOr(isTeamAdmin() || ['korbangreenhalgh.blp@gmail.com', 'markhales.blp@gmail.com'].includes(userEmail()), 'buffing');
+  // a role that grants 'buffing' adds people; it never takes the page from Korban, Mark or managers
+  return isTeamAdmin() || ['korbangreenhalgh.blp@gmail.com', 'markhales.blp@gmail.com'].includes(userEmail())
+    || permHas('buffing') === true;
 }
 async function loadBuffing() {
   BUF.loading = true;
