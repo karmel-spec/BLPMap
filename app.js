@@ -1482,6 +1482,7 @@ function preloadReport(id) {
   if (id === 'queue' && !S.tlRows) loadTimeLog();   // ASSIGNED TO column
   if (id === 'appupdates' && !S.auRows) loadAppUpdates();
   if (id === 'spotlight' && !S.spotData) loadSpotlight();
+  if (id === 'buffing' && !BUF.data && !BUF.loading) loadBuffing().then(() => { if (S.openReport === 'buffing') renderBuffing(); }).catch(() => {});
   if (id === 'clockadjust') {
     if (!S.fixRows) loadClockFixes();
     if (!S.payRows) loadPayroll();
@@ -9717,8 +9718,6 @@ function wireNavGates() {
   if (nt) nt.hidden = !isTeamAdmin();
   const na = $('#navAppset');
   if (na) na.hidden = !isSettingsAdmin();
-  const nb = $('#navBuffing');
-  if (nb) nb.hidden = !buffingOk();
 }
 function isSettingsAdmin() {
   return gateOr(isOwner() || ['melissa@brighamlarsonpianos.com', 'markhales.blp@gmail.com'].includes(userEmail()), 'settings');
@@ -12633,6 +12632,10 @@ const REPORT_DEFS = () => [
      try { return taskQueueLists().reduce((s, q) => s + q.list.length, 0); } catch (e) { return null; } })(),
    desc: 'Eight ordered to-do queues — key service, plates to Curtis Harper, refinishing on deck, plating + buffing, plate hardware buffing (Korban), decals, bass strings, and the showroom tuning queue for Korban (most-overdue first, from the tuning calendars). Each shows who’s NEXT and everyone behind them. Click any row to jump to the piano.',
    html: taskQueuesTable},
+  {id: 'buffing', sec: 'shop', icon: '🔧', title: 'BUFFING LIST', count: (() => {
+     try { return BUF.data ? BUF.data.plates.filter(p => !p.done).length + BUF.data.hardware.filter(h => !h.done).length : null; } catch (e) { return null; } })(),
+   desc: 'Korban\u2019s hardware queue. Plate screws come from Curtis\u2019s sheet in his priority order; a piano\u2019s visible hardware joins the list when it moves past CAP, furthest along first. Anyone can mark a row done, and every tap can be undone the same day. Korban gets the top of both lists by text at 11 AM on workdays.',
+   html: () => '<div id="buffingBody"><div class="empty">Building the list…</div></div>'},
   {id: 'stalled', sec: 'shop', icon: '🐢', title: 'SITTING TOO LONG', count: (() => {
      try { return stalledPianos().length; } catch (e) { return null; } })(),
    desc: 'Custom Shopwork pianos in the building more than twice the typical span for their current phase — the 🐢 list that used to live inside the daily brief. Click a row to jump to the piano.',
@@ -12708,6 +12711,7 @@ function renderReport() {
         <p class="pd">${opened.desc}</p>
         <div class="tscroll">${opened.html()}</div>
       </div>`;
+    if (opened.id === 'buffing') renderBuffing();
     body.querySelector('.rptx').onclick = () => {
       S.openReport = null;
       renderReport();
@@ -15965,7 +15969,7 @@ function renderAdmDash() {
 
 /* ---------- views / nav / drawers ---------- */
 function showView(v) {
-  ['map', 'report', 'board', 'cal', 'media', 'shopmap', 'archive', 'dash', 'whiteboard', 'training', 'trainingdoc', 'sched', 'team', 'admdash', 'updates', 'tboard', 'manager', 'appset', 'top10', 'buffing'].forEach(x => $('#view-' + x).hidden = x !== v);
+  ['map', 'report', 'board', 'cal', 'media', 'shopmap', 'archive', 'dash', 'whiteboard', 'training', 'trainingdoc', 'sched', 'team', 'admdash', 'updates', 'tboard', 'manager', 'appset', 'top10'].forEach(x => $('#view-' + x).hidden = x !== v);
   if (v === 'archive') renderArchive();
   document.querySelectorAll('.navitem[data-view]').forEach(el =>
     el.classList.toggle('on', el.dataset.view === v));
@@ -15980,7 +15984,6 @@ function showView(v) {
   if (v === 'manager') renderManager();
   if (v === 'appset') renderAppSettings();
   if (v === 'top10') renderTop10();
-  if (v === 'buffing') renderBuffing();
 }
 /* 📊 Manager console — the scorecard as its own menu tab */
 function renderManager() {
@@ -16014,7 +16017,7 @@ const PERM_KEYS = [
 ];
 const SETTING_FIELDS = [
   ['🔧 Korban\'s buffing text', [
-    ['buffing_text', 'Daily 7:30 AM buffing text (on / off)'],
+    ['buffing_text', 'Daily 11 AM buffing text (on / off)'],
     ['buffing_text_to', 'Text goes to (name — blank = Korban)'],
   ]],
   ['📵 Quiet hours (texting)', [
@@ -16283,7 +16286,8 @@ function switchView(v) {
   if ((v === 'team' || v === 'admdash') && !isTeamAdmin()) v = 'map';   // admin + managers + owners
   if (v === 'manager' && !isManagerConsole()) v = 'map';   // Brigham, Karmel & Mark only
   if (v === 'top10' && !isTeamAdmin()) v = 'map';   // owners, managers & admins
-  if (v === 'buffing' && !buffingOk()) v = 'map';   // Korban, Mark, managers & owners
+  // old #view=buffing links open the Buffing List report (Walter 10/7)
+  if (v === 'buffing') { S.openReport = 'buffing'; preloadReport('buffing'); v = 'report'; setTimeout(renderReport, 0); }
   if (v === 'training') renderTraining();   // re-check gated rows for whoever is signed in NOW
   S.view = v; showView(v); closeNav();
   // a leftover page scroll (from panning the map) can slide a view's top —
@@ -16316,7 +16320,7 @@ $('.logo').onclick = goHome;
 $('.logo').style.cursor = 'pointer';
 
 // every non-map view gets a ✕ back to the map (Escape works too)
-['report', 'board', 'cal', 'media', 'shopmap', 'archive', 'dash', 'whiteboard', 'training', 'trainingdoc', 'buffing'].forEach(v => {
+['report', 'board', 'cal', 'media', 'shopmap', 'archive', 'dash', 'whiteboard', 'training', 'trainingdoc'].forEach(v => {
   const el = $('#view-' + v);
   if (el && !el.querySelector('.viewclose')) {
     const b = document.createElement('button');
@@ -17224,15 +17228,10 @@ const TOP10 = {data: null, at: 0, loading: false};
 /* 🔧 BUFFING LIST (Walter 10/7) — Korban's two hardware queues on one page:
  * plate screws from Curtis's sheet (column N unchecked, his priority order)
  * and visible hardware for every piano past CAP, furthest along first. The
- * list and every tap live in salesapp2 buffing-list; the 7:30 AM text links
- * here (#view=buffing). */
+ * list and every tap live in salesapp2 buffing-list; the 11 AM text links
+ * here (#report=buffing). A Shop Report, open to everyone (Walter 10/7). */
 const BUFFING_API = 'https://blpsalesapp.netlify.app/.netlify/functions/buffing-list';
 const BUF = {data: null, at: 0, loading: false, busy: new Set(), prevHw: {}, err: {}};
-function buffingOk() {
-  // a role that grants 'buffing' adds people; it never takes the page from Korban, Mark or managers
-  return isTeamAdmin() || ['korbangreenhalgh.blp@gmail.com', 'markhales.blp@gmail.com'].includes(userEmail())
-    || permHas('buffing') === true;
-}
 async function loadBuffing() {
   BUF.loading = true;
   try {
@@ -17244,7 +17243,6 @@ async function loadBuffing() {
 }
 async function renderBuffing(force) {
   const el = $('#buffingBody'); if (!el) return;
-  if (!buffingOk()) { el.innerHTML = '<div class="empty">Korban, Mark, managers &amp; owners.</div>'; return; }
   if (!BUF.data || force || Date.now() - BUF.at > 120000) {
     if (!BUF.data) el.innerHTML = '<div class="empty">Building the list…</div>';
     if (!BUF.loading) {
@@ -17266,13 +17264,13 @@ async function renderBuffing(force) {
                : `<button class="bufgo" data-k="${k}" data-op="screws" ${busy ? 'disabled' : ''}>${busy ? '…' : 'Screws done'}</button>`}</div>`;
   };
   const pill = h => h.kind === 'ship' ? `<span class="bufpill bufship">${esc(h.finish)}</span>`
-    : h.kind === 'buff' ? '<span class="bufpill">No plating</span>' : '<span class="bufpill bufunset">Finish not set</span>';
+    : h.kind === 'buff' ? '<span class="bufpill">No plating · buff only</span>' : '<span class="bufpill bufunset">Finish not set</span>';
   const hwRow = (h, i) => {
     const k = 'h' + i, busy = BUF.busy.has(k);
-    const main = h.kind === 'ship' ? ['shipped', 'Shipped'] : h.kind === 'buff' ? ['buffed', 'Buffed'] : null;
+    const main = h.kind === 'ship' ? ['prepped', 'Prepped for Shipping'] : h.kind === 'buff' ? ['buffed', 'Buffed'] : null;
     return `<div class="bufrow${h.done ? ' bufdone' : ''}">
       <div class="buft"><div class="bufl"><a href="#piano=${encodeURIComponent(h.serial)}" class="bufpiano">${esc(h.label)}</a> ${pill(h)}</div>
-        <div class="bufs">${esc(h.phase)}${h.kind === 'unset' ? ' · set the plating finish on the card first' : h.kind === 'buff' ? ' · buff only' : ' · ships for plating'}</div>
+        ${h.kind === 'unset' ? '<div class="bufs">set the plating finish on the card first</div>' : ''}
         ${BUF.err[k] ? `<div class="bufs buferr">✗ ${esc(BUF.err[k])}</div>` : ''}</div>
       ${h.done ? `<span class="bufok">✓ ${esc(h.done)} <button class="bufundo" data-k="${k}" ${busy ? 'disabled' : ''}>undo</button></span>`
         : `<span class="bufbtns">${main ? `<button class="bufgo" data-k="${k}" data-op="${main[0]}" ${busy ? 'disabled' : ''}>${busy ? '…' : main[1]}</button>` : ''}
@@ -17281,7 +17279,7 @@ async function renderBuffing(force) {
   const openP = d.plates.filter(p => !p.done).length, openH = d.hardware.filter(h => !h.done).length;
   el.innerHTML = `<div class="bufmeta">${openP} plate${openP === 1 ? '' : 's'} · ${openH} piano${openH === 1 ? '' : 's'} with hardware to prep
       <button class="csvbtn bufreload">↻ refresh</button></div>
-    <h3 class="bufh">Plate screws · Curtis's order</h3>
+    <h3 class="bufh">Plate screws</h3>
     <div class="buflist">${d.plates.map(plateRow).join('') || '<div class="bufrow"><div class="buft"><div class="bufs">No plates waiting on screws 🎉</div></div></div>'}</div>
     <h3 class="bufh">Visible hardware · furthest along first</h3>
     <div class="buflist">${d.hardware.map(hwRow).join('') || '<div class="bufrow"><div class="buft"><div class="bufs">Nothing waiting 🎉</div></div></div>'}</div>
@@ -17303,7 +17301,7 @@ async function renderBuffing(force) {
     const k = b.dataset.k, undo = b.classList.contains('bufundo');
     const isPlate = k[0] === 'p', item = (isPlate ? d.plates : d.hardware)[+k.slice(1)];
     if (!item) return;
-    const op = isPlate ? 'screws' : undo ? item.doneOp || ({'Shipped': 'shipped', 'Buffed': 'buffed'}[item.done] || 'done') : b.dataset.op;
+    const op = isPlate ? 'screws' : undo ? item.doneOp || ({'Prepped for shipping': 'prepped', 'Buffed': 'buffed'}[item.done] || 'done') : b.dataset.op;
     const body = {op, on: !undo, serial: item.serial, mapRow: item.mapRow};
     if (isPlate) {
       body.curtisRow = item.curtisRow; body.pianoText = item.pianoText;
@@ -17313,7 +17311,7 @@ async function renderBuffing(force) {
     const ok = await post(k, body);
     if (ok) {
       if (undo) { item.done = ''; delete item.doneOp; }
-      else { item.done = isPlate ? (clockName() || 'done') : ({shipped: 'Shipped', buffed: 'Buffed', done: 'Already done'}[op]); item.doneOp = op; }
+      else { item.done = isPlate ? (clockName() || 'done') : ({prepped: 'Prepped for shipping', buffed: 'Buffed', done: 'Already done'}[op]); item.doneOp = op; }
     }
     renderBuffing();
   });
