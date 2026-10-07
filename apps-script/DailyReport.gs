@@ -18,6 +18,7 @@
 // first statement in the file (Walter 10/7, slow-bridge diagnosis): fn=hb reports
 // how long module evaluation took from here (secrets + App Settings reads)
 var BOOT_T = Date.now();
+var REQ_T0 = 0;   // set when doGet/doPost start; json_ stamps every reply with ms (handler) + boot
 var APP_URL = 'https://blpstoremap.netlify.app';
 var REPORT_TO = 'info@brighamlarsonpianos.com';
 var PIANO_LOG_ID = '1ZunbPKygpQlcXfTyPowDHdUE9spJ3uV1XA4iX1eoKRc';
@@ -53,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-07.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-07.4';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -153,6 +154,7 @@ function sendDailyReport() {
  * env vars or credentials are needed anywhere else.
  */
 function doGet(e) {
+  REQ_T0 = Date.now();
   if (e && e.parameter && e.parameter.fn === 'hb') {
     // heartbeat: boot = ms evaluating this file before the handler ran; ms = the
     // handler; sheetMs (with &sheet=1) = one Piano Log read. Wall time minus
@@ -832,6 +834,7 @@ function fetchEvents_() {
 
 function doPost(e) {
   var t0 = Date.now();   // clock replies report how long the bridge took (ms)
+  REQ_T0 = t0;
   try {
     var req = JSON.parse(e.postData.contents);
     // three ways in: the team PIN, the server-to-server secret, or a
@@ -2201,6 +2204,13 @@ function calById_(id) {
 }
 
 function json_(o) {
+  // every reply carries its own timing (Walter 10/7, slow-bridge diagnosis):
+  // ms = handler time, boot = module evaluation before it. Wall time minus
+  // both is time the call spent queued / starting at Google.
+  if (o && typeof o === 'object' && !Array.isArray(o) && REQ_T0) {
+    if (o.ms == null) o.ms = Date.now() - REQ_T0;
+    if (o.boot == null) o.boot = REQ_T0 - BOOT_T;
+  }
   return ContentService.createTextOutput(JSON.stringify(o))
     .setMimeType(ContentService.MimeType.JSON);
 }
