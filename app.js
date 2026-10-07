@@ -9000,11 +9000,12 @@ async function submitGeneric(p, kind, ov) {
     msg.className = 'tmmsg ok';
     // Touch Up → Doris's calendar + refinishing sheet (Walter 10/7)
     const dz = j.doris;
+    // Touch Up → a row on Doris's refinishing sheet = the Refinishing Queue (no calendar, 10/7)
     msg.textContent = dz
-      ? '✓ Touch-up sent to Doris — ' + [dz.calendar ? 'on her calendar ' + dz.calendar : '✗ calendar: ' + (dz.calendarError || 'not added'),
-          dz.sheetRow ? 'added to her refinishing sheet' : '✗ refinishing sheet: ' + (dz.sheetError || 'not added')].join(' · ')
+      ? (dz.sheetRow ? '✓ Touch-up added to Doris\u2019s refinishing queue.' : '✗ Not added to the refinishing queue: ' + (dz.sheetError || 'unknown error'))
       : `✓ ${kind} request emailed to Brigham and logged.`;
-    if (dz && (dz.calendarError || dz.sheetError)) msg.className = 'tmmsg err';
+    if (dz && !dz.sheetRow) msg.className = 'tmmsg err';
+    if (dz && dz.sheetRow) { REFQ.at = 0; needRefQ(); }   // queue picks it up now, not in 5 min
     setTimeout(() => { ov.hidden = true; }, dz ? 5000 : 2000);
   } catch (e) {
     msg.className = 'tmmsg err'; msg.textContent = '✗ ' + e.message;

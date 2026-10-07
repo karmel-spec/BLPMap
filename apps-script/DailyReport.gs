@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-07.10';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-07.11';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -9165,8 +9165,8 @@ function teamRequest_(req, who) {
   var kind = String(req.kind || 'Team').slice(0, 40);
   var name = String(who || '').replace(/\s*<[^>]*>\s*/, '').replace(/\s*\(.*\)\s*$/, '');
   var logUrl = 'https://pianologapp.netlify.app/#piano=' + encodeURIComponent(req.serial);
-  // the regular Touch Up goes to Doris (Walter 10/7): an hour on her calendar
-  // plus a row on her refinishing sheet. Curtis touch-ups stay on the Curtis
+  // the regular Touch Up goes to Doris (Walter 10/7): a row on her refinishing
+  // sheet, shown in the app's Refinishing Queue. Curtis touch-ups stay on the Curtis
   // Harper request. No email to Brigham for touch-ups (Walter 10/7); other
   // team requests (Priority Scheduling…) still email him.
   var doris = /^touch ?up$/i.test(kind) ? touchUpToDoris_(req, found, name, sh, !!req.dryrun) : null;
@@ -9195,36 +9195,17 @@ function teamRequest_(req, who) {
 }
 
 var REFINISH_SHEET_ID = '1bfF4pmuGv7TefVlDG4lo_04gRjiX9QYerK4o9qih6kc';   // Doris's refinishing sheet (first tab)
-/* Touch Up → Doris: the first open hour in her 8–4 workday (same finder the
- * service requests use) on her own calendar, and a "Touch-up" row at the end
- * of her refinishing list, laid out like the rows already there:
+/* Touch Up → Doris: a "Touch-up" row at the end of her refinishing list (no
+ * calendar event since 10/7 — the queue is the to-do), laid out like the rows
+ * already there:
  * blank | brand | serial | spot | (level) | request | notes. */
 function touchUpToDoris_(req, found, name, sh, dry) {
   var tz = 'America/Denver', res = {};
   var notes = String(req.notes || '').trim();
-  // sheetOnly (10/7 backfill): the calendar half already went through — add the
-  // refinishing-sheet row without booking a second event; requester names who
-  // asked when the bridge is called with the PIN instead of a sign-in
-  if (req.sheetOnly) { res.calendar = 'skipped (sheetOnly)'; if (req.requester) name = String(req.requester).slice(0, 40); }
-  else try {
-    var cid = techCalMap_()['doris'] || '';
-    var cal = cid ? calById_(cid) : null;
-    if (!cal) res.calendarError = "Doris's calendar isn't reachable from the bridge";
-    else {
-      var slot = openGap_(cal, tz, 'Doris', 60);
-      if (!slot) res.calendarError = 'no open hour on her calendar in the next 6 weeks';
-      else {
-        var title = 'Touch up: ' + (found.summary || 'piano') + (req.serial ? ' SN ' + req.serial : '')
-          + (found.location ? ' @ spot ' + found.location : '');
-        var desc = 'Requested via BLP Store Map by ' + (name || 'the team') + ' ('
-          + Utilities.formatDate(new Date(), tz, 'MMM d, h:mm a') + ')'
-          + (notes ? '\n\nTouch-up request:\n' + notes : '')
-          + (req.serial ? '\n\nPiano Log: https://pianologapp.netlify.app/#piano=' + encodeURIComponent(req.serial) : '');
-        if (!dry) cal.createEvent(title, slot.start, slot.end, {description: desc, location: String(found.location || '')});
-        res.calendar = Utilities.formatDate(slot.start, tz, 'EEE, MMM d h:mm a');
-      }
-    }
-  } catch (eC) { res.calendarError = String(eC).slice(0, 120); }
+  // queue only (Walter 10/7): no calendar event — the touch-up is a row on
+  // Doris's refinishing sheet, which the app's Refinishing Queue shows.
+  // requester names who asked when the bridge is called with the PIN.
+  if (req.requester) name = String(req.requester).slice(0, 40);
   try {
     var ss = SpreadsheetApp.openById(REFINISH_SHEET_ID);
     var tab = ss.getSheets().filter(function (t) { return t.getSheetId() === 0; })[0] || ss.getSheets()[0];
