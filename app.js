@@ -413,6 +413,7 @@ async function boot() {
 const PIANO_TASKS_API = 'https://blpsalesapp.netlify.app/.netlify/functions/piano-tasks';
 // buffing list state — declared up here because the map's ✨ Buffing Queue tile reads it on any render
 const BUF = {data: null, at: 0, loading: false, busy: new Set(), prevHw: {}, err: {}};
+const BUFFING_API = 'https://blpsalesapp.netlify.app/.netlify/functions/buffing-list';
 const PLATING_REQUEST_API = 'https://blpsalesapp.netlify.app/.netlify/functions/plating-request';
 let TRACKDEFS = null;
 // live from the Sequence sheet (10-min server cache) so Brigham's tab edits
@@ -17251,7 +17252,6 @@ const TOP10 = {data: null, at: 0, loading: false};
  * and visible hardware for every piano past CAP, furthest along first. The
  * list and every tap live in salesapp2 buffing-list; the 11 AM text links
  * here (#report=buffing). A Shop Report, open to everyone (Walter 10/7). */
-const BUFFING_API = 'https://blpsalesapp.netlify.app/.netlify/functions/buffing-list';
 async function loadBuffing() {
   BUF.loading = true;
   try {
