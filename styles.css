@@ -2244,7 +2244,7 @@ body.qdragging{user-select:none}
 .bufrow:first-child{border-top:0}
 .bufrow.bufdone{background:#eef6ef}
 .bufn{min-width:20px;text-align:center;color:#8a847b}
-.buft{flex:1;min-width:0}
+.buft{flex:1;min-width:150px}
 .bufl{font-size:14px;font-weight:600;color:#2a2622;overflow-wrap:anywhere}
 .bufs{font-size:12px;color:#8a847b;margin-top:2px}
 .buferr{color:#9e2020}
@@ -2253,9 +2253,10 @@ body.qdragging{user-select:none}
 .bufpill.bufship{background:#faeeda;color:#854f0b}
 .bufpill.bufunset{background:#fcebeb;color:#a32d2d}
 .bufbtns{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
-.bufgo{border:1.5px solid #2f7d4f;background:#fff;color:#2f7d4f;border-radius:8px;padding:6px 10px;font-weight:700;font-size:12.5px;white-space:nowrap;cursor:pointer}
+.bufgo{border:1.5px solid #2f7d4f;background:#fff;color:#2f7d4f;border-radius:8px;padding:6px 10px;font-weight:700;font-size:12.5px;line-height:1.2;max-width:118px;text-align:center;cursor:pointer}
 .bufgo.bufalt{border-color:#cfc9bf;color:#6f6a63;font-weight:600}
 .bufgo:disabled,.bufundo:disabled{opacity:.5}
 .bufok{font-size:12.5px;color:#2f7d4f;font-weight:700;white-space:nowrap}
 .bufundo{border:0;background:none;color:#274b6d;text-decoration:underline;cursor:pointer;font-size:12px;padding:0 0 0 4px}
-@media (max-width:520px){.bufrow{flex-wrap:wrap}.bufbtns,.bufgo:not(.bufalt){margin-left:auto}}
+/* phones (Mark 10/7, 100726hales50): button text wraps and the buttons stack, so the piano name keeps its room */
+@media (max-width:520px){.bufbtns{flex-direction:column;align-items:stretch;flex:0 0 auto}.bufgo{max-width:112px}}
