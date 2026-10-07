@@ -15,6 +15,9 @@
  *      no computer required. Run `sendDailyReport` any time for a manual send.
  */
 
+// first statement in the file (Walter 10/7, slow-bridge diagnosis): fn=hb reports
+// how long module evaluation took from here (secrets + App Settings reads)
+var BOOT_T = Date.now();
 var APP_URL = 'https://blpstoremap.netlify.app';
 var REPORT_TO = 'info@brighamlarsonpianos.com';
 var PIANO_LOG_ID = '1ZunbPKygpQlcXfTyPowDHdUE9spJ3uV1XA4iX1eoKRc';
@@ -50,7 +53,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-07.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-07.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -150,6 +153,20 @@ function sendDailyReport() {
  * env vars or credentials are needed anywhere else.
  */
 function doGet(e) {
+  if (e && e.parameter && e.parameter.fn === 'hb') {
+    // heartbeat: boot = ms evaluating this file before the handler ran; ms = the
+    // handler; sheetMs (with &sheet=1) = one Piano Log read. Wall time minus
+    // boot and ms is time spent queued / starting at Google.
+    var hb0 = Date.now();
+    var hb = {ok: true, rev: BRIDGE_REV, boot: hb0 - BOOT_T};
+    if (e.parameter.sheet === '1') {
+      var hs0 = Date.now();
+      try { pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID)).getRange(2, 3).getValue(); hb.sheetMs = Date.now() - hs0; }
+      catch (eH) { hb.sheetErr = String(eH).slice(0, 80); }
+    }
+    hb.ms = Date.now() - hb0;
+    return json_(hb);
+  }
   if (e && e.parameter && e.parameter.fn === 'events') {
     try { return json_({events: fetchEvents_()}); }
     catch (err) { return json_({error: String(err), events: []}); }
