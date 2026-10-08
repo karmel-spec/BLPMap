@@ -19,6 +19,8 @@
 // agent is told who is writing. If the gateway cannot be reached the request
 // fails with a clear error — nothing is ever answered on the agent's behalf.
 
+import team from '../../blp-team.js';
+
 const GATEWAY_URL = (process.env.BLP_GATEWAY_URL || 'https://agents.brighamlarsonpianos.com').replace(/\/$/, '');
 const GATEWAY_KEY = process.env.BLP_GATEWAY_KEY || '';
 // public web client of the "BLP Store Map" Google Cloud project (same as app.js)
@@ -34,9 +36,9 @@ function json(body, status = 200) {
   return Response.json(body, { status, headers: { 'cache-control': 'no-store' } });
 }
 
+// Same sign-in list as the map (blp-team.js). Empty email is not a team account.
 function blpAccount(email) {
-  const e = String(email || '').toLowerCase();
-  return /@brighamlarsonpianos\.com$/.test(e) || /\.blp@gmail\.com$/.test(e) || e === 'brighamlarson@gmail.com';
+  return team.isTeamEmail(email);
 }
 
 // verified tokens, remembered until they expire, so polling does not hit

@@ -6,9 +6,11 @@
 // Script bridge emails him (top10Brief in apps-script/DailyReport.gs).
 //
 // Sources: the Piano Log (same CSV export as /api/data), the task boards and
-// pending mini-QC requests in Supabase. Cached 3 minutes.
+// pending mini-QC requests in Supabase. Cached 3 minutes. Same sign-in gate
+// as /api/data (lib/blp-auth.mjs) — this ranking is built from customer records.
 
 import { loadPianos } from './lib/pianolog-mirror.mjs';   // read mirror (10/7), CSV fallback inside
+import { authorizeDataRequest, denyResponse } from './lib/blp-auth.mjs';
 
 const SB_URL = (process.env.SUPABASE_URL || 'https://ismacawxfvvllfinibbf.supabase.co').replace(/\/$/, '');
 const SB_KEY = process.env.SUPABASE_ANON_KEY || 'sb_publishable_MamcjSX0CHTdYlpKDWSkmQ_-nbuQ1z-';
@@ -156,8 +158,13 @@ function build(pianos, cards, qc) {
     totals: { shop: shop.length, sales: sales.length, admin: admin.length, askOpen: ask.length, myCards: mine.length } };
 }
 
-export default async () => {
-  if (cache.body && Date.now() - cache.at < CACHE_MS) return Response.json({ ...cache.body, cached: true }, { headers: { 'cache-control': 'no-store' } });
+const json = (body, status = 200) => Response.json(body, { status, headers: { 'cache-control': 'private, no-store' } });
+
+export async function handleTop10(req, deps = {}) {
+  const auth = await authorizeDataRequest(req, deps.authOpts);
+  if (!auth.ok) return denyResponse(auth);
+  if (typeof deps.load === 'function') return json(await deps.load());
+  if (cache.body && Date.now() - cache.at < CACHE_MS) return json({ ...cache.body, cached: true });
   try {
     const [pr, cards, qc] = await Promise.all([
       loadPianos(false),
@@ -167,9 +174,11 @@ export default async () => {
     const pianos = pr.pianos;
     const body = { generated: new Date().toISOString(), ...build(pianos, cards, qc) };
     cache.body = body; cache.at = Date.now();
-    return Response.json(body, { headers: { 'cache-control': 'no-store' } });
+    return json(body);
   } catch (e) {
-    if (cache.body) return Response.json({ ...cache.body, stale: true, error: String(e.message || e) }, { headers: { 'cache-control': 'no-store' } });
-    return Response.json({ error: String(e.message || e) }, { status: 502 });
+    if (cache.body) return json({ ...cache.body, stale: true, error: String(e.message || e) });
+    return json({ error: String(e.message || e) }, 502);
   }
-};
+}
+
+export default (req) => handleTop10(req);

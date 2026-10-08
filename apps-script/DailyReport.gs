@@ -33,6 +33,10 @@ var PIANO_LOG_ID = '1ZunbPKygpQlcXfTyPowDHdUE9spJ3uV1XA4iX1eoKRc';
  *     BRIDGE_SECRET   server-to-server auth (optional)
  *     TEAM_PIN        what BLP team members type to move pianos
  *     MOVING_ICS      the moving calendar's SECRET iCal address
+ *     BLP_DATA_SECRET same value as the Netlify BLP_DATA_SECRET env var.
+ *                     Required. /api/data and /api/top10 reject calls that
+ *                     do not send it (header x-blp-data-key). Never paste
+ *                     the secret into this file.
  * The ping reports `secrets` so a missing one is visible in one request
  * instead of surfacing days later as "the moving calendar is broken". */
 var SCRIPT_SECRETS_ = (function () {
@@ -50,15 +54,32 @@ function secretsState_() {
   var missing = [];
   if (!TEAM_PIN) missing.push('TEAM_PIN');
   if (!MOVING_ICS) missing.push('MOVING_ICS');
+  if (!secret_('BLP_DATA_SECRET')) missing.push('BLP_DATA_SECRET');
   if (missing.length) return 'NOT SET: ' + missing.join(', ');
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-07.14';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-08.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
 var MOVING_ICS = secret_('MOVING_ICS');
+/* Read Piano Log data from the Store Map. Sends the server secret; a 401/403
+ * means BLP_DATA_SECRET is missing or does not match Netlify. */
+function storeMapFetch_(path) {
+  var key = secret_('BLP_DATA_SECRET');
+  var opts = {muteHttpExceptions: true, followRedirects: true, headers: {}};
+  if (key) opts.headers['x-blp-data-key'] = key;
+  var res = UrlFetchApp.fetch(APP_URL + path, opts);
+  var code = res.getResponseCode();
+  if (code === 401 || code === 403) {
+    throw new Error('Store Map ' + path + ' answered ' + code + (key
+      ? ' — Script Property BLP_DATA_SECRET does not match the Netlify BLP_DATA_SECRET env var'
+      : ' — set Script Property BLP_DATA_SECRET to the Netlify BLP_DATA_SECRET value'));
+  }
+  if (code >= 300) throw new Error('Store Map ' + path + ' answered ' + code);
+  return JSON.parse(res.getContentText());
+}
 var TUNING_CAL = 'korbangreenhalgh.blp@gmail.com';  // 09-Korban Greenhalgh
 // master record of every tuning in the store — every request lands here
 // in addition to the assigned technician's own calendar
@@ -153,7 +174,7 @@ function sendDailyReport() {
   var dow = Number(Utilities.formatDate(now, 'America/Denver', 'u')); // 1=Mon..7=Sun
   if (dow > 5 && !isManualRun_()) return;  // weekdays only on the trigger
 
-  var data = JSON.parse(UrlFetchApp.fetch(APP_URL + '/api/data').getContentText());
+  var data = storeMapFetch_('/api/data');
   var slotsDoc = JSON.parse(UrlFetchApp.fetch(APP_URL + '/data/slots.json').getContentText());
   var r = buildReport_(data, slotsDoc);
   var subject = 'Store Map Daily Report — ' + r.unplaced.length + ' unplaced, '
@@ -5886,7 +5907,7 @@ function applyScheduleLocked_(req) {
   // piano's CURRENT map spot in the Google event's location field (bare value)
   var spotBySerial = {};
   try {
-    var live = JSON.parse(UrlFetchApp.fetch(APP_URL + '/api/data').getContentText());
+    var live = storeMapFetch_('/api/data');
     (live.pianos || []).forEach(function (p) {
       if (p.serial && p.location) spotBySerial[String(p.serial)] = String(p.location);
     });
@@ -6494,7 +6515,7 @@ function smTuningQueue_(pianos) {
 function buildShopManagerReport_(dayOffset) {
   dayOffset = dayOffset || 0;
   var refDate = new Date(Date.now() + dayOffset * 86400000);
-  var data = JSON.parse(UrlFetchApp.fetch(APP_URL + '/api/data').getContentText());
+  var data = storeMapFetch_('/api/data');
   var slots = JSON.parse(UrlFetchApp.fetch(APP_URL + '/data/slots.json').getContentText());
   var defs = null;
   try { defs = JSON.parse(UrlFetchApp.fetch(TRACKDEFS_URL).getContentText()); } catch (e) {}
@@ -7147,7 +7168,7 @@ function scorecardSnapshot_() {
     var lday = (lv instanceof Date) ? Utilities.formatDate(lv, 'America/Denver', 'yyyy-MM-dd') : String(lv).slice(0, 10);
     if (lday === today) return {ok: true, dup: true};
   }
-  var data = JSON.parse(UrlFetchApp.fetch(APP_URL + '/api/data?scope=active').getContentText());
+  var data = storeMapFetch_('/api/data?scope=active');
   var pianos = (data.pianos || []).filter(function (p) { return p.active !== false; });
   var stalled = 0, wOver = 0, wMiss = 0, wTot = 0;
   pianos.forEach(function (p) {
@@ -9489,9 +9510,7 @@ function top10Doc_(html) {
 function top10Brief() {
   var dow = Number(Utilities.formatDate(new Date(), 'America/Denver', 'u'));
   if (dow === 7) return {ok: true, skipped: 'Sunday'};
-  var res = UrlFetchApp.fetch(TOP10_API, {muteHttpExceptions: true, followRedirects: true});
-  if (res.getResponseCode() >= 300) throw new Error('Store Map /api/top10 answered ' + res.getResponseCode());
-  var d = JSON.parse(res.getContentText());
+  var d = storeMapFetch_('/api/top10');
   if (d.error && !d.shop) throw new Error(d.error);
   var url = top10Doc_(top10Html_(d));
   var day = Utilities.formatDate(new Date(), 'America/Denver', 'EEE M/d');

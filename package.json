@@ -2,6 +2,9 @@
   "name": "blp-store-map",
   "private": true,
   "description": "Netlify function dependencies for the BLP Store Map",
+  "scripts": {
+    "test": "node --test --test-concurrency=1 netlify/functions/lib/blp-auth.test.mjs"
+  },
   "dependencies": {
     "exceljs": "^4.4.0"
   }
