@@ -392,6 +392,7 @@ async function boot() {
   tryCardLink(); tryBoardLink();   // #card=<id> from a task-board notification text/email
   tryFixClockLink(); // #fixclock from a late-clock text → the time-fix form
   setTimeout(loadInactive, 4000);   // sold/delivered history, off the critical path
+  pianologRealtime();               // mirror pings → refresh within ~2 s of a change
   setInterval(async () => {
     try {
       const [m, d2] = await Promise.all([fetchSlots(), fetchData('active')]);
@@ -400,6 +401,56 @@ async function boot() {
       if (!d2.stale && d2.pianos.length) writeCache();
     } catch (e) { /* keep last */ }
   }, 150000);
+}
+
+
+/* live piano data (10/7): /api/data now reads the Supabase READ MIRROR of
+   the Piano Log (≈0.3 s). Every sync that found changes, and every relayed
+   write, inserts a row on the public pianolog_changes ping table — the same
+   plain realtime websocket the task board uses re-fetches the active set so
+   a phase change, a move or a sheet edit shows on every open map within a
+   couple of seconds instead of at the next 2.5-min poll. The poll stays as
+   the fallback; pendingEdits still protect a just-saved change. */
+const plRT = {ws: null, timer: null, ref: 0, backoff: 2000, pending: null, last: 0};
+function pianologLiveRefresh() {
+  clearTimeout(plRT.pending);
+  plRT.pending = setTimeout(async () => {
+    if (document.hidden) return;
+    if (document.body.classList.contains('kdragging')) { pianologLiveRefresh(); return; }
+    try {
+      const d2 = await fetchData('active');
+      if (!d2 || !d2.pianos) return;
+      S.data = mergeInactive(d2);
+      index(); renderAll(true);
+      if (!d2.stale && d2.pianos.length) writeCache();
+      plRT.last = Date.now();
+    } catch (e) { /* the 2.5-min poll covers it */ }
+  }, 1500);
+}
+function pianologRealtime() {
+  if (plRT.ws || !('WebSocket' in window) || typeof SB_URL === 'undefined') return;
+  try {
+    const ws = new WebSocket(SB_URL.replace('https', 'wss')
+      + '/realtime/v1/websocket?apikey=' + SB_KEY + '&vsn=1.0.0');
+    plRT.ws = ws;
+    ws.onopen = () => {
+      plRT.backoff = 2000;
+      ws.send(JSON.stringify({topic: 'realtime:pianolog', event: 'phx_join', ref: String(++plRT.ref),
+        payload: {config: {postgres_changes: [{event: 'INSERT', schema: 'public', table: 'pianolog_changes'}]}}}));
+      clearInterval(plRT.timer);
+      plRT.timer = setInterval(() => {
+        if (ws.readyState === 1) ws.send(JSON.stringify({topic: 'phoenix', event: 'heartbeat', ref: String(++plRT.ref), payload: {}}));
+      }, 25000);
+    };
+    ws.onmessage = ev => {
+      try { if (JSON.parse(ev.data).event === 'postgres_changes') pianologLiveRefresh(); } catch (e) { /* ignore */ }
+    };
+    ws.onclose = ws.onerror = () => {
+      clearInterval(plRT.timer);
+      if (plRT.ws === ws) plRT.ws = null;
+      setTimeout(pianologRealtime, plRT.backoff = Math.min(plRT.backoff * 2, 60000));
+    };
+  } catch (e) { plRT.ws = null; }
 }
 
 

@@ -8,7 +8,7 @@
 // Sources: the Piano Log (same CSV export as /api/data), the task boards and
 // pending mini-QC requests in Supabase. Cached 3 minutes.
 
-import { parsePianos, PIANO_LOG_CSV } from './data.mjs';
+import { loadPianos } from './lib/pianolog-mirror.mjs';   // read mirror (10/7), CSV fallback inside
 
 const SB_URL = (process.env.SUPABASE_URL || 'https://ismacawxfvvllfinibbf.supabase.co').replace(/\/$/, '');
 const SB_KEY = process.env.SUPABASE_ANON_KEY || 'sb_publishable_MamcjSX0CHTdYlpKDWSkmQ_-nbuQ1z-';
@@ -159,12 +159,12 @@ function build(pianos, cards, qc) {
 export default async () => {
   if (cache.body && Date.now() - cache.at < CACHE_MS) return Response.json({ ...cache.body, cached: true }, { headers: { 'cache-control': 'no-store' } });
   try {
-    const [csv, cards, qc] = await Promise.all([
-      fetch(PIANO_LOG_CSV, { signal: AbortSignal.timeout(25000) }).then((r) => r.text()),
+    const [pr, cards, qc] = await Promise.all([
+      loadPianos(false),
       sb('tb_cards?select=id,owner,col,text,serial,due,from_who,created,done_at&done_at=is.null'),
       sb('qc_requests?select=id,serial,piano,phase,next_phase,requested_by,status,escalated,created&status=eq.pending'),
     ]);
-    const pianos = parsePianos(csv);
+    const pianos = pr.pianos;
     const body = { generated: new Date().toISOString(), ...build(pianos, cards, qc) };
     cache.body = body; cache.at = Date.now();
     return Response.json(body, { headers: { 'cache-control': 'no-store' } });

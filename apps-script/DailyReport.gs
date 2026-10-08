@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-07.13';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-07.14';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -111,6 +111,35 @@ var KNOWN_AREAS = ['showroom', 'pre-sale showroom', 'third floor', 'storage',
   'shop', 'vestibule', 'wing room', 'holding room', 'attic', 'sold floor',
   'rebuilding line', 'refinishing', 'back shop', 'middle shop', 'basement',
   'warehouse', 'rental', 'rented', 'out for delivery', 'customer'];
+
+/* ---------- Piano Log → Supabase read mirror (10/7) ----------
+ * The Store Map and the Piano Log app read a Supabase copy of this sheet
+ * (blpsalesapp pianolog-sync, every 3 min + after every app write). An
+ * onChange trigger on the spreadsheet asks for a sync the moment staff edit
+ * a cell, so a hand edit shows in both apps within seconds instead of ~3 min.
+ * Install once: POST {action:'setupsync', pin|secret} to the bridge (or run
+ * setupPianoLogSyncTrigger_ in the editor). setup() leaves it alone.
+ * The sync endpoint is key-gated; the key is the apps' shared access key. */
+var SYNC_URL = 'https://blpsalesapp.netlify.app/.netlify/functions/pianolog-sync-background';
+var SYNC_HANDLER = 'onPianoLogChange';
+function onPianoLogChange(e) {
+  try {
+    // the trigger fires on every edit, sort, insert — the mirror only needs a
+    // kick once per ~20 s; the sync itself skips when one is already running
+    var cache = CacheService.getScriptCache();
+    if (cache.get('plsync')) return;
+    cache.put('plsync', '1', 20);
+    var key = PropertiesService.getScriptProperties().getProperty('APP_ACCESS_KEY') || 'pianoman';
+    UrlFetchApp.fetch(SYNC_URL + '?key=' + encodeURIComponent(key) + '&source=sheet-change',
+      {method: 'post', muteHttpExceptions: true, payload: ''});
+  } catch (err) { /* the 3-min cron covers it */ }
+}
+function setupPianoLogSyncTrigger_() {
+  var have = ScriptApp.getProjectTriggers().filter(function (t) { return t.getHandlerFunction() === SYNC_HANDLER; });
+  if (have.length) return {ok: true, installed: false, already: have.length};
+  ScriptApp.newTrigger(SYNC_HANDLER).forSpreadsheet(PIANO_LOG_ID).onChange().create();
+  return {ok: true, installed: true};
+}
 
 function setup() {
   ScriptApp.getProjectTriggers().forEach(function (t) { ScriptApp.deleteTrigger(t); });
@@ -918,6 +947,7 @@ function doPost(e) {
       return json_(ph);
     }
     if (req.action === 'fixtabs') return json_(fixTabs_());
+    if (req.action === 'setupsync') return json_(setupPianoLogSyncTrigger_());   // read mirror (10/7): install the onChange trigger
     if (req.action === 'migratephases') {
       var mg = migratePhases_();
       if (mg.changed) logAct_(who, 'Phase migration', 'all pianos',

@@ -1,299 +1,37 @@
-// /api/data on Netlify — JS port of server.py's parser.
-// Piano Log CSV is public; the moving calendar's SECRET iCal URL comes from
-// the BLP_MOVING_ICS env var (Netlify site settings) and must never be
-// committed. Without it the app still works, just with no move events.
+// /api/data on Netlify — pianos from the Supabase READ MIRROR of the Piano
+// Log (lib/pianolog-mirror.mjs, refreshed every ≤3 min + after every app
+// write; the sheet stays the authority) with the public CSV export as the
+// fallback, merged with the moving calendar and tuning calendar.
+// The moving calendar's SECRET iCal URL comes from the BLP_MOVING_ICS env
+// var (Netlify site settings) and must never be committed. Without it the
+// app still works, just with no move events.
+import { loadPianos, PIANO_LOG_CSV } from './lib/pianolog-mirror.mjs';
+import parser from './lib/pianolog-parse.cjs';
 
-const PIANO_LOG_CSV =
-  'https://docs.google.com/spreadsheets/d/1ZunbPKygpQlcXfTyPowDHdUE9spJ3uV1XA4iX1eoKRc/export?format=csv&gid=970727205';
 // Apps Script bridge: serves calendar events via public GET (the secret
 // iCal address lives inside the script, not here) and takes PIN-gated
 // move requests. URL is not sensitive — writes require the PIN.
 const BRIDGE_URL =
   'https://script.google.com/macros/s/AKfycbxY4BKnr_Tr0iCTc9itCWhNYLvgszmkI1IoYSkbBWpyAqRtWI-yaUkJQjcVdgG58KXt/exec';
 const TZ = 'America/Denver';
-// must stay comfortably above app.js's 150s poll interval — a shorter
-// window guarantees every poll is a cache miss and pays full fetch latency
-const CACHE_MS = 170000;
+// pianos: the mirror answers in ~0.3 s, so the per-instance copy is kept
+// only long enough to absorb a burst of tabs (the realtime ping re-fetches
+// right after a change lands, and must see it)
+const CACHE_MS = 8000;
+// calendars: the bridge takes 3–30 s, so events/tunings are served from a
+// per-instance copy and refreshed in the background once it is older than
+// this — the pianos never wait on Google
+const CAL_FRESH_MS = 5 * 60000;
 
-let cache = { at: 0, payload: null };
+let cache = { active: null, full: null };
+let calCache = { at: 0, events: null, tunings: null, refreshing: null, icsConfigured: false };
 
 /* ---------- small utils ---------- */
 const denverDay = (d = new Date()) => d.toLocaleDateString('en-CA', { timeZone: TZ });
-
-function parseCSV(text) {
-  const rows = [];
-  let row = [], field = '', inQ = false;
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i];
-    if (inQ) {
-      if (c === '"') {
-        if (text[i + 1] === '"') { field += '"'; i++; }
-        else inQ = false;
-      } else field += c;
-    } else if (c === '"') inQ = true;
-    else if (c === ',') { row.push(field); field = ''; }
-    else if (c === '\n') { row.push(field); rows.push(row); row = []; field = ''; }
-    else if (c !== '\r') field += c;
-  }
-  if (field || row.length) { row.push(field); rows.push(row); }
-  return rows;
-}
-
-const DATE_RE = /(\d{1,2})\/(\d{1,2})\/(\d{2,4})/g;
-function parseDates(s) {
-  const out = [];
-  for (const m of (s || '').matchAll(DATE_RE)) {
-    let y = +m[3]; if (y < 100) y += 2000;
-    const d = new Date(Date.UTC(y, +m[1] - 1, +m[2]));
-    if (!isNaN(d)) out.push(d);
-  }
-  return out;
-}
-
-function pianoType(cat, name) {
-  const c = (cat || '').toLowerCase();
-  if (c.startsWith('grand') || c.includes(', grand')) return 'grand';
-  if (c.includes('digital')) return 'digital';
-  if (/(upright|console|spinet|studio)/.test(c)) return 'upright';
-  // category blank/unhelpful: fall back to the piano's own name text
-  const n = (name || '').toLowerCase();
-  if (/(upright|console|spinet|studio|vertical)/.test(n)) return 'upright';
-  if (/grand/.test(n)) return 'grand';
-  return 'other';
-}
-
-// media/folder cells hold a Drive link when one has been pasted in — the
-// same cells are also used as done/skip markers, so only take real URLs
-function driveUrl(v) {
-  const m = /(https:\/\/(?:drive|docs)\.google\.com\/[^\s,"']+)/.exec(v || '');
-  return m ? m[1] : '';
-}
-
-/* ---------- piano log ---------- */
-const SLOT_RE = /^\d+(?:\.\d)?[a-zA-Z]?$/;
-function parsePianos(text) {
-  const rows = parseCSV(text);
-  const pianos = [];
-  const phaseIdx = rows[1]
-    ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'CURRENT PHASE') : -1;
-  const priceIdx = rows[1]
-    ? (() => {
-        const i = rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'TAG / INVOICE PRICE');
-        return i >= 0 ? i : rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'PRICE');
-      })() : -1;
-  const trackIdx = rows[1]
-    ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'TRACK') : -1;
-  const doneIdx = rows[1]
-    ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'PHASES DONE') : -1;
-  const waitIdx = rows[1]
-    ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'WAITING NOTE') : -1;
-  const crIdx = rows[1]
-    ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'CLIENT REPORTS') : -1;
-  const cbIdx = rows[1]
-    ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'CHECK BACK') : -1;
-  const cabIdx = rows[1]
-    ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'CABINETRY') : -1;
-  const typeOvIdx = rows[1]
-    ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'TYPE OVERRIDE') : -1;
-  const plateIdx = rows[1]
-    ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'PLATE STATUS') : -1;
-  const colorPickIdx = rows[1]
-    ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'COLOR FIRST PICK') : -1;
-  const colorFinalIdx = rows[1]
-    ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'COLOR FINAL APPROVED') : -1;
-  const phaseNotesIdx = rows[1]
-    ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'PHASE NOTES') : -1;
-  const payPlanIdx = rows[1]
-    ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'PAYMENT PLAN') : -1;
-  const payMsIdx = rows[1]
-    ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'PAY MILESTONE') : -1;
-  const adminStIdx = rows[1]
-    ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'ADMIN STEPS') : -1;
-  const keySvcIdx = rows[1]
-    ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'KEY SERVICE') : -1;
-  const benchLocIdx = rows[1]
-    ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'BENCH LOCATION') : -1;
-  const plateHwIdx = rows[1]
-    ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'PLATE HW LOCATION') : -1;
-  const plateTempIdx = rows[1]
-    ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'PLATE TEMP SPOT') : -1;
-  const plateHwStatusIdx = rows[1]
-    ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'PLATE HARDWARE STATUS') : -1;
-  const plateFinishIdx = rows[1]
-    ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'PLATE HARDWARE FINISH') : -1;
-  const keytopMatIdx = rows[1]
-    ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'KEYTOP MATERIAL') : -1;
-  const crmIdIdx = rows[1]
-    ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'CRM CLIENT ID') : -1;
-  const scopeNotesIdx = rows[1]
-    ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'SCOPE NOTES') : -1;
-  const keytopIdx = rows[1]
-    ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'KEYTOP STATUS') : -1;
-  const impNoteIdx = rows[1]
-    ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'IMPORTANT NOTES') : -1;
-  const pianoNotesIdx = rows[1]
-    ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'PIANO NOTES') : -1;
-  const benchNoteIdx = rows[1]
-    ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'BENCH NOTE') : -1;
-  const tempEntryIdx = rows[1]
-    ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'TEMP ENTRY') : -1;
-  const tagSnapIdx = rows[1]
-    ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'TAG SNAPSHOT') : -1;
-  const pvideoIdx = rows[1]
-    ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'PROGRESS VIDEO') : -1;
-  const paperworkIdx = rows[1]
-    ? rows[1].findIndex(h => (h || '').trim().toUpperCase() === 'PAPERWORK') : -1;
-  // CUSTOM SHOPWORK queue bounds (1-based rows)
-  let qHdr = 0, qEnd = 0;
-  for (let k = 0; k < rows.length; k++) {
-    const b = (rows[k][1] || '').trim(), c = (rows[k][2] || '').trim(), d = (rows[k][3] || '').trim();
-    if (!qHdr) { if (b.toUpperCase() === 'CUSTOM SHOPWORK' && !c && !d) qHdr = k + 1; }
-    else if (!qEnd && !b && !c && !d) qEnd = k + 1;
-  }
-  const todayUTC = new Date(denverDay() + 'T00:00:00Z');
-  let section = '', soldZone = false;
-  for (let i = 2; i < rows.length; i++) {
-    const r = rows[i];
-    const col = j => (r[j] || '').trim();
-    const serial = col(2), summary = col(3);
-    // Section banner. Most are blank except the label in col B, but a few
-    // ("SOLD OR COMPLETED BUT NOT DELIVERED YET") also carry a note in the
-    // summary column — so an ALL-CAPS one-line label with no serial and no
-    // year/make/model counts as a banner too, not as a piano.
-    const head = col(1);
-    const capsBanner = !col(4) && !col(5) && !col(6) && head && !head.includes('\n')
-      && head.length < 60 && /[A-Z]/.test(head) && !/[a-z]/.test(head);
-    if (!serial && (!summary || capsBanner)) {
-      if (head) {
-        section = head;
-        if (head.trim().toUpperCase() === 'SOLD') soldZone = true;
-      }
-      continue;
-    }
-    // delivered/sold rows: off the map, kept for the archive view — a phase
-    // of "Delivered" archives immediately, without waiting for the row to be
-    // moved below the SOLD divider
-    const phaseRaw = phaseIdx >= 0 ? col(phaseIdx) : '';
-    const archived = soldZone || /delivered/i.test(phaseRaw);
-    if (['SHOPIFY', 'ADMIN', 'WEB'].includes(summary.toUpperCase())
-        || ['ADMIN', 'LOCATION / STATUS'].includes(col(20).toUpperCase())
-        || col(21).includes('Arrival Date')) continue;
-    const status = col(18), ol = col(1).toLowerCase();
-    let loc = col(20);
-    // the CURRENTLY RENTED section is the truth (Melissa 10/1, 100126terry76):
-    // a row moved there is off the premises even if column U still holds its
-    // old spot — show it in the RENTED zone, not on that spot. The spot text
-    // is kept in the label so it reads "Rented — was at 136" on the card and
-    // column U still has the number for when the piano comes back.
-    if (/^currently rented/i.test(section) && !/rent/i.test(loc)) loc = 'Rented' + (loc ? ' — was at ' + loc : '');
-    // keyboard stands are inventory, not pianos — keep them off the map
-    if (/\bstand\b/i.test(summary) || serial.trim().toLowerCase() === 'stand') continue;
-    // section-header/status-note rows with no serial (room labels, "go to X
-    // section" pointers, "Piano is [not] at BLP..." shop-follow-up notes) —
-    // not a piano, just a divider or note row that slipped a summary in
-    if (!col(4) && !col(5)
-        && (/^haydn room$/i.test(summary.trim()) || /go to .* section/i.test(summary + ' ' + serial)
-            || /^piano is /i.test(summary.trim()))) continue;
-    // media cells: empty=needed, "Skipped ..."=deliberately skipped, else have
-    // media cells: empty=needed, "Skipped ..."=deliberately skipped,
-    // a bare "x"=not applicable to this piano (never needed), else done
-    const med = j => {
-      const v = col(j);
-      if (!v) return false;
-      if (/^x$/i.test(v.trim())) return 'na';
-      return /^skip/i.test(v) ? 'skip' : true;
-    };
-    const dates = parseDates(col(21)).filter(d => d <= todayUTC);
-    const entered = dates.length ? new Date(Math.max(...dates)) : null;
-    const isNew = !!entered && (todayUTC - entered) / 86400000 <= 7;
-    const active = !archived && !ol.includes('never received')
-      && !status.toLowerCase().includes('never received')
-      && !ol.includes('duplicate');
-    pianos.push({
-      row: i + 1, section, owner: col(1), serial, archived,
-      summary: summary || [col(4), col(5), col(6)].filter(Boolean).join(' '),
-      year: col(4), make: col(5), model: col(6), size: col(7),
-      type: (typeOvIdx >= 0 && col(typeOvIdx)) || pianoType(col(9), summary + ' ' + col(6)),
-      typeOverride: (typeOvIdx >= 0 && col(typeOvIdx)) || '', status, location: loc,
-      // shop-tag statics: BENCH, PROJECT CATEGORY (plan), NOTES, REPLATING ORDERED
-      bench: col(19).slice(0, 60), plan: col(23).slice(0, 220),
-      benchLoc: benchLocIdx >= 0 ? col(benchLocIdx).slice(0, 80) : '',
-      plateHw: plateHwIdx >= 0 ? col(plateHwIdx).slice(0, 80) : '',
-      plateTemp: plateTempIdx >= 0 ? col(plateTempIdx).slice(0, 90) : '',
-      plateHwStatus: plateHwStatusIdx >= 0 ? col(plateHwStatusIdx).slice(0, 40) : '',
-      plateFinish: plateFinishIdx >= 0 ? col(plateFinishIdx).slice(0, 30) : '',
-      keytopMaterial: keytopMatIdx >= 0 ? col(keytopMatIdx).slice(0, 30) : '',
-      scopeNotes: scopeNotesIdx >= 0 ? col(scopeNotesIdx).slice(0, 500) : '',
-      crmClientId: crmIdIdx >= 0 ? col(crmIdIdx).trim() : '',
-      keytopStatus: keytopIdx >= 0 ? col(keytopIdx).slice(0, 40) : '',
-      importantNote: impNoteIdx >= 0 ? col(impNoteIdx).slice(0, 200) : '',
-      pianoNotes: pianoNotesIdx >= 0 ? col(pianoNotesIdx).slice(0, 2000) : '',
-      benchNote: benchNoteIdx >= 0 ? col(benchNoteIdx).slice(0, 160) : '',
-      tempEntry: tempEntryIdx >= 0 ? col(tempEntryIdx).slice(0, 80) : '',
-      planNotes: col(26).slice(0, 300), replate: col(50).slice(0, 20),
-      // admin section: payment plan, last-emailed pay milestone, admin steps done
-      payPlan: payPlanIdx >= 0 ? col(payPlanIdx) : '',
-      payMilestone: payMsIdx >= 0 ? col(payMsIdx) : '',
-      adminSteps: adminStIdx >= 0 ? col(adminStIdx) : '',
-      keyService: keySvcIdx >= 0 ? col(keySvcIdx) : '',
-      keywork: col(51).slice(0, 90),
-      tagSnapshot: tagSnapIdx >= 0 ? col(tagSnapIdx) : '',
-      paperwork: paperworkIdx >= 0 ? col(paperworkIdx) : '',
-      // concurrent-task cells (hardware/order columns) for the tasks report
-      tasks: {
-        bass: col(38).slice(0, 80), decals: col(39).slice(0, 80), parts: col(40).slice(0, 80),
-        pedals: col(41).slice(0, 80), pedaltrim: col(42).slice(0, 80), lock: col(43).slice(0, 80),
-        strikeplate: col(44).slice(0, 80), escutcheon: col(45).slice(0, 80), decor: col(46).slice(0, 80),
-        hinges: col(47).slice(0, 80), screws: col(48).slice(0, 80), otherhw: col(49).slice(0, 80),
-      },
-      // everything else the Piano Log holds for this row that the card
-      // doesn't already surface — keyed by the sheet's own header names
-      logExtras: (() => {
-        const used = new Set([0, 1, 2, 3, 4, 5, 6, 7, 9, 14, 15, 16, 17, 18, 19, 20, 21, 23, 26, 50, 51, 68,
-          phaseIdx, priceIdx, trackIdx, doneIdx, waitIdx, crIdx, cbIdx, cabIdx, typeOvIdx,
-          payPlanIdx, payMsIdx, adminStIdx, keySvcIdx, tagSnapIdx, paperworkIdx]);
-        const hdr = rows[1] || [];
-        const out = {};
-        for (let c = 0; c < hdr.length; c++) {
-          const h = String(hdr[c] || '').trim();
-          if (!h || used.has(c)) continue;
-          const v = col(c);
-          if (v) out[h] = v.slice(0, 300);
-        }
-        return out;
-      })(),
-      // the media cells double as Drive folder links when they hold a URL
-      bphotoUrl: driveUrl(col(14)), bvideoUrl: driveUrl(col(15)),
-      aphotoUrl: driveUrl(col(16)), avideoUrl: driveUrl(col(17)),
-      pvideoUrl: pvideoIdx >= 0 ? driveUrl(col(pvideoIdx)) : '',
-      mainFolder: driveUrl(col(68)),
-      isSlot: SLOT_RE.test(loc),
-      entered: entered ? entered.toISOString().slice(0, 10) : null,
-      phase: phaseIdx >= 0 ? col(phaseIdx) : '',
-      // only $-amounts count; notes like "In-Store"/"TBD" aren't prices
-      price: priceIdx >= 0 && /\d/.test(col(priceIdx)) ? col(priceIdx) : '',
-      track: trackIdx >= 0 ? col(trackIdx) : '',
-      phasesDone: doneIdx >= 0 ? col(doneIdx) : '',
-      waitNote: waitIdx >= 0 ? col(waitIdx) : '',
-      clientReports: crIdx >= 0 ? col(crIdx) : '',
-      checkBack: cbIdx >= 0 ? col(cbIdx) : '',
-      cabinetry: cabIdx >= 0 ? col(cabIdx) : '',
-      plateStatus: plateIdx >= 0 ? col(plateIdx) : '',
-      colorPick: colorPickIdx >= 0 ? col(colorPickIdx) : '',
-      colorFinal: colorFinalIdx >= 0 ? col(colorFinalIdx) : '',
-      phaseNotes: phaseNotesIdx >= 0 ? col(phaseNotesIdx).slice(0, 600) : '',
-      bphoto: med(14), bvideo: med(15), aphoto: med(16), avideo: med(17),
-      queuePos: 0, queueTotal: 0,
-      isNew, active,
-    });
-  }
-  // Queue numbers count PIANOS in row order (not raw row offsets), so they
-  // stay a contiguous 1..N even if a label or junk row sits inside the
-  // section — and match the Piano Log app's queue numbering.
-  const q = pianos.filter(p => qHdr && qEnd && p.row > qHdr && p.row < qEnd);
-  q.forEach((p, k) => { p.queuePos = k + 1; p.queueTotal = q.length; });
-  return pianos;
-}
+// the shared parser's helpers (same code the mirror sync runs)
+const { pianoType } = parser;
+// legacy export for anything that still parses CSV text itself
+const parsePianos = text => parser.parseStoreMap(parser.parseCSV(text)).pianos;
 
 /* ---------- moving calendar ---------- */
 function parseEvents(ics) {
@@ -358,9 +96,39 @@ const CORS = { 'access-control-allow-origin': '*' };
 const jsonRes = (body, init = {}) =>
   Response.json(body, { ...init, headers: { ...CORS, ...(init.headers || {}) } });
 
+async function loadCalendars() {
+  const icsUrl = process.env.BLP_MOVING_ICS;
+  const [eventsR, tuningsR] = await Promise.allSettled([
+    icsUrl
+      ? fetch(icsUrl, { signal: AbortSignal.timeout(40000) }).then(r => r.text()).then(parseEvents)
+      : fetch(BRIDGE_URL + '?fn=events', { redirect: 'follow', signal: AbortSignal.timeout(40000) }).then(r => r.json()).then(j => j.events || []),
+    fetch(BRIDGE_URL + '?fn=tunings', { redirect: 'follow', signal: AbortSignal.timeout(40000) }).then(r => r.json()),
+  ]);
+  const events = eventsR.status === 'fulfilled' ? eventsR.value : null;     // calendar down: pianos still ship
+  const tunings = (tuningsR.status === 'fulfilled' && tuningsR.value.upcoming) ? tuningsR.value : null;
+  if (events) calCache.events = events;
+  if (tunings) calCache.tunings = tunings;
+  if (events || tunings) calCache.at = Date.now();
+  calCache.icsConfigured = !!icsUrl;
+}
+
+// calendars: fresh copy if we have one; otherwise refresh — but never let
+// the (slow) bridge hold the pianos hostage: at most `waitMs`, and the
+// refresh keeps running so the next call gets it
+async function calendars(waitMs) {
+  const age = Date.now() - calCache.at;
+  if (!calCache.refreshing && (age > CAL_FRESH_MS || !calCache.events)) {
+    calCache.refreshing = loadCalendars().catch(() => {}).finally(() => { calCache.refreshing = null; });
+  }
+  if (calCache.refreshing && !calCache.events) {
+    await Promise.race([calCache.refreshing, new Promise(res => setTimeout(res, waitMs))]);
+  }
+  return { events: calCache.events || [], tunings: calCache.tunings || { upcoming: [], past: [] } };
+}
+
 export default async (req) => {
   const now = Date.now();
-  // ?scope=active → only in-shop pianos (~640KB instead of ~5.5MB with the
+  // ?scope=active → only in-shop pianos (~750KB instead of ~6MB with the
   // full sold/delivered history) — the app boots on this and lazily pulls
   // the full set in the background (Brigham 8/29: make the app faster)
   let activeOnly = false;
@@ -368,36 +136,31 @@ export default async (req) => {
   const trim = payload => activeOnly
     ? { ...payload, pianos: (payload.pianos || []).filter(p => p.active), scope: 'active' }
     : payload;
-  if (cache.payload && now - cache.at < CACHE_MS) {
-    return jsonRes({ ...trim(cache.payload), cached: true });
-  }
+  // one short-lived copy per scope — the active-only boot payload and the
+  // full archive pull are different reads of the mirror
+  const scopeKey = activeOnly ? 'active' : 'full';
+  const hit = cache[scopeKey];
+  if (hit && now - hit.at < CACHE_MS) return jsonRes({ ...hit.payload, cached: true });
   try {
-    const icsUrl = process.env.BLP_MOVING_ICS;
-    // independent upstream calls (sheet export, moving calendar, tuning
-    // calendar) — run them concurrently so total latency is the slowest
-    // one, not the sum of all three
-    const [csvR, eventsR, tuningsR] = await Promise.allSettled([
-      fetch(PIANO_LOG_CSV).then(r => r.text()),
-      icsUrl
-        ? fetch(icsUrl).then(r => r.text()).then(parseEvents)
-        : fetch(BRIDGE_URL + '?fn=events', { redirect: 'follow' }).then(r => r.json()).then(j => j.events || []),
-      fetch(BRIDGE_URL + '?fn=tunings', { redirect: 'follow' }).then(r => r.json()),
-    ]);
-    if (csvR.status === 'rejected') throw csvR.reason;
-    const pianos = parsePianos(csvR.value);
+    const t0 = Date.now();
+    // pianos (mirror, ~0.3 s; CSV fallback) and the calendars run together;
+    // the calendars wait at most 1.5 s when there is no copy yet
+    const [pr, cal] = await Promise.all([loadPianos(activeOnly), calendars(1500)]);
+    const pianos = pr.pianos;
     try { await mergeComing(pianos); } catch (e) { console.warn('[data] won_coming merge skipped:', String(e).slice(0, 120)); }
-    const events = eventsR.status === 'fulfilled' ? eventsR.value : [];   // calendar down: pianos still ship
-    const tunings = (tuningsR.status === 'fulfilled' && tuningsR.value.upcoming)
-      ? tuningsR.value : { upcoming: [], past: [] };                     // tuning calendar unavailable: degrade gracefully
+    const { events, tunings } = cal;
     const payload = {
       pianos, events, crew: crewToday(events), tunings,
       fetchedAt: new Date().toLocaleString('sv-SE', { timeZone: TZ }).replace(' ', 'T'),
-      stale: false, calendarConfigured: events.length > 0 || !!icsUrl,
+      stale: false, calendarConfigured: events.length > 0 || calCache.icsConfigured,
+      source: pr.source, mirrorSyncedAt: pr.lastSync, readMs: Date.now() - t0,
+      full: !activeOnly, scope: activeOnly ? 'active' : 'full',
     };
-    cache = { at: now, payload };
-    return jsonRes(trim(payload));
+    cache[scopeKey] = { at: now, payload };
+    return jsonRes(payload);
   } catch (err) {
-    if (cache.payload) return jsonRes({ ...trim(cache.payload), stale: true });
+    const any = cache[scopeKey] || cache.full;
+    if (any) return jsonRes({ ...trim(any.payload), stale: true });
     return jsonRes({ error: String(err), pianos: [], events: [], crew: [] },
       { status: 502 });
   }

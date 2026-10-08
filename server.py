@@ -384,9 +384,30 @@ def crew_today(events):
     return names
 
 
+# read mirror (10/7): the Supabase copy of the Piano Log (same records the
+# Netlify function serves — the sync runs the shared JS parser). Service key
+# from config.json "supabase_service_key" or the SUPABASE_SERVICE_KEY env.
+# Falls back to the CSV export + the Python parser below.
+def fetch_mirror_pianos():
+    key = os.environ.get('SUPABASE_SERVICE_KEY', '').strip() or (_CFG.get('supabase_service_key') or '').strip()
+    if not key:
+        raise RuntimeError('mirror not configured')
+    url = (_CFG.get('supabase_url') or 'https://ismacawxfvvllfinibbf.supabase.co').rstrip('/') + '/rest/v1/rpc/pianolog_read'
+    req = urllib.request.Request(url, data=json.dumps({'p_shape': 'sm', 'p_active_only': False}).encode(),
+                                 headers={'apikey': key, 'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json'})
+    with urllib.request.urlopen(req, timeout=15) as r:
+        m = json.loads(r.read())
+    if not m.get('rows'):
+        raise RuntimeError('mirror is empty')
+    return m['rows']
+
 def build_payload():
-    pianos_raw = _fetch(PIANO_LOG_CSV)
-    pianos = parse_pianos(pianos_raw)
+    try:
+        pianos = fetch_mirror_pianos()
+    except Exception as e:
+        print('mirror unavailable, reading the CSV export:', e)
+        pianos_raw = _fetch(PIANO_LOG_CSV)
+        pianos = parse_pianos(pianos_raw)
     events = parse_events(_fetch(MOVING_ICS)) if MOVING_ICS else []
     tunings = {'upcoming': [], 'past': []}
     bridge = _CFG.get('bridge_url')
