@@ -5,8 +5,11 @@
 // x-blp-idtoken header agent chat uses). The token is checked here:
 //   - RS256 signature against Google's published certs
 //   - issuer, expiry, audience = this app's OAuth client ID
-//   - email_verified, and both `hd` and the email domain =
-//     brighamlarsonpianos.com (Google Workspace only)
+//   - email_verified
+//   - the email is on the same team list the map uses to allow sign-in
+//     (blp-team.js: @brighamlarsonpianos.com, .blp@gmail.com, and
+//     brighamlarson@gmail.com). The hd claim is not required — most of
+//     the team signs in with Gmail.
 //
 // Server jobs (the Apps Script daily report, Top 10 brief, local dev) send
 // header x-blp-data-key. The value is BLP_DATA_SECRET from the environment.
@@ -17,8 +20,9 @@
 // read customer records from a visitor's browser.
 
 import { createPublicKey, timingSafeEqual, verify as cryptoVerify } from 'node:crypto';
+import team from '../../../blp-team.js';
 
-export const WORKSPACE_DOMAIN = 'brighamlarsonpianos.com';
+export const isTeamEmail = team.isTeamEmail;
 // Public web client in karmel@'s "BLP Store Map" Google Cloud project.
 // Same value as GOOGLE_CLIENT_ID in app.js. Override with the
 // GOOGLE_CLIENT_ID env var if that client is rotated.
@@ -31,7 +35,7 @@ const CLOCK_SKEW_MS = 120000;
 const ISSUERS = new Set(['accounts.google.com', 'https://accounts.google.com']);
 
 export const SIGN_IN_ERROR = 'Sign in with your Brigham Larson Pianos Google account.';
-export const DOMAIN_ERROR = 'This Google account is not a @brighamlarsonpianos.com account.';
+export const TEAM_ERROR = 'This Google account is not on the BLP team.';
 export const VERIFY_ERROR = 'Could not verify Google sign-in. Try again in a moment.';
 
 export function googleClientId() {
@@ -79,7 +83,6 @@ export function verifyGoogleIdToken(token, {
   certs = [],
   clientId = googleClientId(),
   now = Date.now(),
-  domain = WORKSPACE_DOMAIN,
 } = {}) {
   const raw = String(token || '');
   if (!raw || raw.length > 8192) return fail(401, SIGN_IN_ERROR, 'missing');
@@ -123,16 +126,14 @@ export function verifyGoogleIdToken(token, {
   const verified = payload.email_verified === true || String(payload.email_verified) === 'true';
   if (!verified) return fail(401, SIGN_IN_ERROR, 'email_verified');
 
-  const email = String(payload.email || '').toLowerCase();
-  const hd = String(payload.hd || '').toLowerCase();
-  const want = String(domain || WORKSPACE_DOMAIN).toLowerCase();
-  if (hd !== want || !email.endsWith('@' + want)) return fail(403, DOMAIN_ERROR, 'domain');
+  const email = String(payload.email || '').trim().toLowerCase();
+  if (!email) return fail(401, SIGN_IN_ERROR, 'email');
+  if (!isTeamEmail(email)) return fail(403, TEAM_ERROR, 'team');
   return {
     ok: true,
     via: 'google',
     email,
     name: payload.name || email,
-    hd,
   };
 }
 
@@ -157,17 +158,16 @@ export async function authorizeDataRequest(req, opts = {}) {
   if (!token) return fail(401, SIGN_IN_ERROR, 'missing');
   const clientId = opts.clientId || googleClientId();
   const now = opts.now || Date.now();
-  const domain = opts.domain || WORKSPACE_DOMAIN;
   try {
     let certs = opts.certs;
     const provided = !!opts.certs;
     if (!provided) certs = await fetchGoogleCerts(opts.fetchCerts);
-    let result = verifyGoogleIdToken(token, { certs, clientId, now, domain });
+    let result = verifyGoogleIdToken(token, { certs, clientId, now });
     // Google rotates signing keys. If this token's kid is new, refresh once.
     if (!result.ok && result.reason === 'unknown-kid' && !provided) {
       certCache = { keys: null, exp: 0 };
       certs = await fetchGoogleCerts(opts.fetchCerts);
-      result = verifyGoogleIdToken(token, { certs, clientId, now, domain });
+      result = verifyGoogleIdToken(token, { certs, clientId, now });
     }
     return result;
   } catch (e) {

@@ -26,20 +26,37 @@ sheet on demand (cached 6 hours), so floor-plan edits appear the same day.
 (the response allowed every origin). They return the Piano Log — customer
 names, phone numbers, emails, and addresses. They now answer only:
 
-1. A person signed in with Google as **@brighamlarsonpianos.com**. The
-   server checks the ID token's signature, expiry, audience (this app's
-   OAuth client ID), `email_verified`, the `hd` claim, and the email
-   domain. Anything else is **401** (no / bad token) or **403** (wrong
-   domain), with no piano records in the body.
+1. A person signed in with Google on the **same team list the map already
+   uses** (`blp-team.js`). The server checks the ID token's signature,
+   expiry, audience (this app's OAuth client ID), and `email_verified`.
+   A missing or bad token is **401**. A real Google account that is not
+   on that list is **403**. Neither response includes piano records.
 2. A server job that sends header `x-blp-data-key` equal to the
    `BLP_DATA_SECRET` environment variable. The browser never sees this
    value. Do not commit it.
 
-Shop Gmail accounts (`name.blp@gmail.com`) and `brighamlarson@gmail.com`
-can still sign in for other tools, but they do **not** receive piano or
-customer records. There is no `Access-Control-Allow-Origin: *` on these
-endpoints anymore, so the Shop app's browser cannot read them cross-origin.
-A server on that side can call with `x-blp-data-key` if it still needs the feed.
+There is no `Access-Control-Allow-Origin: *` on these endpoints anymore,
+so the Shop app's browser cannot read them cross-origin. A server on that
+side can call with `x-blp-data-key` if it still needs the feed.
+
+### Who counts as the team
+
+`blp-team.js` is the only copy. The page loads it, the Netlify functions
+import it, and `server.py` reads the same three lists. An email is allowed
+when, after lowercasing:
+
+- it ends with `@brighamlarsonpianos.com`, or
+- it ends with `.blp@gmail.com` (the shop Gmail accounts, such as
+  `curtisbiggs.blp@gmail.com`), or
+- it is listed in `EXTRA_EMAILS` (today that is only `brighamlarson@gmail.com`)
+
+Gmail dots and +tags are not stripped. That matches how the map has always
+compared these addresses.
+
+To add someone: a new workspace mailbox or a new `name.blp@gmail.com`
+account is already covered. Any other address goes in `EXTRA_EMAILS` in
+`blp-team.js`, then deploy. To remove someone, delete that extra address,
+or narrow the suffix lists if a whole pattern has to stop.
 
 The sign-in screen is the one the map already had ("Sign in with Google").
 The client already exists: karmel@'s Google Cloud project **BLP Store Map**,
@@ -47,7 +64,9 @@ web client
 
 `110628682621-v65mkaoanv87sp75ggdfcrglfr7bkr8p.apps.googleusercontent.com`
 
-(the same ID hardcoded in `app.js`). Confirm it in Google Cloud Console →
+(the same ID hardcoded in `app.js`). It already accepts the team's Gmail
+accounts, so leave the OAuth consent screen able to sign those accounts in
+(do not switch it to Internal-only). Confirm in Google Cloud Console →
 APIs & Services → Credentials → that OAuth client:
 
 - Authorized JavaScript origins: `https://blpstoremap.netlify.app`
@@ -57,13 +76,10 @@ APIs & Services → Credentials → that OAuth client:
 
 The redirect URI is required because the visible button uses Google's
 OAuth page and comes back to the map with the ID token. If that client
-is ever deleted, create a new one: Google Cloud Console → the BLP Store
-Map project (or a new project on the brighamlarsonpianos.com organization)
-→ APIs & Services → OAuth consent screen (Internal, so only the Workspace
-can sign in) → Credentials → Create credentials → OAuth client ID →
-Web application → the origins and redirect URIs above. Put the new client
-ID in the Netlify variable below **and** in `GOOGLE_CLIENT_ID` in `app.js`.
-Until those match, every sign-in gets 401.
+is ever deleted, create a new Web application client with those origins
+and redirect URIs, on a consent screen that allows the team's Gmail
+accounts. Put the new client ID in the Netlify variable below **and** in
+`GOOGLE_CLIENT_ID` in `app.js`. Until those match, every sign-in gets 401.
 
 ### What Karmel sets before this ships
 
@@ -93,9 +109,10 @@ Do these **before merging**, or the map and the morning jobs break on deploy.
    `BLP_DATA_SECRET` when the property is missing. Confirm `rev` is
    `2026-10-08.1`.
 
-4. **Then merge.** Staff sign in with their @brighamlarsonpianos.com Google
-   account and the map is the same as before. A logged-out request to
-   `https://blpstoremap.netlify.app/api/data` returns 401 and no pianos.
+4. **Then merge.** Anyone who can sign in to the map today (workspace
+   address, `.blp@gmail.com`, or `brighamlarson@gmail.com`) still sees the
+   map. A logged-out request to `https://blpstoremap.netlify.app/api/data`
+   returns 401 and no pianos.
 
 Local dev: the same rules apply in `server.py`. Put `blp_data_secret` in
 `config.json` (gitignored; see `config.example.json`) or export

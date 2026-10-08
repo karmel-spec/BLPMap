@@ -667,10 +667,34 @@ AGENT_NAMES = {s: s.capitalize() for s in AGENT_SLUGS}
 _TOKENS = {}
 
 
+def _json_array(name, text):
+    m = re.search(r'const %s = (\[[^\]]*\]);' % name, text)
+    if not m:
+        raise RuntimeError('blp-team.js has no %s' % name)
+    return json.loads(m.group(1))
+
+
+def _load_team_rules():
+    """The map's sign-in list. Read from blp-team.js so this copy cannot drift."""
+    with open(os.path.join(BASE, 'blp-team.js'), encoding='utf-8') as fh:
+        text = fh.read()
+    return (_json_array('EXTRA_EMAILS', text),
+            _json_array('DOMAIN_SUFFIXES', text),
+            _json_array('GMAIL_SUFFIXES', text))
+
+
+_TEAM_EXTRA, _TEAM_DOMAINS, _TEAM_GMAIL = _load_team_rules()
+
+
 def _blp_account(email):
-    e = (email or '').lower()
-    return (e.endswith('@brighamlarsonpianos.com') or e.endswith('.blp@gmail.com')
-            or e == 'brighamlarson@gmail.com')
+    """True for an email the map already lets sign in (blp-team.js)."""
+    e = (email or '').strip().lower()
+    if not e:
+        return False
+    if e in _TEAM_EXTRA:
+        return True
+    return (any(e.endswith(s) for s in _TEAM_DOMAINS)
+            or any(e.endswith(s) for s in _TEAM_GMAIL))
 
 
 def verify_google(tok, require_blp=True):
@@ -716,9 +740,10 @@ def _data_secret():
 def piano_data_status(headers):
     """None when this request may read Piano Log data, else 401 or 403.
 
-    Same rule as netlify/functions/lib/blp-auth.mjs: a Workspace Google ID
-    token (tokeninfo checks the signature for local dev) or the
-    x-blp-data-key server secret. No customer payload on failure.
+    Same rule as netlify/functions/lib/blp-auth.mjs: a verified Google ID
+    token for an email in blp-team.js (tokeninfo checks the signature for
+    local dev) or the x-blp-data-key server secret. No customer payload
+    on failure.
     """
     secret = _data_secret()
     presented = headers.get('x-blp-data-key') or ''
@@ -736,15 +761,14 @@ def piano_data_status(headers):
     who = verify_google(tok, require_blp=False)
     if not who:
         return 401
-    if (not who['email'].endswith('@brighamlarsonpianos.com')
-            or who.get('hd') != 'brighamlarsonpianos.com'):
+    if not _blp_account(who['email']):
         return 403
     return None
 
 
 def _piano_denied(status):
     if status == 403:
-        return {'error': 'This Google account is not a @brighamlarsonpianos.com account.'}
+        return {'error': 'This Google account is not on the BLP team.'}
     return {'error': 'Sign in with your Brigham Larson Pianos Google account.'}
 
 

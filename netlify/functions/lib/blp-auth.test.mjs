@@ -1,17 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { generateKeyPairSync, sign } from 'node:crypto';
 import {
   authorizeDataRequest,
   DATA_KEY_HEADER,
   DEFAULT_GOOGLE_CLIENT_ID,
   denyResponse,
-  DOMAIN_ERROR,
   fetchGoogleCerts,
+  isTeamEmail,
   serviceSecretOk,
   SIGN_IN_ERROR,
+  TEAM_ERROR,
   verifyGoogleIdToken,
-  WORKSPACE_DOMAIN,
   __resetCertCacheForTests,
 } from './blp-auth.mjs';
 import { handleData } from '../data.mjs';
@@ -46,7 +47,6 @@ function staffPayload(over = {}) {
     iat: Math.floor(NOW / 1000),
     email: 'lisa@brighamlarsonpianos.com',
     email_verified: true,
-    hd: WORKSPACE_DOMAIN,
     name: 'Lisa',
     ...over,
   };
@@ -58,12 +58,14 @@ function req(headers = {}, url = 'https://blpstoremap.netlify.app/api/data') {
 
 const authOpts = { certs: CERTS, clientId: CLIENT, now: NOW };
 
-test('accepts a Workspace ID token whose signature, audience, hd, and email domain match', () => {
+test('accepts a team ID token: signature, expiry, audience, and email_verified', () => {
   const token = makeToken(staffPayload());
   const out = verifyGoogleIdToken(token, authOpts);
   assert.equal(out.ok, true);
   assert.equal(out.email, 'lisa@brighamlarsonpianos.com');
-  assert.equal(out.hd, WORKSPACE_DOMAIN);
+  const upper = verifyGoogleIdToken(makeToken(staffPayload({ email: 'Lisa@BrighamLarsonPianos.com' })), authOpts);
+  assert.equal(upper.ok, true);
+  assert.equal(upper.email, 'lisa@brighamlarsonpianos.com');
 });
 
 test('rejects a missing token, a bad signature, the wrong audience, and an expired token', () => {
@@ -80,27 +82,27 @@ test('rejects a missing token, a bad signature, the wrong audience, and an expir
   assert.equal(verifyGoogleIdToken(makeToken(staffPayload(), { kid: 'rotated' }), authOpts).reason, 'unknown-kid');
 });
 
-test('rejects the wrong hosted domain and non-workspace emails with 403 and no identity echo', () => {
-  const cases = [
-    staffPayload({ hd: 'gmail.com' }),
-    staffPayload({ hd: '' }),
-    staffPayload({ email: 'markhales.blp@gmail.com', hd: 'gmail.com' }),
-    staffPayload({ email: 'brighamlarson@gmail.com', hd: '' }),
-    staffPayload({ email: 'lisa@brighamlarsonpianos.com.evil.com' }),
-    staffPayload({ email: 'lisa@notbrighamlarsonpianos.com', hd: 'notbrighamlarsonpianos.com' }),
-    staffPayload({ email_verified: false }),
-  ];
-  for (const payload of cases) {
-    const out = verifyGoogleIdToken(makeToken(payload), authOpts);
-    assert.equal(out.ok, false, payload.email);
-    assert.ok(out.status === 403 || out.status === 401);
-    assert.equal(out.email, undefined);
+test('allows the same Gmail team accounts the map already lets sign in, and rejects everyone else', () => {
+  for (const email of ['markhales.blp@gmail.com', 'Jake.BLP@Gmail.com', 'brighamlarson@gmail.com']) {
+    const out = verifyGoogleIdToken(makeToken(staffPayload({ email, hd: '' })), authOpts);
+    assert.equal(out.ok, true, email);
+    assert.equal(out.email, email.toLowerCase());
   }
-  const wrongDomain = verifyGoogleIdToken(makeToken(staffPayload({ hd: 'gmail.com', email: 'a@gmail.com' })), authOpts);
-  assert.equal(wrongDomain.status, 403);
-  assert.equal(wrongDomain.error, DOMAIN_ERROR);
-  const unverified = verifyGoogleIdToken(makeToken(staffPayload({ email_verified: false })), authOpts);
+  // The existing rule does not strip Gmail dots or +tags. A dotted local
+  // part still matches the .blp suffix; a +tag in front of @gmail does not.
+  assert.equal(isTeamEmail('mark.hales.blp@gmail.com'), true);
+  assert.equal(isTeamEmail('markhales.blp+shop@gmail.com'), false);
+  const stranger = verifyGoogleIdToken(makeToken(staffPayload({ email: 'someone@gmail.com' })), authOpts);
+  assert.equal(stranger.status, 403);
+  assert.equal(stranger.error, TEAM_ERROR);
+  assert.equal(stranger.email, undefined);
+  const lookalike = verifyGoogleIdToken(makeToken(staffPayload({ email: 'lisa@brighamlarsonpianos.com.evil.com' })), authOpts);
+  assert.equal(lookalike.status, 403);
+  const unverified = verifyGoogleIdToken(makeToken(staffPayload({ email: 'lisa@brighamlarsonpianos.com', email_verified: false })), authOpts);
   assert.equal(unverified.status, 401);
+  assert.equal(unverified.reason, 'email_verified');
+  const unverifiedGmail = verifyGoogleIdToken(makeToken(staffPayload({ email: 'jake.blp@gmail.com', email_verified: 'false' })), authOpts);
+  assert.equal(unverifiedGmail.status, 401);
 });
 
 test('accepts a long server secret and ignores a missing, short, or wrong one', () => {
@@ -182,7 +184,7 @@ test('/api/data and /api/top10 return 401/403 with no piano data and no wildcard
   assert.equal(anon.headers.get('access-control-allow-origin'), null);
   assert.equal(loaded, 0);
 
-  const gmail = makeToken(staffPayload({ email: 'tech.blp@gmail.com', hd: '' }));
+  const gmail = makeToken(staffPayload({ email: 'someone@gmail.com' }));
   const denied = await handleData(req({ authorization: 'Bearer ' + gmail }), { loadPianos, authOpts });
   assert.equal(denied.status, 403);
   const deniedBody = await denied.json();
@@ -209,7 +211,7 @@ test('a valid Workspace token or the server secret receives piano data, still wi
     calendars: async () => ({ events: [], tunings: { upcoming: [], past: [] } }),
     authOpts,
   };
-  const token = makeToken(staffPayload());
+  const token = makeToken(staffPayload({ email: 'curtisbiggs.blp@gmail.com' }));
   const ok = await handleData(req({ authorization: 'Bearer ' + token }), deps);
   assert.equal(ok.status, 200);
   const body = await ok.json();
@@ -233,4 +235,18 @@ test('a valid Workspace token or the server secret receives piano data, still wi
 
 test('the built-in audience matches the public client id the map already uses', () => {
   assert.equal(DEFAULT_GOOGLE_CLIENT_ID, '110628682621-v65mkaoanv87sp75ggdfcrglfr7bkr8p.apps.googleusercontent.com');
+});
+
+test('the browser, the functions, and local dev share blp-team.js', () => {
+  const root = new URL('../../../', import.meta.url);
+  const team = readFileSync(new URL('blp-team.js', root), 'utf8');
+  const html = readFileSync(new URL('index.html', root), 'utf8');
+  const app = readFileSync(new URL('app.js', root), 'utf8');
+  const py = readFileSync(new URL('server.py', root), 'utf8');
+  assert.match(html, /blp-team\.js/);
+  assert.equal(app.includes('function blpAccount'), false);
+  assert.match(py, /blp-team\.js/);
+  assert.match(team, /brighamlarson@gmail.com/);
+  assert.match(team, /@brighamlarsonpianos.com/);
+  assert.match(team, /\.blp@gmail.com/);
 });

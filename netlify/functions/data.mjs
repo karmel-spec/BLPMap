@@ -2,8 +2,9 @@
 // Log (lib/pianolog-mirror.mjs, refreshed every ≤3 min + after every app
 // write; the sheet stays the authority) with the public CSV export as the
 // fallback, merged with the moving calendar and tuning calendar.
-// Staff only: a verified @brighamlarsonpianos.com Google ID token, or the
-// x-blp-data-key server secret (BLP_DATA_SECRET). See lib/blp-auth.mjs.
+// Staff only: a verified Google ID token for an account the map already
+// lets sign in (blp-team.js), or the x-blp-data-key server secret
+// (BLP_DATA_SECRET). See lib/blp-auth.mjs.
 // The moving calendar's SECRET iCal URL comes from the BLP_MOVING_ICS env
 // var (Netlify site settings) and must never be committed. Without it the
 // app still works, just with no move events.

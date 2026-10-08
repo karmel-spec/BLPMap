@@ -310,16 +310,17 @@ const esc = s => String(s ?? '').replace(/[&<>"]/g,
   c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
 
 const EMPTY = {pianos: [], events: [], crew: [], fetchedAt: null, stale: true};
-// Piano Log reads require a @brighamlarsonpianos.com Google session. The
-// hourly token is sent on every /api/data and /api/top10 request; a lapsed
-// token does not raise the gate (GIS renews it) but a server 401/403 does.
+// Piano Log reads require the same Google sign-in the map already uses
+// (blp-team.js). The hourly token is sent on every /api/data and /api/top10
+// request; a lapsed token does not raise the gate (GIS renews it) but a
+// server 401/403 does.
 let signInHold = '';
 let bootStarted = false;
 let appReady = false;
 function mapSignInOk() {
   const u = authUser();
   if (!u || u.pinOnly) return false;
-  return /@brighamlarsonpianos\.com$/i.test(String(u.email || ''));
+  return blpAccount(u.email);
 }
 function dataAuthHeaders() {
   const u = authUser();
@@ -330,7 +331,7 @@ function dataAuthHeaders() {
 async function fetchData(scope, fresh) {
   const headers = dataAuthHeaders();
   if (!headers) {
-    const err = new Error('Sign in with your @brighamlarsonpianos.com Google account.');
+    const err = new Error('Sign in with your BLP Google account.');
     err.status = 401;
     err.quiet = true;
     throw err;
@@ -340,7 +341,7 @@ async function fetchData(scope, fresh) {
   });
   if (r.status === 401 || r.status === 403) {
     let message = r.status === 403
-      ? 'This Google account is not a @brighamlarsonpianos.com account.'
+      ? 'This Google account is not on the BLP team.'
       : 'Sign in with your Brigham Larson Pianos Google account.';
     try {
       const j = await r.json();
@@ -9876,14 +9877,8 @@ function isContractViewer() { return isPayrollAdmin() || isOwner() || gateOr(['l
 function isTimelogAdmin() { return gateOr(TIMELOG_ADMIN_EMAILS.includes(userEmail()), 'tl_edit'); }
 // 📊 Manager console — the owners and the Lead Manager only (Brigham 9/1)
 function isManagerConsole() { return isOwner() || gateOr(userEmail() === 'markhales.blp@gmail.com', 'manager_console'); }
-// only BLP accounts may sign in — a personal Gmail gets bounced back to
-// Google's account chooser instead of silently half-working
-function blpAccount(email) {
-  const e = String(email || '').toLowerCase();
-  if (!e) return true;   // PIN-gate identities carry no email
-  return /@brighamlarsonpianos\.com$/.test(e) || /\.blp@gmail\.com$/.test(e)
-    || e === 'brighamlarson@gmail.com';
-}
+// Who may sign in lives in blp-team.js (loaded before this file). That is
+// also what /api/data checks, so the browser and the server cannot drift.
 function onGoogleCred(resp) {
   try {
     const claims = JSON.parse(atob(resp.credential.split('.')[1]
@@ -9938,8 +9933,6 @@ function authGate() {
   const ov = document.getElementById('authgate');
   if (!ov) return;
   if (!GOOGLE_CLIENT_ID) { ov.hidden = true; return; }
-  // The map's piano records are Workspace-only. A .blp@gmail.com sign-in
-  // still counts for other tools, but it does not dismiss this gate.
   const signedIn = mapSignInOk() && !signInHold;
   ov.hidden = signedIn;
   if (!signedIn) {
@@ -9958,7 +9951,7 @@ function authGate() {
       msg.textContent = signInHold
         ? signInHold
         : (bad
-          ? bad + ' can\u2019t open piano records. Sign in with your @brighamlarsonpianos.com Google account.'
+          ? bad + ' is a personal account and won\u2019t work here — tap Sign in and pick your BLP account (or "Use another account").'
           : '');
     }
   }
