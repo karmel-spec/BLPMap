@@ -310,8 +310,8 @@ const esc = s => String(s ?? '').replace(/[&<>"]/g,
   c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
 
 const EMPTY = {pianos: [], events: [], crew: [], fetchedAt: null, stale: true};
-async function fetchData(scope) {
-  const r = await fetch('/api/data' + (scope === 'active' ? '?scope=active' : ''));
+async function fetchData(scope, fresh) {
+  const r = await fetch('/api/data' + (scope === 'active' ? '?scope=active' : '?scope=full') + (fresh ? '&fresh=1' : ''));
   if (!r.ok) throw new Error('api ' + r.status);
   return r.json();
 }
@@ -418,7 +418,7 @@ function pianologLiveRefresh() {
     if (document.hidden) return;
     if (document.body.classList.contains('kdragging')) { pianologLiveRefresh(); return; }
     try {
-      const d2 = await fetchData('active');
+      const d2 = await fetchData('active', true);
       if (!d2 || !d2.pianos) return;
       S.data = mergeInactive(d2);
       index(); renderAll(true);

@@ -131,8 +131,8 @@ export default async (req) => {
   // ?scope=active → only in-shop pianos (~750KB instead of ~6MB with the
   // full sold/delivered history) — the app boots on this and lazily pulls
   // the full set in the background (Brigham 8/29: make the app faster)
-  let activeOnly = false;
-  try { activeOnly = new URL(req.url).searchParams.get('scope') === 'active'; } catch (e) {}
+  let activeOnly = false, fresh = false;
+  try { const u = new URL(req.url); activeOnly = u.searchParams.get('scope') === 'active'; fresh = u.searchParams.get('fresh') === '1'; } catch (e) {}
   const trim = payload => activeOnly
     ? { ...payload, pianos: (payload.pianos || []).filter(p => p.active), scope: 'active' }
     : payload;
@@ -140,7 +140,8 @@ export default async (req) => {
   // full archive pull are different reads of the mirror
   const scopeKey = activeOnly ? 'active' : 'full';
   const hit = cache[scopeKey];
-  if (hit && now - hit.at < CACHE_MS) return jsonRes({ ...hit.payload, cached: true });
+  // ?fresh=1: a realtime ping said the mirror changed — never answer from the copy
+  if (hit && now - hit.at < CACHE_MS && !fresh) return jsonRes({ ...hit.payload, cached: true });
   try {
     const t0 = Date.now();
     // pianos (mirror, ~0.3 s; CSV fallback) and the calendars run together;
