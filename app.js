@@ -310,9 +310,52 @@ const esc = s => String(s ?? '').replace(/[&<>"]/g,
   c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
 
 const EMPTY = {pianos: [], events: [], crew: [], fetchedAt: null, stale: true};
+// Piano Log reads require a @brighamlarsonpianos.com Google session. The
+// hourly token is sent on every /api/data and /api/top10 request; a lapsed
+// token does not raise the gate (GIS renews it) but a server 401/403 does.
+let signInHold = '';
+let bootStarted = false;
+let appReady = false;
+function mapSignInOk() {
+  const u = authUser();
+  if (!u || u.pinOnly) return false;
+  return /@brighamlarsonpianos\.com$/i.test(String(u.email || ''));
+}
+function dataAuthHeaders() {
+  const u = authUser();
+  if (!mapSignInOk() || !u.tok) return null;
+  if (u.exp * 1000 <= Date.now() + 30000) return null;
+  return { Authorization: 'Bearer ' + u.tok, 'x-blp-idtoken': u.tok };
+}
 async function fetchData(scope, fresh) {
-  const r = await fetch('/api/data' + (scope === 'active' ? '?scope=active' : '?scope=full') + (fresh ? '&fresh=1' : ''));
+  const headers = dataAuthHeaders();
+  if (!headers) {
+    const err = new Error('Sign in with your @brighamlarsonpianos.com Google account.');
+    err.status = 401;
+    err.quiet = true;
+    throw err;
+  }
+  const r = await fetch('/api/data' + (scope === 'active' ? '?scope=active' : '?scope=full') + (fresh ? '&fresh=1' : ''), {
+    headers, cache: 'no-store',
+  });
+  if (r.status === 401 || r.status === 403) {
+    let message = r.status === 403
+      ? 'This Google account is not a @brighamlarsonpianos.com account.'
+      : 'Sign in with your Brigham Larson Pianos Google account.';
+    try {
+      const j = await r.json();
+      if (j && j.error) message = String(j.error);
+    } catch (e) { /* keep the generic message — never render an error body as piano data */ }
+    signInHold = message;
+    lsDel(CACHE_KEY);
+    S.data = EMPTY;
+    try { renderAuth(); } catch (e) {}
+    const err = new Error(message);
+    err.status = r.status;
+    throw err;
+  }
   if (!r.ok) throw new Error('api ' + r.status);
+  signInHold = '';
   return r.json();
 }
 /* speed: boot + refresh use the ~640KB active-only payload; the ~5MB
@@ -369,6 +412,21 @@ function writeCache() {
 }
 
 async function boot() {
+  // Customer records stay off the screen until a Workspace Google session
+  // is stored. A later sign-in calls boot() again.
+  if (!mapSignInOk()) return;
+  if (bootStarted) {
+    try {
+      const d2 = await fetchData('active');
+      if (d2 && d2.pianos) {
+        S.data = mergeInactive(d2);
+        index(); renderAll(true);
+        if (!d2.stale && d2.pianos.length) writeCache();
+      }
+    } catch (e) { /* keep last */ }
+    return;
+  }
+  bootStarted = true;
   const cached = readCache();
   if (cached) {                     // repeat visit: full map on screen instantly
     S.map = cached.map;
@@ -394,6 +452,7 @@ async function boot() {
   setTimeout(loadInactive, 4000);   // sold/delivered history, off the critical path
   pianologRealtime();               // mirror pings → refresh within ~2 s of a change
   setInterval(async () => {
+    if (!mapSignInOk()) return;
     try {
       const [m, d2] = await Promise.all([fetchSlots(), fetchData('active')]);
       S.map = m; S.data = mergeInactive(d2);
@@ -9841,12 +9900,23 @@ function onGoogleCred(resp) {
       name: claims.name || claims.email, email: claims.email, pic: claims.picture || '',
     }));
   } catch (e) { /* malformed credential — stay signed out */ }
+  signInHold = '';
   renderAuth();
+  // During the first page load, boot() runs once at the bottom of this file
+  // after every control is wired. A sign-in that happens later (or a silent
+  // token refresh) has to kick it itself.
+  if (appReady) {
+    try { boot(); } catch (e) { /* map data follows the new session */ }
+  }
 }
 function signOut() {
   ['blpUser', 'blpNonce', 'blpGsiCred'].forEach(lsDel);
+  lsDel(CACHE_KEY);
+  signInHold = '';
+  S.data = EMPTY;
   try { sessionStorage.removeItem('blp.oauth.silent'); } catch (e) { /* storage unavailable */ }
   if (window.google?.accounts?.id) google.accounts.id.disableAutoSelect();
+  try { index(); renderAll(); } catch (e) { /* map not drawn yet */ }
   renderAuth();
 }
 // someone already stored a personal account (before the rule above existed):
@@ -9868,7 +9938,9 @@ function authGate() {
   const ov = document.getElementById('authgate');
   if (!ov) return;
   if (!GOOGLE_CLIENT_ID) { ov.hidden = true; return; }
-  const signedIn = !!authUser();
+  // The map's piano records are Workspace-only. A .blp@gmail.com sign-in
+  // still counts for other tools, but it does not dismiss this gate.
+  const signedIn = mapSignInOk() && !signInHold;
   ov.hidden = signedIn;
   if (!signedIn) {
     const gb = document.getElementById('gateBtn');
@@ -9876,15 +9948,18 @@ function authGate() {
       gb.innerHTML = '<button class="goauth" type="button">Sign in with Google</button>';
       // no arg: always offer Google's account chooser (passing the click
       // event here used to become login_hint and skip the chooser)
-      gb.querySelector('.goauth').onclick = () => { lsDel('blpBadAcct'); oidcLogin(); };
+      gb.querySelector('.goauth').onclick = () => { lsDel('blpBadAcct'); signInHold = ''; oidcLogin(); };
     }
-    const bad = lsGet('blpBadAcct');
+    const u = authUser();
+    const bad = lsGet('blpBadAcct') || (u && u.email && !mapSignInOk() ? u.email : '');
     const msg = document.getElementById('agMsg');
     if (msg) {
-      msg.className = bad ? 'agmsg err' : 'agmsg';
-      msg.textContent = bad
-        ? bad + ' is a personal account and won\u2019t work here — tap Sign in and pick your BLP account (or "Use another account").'
-        : '';
+      msg.className = (bad || signInHold) ? 'agmsg err' : 'agmsg';
+      msg.textContent = signInHold
+        ? signInHold
+        : (bad
+          ? bad + ' can\u2019t open piano records. Sign in with your @brighamlarsonpianos.com Google account.'
+          : '');
     }
   }
 }
@@ -16903,6 +16978,7 @@ $('#mapscroll').addEventListener('dblclick', e => {
 });
 
 boot();
+appReady = true;
 
 /* ---------- 🤖 agent chat (Karmel 9/18) ----------
  * The agents' faces bottom-right used to be blpagents.netlify.app/assistant.js,
@@ -17426,8 +17502,9 @@ async function renderTop10() {
   if (!TOP10.loading && (!TOP10.data || Date.now() - TOP10.at > 180000)) {
     TOP10.loading = true;
     try {
-      let r = await fetch('/api/top10', {cache: 'no-store'});
-      if (!r.ok || !/json/.test(r.headers.get('content-type') || '')) r = await fetch('https://blpstoremap.netlify.app/api/top10', {cache: 'no-store'});   // local dev has no functions
+      const headers = dataAuthHeaders() || {};
+      let r = await fetch('/api/top10', {cache: 'no-store', headers});
+      if (!r.ok || !/json/.test(r.headers.get('content-type') || '')) r = await fetch('https://blpstoremap.netlify.app/api/top10', {cache: 'no-store', headers});   // local dev has no functions
       const j = await r.json();
       if (j.error && !j.shop) throw new Error(j.error);
       TOP10.data = j; TOP10.at = Date.now();
@@ -17441,8 +17518,7 @@ async function renderTop10() {
       || '<div class="t10row"><div class="t10t"><div class="t10why">Nothing waiting 🎉</div></div></div>'}</div>`;
   el.innerHTML = `<div class="t10meta">Ranked ${esc(new Date(d.generated).toLocaleString('en-US', {weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'}))}
       · ${d.totals.askOpen} open Ask-Brigham questions · ${d.totals.myCards} cards on his board${d.stale ? ' · ⚠ stale (refresh failed)' : ''}
-      <button class="tagbtn t10refresh" type="button">↻ refresh</button>
-      <a class="tagbtn" href="https://blpstoremap.netlify.app/api/top10" target="_blank" rel="noopener" title="the JSON the brief is built from">{ } data</a></div>
+      <button class="tagbtn t10refresh" type="button">↻ refresh</button></div>
     <div class="t10grid">${col('shop', 'SHOP', '🔧', d.shop)}${col('sales', 'SALES', '💼', d.sales)}${col('admin', 'ADMIN NEEDS YOU', '🗂', d.admin)}</div>`;
   el.querySelector('.t10refresh').onclick = () => { TOP10.data = null; renderTop10(); };
   el.querySelectorAll('.t10row[data-serial], .t10row[data-link]').forEach(row => row.onclick = () => {

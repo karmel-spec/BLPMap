@@ -9,22 +9,104 @@ local computer.
 | Job | Runs on | Config |
 |---|---|---|
 | Map + stats + reports UI | Netlify (static) | auto-deploy from GitHub |
-| `/api/data` (Piano Log + calendar) | Netlify Function | `BLP_MOVING_ICS` env var |
+| `/api/data` (Piano Log + calendar) | Netlify Function | Google sign-in, or `BLP_DATA_SECRET` for server jobs. `BLP_MOVING_ICS` optional |
 | `/api/slots` (floor-plan geometry, live from the sheet, 6 h cache) | Netlify Function | none — `netlify/functions/slots.mjs` |
 | `/api/agent` (in-app chat with Lindsay / Melody / Chris … — the Hermes agents) | Netlify Function | `BLP_GATEWAY_URL`, `BLP_GATEWAY_KEY` env vars |
 | `/api/queue` (drag-to-reorder + ＋ add for the Keytop / Refinish / Plate Q boxes — owners, managers & admins) | Netlify Function | `SUPABASE_SERVICE_KEY`; run `supabase/queue_order.sql` once |
 | Daily report email (weekdays 6 AM) | Google Apps Script as info@ | `apps-script/DailyReport.gs` |
-| 🎯 Brigham's Top 10 brief (6:15 AM Mon–Sat, Google Doc + email) | Google Apps Script `top10Brief` ← `/api/top10` Netlify Function | run `setupTop10Brief()` once in the bridge project |
+| 🎯 Brigham's Top 10 brief (6:15 AM Mon–Sat, Google Doc + email) | Google Apps Script `top10Brief` ← `/api/top10` Netlify Function | `BLP_DATA_SECRET` in Script Properties (same value as Netlify). Run `setupTop10Brief()` once |
 
 Geometry needs no cron at all: `/api/slots` regenerates from the Store Map
 sheet on demand (cached 6 hours), so floor-plan edits appear the same day.
 `data/slots.json` stays in the repo only as a fallback snapshot.
 
+## Piano records require a BLP Google sign-in (October 2026)
+
+`/api/data` and `/api/top10` used to answer anyone, including other websites
+(the response allowed every origin). They return the Piano Log — customer
+names, phone numbers, emails, and addresses. They now answer only:
+
+1. A person signed in with Google as **@brighamlarsonpianos.com**. The
+   server checks the ID token's signature, expiry, audience (this app's
+   OAuth client ID), `email_verified`, the `hd` claim, and the email
+   domain. Anything else is **401** (no / bad token) or **403** (wrong
+   domain), with no piano records in the body.
+2. A server job that sends header `x-blp-data-key` equal to the
+   `BLP_DATA_SECRET` environment variable. The browser never sees this
+   value. Do not commit it.
+
+Shop Gmail accounts (`name.blp@gmail.com`) and `brighamlarson@gmail.com`
+can still sign in for other tools, but they do **not** receive piano or
+customer records. There is no `Access-Control-Allow-Origin: *` on these
+endpoints anymore, so the Shop app's browser cannot read them cross-origin.
+A server on that side can call with `x-blp-data-key` if it still needs the feed.
+
+The sign-in screen is the one the map already had ("Sign in with Google").
+The client already exists: karmel@'s Google Cloud project **BLP Store Map**,
+web client
+
+`110628682621-v65mkaoanv87sp75ggdfcrglfr7bkr8p.apps.googleusercontent.com`
+
+(the same ID hardcoded in `app.js`). Confirm it in Google Cloud Console →
+APIs & Services → Credentials → that OAuth client:
+
+- Authorized JavaScript origins: `https://blpstoremap.netlify.app`
+  and, for local dev, `http://localhost:8641`
+- Authorized redirect URIs: `https://blpstoremap.netlify.app/`
+  and `http://localhost:8641/`
+
+The redirect URI is required because the visible button uses Google's
+OAuth page and comes back to the map with the ID token. If that client
+is ever deleted, create a new one: Google Cloud Console → the BLP Store
+Map project (or a new project on the brighamlarsonpianos.com organization)
+→ APIs & Services → OAuth consent screen (Internal, so only the Workspace
+can sign in) → Credentials → Create credentials → OAuth client ID →
+Web application → the origins and redirect URIs above. Put the new client
+ID in the Netlify variable below **and** in `GOOGLE_CLIENT_ID` in `app.js`.
+Until those match, every sign-in gets 401.
+
+### What Karmel sets before this ships
+
+Do these **before merging**, or the map and the morning jobs break on deploy.
+
+1. **Netlify** → blpstoremap → Site configuration → Environment variables.
+   Apply to all deploy contexts. Then trigger a deploy (or merge, which deploys).
+
+   | Variable | Value |
+   |---|---|
+   | `GOOGLE_CLIENT_ID` | `110628682621-v65mkaoanv87sp75ggdfcrglfr7bkr8p.apps.googleusercontent.com` |
+   | `BLP_DATA_SECRET` | a long random string (at least 16 characters). Generate one; do not reuse the team PIN. |
+
+   If `GOOGLE_CLIENT_ID` is left unset, the function falls back to the client
+   ID already in `app.js`, so the map still recognizes staff tokens. If it is
+   set to a **different** ID than `app.js`, nobody can load pianos.
+
+2. **Apps Script** (the "Store Map Daily Report" project) → Project Settings
+   → Script properties → add `BLP_DATA_SECRET` with the **same** value as
+   Netlify. A code paste cannot see or erase Script Properties.
+
+3. **Redeploy the bridge** from `apps-script/DailyReport.gs` (rev
+   `2026-10-08.1`) signed in as karmel@. The daily report, the shop-manager
+   report, the scorecard snapshot, and Brigham's Top 10 brief all read
+   `/api/data` or `/api/top10` and now send `x-blp-data-key`. Until that
+   paste is deployed, those jobs get 401. The ping's `secrets` field lists
+   `BLP_DATA_SECRET` when the property is missing. Confirm `rev` is
+   `2026-10-08.1`.
+
+4. **Then merge.** Staff sign in with their @brighamlarsonpianos.com Google
+   account and the map is the same as before. A logged-out request to
+   `https://blpstoremap.netlify.app/api/data` returns 401 and no pianos.
+
+Local dev: the same rules apply in `server.py`. Put `blp_data_secret` in
+`config.json` (gitignored; see `config.example.json`) or export
+`BLP_DATA_SECRET`.
+
 ## One-time setup
 
-### 1. Netlify environment variables — two, for agent chat only
-The map, moves and calendar need no env vars (see below). **Agent chat**
-(tap an agent's face bottom-right → chat window, added Sep 18 2026) does:
+### 1. Netlify environment variables
+Piano records need `GOOGLE_CLIENT_ID` and `BLP_DATA_SECRET` — see **Piano
+records require a BLP Google sign-in** above, and set those before merging.
+**Agent chat** (tap an agent's face bottom-right → chat window, added Sep 18 2026) also needs:
 
 | Var | Value |
 |---|---|
@@ -46,9 +128,8 @@ Only owners, managers and admins may write — the function checks the signed-in
 email against the list in `netlify/functions/queue-order.mjs`; add more with a
 comma-separated `QUEUE_EDITORS` env var.
 
-#### Everything else — NONE REQUIRED
-The live site needs no env vars: calendar events are served by the Apps
-Script bridge (`GET <bridge>/exec?fn=events` — the secret iCal address
+#### Calendar and moves — no extra env vars
+Calendar events are served by the Apps Script bridge (`GET <bridge>/exec?fn=events` — the secret iCal address
 lives only inside the deployed script), and piano moves go browser →
 bridge, authenticated by the team PIN (`TEAM_PIN` constant in the
 deployed script; change it there any time). `BLP_MOVING_ICS` is honored

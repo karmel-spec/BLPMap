@@ -2,11 +2,14 @@
 // Log (lib/pianolog-mirror.mjs, refreshed every ≤3 min + after every app
 // write; the sheet stays the authority) with the public CSV export as the
 // fallback, merged with the moving calendar and tuning calendar.
+// Staff only: a verified @brighamlarsonpianos.com Google ID token, or the
+// x-blp-data-key server secret (BLP_DATA_SECRET). See lib/blp-auth.mjs.
 // The moving calendar's SECRET iCal URL comes from the BLP_MOVING_ICS env
 // var (Netlify site settings) and must never be committed. Without it the
 // app still works, just with no move events.
 import { loadPianos, PIANO_LOG_CSV } from './lib/pianolog-mirror.mjs';
 import parser from './lib/pianolog-parse.cjs';
+import { authorizeDataRequest, denyResponse } from './lib/blp-auth.mjs';
 
 // Apps Script bridge: serves calendar events via public GET (the secret
 // iCal address lives inside the script, not here) and takes PIN-gated
@@ -90,11 +93,11 @@ function crewToday(events) {
 }
 
 /* ---------- handler ---------- */
-// CORS open for reads: the BLP Shop app (blpshop.netlify.app) pulls live
-// phases from here so both apps agree on every piano's stage
-const CORS = { 'access-control-allow-origin': '*' };
+// No CORS header. This payload is customer data (names, phones, emails,
+// addresses). Same-origin Store Map requests do not need one, and a
+// wildcard let any website read it. Other servers send x-blp-data-key.
 const jsonRes = (body, init = {}) =>
-  Response.json(body, { ...init, headers: { ...CORS, ...(init.headers || {}) } });
+  Response.json(body, { ...init, headers: { 'cache-control': 'private, no-store', ...(init.headers || {}) } });
 
 async function loadCalendars() {
   const icsUrl = process.env.BLP_MOVING_ICS;
@@ -126,8 +129,11 @@ async function calendars(waitMs) {
   return { events: calCache.events || [], tunings: calCache.tunings || { upcoming: [], past: [] } };
 }
 
-export default async (req) => {
+export async function handleData(req, deps = {}) {
+  const auth = await authorizeDataRequest(req, deps.authOpts);
+  if (!auth.ok) return denyResponse(auth);
   const now = Date.now();
+  const testing = typeof deps.loadPianos === 'function';
   // ?scope=active → only in-shop pianos (~750KB instead of ~6MB with the
   // full sold/delivered history) — the app boots on this and lazily pulls
   // the full set in the background (Brigham 8/29: make the app faster)
@@ -141,14 +147,17 @@ export default async (req) => {
   const scopeKey = activeOnly ? 'active' : 'full';
   const hit = cache[scopeKey];
   // ?fresh=1: a realtime ping said the mirror changed — never answer from the copy
-  if (hit && now - hit.at < CACHE_MS && !fresh) return jsonRes({ ...hit.payload, cached: true });
+  if (!testing && hit && now - hit.at < CACHE_MS && !fresh) return jsonRes({ ...hit.payload, cached: true });
   try {
     const t0 = Date.now();
     // pianos (mirror, ~0.3 s; CSV fallback) and the calendars run together;
     // the calendars wait at most 1.5 s when there is no copy yet
+    const load = deps.loadPianos || loadPianos;
+    const cals = deps.calendars || calendars;
+    const coming = deps.fetchComing || fetchComing;
     const [pr, cal, comingRows] = await Promise.all([
-      loadPianos(activeOnly), calendars(1500),
-      fetchComing().catch(e => { console.warn('[data] won_coming merge skipped:', String(e).slice(0, 120)); return []; }),
+      load(activeOnly), cals(1500),
+      coming().catch(e => { console.warn('[data] won_coming merge skipped:', String(e).slice(0, 120)); return []; }),
     ]);
     const pianos = pr.pianos;
     try { mergeComing(pianos, comingRows); } catch (e) { console.warn('[data] won_coming merge skipped:', String(e).slice(0, 120)); }
@@ -160,7 +169,7 @@ export default async (req) => {
       source: pr.source, mirrorSyncedAt: pr.lastSync, readMs: Date.now() - t0,
       full: !activeOnly, scope: activeOnly ? 'active' : 'full',
     };
-    cache[scopeKey] = { at: now, payload };
+    if (!testing) cache[scopeKey] = { at: now, payload };
     return jsonRes(payload);
   } catch (err) {
     const any = cache[scopeKey] || cache.full;
@@ -168,7 +177,9 @@ export default async (req) => {
     return jsonRes({ error: String(err), pianos: [], events: [], crew: [] },
       { status: 502 });
   }
-};
+}
+
+export default (req) => handleData(req);
 
 // shared with top10.mjs (Brigham's Top 10 brief)
 /* ---------- "piano coming" from Sales App WON handoffs ----------

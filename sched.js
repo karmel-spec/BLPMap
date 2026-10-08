@@ -1033,7 +1033,7 @@ function needMapData(){
   if(MAPD || MAPD_LOADING) return !!MAPD;
   MAPD_LOADING=true;
   Promise.all([
-    fetch("/api/data",{signal:AbortSignal.timeout(30000)}).then(r=>r.json()).catch(()=>null),
+    fetch("/api/data",{headers:(typeof dataAuthHeaders==="function"&&dataAuthHeaders())||{},cache:"no-store",signal:AbortSignal.timeout(30000)}).then(r=>r.ok?r.json():null).catch(()=>null),
     fetch("https://blpsalesapp.netlify.app/.netlify/functions/team-roster?key=pianoman")
       .then(r=>r.json()).catch(()=>null),
   ]).then(([d,ro])=>{

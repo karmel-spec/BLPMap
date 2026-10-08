@@ -8,6 +8,7 @@ Both are cached in memory for 2 minutes; on network failure the last good
 payload is served with stale=true.
 """
 import csv
+import hmac
 import io
 import json
 import os
@@ -672,12 +673,20 @@ def _blp_account(email):
             or e == 'brighamlarson@gmail.com')
 
 
-def verify_google(tok):
-    """ID token -> {email, name} for a BLP account, else None (cached until exp)."""
+def verify_google(tok, require_blp=True):
+    """ID token -> {email, name, hd}, else None (cached until exp).
+
+    require_blp keeps the wider staff list used by agent chat and queues
+    (@brighamlarsonpianos.com, .blp@gmail.com, brighamlarson@gmail.com).
+    Piano Log reads pass require_blp=False and then require the Workspace
+    domain plus the hd claim themselves, so a wrong domain is a 403.
+    """
     if not tok:
         return None
     hit = _TOKENS.get(tok)
     if hit and hit['exp'] * 1000 > time.time() * 1000:
+        if require_blp and not _blp_account(hit.get('email')):
+            return None
         return hit
     try:
         with urllib.request.urlopen('https://oauth2.googleapis.com/tokeninfo?id_token='
@@ -687,14 +696,56 @@ def verify_google(tok):
         return None
     if info.get('aud') != GOOGLE_CLIENT_ID or str(info.get('email_verified')) != 'true':
         return None
-    if not _blp_account(info.get('email')):
+    email = (info.get('email') or '').lower()
+    if require_blp and not _blp_account(email):
         return None
-    u = {'email': info['email'].lower(), 'name': info.get('name') or info['email'],
-         'exp': int(info.get('exp') or 0)}
+    if not email:
+        return None
+    u = {'email': email, 'name': info.get('name') or email,
+         'exp': int(info.get('exp') or 0), 'hd': (info.get('hd') or '').lower()}
     if len(_TOKENS) > 500:
         _TOKENS.clear()
     _TOKENS[tok] = u
     return u
+
+
+def _data_secret():
+    return os.environ.get('BLP_DATA_SECRET') or _CFG.get('blp_data_secret') or ''
+
+
+def piano_data_status(headers):
+    """None when this request may read Piano Log data, else 401 or 403.
+
+    Same rule as netlify/functions/lib/blp-auth.mjs: a Workspace Google ID
+    token (tokeninfo checks the signature for local dev) or the
+    x-blp-data-key server secret. No customer payload on failure.
+    """
+    secret = _data_secret()
+    presented = headers.get('x-blp-data-key') or ''
+    if secret and len(secret) >= 16 and presented and len(presented) == len(secret):
+        if hmac.compare_digest(presented, secret):
+            return None
+    tok = ''
+    auth = headers.get('Authorization') or ''
+    if auth.lower().startswith('bearer '):
+        tok = auth[7:].strip()
+    if not tok:
+        tok = headers.get('x-blp-idtoken') or ''
+    if not tok:
+        return 401
+    who = verify_google(tok, require_blp=False)
+    if not who:
+        return 401
+    if (not who['email'].endswith('@brighamlarsonpianos.com')
+            or who.get('hd') != 'brighamlarsonpianos.com'):
+        return 403
+    return None
+
+
+def _piano_denied(status):
+    if status == 403:
+        return {'error': 'This Google account is not a @brighamlarsonpianos.com account.'}
+    return {'error': 'Sign in with your Brigham Larson Pianos Google account.'}
 
 
 def gateway_call(path, payload=None):
@@ -888,9 +939,18 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_GET(self):
         if self.path.split('?')[0] == '/api/top10':
+            denied = piano_data_status(self.headers)
+            if denied:
+                self._json(_piano_denied(denied), denied)
+                return
             # local dev: the ranking lives in a Netlify function — proxy the live one
             try:
-                with urllib.request.urlopen('https://blpstoremap.netlify.app/api/top10', timeout=60) as r:
+                fwd = {}
+                for name in ('Authorization', 'x-blp-idtoken', 'x-blp-data-key'):
+                    if self.headers.get(name):
+                        fwd[name] = self.headers.get(name)
+                rq = urllib.request.Request('https://blpstoremap.netlify.app/api/top10', headers=fwd)
+                with urllib.request.urlopen(rq, timeout=60) as r:
                     body = r.read()
                 self.send_response(200)
                 self.send_header('Content-Type', 'application/json')
@@ -931,6 +991,10 @@ class Handler(SimpleHTTPRequestHandler):
                 self._json({'error': str(exc)}, 502)
             return
         if self.path.split('?')[0] == '/api/data':
+            denied = piano_data_status(self.headers)
+            if denied:
+                self._json(_piano_denied(denied), denied)
+                return
             data = get_data()
             if 'scope=active' in self.path:
                 data = dict(data, pianos=[p for p in data.get('pianos', []) if p.get('active')], scope='active')
