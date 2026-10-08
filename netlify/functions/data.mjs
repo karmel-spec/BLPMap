@@ -145,9 +145,12 @@ export default async (req) => {
     const t0 = Date.now();
     // pianos (mirror, ~0.3 s; CSV fallback) and the calendars run together;
     // the calendars wait at most 1.5 s when there is no copy yet
-    const [pr, cal] = await Promise.all([loadPianos(activeOnly), calendars(1500)]);
+    const [pr, cal, comingRows] = await Promise.all([
+      loadPianos(activeOnly), calendars(1500),
+      fetchComing().catch(e => { console.warn('[data] won_coming merge skipped:', String(e).slice(0, 120)); return []; }),
+    ]);
     const pianos = pr.pianos;
-    try { await mergeComing(pianos); } catch (e) { console.warn('[data] won_coming merge skipped:', String(e).slice(0, 120)); }
+    try { mergeComing(pianos, comingRows); } catch (e) { console.warn('[data] won_coming merge skipped:', String(e).slice(0, 120)); }
     const { events, tunings } = cal;
     const payload = {
       pianos, events, crew: crewToday(events), tunings,
@@ -173,11 +176,15 @@ export default async (req) => {
  * as "Coming Soon" pianos until the serial shows up in the Piano Log. */
 const SB_URL = (process.env.SUPABASE_URL || 'https://ismacawxfvvllfinibbf.supabase.co').replace(/\/$/, '');
 const SB_KEY = process.env.SUPABASE_ANON_KEY || 'sb_publishable_MamcjSX0CHTdYlpKDWSkmQ_-nbuQ1z-';
-async function mergeComing(pianos) {
+async function fetchComing() {
   const r = await fetch(SB_URL + '/rest/v1/won_coming?select=*&order=created_at.desc', { headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY }, signal: AbortSignal.timeout(6000) });
   if (!r.ok) throw new Error('won_coming ' + r.status);
-  const rows = await r.json();
-  if (!rows.length || !pianos.length) return;
+  return r.json();
+}
+// rows fetched alongside the mirror read (10/7) so the handoff lookup never
+// adds to the response time
+function mergeComing(pianos, rows) {
+  if (!rows || !rows.length || !pianos.length) return;
   const have = new Set(pianos.filter(p => p.active && p.serial).map(p => p.serial.trim().toLowerCase()));
   const tmpl = pianos[0];
   const blank = Object.fromEntries(Object.keys(tmpl).map(k => {
