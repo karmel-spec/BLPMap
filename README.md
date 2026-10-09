@@ -62,9 +62,9 @@ never be committed. Without it the app still runs (map + pianos, no moves).
   numbers back to the Piano Log. Everyone else sees the same order, read-only.
 - **Agent chat** — the agents' faces bottom-right (Chris for everyone; each
   person's own helpers, e.g. Lindsay · Melody · Carla for Karmel) open an
-  in-app chat with that Hermes agent through the BLP Agent Gateway
-  (`netlify/functions/agent-chat.mjs`, `/api/agent`), like Marcus on the
-  Marketing app — no more bouncing out to Telegram. Every message is saved
+  in-app chat with that agent through the BLP Agent Console, which relays
+  to the agent's Grok Bot (`netlify/functions/agent-chat.mjs`, `/api/agent`;
+  env `BLP_AGENTS_KEY`) — no Hermes, no Mac, no more bouncing out to Telegram. Every message is saved
   to Supabase (`agent_messages`, `supabase/agent_chat.sql`) so threads follow
   you across devices, and the search bar in each window searches every
   agent's conversations; the device keeps a copy as an instant cache. A

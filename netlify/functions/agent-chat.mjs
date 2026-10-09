@@ -1,26 +1,25 @@
-// /api/agent — in-app chat with a BLP Hermes agent (Lindsay, Melody, Carla,
-// Chris, …) through the BLP Agent Gateway on the agents' Mac, the same bridge
-// the Marketing app uses for Marcus. The gateway URL + key live in Netlify
-// env vars so they never reach browsers.
+// /api/agent — in-app chat with a BLP agent (Chris, Lindsay, Melody, Carla,
+// Clara, Arnold, Ivory, Marcus) through the BLP Agent Console
+// (blpagents.netlify.app), which is every agent's switchboard since
+// 2026-10-08: it stores the thread (Supabase agent_messages), wakes the
+// agent's Grok Bot (or runs the in-app vault runner for an agent whose Bot
+// isn't wired yet) and delivers the reply. No Mac, no Hermes, no tunnel.
 //
-//   POST {slug, message, transcript?, idToken}   -> {run_id, session_id, stored}
+//   POST {slug, message, idToken}                 -> {run_id, status, engine}
 //   POST {slug, import: [{r, t, by, at}], idToken} -> {imported}   (one-time copy of a browser thread)
-//   GET  ?slug=lindsay&run=<run_id>  (x-blp-idtoken header)
-//                                              -> {status, output, error, stored}
-//
-// Every message is also written to Supabase (agent_messages, see
-// supabase/agent_chat.sql) with the service-role key, so threads survive the
-// browser and are searchable. The browser reads them back with the
-// publishable key. Without SUPABASE_SERVICE_KEY the chat still works —
-// threads just stay in the browser (the reply says stored:false).
+//   GET  ?slug=lindsay&run=<job id>  (x-blp-idtoken header)
+//                                              -> {status, output, error}
+//   GET  ?health=1                               -> {ok, agents: {slug: up}, engines}
 //
 // Only a signed-in BLP Google account may talk to an agent: the ID token the
 // map already holds is verified against Google's tokeninfo endpoint, and the
-// agent is told who is writing. If the gateway cannot be reached the request
+// console is told who is writing. If the console cannot be reached the request
 // fails with a clear error — nothing is ever answered on the agent's behalf.
+// Env: BLP_AGENTS_URL (default https://blpagents.netlify.app), BLP_AGENTS_KEY
+// (the console's team passcode, BLP_APP_ACCESS_KEY on the blpagents site).
 
-const GATEWAY_URL = (process.env.BLP_GATEWAY_URL || 'https://agents.brighamlarsonpianos.com').replace(/\/$/, '');
-const GATEWAY_KEY = process.env.BLP_GATEWAY_KEY || '';
+const AGENTS_URL = (process.env.BLP_AGENTS_URL || 'https://blpagents.netlify.app').replace(/\/$/, '');
+const AGENTS_KEY = process.env.BLP_AGENTS_KEY || '';
 // public web client of the "BLP Store Map" Google Cloud project (same as app.js)
 const GOOGLE_CLIENT_ID = '110628682621-v65mkaoanv87sp75ggdfcrglfr7bkr8p.apps.googleusercontent.com';
 const AGENTS = ['lindsay', 'melody', 'carla', 'chris', 'clara', 'arnold', 'ivory', 'marcus'];
@@ -28,7 +27,7 @@ const NAMES = { lindsay: 'Lindsay', melody: 'Melody', carla: 'Carla', chris: 'Ch
 const SB_URL = (process.env.SUPABASE_URL || 'https://ismacawxfvvllfinibbf.supabase.co').replace(/\/$/, '');
 // either spelling works — Supabase's dashboard calls it the service_role key
 const SB_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-const GATEWAY_DOWN = 'Could not reach the agent gateway (the Hermes agents on the agents\' Mac). Check that the Mac is awake, the gateway is up and the Cloudflare tunnel is connected, then try again. Nothing was answered on the agent\'s behalf.';
+const CONSOLE_DOWN = 'Could not reach the BLP Agent Console (blpagents.netlify.app), which relays messages to the agents. Try again in a moment. Nothing was answered on the agent\'s behalf.';
 
 function json(body, status = 200) {
   return Response.json(body, { status, headers: { 'cache-control': 'no-store' } });
@@ -62,44 +61,29 @@ async function verify(idToken) {
   return u;
 }
 
-async function gateway(path, init) {
+async function console_(path, init) {
   let r;
   try {
-    r = await fetch(GATEWAY_URL + path, {
+    r = await fetch(AGENTS_URL + path, {
       ...init,
-      headers: { 'x-blp-gateway-key': GATEWAY_KEY, 'content-type': 'application/json', ...(init && init.headers || {}) },
+      headers: { 'x-blp-key': AGENTS_KEY, 'content-type': 'application/json', ...(init && init.headers || {}) },
       signal: AbortSignal.timeout(20000),
     });
   } catch (e) {
-    throw new Error(GATEWAY_DOWN + ' (' + (e && e.message || e) + ')');
+    throw new Error(CONSOLE_DOWN + ' (' + (e && e.message || e) + ')');
   }
   const raw = await r.text();
   let out = {};
   try { out = JSON.parse(raw); } catch (e) { out = {}; }
   if (!r.ok) {
     if (out && out.error) throw new Error(out.error);
-    /* Cloudflare answers an unreachable origin with an HTML error page and a
-     * 5xx — 530 is "tunnel up, nothing behind it" (their error 1033), i.e.
-     * exactly the case GATEWAY_DOWN describes. It never reached that message
-     * because a 530 is a successful fetch, so it fell through to the generic
-     * branch; and stripping tags left the inline <script> BODY behind, so the
-     * chat bubble showed Cloudflare's JavaScript (Walter 9/22). */
-    const cfCode = (raw.match(/error code:\s*(\d+)/i) || [])[1];
-    const edge = [502, 503, 504, 520, 521, 522, 523, 524, 525, 526, 530].indexOf(r.status) >= 0;
-    if (edge || cfCode || /^\s*<(!doctype|html)/i.test(raw)) {
-      throw new Error(GATEWAY_DOWN + ' (HTTP ' + r.status
-        + (cfCode ? ', Cloudflare error ' + cfCode : '') + ')');
-    }
-    const text = raw
-      .replace(/<(script|style)[^>]*>[\s\S]*?<\/\1>/gi, ' ')   // drop their bodies, not just the tags
-      .replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160);
-    throw new Error('Agent gateway ' + r.status + (text ? ': ' + text : ''));
+    const text = raw.replace(/<(script|style)[^>]*>[\s\S]*?<\/\1>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160);
+    throw new Error('Agent Console ' + r.status + (text ? ': ' + text : ''));
   }
   return out;
 }
 
-// insert rows into agent_messages; never throws — chat must not fail because
-// history did. Duplicate agent replies (same run polled twice) are ignored.
+// one-time import of a browser-only thread into agent_messages; never throws
 async function store(rows) {
   if (!SB_SERVICE_KEY || !rows.length) return false;
   try {
@@ -115,20 +99,21 @@ async function store(rows) {
 }
 
 export default async (req) => {
-  if (!GATEWAY_KEY) return json({ error: 'agent chat not configured — set BLP_GATEWAY_KEY (and BLP_GATEWAY_URL) in Netlify env vars' }, 501);
+  if (!AGENTS_KEY) return json({ error: 'agent chat not configured — set BLP_AGENTS_KEY (the Agent Console team passcode) and optionally BLP_AGENTS_URL in Netlify env vars' }, 501);
   const url = new URL(req.url);
 
   if (req.method === 'GET' && url.searchParams.has('health')) {
-    // which agents are live on the agents' Mac — drives the green / red rings
-    // on the faces (Brigham 9/22). Cached 30 s so a busy store doesn't hammer it.
+    // which agents have an engine answering right now (Grok Bot relay or the
+    // console runner) — drives the green / red rings on the faces (Brigham 9/22).
+    // Cached 30 s so a busy store doesn't hammer the console.
     if (HEALTH.at && Date.now() - HEALTH.at < 30000) return json(HEALTH.body);
     try {
-      const h = await gateway('/health');
-      const agents = {};
-      Object.entries(h.agents || {}).forEach(([k, v]) => { agents[k.toLowerCase()] = !!(v && v.up); });
-      HEALTH.body = { ok: !!h.ok, machine: h.machine || '', agents, at: new Date().toISOString() };
+      const h = await console_('/api/agents/live');
+      const agents = {}; const engines = {};
+      Object.entries(h.agents || {}).forEach(([k, v]) => { agents[k.toLowerCase()] = !!(v && v.up); engines[k.toLowerCase()] = v && v.engine || ''; });
+      HEALTH.body = { ok: !!h.configured, machine: h.machine || 'cloud', agents, engines, at: new Date().toISOString() };
     } catch (e) {
-      HEALTH.body = { ok: false, agents: {}, error: String(e && e.message || e), at: new Date().toISOString() };
+      HEALTH.body = { ok: false, agents: {}, engines: {}, error: String(e && e.message || e), at: new Date().toISOString() };
     }
     HEALTH.at = Date.now();
     return json(HEALTH.body);
@@ -136,16 +121,13 @@ export default async (req) => {
   if (req.method === 'GET') {
     const slug = String(url.searchParams.get('slug') || '').toLowerCase();
     const run = String(url.searchParams.get('run') || '');
-    if (!AGENTS.includes(slug) || !/^[\w.-]{1,80}$/.test(run)) return json({ error: 'slug and run required' }, 400);
+    if (!AGENTS.includes(slug) || !/^\d{1,12}$/.test(run)) return json({ error: 'slug and run required' }, 400);
     const who = await verify(req.headers.get('x-blp-idtoken'));
     if (!who) return json({ error: 'Sign in with your BLP Google account first.' }, 401);
     try {
-      const st = await gateway('/agents/' + slug + '/runs/' + encodeURIComponent(run));
-      let stored = false;
-      if (st.status === 'completed' && (st.output || '').trim()) {
-        stored = await store([{ agent: slug, role: 'agent', who: NAMES[slug], body: String(st.output).trim(), run_id: run }]);
-      }
-      return json({ status: st.status, output: st.output || null, error: st.error || null, stored });
+      const st = await console_('/api/agents/' + slug + '/chat/jobs/' + run);
+      const status = st.status === 'done' ? 'completed' : st.status === 'failed' ? 'failed' : 'running';
+      return json({ status, output: status === 'completed' ? (st.reply || '') : null, error: st.error || null, engine: st.engine || null, stored: status === 'completed' });
     } catch (e) {
       return json({ error: String(e && e.message || e) }, 502);
     }
@@ -177,25 +159,18 @@ export default async (req) => {
   const who = await verify(body.idToken);
   if (!who) return json({ error: 'Sign in with your BLP Google account first.' }, 401);
 
-  const first = String(who.name).split(/\s+/)[0];
-  const transcript = String(body.transcript || '').slice(0, 12000);
-  const input = [
-    'You are being messaged from the BLP Store Map web app (blpstoremap.netlify.app) by ' + who.name + ' <' + who.email + '>. '
-      + 'Answer as yourself — the same ' + NAMES[slug] + ' as on Telegram — using your vault files and memory as usual. '
-      + 'Reply in plain text for a small chat window: short paragraphs, no markdown tables or headings. '
-      + 'You never post, send or change anything on their behalf from here unless they ask you to.',
-    transcript ? 'RECENT THREAD (this chat window):\n' + transcript : '',
-    first + ': ' + message,
-  ].filter(Boolean).join('\n\n');
-
+  // The console stores both turns in agent_messages (the thread the map reads
+  // back) and tells the agent who wrote and from where.
+  const context = 'You are being messaged from the BLP Store Map web app (blpstoremap.netlify.app) — a small chat window beside the live shop map. '
+    + 'Answer as yourself, the same ' + NAMES[slug] + ' as on Telegram. Reply in plain text for a small chat window: short paragraphs, no markdown tables or headings. '
+    + 'You never post, send or change anything on their behalf from here unless they ask you to.';
   try {
-    const rec = await gateway('/agents/' + slug + '/runs', {
+    const rec = await console_('/api/agents/' + slug + '/chat', {
       method: 'POST',
-      body: JSON.stringify({ input, requester: first + ' <store map>' }),
+      body: JSON.stringify({ message, who: who.name, email: who.email, channelNote: context }),
     });
-    if (!rec.run_id) throw new Error('gateway accepted the message but returned no run id');
-    const stored = await store([{ agent: slug, role: 'user', who: who.name, who_email: who.email, body: message }]);
-    return json({ run_id: rec.run_id, session_id: rec.session_id || null, status: rec.status || 'started', stored });
+    if (!rec.jobId) throw new Error('the console accepted the message but returned no job id');
+    return json({ run_id: String(rec.jobId), status: rec.status || 'pending', engine: rec.engine || null, stored: true });
   } catch (e) {
     return json({ error: String(e && e.message || e) }, 502);
   }

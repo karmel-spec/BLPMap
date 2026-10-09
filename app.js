@@ -17778,14 +17778,14 @@ $('#mapscroll').addEventListener('dblclick', e => {
 
 boot();
 
-/* ---------- 🤖 agent chat (Karmel 9/18) ----------
+/* ---------- 🤖 agent chat (Karmel 9/18; Grok Bots 10/8) ----------
  * The agents' faces bottom-right used to be blpagents.netlify.app/assistant.js,
  * which bounced every tap out to the agent's Telegram bot. Now a tap opens an
- * in-app chat with that Hermes agent — the same agent, same vault + memory —
- * through the BLP Agent Gateway (netlify/functions/agent-chat.mjs), exactly
- * like Marcus on the Marketing app home screen. Per-person helper sets are
- * unchanged from the old widget. If the gateway can't be reached the window
- * shows a clear error — nothing is ever answered on the agent's behalf.
+ * in-app chat with that agent — the same agent, same vault + memory — through
+ * the BLP Agent Console (netlify/functions/agent-chat.mjs), which since
+ * 2026-10-08 wakes the agent's Grok Bot (no Hermes, no Mac). Per-person helper
+ * sets are unchanged from the old widget. If the console can't be reached the
+ * window shows a clear error — nothing is ever answered on the agent's behalf.
  * Threads live in Supabase (agent_messages, written by the function) so they
  * survive browsers and devices and are searchable across every agent; the
  * device keeps a copy as an instant cache / offline fallback (Karmel 9/18). */
@@ -17842,7 +17842,7 @@ boot();
   }
   refreshFaces();
   setInterval(refreshFaces, 4000);   // pick up sign-in / a different person without a reload
-  // live / down rings (Brigham 9/22): the gateway on the agents' Mac says which
+  // live / down rings (Brigham 9/22): the Agent Console says which agents have an engine (Grok Bot relay / runner) answering, i.e. which
   // agents are up — green ring = live, red ring = down or unreachable (needs
   // help). Gold pulse (below) still means "working on your question".
   const LIVE = {agents: null, ok: false};
@@ -17858,7 +17858,7 @@ boot();
     stack.querySelectorAll('.agf-btn').forEach(b => {
       const slug = b.dataset.agent, a = INFO[slug] || {name: slug};
       const known = LIVE.agents && slug in LIVE.agents;
-      const up = known ? LIVE.agents[slug] : LIVE.ok;   // gateway up but agent unlisted → assume live
+      const up = known ? LIVE.agents[slug] : LIVE.ok;   // console up but agent unlisted → assume live
       b.classList.toggle('live', LIVE.agents !== null && up);
       b.classList.toggle('down', LIVE.agents !== null && !up);
       const base = b.dataset.tip || b.title; b.dataset.tip = base;
@@ -17994,7 +17994,7 @@ boot();
       return `<div class="agmsg ${m.r === 'me' ? 'me' : ''}" ${m.id ? `data-id="${m.id}"` : ''}><span class="agwho">${who}<time>${esc(stamp(m.at))}</time></span>${esc(m.t)}</div>`;
     }).join('');
     const b = busy(slug);
-    if (b) html += `<div class="agtyping">${esc(a.name)} is working (Hermes agent on the agents' Mac — usually 10–60 s; if the agent can't be reached you'll see an error, never a stand-in)… <span class="lite">minimise (–) and it pops back when the answer lands</span></div>`;
+    if (b) html += `<div class="agtyping">${esc(a.name)} is working (Grok Bot via the Agent Console — usually 10–90 s; if the agent can't be reached you'll see an error, never a stand-in)… <span class="lite">minimise (–) and it pops back when the answer lands</span></div>`;
     const q = queue(slug);
     if (q.length) html += `<div class="agqueue"><div class="agqhead">⏳ Up next — sent automatically when ${esc(a.name)} is free</div>` + q.map((t, i) =>
       `<div class="agqrow"><span class="agqtxt">${esc(t)}</span>${b ? '' : `<button type="button" class="agqgo" data-i="${i}" title="send now">Send</button>`}<button type="button" class="agqdel" data-i="${i}" title="remove">✕</button></div>`).join('') + '</div>';
@@ -18021,7 +18021,7 @@ boot();
     const a = INFO[slug] || {name: slug, role: ''};
     box.querySelector('img').src = ORIGIN + '/agents/' + slug + '.jpg';
     box.querySelector('b').textContent = a.name;
-    box.querySelector('small').textContent = (a.role ? a.role + ' · ' : '') + 'Hermes agent';
+    box.querySelector('small').textContent = (a.role ? a.role + ' · ' : '') + 'BLP agent (Grok Bot)';
     const tg = box.querySelector('.agchat-tg');
     tg.href = a.bot ? 'https://t.me/' + a.bot : '#'; tg.hidden = !a.bot;
     box.hidden = false;
@@ -18101,7 +18101,7 @@ boot();
         if (j.status === 'completed') { finish(slug, {r: 'ag', t: (j.output || '').trim() || '(no reply)'}); return; }
         if (j.status === 'failed' || j.status === 'cancelled') { finish(slug, {r: 'err', t: 'Run ' + j.status + (j.error ? ': ' + j.error : '')}); return; }
       } catch (e) {
-        // gateway hiccup mid-poll — keep waiting until the cap; the run is still live on the Mac
+        // console hiccup mid-poll — keep waiting until the cap; the job is still live on the console
         if (/not configured|Sign in/i.test(e.message || '')) { finish(slug, {r: 'err', t: e.message}); return; }
       }
       if (RUNS[slug]) RUNS[slug].timer = setTimeout(tick, POLL_MS);

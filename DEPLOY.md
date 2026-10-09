@@ -11,7 +11,7 @@ local computer.
 | Map + stats + reports UI | Netlify (static) | auto-deploy from GitHub |
 | `/api/data` (Piano Log + calendar) | Netlify Function | `BLP_MOVING_ICS` env var |
 | `/api/slots` (floor-plan geometry, live from the sheet, 6 h cache) | Netlify Function | none — `netlify/functions/slots.mjs` |
-| `/api/agent` (in-app chat with Lindsay / Melody / Chris … — the Hermes agents) | Netlify Function | `BLP_GATEWAY_URL`, `BLP_GATEWAY_KEY` env vars |
+| `/api/agent` (in-app chat with Lindsay / Melody / Chris … — relayed by the Agent Console to each agent's Grok Bot) | Netlify Function | `BLP_AGENTS_KEY` (console team passcode), optional `BLP_AGENTS_URL` |
 | `/api/queue` (drag-to-reorder + ＋ add for the Keytop / Refinish / Plate Q boxes — owners, managers & admins) | Netlify Function | `SUPABASE_SERVICE_KEY`; run `supabase/queue_order.sql` once |
 | Daily report email (weekdays 6 AM) | Google Apps Script as info@ | `apps-script/DailyReport.gs` |
 | 🎯 Brigham's Top 10 brief (6:15 AM Mon–Sat, Google Doc + email) | Google Apps Script `top10Brief` ← `/api/top10` Netlify Function | run `setupTop10Brief()` once in the bridge project |
