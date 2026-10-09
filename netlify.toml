@@ -40,6 +40,11 @@
   status = 200
 
 [[redirects]]
+  from = "/api/tuningcheck"
+  to = "/.netlify/functions/tuning-check"
+  status = 200
+
+[[redirects]]
   from = "/api/top10"
   to = "/.netlify/functions/top10"
   status = 200

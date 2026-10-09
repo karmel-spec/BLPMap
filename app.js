@@ -1542,6 +1542,7 @@ function preloadReport(id) {
   if (id === 'queue' && !S.tlRows) loadTimeLog();   // ASSIGNED TO column
   if (id === 'appupdates' && !S.auRows) loadAppUpdates();
   if (id === 'spotlight' && !S.spotData) loadSpotlight();
+  if (id === 'tuningcheck') tchkLoad().then(() => { if (S.openReport === 'tuningcheck') renderReport(); });
   if (id === 'buffing' && !BUF.data && !BUF.loading) loadBuffing().then(() => { if (S.openReport === 'buffing') renderBuffing(); }).catch(() => {});
   if (id === 'clockadjust') {
     if (!S.fixRows) loadClockFixes();
@@ -12727,6 +12728,10 @@ const REPORT_DEFS = () => [
      try { return stalledPianos().length; } catch (e) { return null; } })(),
    desc: 'Custom Shopwork pianos in the building more than twice the typical span for their current phase — the 🐢 list that used to live inside the daily brief. Click a row to jump to the piano.',
    html: stalledTable},
+  {id: 'tuningcheck', sec: 'shop', icon: '🎵', title: 'SHOWROOM TUNING CHECK', count: (() => {
+     try { return tchkRows().length; } catch (e) { return null; } })(),
+   desc: 'Korban’s walk-order worksheet: every piano for sale on the public floor (vestibule, showroom, bottom of the stairs, balcony) with a tag price and no tuning in the last 30 days — front door first, then down the ramp, the spots by the admin desk, then up to the balcony. Mark each one Good or Needs tuning and jot service notes; marks save for everyone. 🖨 Print now for the paper sheet.',
+   html: tuningCheckTable, print: tuningCheckPrintHTML},
   {id: 'unplaced', sec: 'shop', icon: '⚠️', title: 'UNPLACED PIANOS', count: unplaced().length,
    desc: 'Active pianos whose Piano Log location (column U) is empty or doesn’t match any spot or known area.',
    html: unplacedTable},
@@ -13295,6 +13300,7 @@ function renderReport() {
     const wrap = document.querySelector('.shopmapwrap');
     if (mt && wrap) { mt.appendChild(wrap); renderShopMap(); }
   }
+  if (S.openReport === 'tuningcheck') wireTuningCheck(body, renderReport);
   body.querySelectorAll('.sharebtn').forEach(b => b.onclick = ev => {
     ev.stopPropagation();
     const def = REPORT_DEFS().find(r => r.id === b.dataset.r);
@@ -13304,7 +13310,7 @@ function renderReport() {
   body.querySelectorAll('.printbtn').forEach(b => b.onclick = ev => {
     ev.stopPropagation();
     const def = REPORT_DEFS().find(r => r.id === b.dataset.r);
-    let html = def.html();
+    let html = def.print ? def.print() : def.html();   // paper layout where a report has one
     if (['activity', 'tasks', 'queue', 'paytime', 'jobcost'].includes(def.id)) {
       const i = html.indexOf('<table');
       if (i > 0) html = html.slice(i);   // drop the filter bar from print
@@ -15699,6 +15705,393 @@ addEventListener('message', ev => {
       email: u.email, name: u.name || ''}}, ev.origin);
   } catch (e) { /* frame gone */ }
 });
+/* ---------- 🎵 Showroom Tuning Check (Brigham 10/9) ----------
+ * Walk-order worksheet for Korban: every piano for sale on the public floor
+ * (vestibule · showroom · bottom of the stairs · balcony) with a tag price
+ * and no tuning in the last 30 days, in the order he walks the building —
+ * front door → vestibule → down the ramp → showroom → the spots at the
+ * bottom of the stairs by the admin desk → up to the balcony.
+ * Good / Needs tuning marks and service notes live in Supabase tuning_check
+ * (supabase/tuning_check.sql, written by /api/tuningcheck) so a phone on the
+ * floor and the desk see the same sheet. Opens from the 📅 Scheduling tabs
+ * and from Reports; 🖨 Print now gives the paper version. */
+const TCHK = {data: null, at: 0, loading: false};
+const TCHK_DAYS = 30;             // "tuned in the past month" = skip it
+const TCHK_STOPS = [
+  ['vestibule', 'Vestibule', 'start at the front door'],
+  ['showroom', 'Showroom', 'down the ramp, sweep back toward the stairs'],
+  ['stairs', 'Bottom of the stairs', 'by the admin front desk'],
+  ['balcony', 'Balcony', 'up the stairs, above the showroom'],
+];
+function tchkLoad(force) {
+  if (TCHK.loading || (!force && TCHK.data && Date.now() - TCHK.at < 60000)) return Promise.resolve(TCHK.data || {});
+  TCHK.loading = true;
+  return fetch(SB_URL + '/rest/v1/tuning_check?select=serial,mark,note,marked_by,marked_at',
+    {headers: {apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY}, cache: 'no-store'})
+    .then(r => r.ok ? r.json() : [])
+    .then(rows => { const d = {}; rows.forEach(r => { d[r.serial] = {mark: r.mark || '', note: r.note || '', by: r.marked_by || '', at: r.marked_at || ''}; });
+      TCHK.data = d; TCHK.at = Date.now(); return d; })
+    .catch(() => TCHK.data || {})
+    .then(d => { TCHK.loading = false; return d; });
+}
+// a mark older than the window is a previous walk — ignore it
+function tchkState(serial) {
+  const s = (TCHK.data || {})[serial];
+  if (!s || !s.at || daysSince(s.at.slice(0, 10)) > TCHK_DAYS) return {mark: '', note: '', by: '', at: ''};
+  return s;
+}
+async function tchkSave(serial, patch) {
+  const wa = authFields();
+  if (!wa.idToken) throw new Error('Sign in with Google (☰ menu) first.');
+  const cur = Object.assign({}, tchkState(serial), patch, {by: clockName() || (wa.user && wa.user.name) || '', at: new Date().toISOString()});
+  const r = await fetch('/api/tuningcheck', {method: 'POST', headers: {'content-type': 'application/json'},
+    body: JSON.stringify({op: 'mark', serial, mark: cur.mark || '', note: cur.note || '', idToken: wa.idToken})});
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+  (TCHK.data || (TCHK.data = {}))[serial] = cur;
+  return cur;
+}
+async function tchkClear() {
+  const wa = authFields();
+  if (!wa.idToken) throw new Error('Sign in with Google (☰ menu) first.');
+  const r = await fetch('/api/tuningcheck', {method: 'POST', headers: {'content-type': 'application/json'},
+    body: JSON.stringify({op: 'clear', idToken: wa.idToken})});
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+  TCHK.data = {}; TCHK.at = Date.now();
+}
+function tchkSlot(p) {
+  const loc = (p.location || '').trim().toLowerCase();
+  const fi = S.slotFloor.get(loc);
+  if (fi == null || !S.map) return null;
+  const sl = S.map.floors[fi].slots.find(s => s.id.toLowerCase() === loc);
+  return sl ? {fi, sl} : null;
+}
+// which stop of the walk a map spot belongs to, read off the floor plan's own
+// labels (Showroom / Vestibule / "Stairs down to showroom" on the first
+// floor, "Stairs going down to showroom" on the second) so a redrawn sheet
+// keeps working; the numbers are the 10/9 geometry as a fallback
+function tchkZone(p) {
+  if (!p.isSlot) return null;
+  const g = tchkSlot(p);
+  if (!g) return null;
+  const {fi, sl} = g, f = S.map.floors[fi];
+  const lab = re => (f.labels || []).find(l => re.test((l.text || '').trim()));
+  if (fi === 0) {
+    const show = lab(/^showroom$/i), vest = lab(/^vestibule$/i), st = lab(/^stairs down to showroom$/i);
+    if (sl.y + sl.h / 2 < (show ? show.y : 2090)) return null;      // the shop
+    if (sl.x >= (vest ? vest.x : 1290)) return 'vestibule';
+    if (sl.y < (st ? st.y + st.h : 2309) + 160) return 'stairs';     // the two rows under the stairs
+    return 'showroom';
+  }
+  if (fi === 1) {
+    const st = (f.labels || []).filter(l => /^stairs going down to showroom$/i.test((l.text || '').trim()))
+      .sort((a, b) => a.y - b.y)[0];
+    return sl.y >= (st ? st.y + st.h : 2099) ? 'balcony' : null;
+  }
+  return null;
+}
+// the worksheet rows, in walking order
+function tchkRows() {
+  const rows = [];
+  S.data.pianos.forEach(p => {
+    if (!p.active || p.archived || !p.serial || !p.isSlot) return;
+    const zone = tchkZone(p);
+    if (!zone) return;
+    // "for sale with a current price": the status tags say For Sale (not
+    // Sold) AND the tag price is filled in — the log phase can lag
+    const st = p.status || '';
+    if (!/for sale/i.test(st) || /\bsold\b/i.test(st)) return;
+    if (!/\d/.test(p.price || '')) return;
+    if (/digital|realpiano|clavinova|keyboard/i.test([p.make, p.model, p.summary, p.type].join(' '))) return;
+    const ti = tuningInfo(p);
+    if (ti.last && daysSince(ti.last) < TCHK_DAYS) return;
+    rows.push({p, zone, last: ti.last || null, next: ti.next || null, geo: tchkSlot(p).sl});
+  });
+  // serpentine through a stop by rows of spots (~one piano deep), flipping
+  // direction each row so he never doubles back
+  const sweep = (list, southFirst, eastFirst) => {
+    const m = new Map();
+    list.forEach(r => { const k = Math.round((r.geo.y + r.geo.h / 2) / 110); if (!m.has(k)) m.set(k, []); m.get(k).push(r); });
+    const keys = [...m.keys()].sort((a, b) => southFirst ? b - a : a - b);
+    let east = eastFirst; const out = [];
+    keys.forEach(k => { m.get(k).sort((a, b) => east ? b.geo.x - a.geo.x : a.geo.x - b.geo.x).forEach(r => out.push(r)); east = !east; });
+    return out;
+  };
+  const z = k => rows.filter(r => r.zone === k);
+  // vestibule: front door is at the top, walk it south; the ramp lands at
+  // the south end of the showroom, sweep north to the stairs; the stair
+  // spots east→west; upstairs you arrive at the north-west corner
+  return [].concat(z('vestibule').sort((a, b) => a.geo.y - b.geo.y),
+    sweep(z('showroom'), true, true),
+    z('stairs').sort((a, b) => b.geo.x - a.geo.x),
+    sweep(z('balcony'), false, false));
+}
+const tchkStamp = d => (d || new Date()).toLocaleString('en-US',
+  {weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit'});
+function tchkAge(iso) {
+  const d = daysSince(iso);
+  if (d >= 365) return Math.floor(d / 365) + ' yr ' + Math.floor((d % 365) / 30) + ' mo ago';
+  return Math.floor(d / 30) + ' mo ago';
+}
+function tchkFlags(r) {
+  const p = r.p, out = [];
+  if (r.next) out.push(`<span class="tcflag booked">Tuning booked ${esc(fmtDay(r.next.date))} ${esc(r.next.time || '')}</span>`);
+  if (p.phase && p.phase !== 'For Sale') out.push(`<span class="tcflag phase">Log phase: ${esc(p.phase)}</span>`);
+  if (/SOLD/i.test(p.section || '')) out.push('<span class="tcflag warn">Log section says sold, not delivered — confirm</span>');
+  return out.join('');
+}
+const tchkPrice = p => String(p.price || '').replace(/\.00\b/, '');
+const tchkYear = p => /^new$/i.test((p.year || '').trim()) ? 'New' : (p.year || '');
+// the worksheet (screen version): header with logo, who & when, the route,
+// then the rows with Good / Needs tuning boxes and a notes line
+function tuningCheckTable() {
+  const rows = tchkRows();
+  const who = lsGet('tchkWho') || clockName();
+  const marks = rows.map(r => tchkState(r.p.serial));
+  const good = marks.filter(m => m.mark === 'good').length, tune = marks.filter(m => m.mark === 'tune').length,
+    skip = marks.filter(m => m.mark === 'skip').length;
+  const lastAt = marks.map(m => m.at).filter(Boolean).sort().pop();
+  const noRec = rows.filter(r => !r.last).length, booked = rows.filter(r => r.next).length;
+  const counts = {}; rows.forEach(r => { counts[r.zone] = (counts[r.zone] || 0) + 1; });
+  const stops = TCHK_STOPS.map(([k, label, hint], i) =>
+    `<span class="tcstop"><b>${i + 1}</b>${esc(label)} <i>(${counts[k] || 0})</i><small>${esc(hint)}</small></span>`).join('<span class="tcarrow">→</span>');
+  let body = '', n = 0;
+  TCHK_STOPS.forEach(([k, label, hint]) => {
+    const zr = rows.filter(r => r.zone === k);
+    body += `<tr class="tczone"><td colspan="12"><b>${esc(label)}</b><span>${esc(hint)}</span><em>${zr.length} piano${zr.length === 1 ? '' : 's'}</em></td></tr>`;
+    if (!zr.length) body += '<tr><td colspan="12" class="empty">nothing to check here</td></tr>';
+    zr.forEach(r => {
+      const p = r.p, m = tchkState(p.serial);
+      n++;
+      const tuned = r.last
+        ? `<span class="d ${daysSince(r.last) > 180 ? 'old' : ''}">${esc(fmtDayYear(r.last))}</span><span class="age">${esc(tchkAge(r.last))}</span>`
+        : '<span class="d none">No record</span><span class="age">none on the calendar</span>';
+      body += `<tr class="tcrow ${m.mark}" data-row="${p.row}" data-serial="${esc(p.serial)}">
+        <td class="n">${n}</td>
+        <td class="map"><span class="tcmap" title="open on the map">${esc(p.location)}</span></td>
+        <td class="ser">${esc(p.serial)}</td>
+        <td class="tuned">${tuned}</td>
+        <td>${esc(tchkYear(p))}</td><td>${esc(p.make)}</td><td>${esc(p.model)}</td>
+        <td class="pr">${esc(tchkPrice(p))}</td>
+        <td class="chk"><label><input type="checkbox" class="tcmark" data-m="good" ${m.mark === 'good' ? 'checked' : ''}> Good</label></td>
+        <td class="chk"><label><input type="checkbox" class="tcmark" data-m="tune" ${m.mark === 'tune' ? 'checked' : ''}> Needs tuning</label></td>
+        <td class="skipcell">${m.mark === 'skip'
+          ? '<span class="tcskipped">Skipped</span><button type="button" class="tcunskip" title="put it back on the walk">undo</button>'
+          : '<button type="button" class="tcskip" title="not a piano to check — say why, and Chris gets it for review">Skip</button>'}</td>
+        <td class="notes">${tchkFlags(r)}${m.mark === 'skip'
+          ? `<div class="tcwhy">Skipped: ${esc(m.note)}</div>`
+          : `<input type="text" class="tcnote" value="${esc(m.note)}" placeholder="sticky key, squeaky pedal, clicks…" maxlength="300">`}${m.by ? `<small>${esc(m.by)} · ${esc(tchkStamp(new Date(m.at)))}</small>` : ''}</td>
+      </tr>`;
+    });
+  });
+  return `<div class="tchk">
+    <div class="tchkhead">
+      <img src="assets/blp-logo.png" alt="Brigham Larson Pianos">
+      <div class="tchkttl"><b>Showroom Tuning Check</b>
+        <span>Pianos for sale on the floor with a tag price, not tuned in the last ${TCHK_DAYS} days. Walk them in order, play each one, mark it. Tap a spot number to open the piano on the map.</span></div>
+      <div class="tchkwho">
+        <label>Checked by<input type="text" class="tcwho" value="${esc(who)}" maxlength="60"></label>
+        <label>Date / time<input type="text" class="tcwhen" value="${esc(lastAt ? tchkStamp(new Date(lastAt)) : tchkStamp())}" readonly></label>
+      </div>
+      <div class="tchkbtns">
+        <button class="tcprint">🖨 Print now</button>
+        <button class="tcclear" title="wipe every Good / Needs tuning mark and note — start a fresh walk">Clear marks</button>
+      </div>
+    </div>
+    <div class="tcroute">${stops}</div>
+    <div class="tctally"><b>${rows.length}</b> pianos to check · <b class="tcgood">${good}</b> good · <b class="tctune">${tune}</b> need tuning · <b class="tcskipn">${skip}</b> skipped · <b class="tcleft">${rows.length - good - tune - skip}</b> left
+      <span>· ${noRec} with no tuning on the calendar · ${booked} already booked for a tuning (see Notes) · skipped pianos go to Chris for review${TCHK.data ? '' : ' · loading saved marks…'}</span></div>
+    <div class="tscroll"><table class="tchktbl">
+      <thead><tr><th></th><th>Map #</th><th>Serial</th><th>Last tuned</th><th>Year</th><th>Make</th><th>Model</th><th>Price</th><th>Good</th><th>Tuning</th><th>Skip</th><th>Notes — sticky key, squeaky pedal, clicks, other service</th></tr></thead>
+      <tbody>${body}</tbody></table></div>
+  </div>`;
+}
+// the paper version (🖨 Print now / the report's Print button): logo, name
+// and date lines, empty boxes, a writing line per piano
+function tuningCheckPrintHTML() {
+  const rows = tchkRows();
+  const who = lsGet('tchkWho') || clockName();
+  let body = '', n = 0;
+  TCHK_STOPS.forEach(([k, label, hint], i) => {
+    const zr = rows.filter(r => r.zone === k);
+    body += `<tr class="z"><td colspan="11"><b>${i + 1}. ${esc(label)}</b> — ${esc(hint)} · ${zr.length}</td></tr>`;
+    zr.forEach(r => {
+      const p = r.p, m = tchkState(p.serial);
+      n++;
+      const flags = [r.next ? 'tuning booked ' + fmtDay(r.next.date) + ' ' + (r.next.time || '') : '',
+        p.phase && p.phase !== 'For Sale' ? 'log phase: ' + p.phase : '',
+        /SOLD/i.test(p.section || '') ? 'log says sold, not delivered' : ''].filter(Boolean).join(' · ');
+      body += `<tr>
+        <td class="n">${n}</td><td class="map">${esc(p.location)}</td><td class="ser">${esc(p.serial)}</td>
+        <td>${r.last ? esc(fmtDayYear(r.last)) + '<br><small>' + esc(tchkAge(r.last)) + '</small>' : '<b>No record</b>'}</td>
+        <td>${esc(tchkYear(p))}</td><td>${esc(p.make)}</td><td>${esc(p.model)}</td><td class="pr">${esc(tchkPrice(p))}</td>
+        <td class="bx">${m.mark === 'good' ? '☒' : '☐'}</td><td class="bx">${m.mark === 'tune' ? '☒' : '☐'}</td>
+        <td class="nt">${flags ? '<small>' + esc(flags) + '</small><br>' : ''}${m.mark === 'skip' ? '<b>SKIPPED</b> — ' : ''}${esc(m.note)}</td>
+      </tr>`;
+    });
+  });
+  return `<style>
+    @page { size: letter landscape; margin: .45in .5in; }
+    .tch { display: flex; gap: 18px; align-items: flex-end; margin: 0 0 10px; }
+    .tch img { height: 34px; }
+    .tch .t { flex: 1; } .tch .t b { font-size: 15px; } .tch .t div { color: #555; font-size: 10px; }
+    .tch .w { font-size: 11px; min-width: 300px; } .tch .w div { display: flex; gap: 8px; align-items: flex-end; margin-top: 6px; }
+    .tch .w span { flex: 1; border-bottom: 1px solid #000; min-height: 16px; padding: 0 4px; }
+    .tr { font-size: 10.5px; color: #333; margin-bottom: 8px; }
+    table.tct td { padding: 4px 6px 4px 0; font-size: 10.5px; }
+    table.tct th { padding: 3px 6px 3px 0; }
+    table.tct tr.z td { background: #eee; border-top: 2px solid #000; padding: 4px 6px; }
+    table.tct td.n { color: #777; width: 16px; text-align: right; }
+    table.tct td.map { font-weight: 800; font-size: 13px; width: 34px; }
+    table.tct td.ser { font-family: Menlo, Consolas, monospace; font-size: 10px; }
+    table.tct td.pr { white-space: nowrap; }
+    table.tct td.bx { font-size: 15px; text-align: center; width: 36px; line-height: 1; }
+    table.tct td.nt { min-width: 230px; border-bottom: 1px solid #000; }
+    table.tct th.bx { text-align: center; }
+    table.tct tr { break-inside: avoid; }
+    .sig { margin-top: 18px; display: flex; gap: 30px; font-size: 11px; }
+    .sig span { flex: 1; border-bottom: 1px solid #000; }
+  </style>
+  <div class="tch">
+    <img src="${logoUrlForPrint()}" alt="BLP">
+    <div class="t"><b>Showroom Tuning Check</b><div>For-sale pianos on the floor with a tag price, not tuned in the last ${TCHK_DAYS} days · ${rows.length} to check · walk them in order</div></div>
+    <div class="w"><div>Checked by <span>${esc(who)}</span></div><div>Date / time <span>${esc(tchkStamp())}</span></div></div>
+  </div>
+  <div class="tr">${TCHK_STOPS.map(([k, l, h], i) => `<b>${i + 1}. ${esc(l)}</b> (${esc(h)})`).join(' → ')}</div>
+  <table class="tct"><thead><tr><th></th><th>Map #</th><th>Serial</th><th>Last tuned</th><th>Year</th><th>Make</th><th>Model</th><th>Price</th><th class="bx">Good</th><th class="bx">Tuning</th><th>Notes — sticky key, squeaky pedal, clicks, other service</th></tr></thead>
+  <tbody>${body}</tbody></table>
+  <div class="sig">Signed <span></span> Date <span></span></div>`;
+}
+// wire the worksheet wherever it's rendered (Reports page or the Scheduling
+// tab); `rerender` redraws that host after Clear marks
+function wireTuningCheck(root, rerender) {
+  const box = root.querySelector('.tchk');
+  if (!box) return;
+  const tally = () => {
+    const rows = [...box.querySelectorAll('.tcrow')];
+    const g = rows.filter(tr => tr.classList.contains('good')).length, t = rows.filter(tr => tr.classList.contains('tune')).length,
+      k = rows.filter(tr => tr.classList.contains('skip')).length;
+    box.querySelector('.tcgood').textContent = g; box.querySelector('.tctune').textContent = t;
+    box.querySelector('.tcskipn').textContent = k;
+    box.querySelector('.tcleft').textContent = rows.length - g - t - k;
+    box.querySelector('.tcwhen').value = tchkStamp();
+  };
+  const rowPiano = tr => S.data.pianos.find(x => x.row === +tr.dataset.row);
+  // Skip: this piano shouldn't be on the walk (delivered, not really for
+  // sale, …) — a reason is required, and it goes to Chris's thread so
+  // Brigham, Karmel or Mark can approve what to change in the Piano Log
+  box.querySelectorAll('.tcskip').forEach(b => b.onclick = ev => {
+    ev.stopPropagation();
+    const tr = b.closest('.tcrow'), p = rowPiano(tr);
+    if (p) tchkSkipModal(p, () => { tr.classList.remove('good', 'tune'); tr.classList.add('skip'); tally(); if (rerender) rerender(); });
+  });
+  box.querySelectorAll('.tcunskip').forEach(b => b.onclick = async ev => {
+    ev.stopPropagation();
+    const tr = b.closest('.tcrow');
+    try { await tchkSave(tr.dataset.serial, {mark: '', note: ''}); tr.classList.remove('skip'); tally(); if (rerender) rerender(); }
+    catch (e) { cfxToast('Couldn’t undo the skip — ' + (e.message || e)); }
+  });
+  box.querySelectorAll('.tcrow').forEach(tr => tr.onclick = ev => {
+    if (ev.target.closest('input, label, button, a')) return;
+    const p = S.data.pianos.find(x => x.row === +tr.dataset.row);
+    if (p) focusPiano(p);
+  });
+  box.querySelectorAll('.tcmark').forEach(cb => cb.onchange = async () => {
+    const tr = cb.closest('.tcrow'), serial = tr.dataset.serial, m = cb.dataset.m;
+    const other = tr.querySelector(`.tcmark[data-m="${m === 'good' ? 'tune' : 'good'}"]`);
+    const mark = cb.checked ? m : '';
+    if (cb.checked && other) other.checked = false;
+    const wasSkip = tr.classList.contains('skip');
+    tr.classList.toggle('good', mark === 'good'); tr.classList.toggle('tune', mark === 'tune'); tr.classList.remove('skip');
+    tally();
+    try {
+      await tchkSave(serial, wasSkip ? {mark, note: ''} : {mark});
+      if (wasSkip && rerender) rerender();   // the row gets its notes line back
+    }
+    catch (e) {
+      const prev = tchkState(serial).mark;
+      cb.checked = prev === m; if (other) other.checked = prev === other.dataset.m;
+      tr.classList.toggle('good', prev === 'good'); tr.classList.toggle('tune', prev === 'tune'); tr.classList.toggle('skip', prev === 'skip');
+      tally(); cfxToast('Couldn’t save that mark — ' + (e.message || e));
+    }
+  });
+  box.querySelectorAll('.tcnote').forEach(inp => {
+    let saved = inp.value;
+    const go = async () => {
+      if (inp.value === saved) return;
+      const serial = inp.closest('.tcrow').dataset.serial;
+      try { await tchkSave(serial, {note: inp.value.trim()}); saved = inp.value; tally(); }
+      catch (e) { cfxToast('Couldn’t save that note — ' + (e.message || e)); }
+    };
+    inp.onchange = go;
+    inp.onkeydown = ev => { if (ev.key === 'Enter') { ev.preventDefault(); inp.blur(); } };
+  });
+  const who = box.querySelector('.tcwho');
+  if (who) who.oninput = () => lsSet('tchkWho', who.value);
+  box.querySelector('.tcprint').onclick = () => printReport('🎵 SHOWROOM TUNING CHECK', tuningCheckPrintHTML());
+  box.querySelector('.tcclear').onclick = async () => {
+    if (!confirm('Clear every Good / Needs tuning mark and note and start a fresh walk?')) return;
+    try { await tchkClear(); cfxToast('Marks cleared — fresh sheet.'); if (rerender) rerender(); }
+    catch (e) { cfxToast('Couldn’t clear — ' + (e.message || e)); }
+  };
+}
+// the Skip popup: a reason is required; on save the mark is stored and the
+// reason is posted into Chris's chat thread (☰ faces, bottom-right) for
+// Brigham, Karmel or Mark to approve what changes on that piano
+function tchkSkipModal(p, onDone) {
+  let ov = $('#tcskipmodal');
+  if (!ov) { ov = document.createElement('div'); ov.id = 'tcskipmodal'; ov.className = 'blpmodal'; document.body.appendChild(ov); }
+  const nm = [tchkYear(p), p.make, p.model].filter(Boolean).join(' ') || p.summary || 'Piano';
+  ov.innerHTML = `<div class="tmcard">
+    <span class="x">✕</span>
+    <h3>⏭ Skip this piano</h3>
+    <div class="tmpiano"><b>${esc(nm)}</b>
+      <span>Serial ${esc(p.serial)} · Spot ${esc(p.location)}${p.price ? ' · ' + esc(tchkPrice(p)) : ''}</span></div>
+    <label>Why doesn’t it need a tuning check? <small>(required)</small></label>
+    <textarea class="tcwhyin" rows="3" placeholder="already delivered · not really for sale · sold, waiting on pickup · customer's piano · …"></textarea>
+    <p class="tcskipnote">Your reason goes to Chris’s thread so Brigham, Karmel or Mark can approve the Piano Log change (status, price, spot or phase) that takes it off the walk.</p>
+    <div class="prbtns"><button type="button" class="prskip tccancel">Cancel</button><button type="button" class="tmgo tcgo" disabled>Skip &amp; send to Chris</button></div>
+    <div class="tmmsg"></div>
+  </div>`;
+  ov.hidden = false;
+  const ta = ov.querySelector('.tcwhyin'), go = ov.querySelector('.tcgo'), msg = ov.querySelector('.tmmsg');
+  const close = () => { ov.hidden = true; };
+  ov.onclick = ev => { if (ev.target === ov || ev.target.closest('.x') || ev.target.closest('.tccancel')) close(); };
+  ta.oninput = () => { go.disabled = ta.value.trim().length < 3; };
+  go.onclick = async () => {
+    const why = ta.value.trim();
+    if (why.length < 3) { ta.focus(); return; }
+    go.disabled = true; msg.textContent = 'Saving…';
+    try {
+      await tchkSave(p.serial, {mark: 'skip', note: why});
+      const sent = tchkTellChris(p, why);
+      close();
+      cfxToast(sent ? '⏭ Skipped — sent to Chris for review.' : '⏭ Skipped. (Chris’s chat isn’t available right now — the reason is saved on the sheet.)');
+      if (onDone) onDone();
+    } catch (e) {
+      go.disabled = false;
+      msg.textContent = 'Couldn’t save — ' + (e.message || e);
+    }
+  };
+  setTimeout(() => ta.focus(), 50);
+}
+function tchkTellChris(p, why) {
+  const me = clockName() || 'a technician';
+  const ti = tuningInfo(p);
+  const text = `🎵 Tuning Check — SKIPPED by ${me} (${tchkStamp()})
+Spot ${p.location} · ${[tchkYear(p), p.make, p.model].filter(Boolean).join(' ')} · serial ${p.serial}${p.price ? ' · ' + tchkPrice(p) : ''}${ti.last ? ' · last tuned ' + fmtDayYear(ti.last) : ' · no tuning on the calendar'}
+Reason: ${why}
+Brigham / Karmel / Mark: please review and approve what should change on this piano in the Piano Log (status, price, spot or phase) so it stops showing on the showroom tuning walk. ${mapLink(p)}`;
+  if (window.agentSend) return !!agentSend('chris', text);
+  // chat module not loaded (shouldn't happen) — post straight to the thread
+  const wa = authFields();
+  if (!wa.idToken) return false;
+  fetch('/api/agent', {method: 'POST', headers: {'content-type': 'application/json'},
+    body: JSON.stringify({slug: 'chris', message: text, idToken: wa.idToken})}).catch(() => {});
+  return true;
+}
+
 const SCHED_TABS = [
   // 🗓 Week Schedule tab retired 9/4 (Brigham) — the Week Board duplicated
   // what Planner + Schedule already cover
@@ -15706,6 +16099,7 @@ const SCHED_TABS = [
   ['schedule', '📆 Schedules'], ['sequence', '🔢 Sequence'],
   ['pipeline', '🚰 Pipeline'], ['walk', '🚶 Walk-the-Shop'], ['audit', '🧪 Card Audit'],
   ['ladder', '🪜 Skill Ladder'], ['matrix', '🔢 Versatility Matrix'],
+  ['tuningcheck', '🎵 Tuning Check'],   // Korban's showroom walk-order worksheet (Brigham 10/9)
 ];
 const SCHED = {tab: 'planner'};
 function renderSched() {
@@ -15713,8 +16107,8 @@ function renderSched() {
   if (!el) return;
   // whole-team mode (Brigham 9/11): non-managers get the Card Audit tab
   // only — the report-vs-card discrepancy list everyone can act on
-  const tabs = isTimelogAdmin() ? SCHED_TABS : SCHED_TABS.filter(([id]) => id === 'audit');
-  if (!isTimelogAdmin()) SCHED.tab = 'audit';
+  const tabs = isTimelogAdmin() ? SCHED_TABS : SCHED_TABS.filter(([id]) => id === 'audit' || id === 'tuningcheck');
+  if (!isTimelogAdmin() && SCHED.tab !== 'tuningcheck') SCHED.tab = 'audit';
   el.innerHTML = `<div class="teamtabs">${tabs.map(([id, label]) =>
       `<button data-st="${id}" class="${SCHED.tab === id ? 'on' : ''}">${label}</button>`).join('')}</div>
     <div id="schedFrame"></div>`;
@@ -15730,6 +16124,13 @@ function renderSched() {
 function schedPane() {
   const host = $('#schedFrame');
   if (!host) return;
+  if (SCHED.tab === 'tuningcheck') {
+    // the worksheet itself, right here in the Scheduling section
+    host.innerHTML = `<div class="smgr">${tuningCheckTable()}</div>`;
+    wireTuningCheck(host, schedPane);
+    if (!TCHK.data) tchkLoad().then(() => { if (SCHED.tab === 'tuningcheck' && S.view === 'sched') schedPane(); });
+    return;
+  }
   if (SCHED.tab === 'schedule') {
     if (!TEAM.sched && !TEAM.loading) { teamFetchAll(); }
     host.innerHTML = `<div class="smgr">${TEAM.sched ? teamScheduleHTML()
@@ -17305,6 +17706,15 @@ boot();
     go(12);
   });
   window.openAgentChat = openChat;
+  // other features post into an agent's thread (the 🎵 Tuning Check sends
+  // skipped pianos to Chris for review) — same path as typing it in the window
+  window.agentSend = (slug, text) => {
+    const t = String(text || '').trim();
+    if (!t || !INFO[slug]) return false;
+    if (busy(slug)) { const q = queue(slug); q.push(t); saveQueue(slug, q); if (CH.slug === slug) render(); }
+    else dispatch(slug, t);
+    return true;
+  };
 })();
 
 /* ---------- 🎯 Brigham's Top 10 (Brigham 9/22) ----------

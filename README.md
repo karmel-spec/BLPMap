@@ -37,6 +37,16 @@ never be committed. Without it the app still runs (map + pianos, no moves).
   the Piano Log, the task boards and pending mini-QCs. The Apps Script bridge
   (`top10Brief`) writes the same list into one printable Google Doc every
   morning at 6:15 (same link every day) and emails him the link.
+- **🎵 Showroom Tuning Check** (Brigham 10/9): 📅 Scheduling → 🎵 Tuning Check
+  (also ☰ → Reports, deep link `#report=tuningcheck`). Korban's walk-order
+  worksheet: every piano for sale on the public floor (vestibule, showroom,
+  the spots by the admin desk, balcony) with a tag price and no tuning in the
+  last 30 days, ordered front door → down the ramp → stairs → balcony from the
+  floor plan's own labels. Good / Needs tuning marks and service notes save
+  to Supabase `tuning_check` (`supabase/tuning_check.sql`, written by
+  `/api/tuningcheck`) so everyone sees the same sheet; **Skip** requires a
+  reason and posts it into Chris's agent thread for Brigham, Karmel or Mark
+  to approve the Piano Log change. 🖨 Print now gives the paper version.
 - **Queue boxes are editable** (Keytop Q · Refinish Q · Plate Q, Karmel 9/18):
   owners, managers and admins drag ⠿ to reorder and ＋ add a piano; the order
   and additions live in Supabase `queue_order` (`supabase/queue_order.sql`,
