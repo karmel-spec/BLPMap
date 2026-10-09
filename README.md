@@ -50,7 +50,8 @@ never be committed. Without it the app still runs (map + pianos, no moves).
 - **🎵 Tuning Queue box** (Brigham 10/9): on the first floor by the admin
   front desk, in the open floor between "Stairs going up" and "Stairs down to
   showroom". Every piano marked Needs tuning on the Tuning Check lands in it
-  automatically, in walk order; managers can drag to reorder and ＋ add, like
+  automatically, in walk order, followed by every tuning already booked on
+  the calendar (Request ▾ → Tuning), soonest first; managers can drag to reorder and ＋ add, like
   the other queue boxes (`queue_order` row `tuning`). The sheet has a button
   straight to the worksheet.
 - **Queue boxes are editable** (Keytop Q · Refinish Q · Plate Q, Karmel 9/18):

@@ -873,19 +873,36 @@ const QDEFS = {
   // Showroom Tuning Check, in walk order, plus anything added with ＋ —
   // the box sits by the admin desk between the two stairs on the first floor
   tuning: {title: '🎵 Tuning Queue', noun: 'tuning queue', unit: 'piano',
-    sub: 'marked Needs tuning on the Showroom Tuning Check, in walk order', empty: 'Nothing marked Needs tuning — walk the 🎵 Tuning Check to fill this queue.',
+    sub: 'marked Needs tuning on the Showroom Tuning Check (walk order), then every tuning booked on the calendar (Request ▾ → Tuning), soonest first',
+    empty: 'Nothing marked Needs tuning and no tunings booked — walk the 🎵 Tuning Check to fill this queue.',
     natural: () => {
       let rows = [];
       try { rows = tchkRows(); } catch (e) { rows = []; }
-      return rows.filter(r => tchkState(r.p.serial).mark === 'tune').map(r => {
+      const main = p => `${esc(p.summary || '')} <span class="lite">#${esc(p.serial)}</span>`;
+      const right = p => `<span class="lite">${esc(p.location || '')}</span>`;
+      const booked = ti => `📅 Tuning booked ${esc(fmtDay(ti.next.date))} ${esc(ti.next.time || '')}`;
+      // 1. worksheet marks, in walk order
+      const marked = rows.filter(r => tchkState(r.p.serial).mark === 'tune').map(r => {
         const m = tchkState(r.p.serial), ti = tuningInfo(r.p);
         const det = [m.note ? `<div class="qdet">📝 ${esc(m.note)}</div>` : '',
-                     ti.next ? `<div class="qdet">📅 Tuning booked ${esc(fmtDay(ti.next.date))} ${esc(ti.next.time || '')}</div>` : ''].join('');
+                     ti.next ? `<div class="qdet">${booked(ti)}</div>` : ''].join('');
         return {serial: r.p.serial, p: r.p, badge: `<b style="min-width:88px;color:#9e2020">${ti.last ? 'tuned ' + esc(fmtDayYear(ti.last)) : 'no record'}</b>`,
-          sub: m.by ? 'marked by ' + m.by : '', detail: det,
-          main: `${esc(r.p.summary || '')} <span class="lite">#${esc(r.p.serial)}</span>`,
-          right: `<span class="lite">${esc(r.p.location || '')}</span>`};
+          sub: m.by ? 'marked by ' + m.by : '', detail: det, main: main(r.p), right: right(r.p)};
       });
+      // 2. tunings already booked on the calendar (any active piano), soonest first
+      const have = new Set(marked.map(it => qn(it.serial)));
+      const bookedRows = [];
+      S.data.pianos.forEach(p => {
+        if (!p.active || !p.serial || have.has(qn(p.serial))) return;
+        const ti = tuningInfo(p);
+        if (!ti.next) return;
+        bookedRows.push({p, ti, key: ti.next.date + ' ' + (ti.next.time || '')});
+      });
+      bookedRows.sort((a, b) => a.key < b.key ? -1 : a.key > b.key ? 1 : a.p.row - b.p.row);
+      return marked.concat(bookedRows.map(({p, ti}) => ({serial: p.serial, p,
+        badge: `<b style="min-width:88px;color:#245a8c">booked ${esc(fmtDay(ti.next.date))}</b>`,
+        sub: (ti.next.time ? ti.next.time + ' · ' : '') + (ti.last ? 'last tuned ' + fmtDayYear(ti.last) : 'no tuning on record'),
+        detail: '', main: main(p), right: right(p)})));
     }},
   refin: {title: '🎨 Refinishing Queue', noun: 'refinishing queue', unit: 'piano',
     sub: 'from the refinishing sheet (its row order = priority)', empty: 'The refinishing sheet is empty — nothing queued.',
@@ -3629,7 +3646,7 @@ function renderMap() {
     s += `<g class="tqbtn" style="cursor:pointer">
       <rect x="${txq}" y="${tyq}" width="${tw}" height="${th}" rx="8" class="kqrect"/>
       <text x="${txq + tw / 2}" y="${tyq + 31}" text-anchor="middle" class="kqtxt" font-size="20">🎵 <tspan font-weight="800" font-size="15">Tuning Q</tspan></text>
-      <text x="${txq + tw / 2}" y="${tyq + 58}" text-anchor="middle" class="kqtxt kqcount" font-size="13">${TCHK.data && tq != null ? tq + ' need tuning ›' : 'loading…'}</text>
+      <text x="${txq + tw / 2}" y="${tyq + 58}" text-anchor="middle" class="kqtxt kqcount" font-size="13">${TCHK.data && tq != null ? tq + ' in queue ›' : 'loading…'}</text>
     </g>`;
   }
   // ✨ Buffing Queue box on the 2nd floor, just under spot 189a (Walter 10/7) —
