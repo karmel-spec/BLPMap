@@ -2333,3 +2333,12 @@ table.tchktbl tr.tcrow.skip td.chk{opacity:.45}
 #tcskipmodal .tmpiano{margin-bottom:4px}
 #tcskipmodal .tmpiano span{display:block;color:#8a929a;font-size:12px}
 .tcskipnote{font-size:11.5px;color:#8a929a;margin:8px 0 0;line-height:1.45}
+/* 🎵 Tuning Check button at the top of the Scheduling page */
+.schedtools{margin:2px 0 12px}
+.tcopenbtn{display:inline-flex;align-items:center;gap:11px;border:2px solid #9e2020;background:#fff;border-radius:12px;padding:9px 16px 9px 12px;cursor:pointer;text-align:left;font-family:inherit;color:#1d2126;box-shadow:0 2px 8px rgba(158,32,32,.12)}
+.tcopenbtn:hover{background:#9e2020;color:#fff}
+.tcopenbtn .ic{font-size:22px;line-height:1}
+.tcopenbtn .tcl b{display:block;font-size:14px;letter-spacing:.6px;text-transform:uppercase}
+.tcopenbtn .tcl small{display:block;font-size:11.5px;color:#8a929a;font-weight:600}
+.tcopenbtn:hover .tcl small{color:#f3d9d9}
+.tcopenbtn .pc{margin-left:6px}

@@ -16109,13 +16109,24 @@ function renderSched() {
   // only — the report-vs-card discrepancy list everyone can act on
   const tabs = isTimelogAdmin() ? SCHED_TABS : SCHED_TABS.filter(([id]) => id === 'audit' || id === 'tuningcheck');
   if (!isTimelogAdmin() && SCHED.tab !== 'tuningcheck') SCHED.tab = 'audit';
-  el.innerHTML = `<div class="teamtabs">${tabs.map(([id, label]) =>
+  // 🎵 Tuning Check gets its own button up top (Brigham 10/9) — the walk-order
+  // worksheet is a tool, not a dashboard tab, and it should be one click
+  let tcCount = null;
+  try { tcCount = tchkRows().length; } catch (e) { /* map not ready yet */ }
+  el.innerHTML = `<div class="schedtools">
+      <button class="tcopenbtn" data-st="tuningcheck" title="Korban's showroom walk-order worksheet: for-sale pianos not tuned in the last 30 days">
+        <span class="ic">🎵</span><span class="tcl"><b>Tuning Check</b><small>showroom walk-order worksheet · mark Good / Needs tuning / Skip · print</small></span>
+        ${tcCount != null ? `<span class="pc ${tcCount ? '' : 'zero'}">${tcCount}</span>` : ''}
+      </button>
+    </div>
+    <div class="teamtabs">${tabs.map(([id, label]) =>
       `<button data-st="${id}" class="${SCHED.tab === id ? 'on' : ''}">${label}</button>`).join('')}</div>
     <div id="schedFrame"></div>`;
   el.querySelectorAll('[data-st]').forEach(b => b.onclick = () => {
     SCHED.tab = b.dataset.st;
-    el.querySelectorAll('[data-st]').forEach(x => x.classList.toggle('on', x.dataset.st === SCHED.tab));
+    el.querySelectorAll('.teamtabs [data-st]').forEach(x => x.classList.toggle('on', x.dataset.st === SCHED.tab));
     schedPane();
+    if (b.classList.contains('tcopenbtn')) { const f = $('#schedFrame'); if (f) f.scrollIntoView({behavior: 'smooth', block: 'start'}); }
   });
   schedPane();
 }
