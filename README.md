@@ -47,6 +47,12 @@ never be committed. Without it the app still runs (map + pianos, no moves).
   `/api/tuningcheck`) so everyone sees the same sheet; **Skip** requires a
   reason and posts it into Chris's agent thread for Brigham, Karmel or Mark
   to approve the Piano Log change. 🖨 Print now gives the paper version.
+- **🎵 Tuning Queue box** (Brigham 10/9): on the first floor by the admin
+  front desk, in the open floor between "Stairs going up" and "Stairs down to
+  showroom". Every piano marked Needs tuning on the Tuning Check lands in it
+  automatically, in walk order; managers can drag to reorder and ＋ add, like
+  the other queue boxes (`queue_order` row `tuning`). The sheet has a button
+  straight to the worksheet.
 - **Queue boxes are editable** (Keytop Q · Refinish Q · Plate Q, Karmel 9/18):
   owners, managers and admins drag ⠿ to reorder and ＋ add a piano; the order
   and additions live in Supabase `queue_order` (`supabase/queue_order.sql`,
