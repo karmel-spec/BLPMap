@@ -11,7 +11,7 @@
 const SB_URL = (process.env.SUPABASE_URL || 'https://ismacawxfvvllfinibbf.supabase.co').replace(/\/$/, '');
 const SB_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const GOOGLE_CLIENT_ID = '110628682621-v65mkaoanv87sp75ggdfcrglfr7bkr8p.apps.googleusercontent.com';
-const QUEUES = ['keytop', 'refin', 'plates'];
+const QUEUES = ['keytop', 'refin', 'plates', 'tuning'];   // tuning: the 🎵 Tuning Queue by the admin desk (Brigham 10/9)
 // mirrors OWNER_EMAILS / ADMIN_EMAILS / TIMELOG_ADMIN_EMAILS (managers) in app.js
 const EDITORS = new Set([
   'brigham@brighamlarsonpianos.com', 'karmel@brighamlarsonpianos.com', 'brighamlarson@gmail.com',

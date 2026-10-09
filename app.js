@@ -869,6 +869,24 @@ const QDEFS = {
       const slat = cabTokens(p).find(t => /^\d+p$/.test(t));
       return qItem(p, plateBadge(p.plateStatus), p.plateTemp ? 'plate: ' + p.plateTemp : slat ? 'plate at ' + slat.toUpperCase() : '');
     })},
+  // 🎵 Tuning Queue (Brigham 10/9): the pianos marked Needs tuning on the
+  // Showroom Tuning Check, in walk order, plus anything added with ＋ —
+  // the box sits by the admin desk between the two stairs on the first floor
+  tuning: {title: '🎵 Tuning Queue', noun: 'tuning queue', unit: 'piano',
+    sub: 'marked Needs tuning on the Showroom Tuning Check, in walk order', empty: 'Nothing marked Needs tuning — walk the 🎵 Tuning Check to fill this queue.',
+    natural: () => {
+      let rows = [];
+      try { rows = tchkRows(); } catch (e) { rows = []; }
+      return rows.filter(r => tchkState(r.p.serial).mark === 'tune').map(r => {
+        const m = tchkState(r.p.serial), ti = tuningInfo(r.p);
+        const det = [m.note ? `<div class="qdet">📝 ${esc(m.note)}</div>` : '',
+                     ti.next ? `<div class="qdet">📅 Tuning booked ${esc(fmtDay(ti.next.date))} ${esc(ti.next.time || '')}</div>` : ''].join('');
+        return {serial: r.p.serial, p: r.p, badge: `<b style="min-width:88px;color:#9e2020">${ti.last ? 'tuned ' + esc(fmtDayYear(ti.last)) : 'no record'}</b>`,
+          sub: m.by ? 'marked by ' + m.by : '', detail: det,
+          main: `${esc(r.p.summary || '')} <span class="lite">#${esc(r.p.serial)}</span>`,
+          right: `<span class="lite">${esc(r.p.location || '')}</span>`};
+      });
+    }},
   refin: {title: '🎨 Refinishing Queue', noun: 'refinishing queue', unit: 'piano',
     sub: 'from the refinishing sheet (its row order = priority)', empty: 'The refinishing sheet is empty — nothing queued.',
     natural: () => (REFQ.rows || []).map(x => {
@@ -950,6 +968,7 @@ function openQueueSheet(key) {
     ov.innerHTML = `<div class="dsheet" style="max-height:80vh;overflow:auto"><button class="dsx">✕</button>
       <h3>${def.title}</h3>
       <div class="dssub">${items.length} ${def.unit}${items.length === 1 ? '' : 's'} · ${def.sub} · tap one to open its card${canEdit ? ' · drag ⠿ to reorder' : ''}</div>
+      ${key === 'tuning' ? '<div class="qtools"><button class="qtcopen" type="button">🎵 Open the Tuning Check worksheet</button></div>' : ''}
       ${canEdit ? `<div class="qtools"><button class="qadd" type="button">＋ Add a piano</button><span class="qmsg"></span></div>` : ''}
       <div class="qlist">${items.map((it, i) => `<div class="kqrow" data-serial="${esc(it.serial)}" ${it.p ? `data-row="${it.p.row}"` : ''} style="display:flex;gap:10px;align-items:center;padding:8px 2px;border-top:1px solid #f0ece5;${it.p ? 'cursor:pointer' : 'opacity:.8'}">
         ${canEdit ? '<span class="qgrab" title="drag to reorder">⠿</span>' : ''}<span class="qpos">#${i + 1}</span>${it.badge}
@@ -957,6 +976,11 @@ function openQueueSheet(key) {
         ${canEdit && it.manual ? '<button class="qdel" type="button" title="remove from this queue">✕</button>' : ''}</div>`).join('')
         || `<div class="empty">${def.empty}</div>`}</div></div>`;
     ov.querySelector('.dsx').onclick = () => ov.remove();
+    const tco = ov.querySelector('.qtcopen');
+    if (tco) tco.onclick = ev => {
+      ev.stopPropagation(); ov.remove();
+      S.openReport = 'tuningcheck'; preloadReport('tuningcheck'); switchView('report'); renderReport();
+    };
     if (canEdit) wireQueueEdit(ov, key, paint);
   };
   ov.onclick = ev => {
@@ -3591,6 +3615,22 @@ function renderMap() {
       <text x="${pxq + pw / 2}" y="${pyq + 31}" text-anchor="middle" class="kqtxt" font-size="20">⚙️ <tspan font-weight="800" font-size="15">Plate Q</tspan></text>
       <text x="${pxq + pw / 2}" y="${pyq + 58}" text-anchor="middle" class="kqtxt kqcount" font-size="13">${pq} in queue ›</text>
     </g>`;
+    // 🎵 Tuning Queue box by the admin front desk (Brigham 10/9): the open
+    // floor between "Stairs going up" and "Stairs down to showroom" — tap
+    // for the pianos marked Needs tuning on the Showroom Tuning Check
+    if (!TCHK.data && !TCHK.loading) tchkLoad().then(() => renderMap());
+    const su = (f.labels || []).find(z => /^stairs going up$/i.test((z.text || '').trim()));
+    const sd = (f.labels || []).find(z => /^stairs down to showroom$/i.test((z.text || '').trim()));
+    const tw = 170, th = 78;
+    const gapTop = su ? su.y + su.h : 2099, gapBot = sd ? sd.y : 2225;
+    const txq = sd ? sd.x + (sd.w - tw) / 2 : 337, tyq = gapTop + Math.max(6, (gapBot - gapTop - th) / 2);
+    let tq = null;
+    try { tq = queueItems('tuning').length; } catch (e) { tq = null; }
+    s += `<g class="tqbtn" style="cursor:pointer">
+      <rect x="${txq}" y="${tyq}" width="${tw}" height="${th}" rx="8" class="kqrect"/>
+      <text x="${txq + tw / 2}" y="${tyq + 31}" text-anchor="middle" class="kqtxt" font-size="20">🎵 <tspan font-weight="800" font-size="15">Tuning Q</tspan></text>
+      <text x="${txq + tw / 2}" y="${tyq + 58}" text-anchor="middle" class="kqtxt kqcount" font-size="13">${TCHK.data && tq != null ? tq + ' need tuning ›' : 'loading…'}</text>
+    </g>`;
   }
   // ✨ Buffing Queue box on the 2nd floor, just under spot 189a (Walter 10/7) —
   // tap for the Buffing List report (Korban's plate screws + visible hardware)
@@ -3677,6 +3717,8 @@ function renderMap() {
   if (rqb) rqb.addEventListener('click', ev => { ev.stopPropagation(); openRefinishQ(); });
   const pqb = svg.querySelector('.pqbtn');
   if (pqb) pqb.addEventListener('click', ev => { ev.stopPropagation(); openPlateQ(); });
+  const tqb = svg.querySelector('.tqbtn');
+  if (tqb) tqb.addEventListener('click', ev => { ev.stopPropagation(); openQueueSheet('tuning'); });
   const bqb = svg.querySelector('.bqbtn');
   if (bqb) bqb.addEventListener('click', ev => {
     ev.stopPropagation();
@@ -15749,6 +15791,8 @@ async function tchkSave(serial, patch) {
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
   (TCHK.data || (TCHK.data = {}))[serial] = cur;
+  // a Needs tuning mark is what fills the 🎵 Tuning Queue — keep the map box current
+  try { if (S.map && S.view === 'map') renderMap(); } catch (e) { /* map not drawn yet */ }
   return cur;
 }
 async function tchkClear() {
