@@ -1,0 +1,846 @@
+<title>Showroom Tuning Check</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&display=swap">
+<style>
+/* Layout: one printable letter-width sheet; a sticky header with the logo, who/when, and the four-stop route. Rows are grouped by stop in walking order. */
+:root {
+  --paper:#ffffff; --ink:#1b1a18; --muted:#6b6560; --rule:#d9d3cb; --rule-soft:#ece7df;
+  --zone:#f4f0ea; --accent:#9e2020; --accent-ink:#ffffff; --warn:#8a5a00; --warn-bg:#fff4d6;
+  --ok:#2e6b3a; --ok-bg:#e6f2e8; --booked:#245a8c; --booked-bg:#e4eef8; --old:#9e2020;
+  --focus:#2b5cb8;
+  --display:"Source Serif 4", Georgia, "Times New Roman", serif;
+  --body:"Source Sans 3", -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --paper:#1c1b19; --ink:#ece8e1; --muted:#a39c93; --rule:#3d3933; --rule-soft:#2c2925;
+  --zone:#26231f; --accent:#d8534f; --accent-ink:#ffffff; --warn:#f0c060; --warn-bg:#3a2e10;
+  --ok:#8fd19b; --ok-bg:#1f3524; --booked:#8ab8ea; --booked-bg:#1b2e44; --old:#e07a76; --focus:#7aa2ff;
+  color-scheme: dark;
+} }
+:root[data-theme="dark"] {
+  --paper:#1c1b19; --ink:#ece8e1; --muted:#a39c93; --rule:#3d3933; --rule-soft:#2c2925;
+  --zone:#26231f; --accent:#d8534f; --accent-ink:#ffffff; --warn:#f0c060; --warn-bg:#3a2e10;
+  --ok:#8fd19b; --ok-bg:#1f3524; --booked:#8ab8ea; --booked-bg:#1b2e44; --old:#e07a76; --focus:#7aa2ff;
+  color-scheme: dark;
+}
+body { background:var(--paper); color:var(--ink); font:14px/1.4 var(--body); padding-block:18px 40px; padding-inline:16px; }
+.sheet { max-width:1080px; margin:0 auto; }
+a { color:inherit; }
+.head { display:flex; flex-wrap:wrap; gap:14px 28px; align-items:flex-end; border-bottom:3px solid var(--ink); padding-bottom:12px; }
+.head img { height:36px; width:auto; display:block; }
+.head .ttl { flex:1 1 260px; min-width:0; }
+.head h1 { font:700 22px/1.1 var(--display); margin:6px 0 2px; letter-spacing:.2px; text-wrap:balance; }
+.head .sub { color:var(--muted); font-size:12.5px; }
+.who { display:grid; grid-template-columns:auto 1fr; gap:6px 10px; align-items:center; font-size:12.5px; flex:0 1 330px; min-width:0; }
+.who label { text-transform:uppercase; letter-spacing:.8px; font-size:10px; font-weight:700; color:var(--muted); }
+.who input { font:inherit; color:inherit; background:transparent; border:0; border-bottom:1px solid var(--ink); padding:3px 2px; width:100%; min-width:0; }
+.who input:focus, .notes input:focus { outline:2px solid var(--focus); outline-offset:1px; border-radius:2px; }
+.route { display:flex; flex-wrap:wrap; gap:6px 0; margin:12px 0 4px; font-size:12px; align-items:center; }
+.route .stop { display:inline-flex; align-items:center; gap:6px; padding:3px 9px 3px 4px; border:1px solid var(--rule); border-radius:999px; background:var(--zone); }
+.route .stop b { background:var(--accent); color:var(--accent-ink); border-radius:50%; width:18px; height:18px; display:inline-grid; place-items:center; font-size:11px; }
+.route .arrow { color:var(--muted); padding:0 6px; }
+.legend { display:flex; flex-wrap:wrap; gap:6px 18px; color:var(--muted); font-size:11.5px; margin:6px 0 14px; }
+.legend span.k { color:var(--ink); font-weight:600; }
+.tools { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:0 0 10px; font-size:12px; }
+.tools button { font:600 12px var(--body); color:var(--ink); background:var(--zone); border:1px solid var(--rule); border-radius:6px; padding:5px 10px; cursor:pointer; }
+.tools button:focus-visible { outline:2px solid var(--focus); outline-offset:1px; }
+.tools .tally { margin-left:auto; color:var(--muted); }
+.tools .tally b { color:var(--ink); font-variant-numeric:tabular-nums; }
+.tablewrap { overflow-x:auto; }
+table { border-collapse:collapse; width:100%; min-width:900px; font-size:12.5px; font-variant-numeric:tabular-nums; }
+thead th { text-align:left; font-size:10px; text-transform:uppercase; letter-spacing:.8px; color:var(--muted); font-weight:700; padding:6px 7px; border-bottom:2px solid var(--ink); white-space:nowrap; }
+tbody td { padding:6px 7px; border-bottom:1px solid var(--rule-soft); vertical-align:top; }
+tr.p:nth-child(even) td { background:color-mix(in srgb, var(--zone) 45%, transparent); }
+tr.zone td { background:var(--zone); border-top:2px solid var(--ink); border-bottom:1px solid var(--rule); padding:7px 8px; }
+tr.zone b { font:700 14px var(--display); margin-right:10px; }
+tr.zone span { color:var(--muted); font-size:12px; }
+tr.zone em { float:right; font-style:normal; color:var(--muted); font-size:11.5px; }
+td.n { color:var(--muted); width:26px; text-align:right; padding-right:4px; }
+td.map { width:44px; }
+td.map a { display:inline-block; font-weight:700; font-size:14px; text-decoration:none; border:1.5px solid var(--ink); border-radius:4px; padding:1px 7px; min-width:22px; text-align:center; }
+td.map a:hover, td.ser a:hover { color:var(--accent); border-color:var(--accent); }
+td.ser { font-family:ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size:12px; white-space:nowrap; }
+td.ser a { text-decoration:none; border-bottom:1px dotted var(--rule); }
+td.tuned { white-space:nowrap; width:118px; }
+td.tuned .d { display:block; font-weight:600; }
+td.tuned .age { display:block; font-size:10.5px; color:var(--muted); }
+td.tuned.old .d { color:var(--old); }
+td.tuned.none .d { color:var(--old); }
+td.yr { width:40px; }
+td.pr { white-space:nowrap; text-align:right; width:72px; }
+td.chk { width:88px; white-space:nowrap; }
+td.chk label { display:inline-flex; align-items:center; gap:5px; cursor:pointer; font-size:11.5px; }
+td.chk input { width:17px; height:17px; margin:0; accent-color:var(--accent); }
+tr.good td.chk:first-of-type label { color:var(--ok); }
+tr.tune td { background:color-mix(in srgb, var(--warn-bg) 70%, transparent) !important; }
+td.notes { min-width:210px; }
+td.notes input { font:inherit; color:inherit; background:transparent; width:100%; min-width:0; border:0; border-bottom:1px solid var(--rule); padding:2px 2px 3px; }
+.flag { display:inline-block; font-size:10.5px; font-weight:600; border-radius:4px; padding:1px 6px; margin:0 0 3px; }
+.flag.booked { color:var(--booked); background:var(--booked-bg); }
+.flag.warn { color:var(--warn); background:var(--warn-bg); }
+.flag.phase { color:var(--muted); background:var(--zone); border:1px solid var(--rule); }
+.foot { margin-top:22px; font-size:12px; color:var(--muted); display:flex; flex-wrap:wrap; gap:10px 28px; }
+.foot .sig { flex:1 1 240px; display:flex; gap:8px; align-items:flex-end; }
+.foot .sig span { flex:1; border-bottom:1px solid var(--ink); height:22px; }
+details { margin-top:26px; font-size:12px; }
+summary { cursor:pointer; font-weight:600; color:var(--ink); }
+.skips { display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:10px 24px; margin-top:8px; }
+.skipgrp h4 { margin:6px 0 4px; font-size:12px; }
+.skipgrp h4 span { color:var(--muted); font-weight:400; }
+.skipgrp ul { margin:0; padding-left:0; list-style:none; color:var(--muted); line-height:1.5; }
+.skipgrp a { font-weight:700; color:var(--ink); text-decoration:none; }
+.sm { font-size:11px; }
+@media (max-width:640px) { .head img { height:30px; } table { min-width:860px; } }
+@media print {
+  :root { --paper:#fff; --ink:#000; --muted:#444; --rule:#999; --rule-soft:#ccc; --zone:#eee; --accent:#000; --warn-bg:#fff; --booked-bg:#fff; }
+  body { padding:0; font-size:11px; }
+  .sheet { max-width:none; }
+  .tools, details, .legend .digital { display:none !important; }
+  .tablewrap { overflow:visible; }
+  table { min-width:0; font-size:10.5px; }
+  tbody td { padding:5px 5px; }
+  td.chk input { width:13px; height:13px; }
+  td.notes input { border-bottom:1px solid #000; }
+  tr.zone td { break-after:avoid; }
+  tr.p { break-inside:avoid; }
+  thead { display:table-header-group; }
+  a { text-decoration:none; color:#000; }
+  td.map a { border-color:#000; }
+  @page { size:letter landscape; margin:0.45in 0.5in; }
+}
+</style>
+<div class="sheet">
+  <header class="head">
+    <div class="ttl">
+      <img src="assets/blp-logo.png" alt="Brigham Larson Pianos">
+      <h1>Showroom Tuning Check</h1>
+      <div class="sub">Pianos for sale on the floor with a current price, not tuned in the last 30 days. Walk them in order, play each one, and mark it. Generated from the Piano Log and tuning calendar on Friday, October 9, 2026.</div>
+    </div>
+    <div class="who">
+      <label for="who">Checked by</label><input id="who" type="text" autocomplete="name" placeholder="">
+      <label for="when">Date / time</label><input id="when" type="text" placeholder="">
+    </div>
+  </header>
+
+  <div class="route">
+    <span class="stop"><b>1</b>Front door &amp; vestibule <span class="sm">(1)</span></span><span class="arrow">&rarr;</span>
+    <span class="stop"><b>2</b>Down the ramp, showroom <span class="sm">(31)</span></span><span class="arrow">&rarr;</span>
+    <span class="stop"><b>3</b>Bottom of stairs, admin desk <span class="sm">(6)</span></span><span class="arrow">&rarr;</span>
+    <span class="stop"><b>4</b>Up the stairs, balcony <span class="sm">(10)</span></span>
+  </div>
+  <div class="legend">
+    <span><span class="k">48 pianos</span> to check</span>
+    <span><span class="k">15</span> have no tuning on the calendar since April 2025</span>
+    <span><span class="k">4</span> already have a tuning booked next week (shown in Notes)</span>
+    <span class="digital">Tap a map number or serial to open that piano on the store map.</span>
+  </div>
+
+  <div class="tools">
+    <button type="button" id="fillWhen">Stamp date &amp; time</button>
+    <button type="button" id="clearAll">Clear marks</button>
+    <span class="tally"><b id="cGood">0</b> good &middot; <b id="cTune">0</b> need tuning &middot; <b id="cLeft">48</b> left</span>
+  </div>
+
+  <div class="tablewrap">
+  <table>
+    <thead><tr>
+      <th></th><th>Map #</th><th>Serial</th><th>Last tuned</th><th>Year</th><th>Make</th><th>Model</th><th>Price</th><th>Good</th><th>Tuning</th><th>Notes: sticky key, squeaky pedal, clicks, other service</th>
+    </tr></thead>
+    <tbody>
+<tr class="zone"><td colspan="11"><b>Vestibule</b><span>Start at the front door</span><em>1 piano</em></td></tr>
+<tr class="p" data-serial="37121" data-slot="161">
+  <td class="n">1</td>
+  <td class="map"><a href="https://blpstoremap.netlify.app/#piano=37121" target="_blank" rel="noopener" title="Open on the store map">161</a></td>
+  <td class="ser"><a href="https://blpstoremap.netlify.app/#piano=37121" target="_blank" rel="noopener">37121</a></td>
+  <td class="tuned old"><span class="d">Jun 26, 2025</span><span class="age">1 yr 3 mo ago</span></td>
+  <td class="yr">1880</td>
+  <td class="mk">Kranich &amp; Bach</td>
+  <td class="md">Upright</td>
+  <td class="pr">$14,998</td>
+  <td class="chk"><label><input type="checkbox" id="g-37121" data-k="good"><span>Good</span></label></td>
+  <td class="chk"><label><input type="checkbox" id="t-37121" data-k="tune"><span>Needs tuning</span></label></td>
+  <td class="notes"><input type="text" id="n-37121" data-k="note" placeholder="" aria-label="Notes for 37121"></td>
+</tr>
+<tr class="zone"><td colspan="11"><b>Showroom</b><span>Down the ramp, sweep front to back toward the stairs</span><em>31 pianos</em></td></tr>
+<tr class="p" data-serial="277589" data-slot="152">
+  <td class="n">2</td>
+  <td class="map"><a href="https://blpstoremap.netlify.app/#piano=277589" target="_blank" rel="noopener" title="Open on the store map">152</a></td>
+  <td class="ser"><a href="https://blpstoremap.netlify.app/#piano=277589" target="_blank" rel="noopener">277589</a></td>
+  <td class="tuned "><span class="d">Jul 7, 2026</span><span class="age">3 mo ago</span></td>
+  <td class="yr">New</td>
+  <td class="mk">Hailun</td>
+  <td class="md">121</td>
+  <td class="pr">$6,998</td>
+  <td class="chk"><label><input type="checkbox" id="g-277589" data-k="good"><span>Good</span></label></td>
+  <td class="chk"><label><input type="checkbox" id="t-277589" data-k="tune"><span>Needs tuning</span></label></td>
+  <td class="notes"><span class="flag booked">Tuning booked Thu 10/15 9:30am</span><input type="text" id="n-277589" data-k="note" placeholder="" aria-label="Notes for 277589"></td>
+</tr>
+<tr class="p" data-serial="824003" data-slot="135">
+  <td class="n">3</td>
+  <td class="map"><a href="https://blpstoremap.netlify.app/#piano=824003" target="_blank" rel="noopener" title="Open on the store map">135</a></td>
+  <td class="ser"><a href="https://blpstoremap.netlify.app/#piano=824003" target="_blank" rel="noopener">824003</a></td>
+  <td class="tuned old"><span class="d">Mar 14, 2026</span><span class="age">6 mo ago</span></td>
+  <td class="yr">New</td>
+  <td class="mk">Gebruder Schulz</td>
+  <td class="md">G-30</td>
+  <td class="pr">$9,998</td>
+  <td class="chk"><label><input type="checkbox" id="g-824003" data-k="good"><span>Good</span></label></td>
+  <td class="chk"><label><input type="checkbox" id="t-824003" data-k="tune"><span>Needs tuning</span></label></td>
+  <td class="notes"><input type="text" id="n-824003" data-k="note" placeholder="" aria-label="Notes for 824003"></td>
+</tr>
+<tr class="p" data-serial="61691852" data-slot="122">
+  <td class="n">4</td>
+  <td class="map"><a href="https://blpstoremap.netlify.app/#piano=61691852" target="_blank" rel="noopener" title="Open on the store map">122</a></td>
+  <td class="ser"><a href="https://blpstoremap.netlify.app/#piano=61691852" target="_blank" rel="noopener">61691852</a></td>
+  <td class="tuned "><span class="d">May 28, 2026</span><span class="age">4 mo ago</span></td>
+  <td class="yr">New</td>
+  <td class="mk">A. Geyer</td>
+  <td class="md">GU-123</td>
+  <td class="pr">$5,998</td>
+  <td class="chk"><label><input type="checkbox" id="g-61691852" data-k="good"><span>Good</span></label></td>
+  <td class="chk"><label><input type="checkbox" id="t-61691852" data-k="tune"><span>Needs tuning</span></label></td>
+  <td class="notes"><input type="text" id="n-61691852" data-k="note" placeholder="" aria-label="Notes for 61691852"></td>
+</tr>
+<tr class="p" data-serial="148345" data-slot="108">
+  <td class="n">5</td>
+  <td class="map"><a href="https://blpstoremap.netlify.app/#piano=148345" target="_blank" rel="noopener" title="Open on the store map">108</a></td>
+  <td class="ser"><a href="https://blpstoremap.netlify.app/#piano=148345" target="_blank" rel="noopener">148345</a></td>
+  <td class="tuned "><span class="d">Aug 6, 2026</span><span class="age">2 mo ago</span></td>
+  <td class="yr">1905</td>
+  <td class="mk">Kimball</td>
+  <td class="md">Upright</td>
+  <td class="pr">$14,998</td>
+  <td class="chk"><label><input type="checkbox" id="g-148345" data-k="good"><span>Good</span></label></td>
+  <td class="chk"><label><input type="checkbox" id="t-148345" data-k="tune"><span>Needs tuning</span></label></td>
+  <td class="notes"><input type="text" id="n-148345" data-k="note" placeholder="" aria-label="Notes for 148345"></td>
+</tr>
+<tr class="p" data-serial="156792" data-slot="106">
+  <td class="n">6</td>
+  <td class="map"><a href="https://blpstoremap.netlify.app/#piano=156792" target="_blank" rel="noopener" title="Open on the store map">106</a></td>
+  <td class="ser"><a href="https://blpstoremap.netlify.app/#piano=156792" target="_blank" rel="noopener">156792</a></td>
+  <td class="tuned "><span class="d">Jun 26, 2026</span><span class="age">3 mo ago</span></td>
+  <td class="yr">1923</td>
+  <td class="mk">Howard</td>
+  <td class="md">Upright</td>
+  <td class="pr">$5,998</td>
+  <td class="chk"><label><input type="checkbox" id="g-156792" data-k="good"><span>Good</span></label></td>
+  <td class="chk"><label><input type="checkbox" id="t-156792" data-k="tune"><span>Needs tuning</span></label></td>
+  <td class="notes"><input type="text" id="n-156792" data-k="note" placeholder="" aria-label="Notes for 156792"></td>
+</tr>
+<tr class="p" data-serial="26068" data-slot="105">
+  <td class="n">7</td>
+  <td class="map"><a href="https://blpstoremap.netlify.app/#piano=26068" target="_blank" rel="noopener" title="Open on the store map">105</a></td>
+  <td class="ser"><a href="https://blpstoremap.netlify.app/#piano=26068" target="_blank" rel="noopener">26068</a></td>
+  <td class="tuned "><span class="d">Jul 17, 2026</span><span class="age">2 mo ago</span></td>
+  <td class="yr">1915</td>
+  <td class="mk">Mason &amp; Hamlin</td>
+  <td class="md">Upright</td>
+  <td class="pr">$18,998</td>
+  <td class="chk"><label><input type="checkbox" id="g-26068" data-k="good"><span>Good</span></label></td>
+  <td class="chk"><label><input type="checkbox" id="t-26068" data-k="tune"><span>Needs tuning</span></label></td>
+  <td class="notes"><input type="text" id="n-26068" data-k="note" placeholder="" aria-label="Notes for 26068"></td>
+</tr>
+<tr class="p" data-serial="32763" data-slot="107">
+  <td class="n">8</td>
+  <td class="map"><a href="https://blpstoremap.netlify.app/#piano=32763" target="_blank" rel="noopener" title="Open on the store map">107</a></td>
+  <td class="ser"><a href="https://blpstoremap.netlify.app/#piano=32763" target="_blank" rel="noopener">32763</a></td>
+  <td class="tuned "><span class="d">Aug 5, 2026</span><span class="age">2 mo ago</span></td>
+  <td class="yr">1903</td>
+  <td class="mk">Ed. Seiler</td>
+  <td class="md">Upright</td>
+  <td class="pr">$9,998</td>
+  <td class="chk"><label><input type="checkbox" id="g-32763" data-k="good"><span>Good</span></label></td>
+  <td class="chk"><label><input type="checkbox" id="t-32763" data-k="tune"><span>Needs tuning</span></label></td>
+  <td class="notes"><input type="text" id="n-32763" data-k="note" placeholder="" aria-label="Notes for 32763"></td>
+</tr>
+<tr class="p" data-serial="4359798" data-slot="119">
+  <td class="n">9</td>
+  <td class="map"><a href="https://blpstoremap.netlify.app/#piano=4359798" target="_blank" rel="noopener" title="Open on the store map">119</a></td>
+  <td class="ser"><a href="https://blpstoremap.netlify.app/#piano=4359798" target="_blank" rel="noopener">4359798</a></td>
+  <td class="tuned "><span class="d">May 22, 2026</span><span class="age">4 mo ago</span></td>
+  <td class="yr">1987</td>
+  <td class="mk">Yamaha</td>
+  <td class="md">U1</td>
+  <td class="pr">$5,898</td>
+  <td class="chk"><label><input type="checkbox" id="g-4359798" data-k="good"><span>Good</span></label></td>
+  <td class="chk"><label><input type="checkbox" id="t-4359798" data-k="tune"><span>Needs tuning</span></label></td>
+  <td class="notes"><input type="text" id="n-4359798" data-k="note" placeholder="" aria-label="Notes for 4359798"></td>
+</tr>
+<tr class="p" data-serial="5950342" data-slot="121">
+  <td class="n">10</td>
+  <td class="map"><a href="https://blpstoremap.netlify.app/#piano=5950342" target="_blank" rel="noopener" title="Open on the store map">121</a></td>
+  <td class="ser"><a href="https://blpstoremap.netlify.app/#piano=5950342" target="_blank" rel="noopener">5950342</a></td>
+  <td class="tuned "><span class="d">May 28, 2026</span><span class="age">4 mo ago</span></td>
+  <td class="yr">2001</td>
+  <td class="mk">Yamaha</td>
+  <td class="md">YU1</td>
+  <td class="pr">$7,298</td>
+  <td class="chk"><label><input type="checkbox" id="g-5950342" data-k="good"><span>Good</span></label></td>
+  <td class="chk"><label><input type="checkbox" id="t-5950342" data-k="tune"><span>Needs tuning</span></label></td>
+  <td class="notes"><input type="text" id="n-5950342" data-k="note" placeholder="" aria-label="Notes for 5950342"></td>
+</tr>
+<tr class="p" data-serial="311107" data-slot="151">
+  <td class="n">11</td>
+  <td class="map"><a href="https://blpstoremap.netlify.app/#piano=311107" target="_blank" rel="noopener" title="Open on the store map">151</a></td>
+  <td class="ser"><a href="https://blpstoremap.netlify.app/#piano=311107" target="_blank" rel="noopener">311107</a></td>
+  <td class="tuned "><span class="d">Jul 14, 2026</span><span class="age">2 mo ago</span></td>
+  <td class="yr">New</td>
+  <td class="mk">Hailun</td>
+  <td class="md">5P</td>
+  <td class="pr">$9,998</td>
+  <td class="chk"><label><input type="checkbox" id="g-311107" data-k="good"><span>Good</span></label></td>
+  <td class="chk"><label><input type="checkbox" id="t-311107" data-k="tune"><span>Needs tuning</span></label></td>
+  <td class="notes"><input type="text" id="n-311107" data-k="note" placeholder="" aria-label="Notes for 311107"></td>
+</tr>
+<tr class="p" data-serial="16404" data-slot="94">
+  <td class="n">12</td>
+  <td class="map"><a href="https://blpstoremap.netlify.app/#piano=16404" target="_blank" rel="noopener" title="Open on the store map">94</a></td>
+  <td class="ser"><a href="https://blpstoremap.netlify.app/#piano=16404" target="_blank" rel="noopener">16404</a></td>
+  <td class="tuned "><span class="d">Aug 14, 2026</span><span class="age">1 mo ago</span></td>
+  <td class="yr">1919</td>
+  <td class="mk">Kreiter</td>
+  <td class="md">Upright</td>
+  <td class="pr">$14,998</td>
+  <td class="chk"><label><input type="checkbox" id="g-16404" data-k="good"><span>Good</span></label></td>
+  <td class="chk"><label><input type="checkbox" id="t-16404" data-k="tune"><span>Needs tuning</span></label></td>
+  <td class="notes"><input type="text" id="n-16404" data-k="note" placeholder="" aria-label="Notes for 16404"></td>
+</tr>
+<tr class="p" data-serial="37998" data-slot="93">
+  <td class="n">13</td>
+  <td class="map"><a href="https://blpstoremap.netlify.app/#piano=37998" target="_blank" rel="noopener" title="Open on the store map">93</a></td>
+  <td class="ser"><a href="https://blpstoremap.netlify.app/#piano=37998" target="_blank" rel="noopener">37998</a></td>
+  <td class="tuned "><span class="d">Aug 24, 2026</span><span class="age">1 mo ago</span></td>
+  <td class="yr">1906</td>
+  <td class="mk">Everett</td>
+  <td class="md">Upright</td>
+  <td class="pr">$14,998</td>
+  <td class="chk"><label><input type="checkbox" id="g-37998" data-k="good"><span>Good</span></label></td>
+  <td class="chk"><label><input type="checkbox" id="t-37998" data-k="tune"><span>Needs tuning</span></label></td>
+  <td class="notes"><input type="text" id="n-37998" data-k="note" placeholder="" aria-label="Notes for 37998"></td>
+</tr>
+<tr class="p" data-serial="81891376" data-slot="102">
+  <td class="n">14</td>
+  <td class="map"><a href="https://blpstoremap.netlify.app/#piano=81891376" target="_blank" rel="noopener" title="Open on the store map">102</a></td>
+  <td class="ser"><a href="https://blpstoremap.netlify.app/#piano=81891376" target="_blank" rel="noopener">81891376</a></td>
+  <td class="tuned "><span class="d">Jul 16, 2026</span><span class="age">2 mo ago</span></td>
+  <td class="yr">New</td>
+  <td class="mk">A. Geyer</td>
+  <td class="md">GG-170</td>
+  <td class="pr">$12,998</td>
+  <td class="chk"><label><input type="checkbox" id="g-81891376" data-k="good"><span>Good</span></label></td>
+  <td class="chk"><label><input type="checkbox" id="t-81891376" data-k="tune"><span>Needs tuning</span></label></td>
+  <td class="notes"><input type="text" id="n-81891376" data-k="note" placeholder="" aria-label="Notes for 81891376"></td>
+</tr>
+<tr class="p" data-serial="81891387" data-slot="116">
+  <td class="n">15</td>
+  <td class="map"><a href="https://blpstoremap.netlify.app/#piano=81891387" target="_blank" rel="noopener" title="Open on the store map">116</a></td>
+  <td class="ser"><a href="https://blpstoremap.netlify.app/#piano=81891387" target="_blank" rel="noopener">81891387</a></td>
+  <td class="tuned "><span class="d">Jul 16, 2026</span><span class="age">2 mo ago</span></td>
+  <td class="yr">New</td>
+  <td class="mk">A. Geyer</td>
+  <td class="md">GG-160</td>
+  <td class="pr">$11,998</td>
+  <td class="chk"><label><input type="checkbox" id="g-81891387" data-k="good"><span>Good</span></label></td>
+  <td class="chk"><label><input type="checkbox" id="t-81891387" data-k="tune"><span>Needs tuning</span></label></td>
+  <td class="notes"><input type="text" id="n-81891387" data-k="note" placeholder="" aria-label="Notes for 81891387"></td>
+</tr>
+<tr class="p" data-serial="1554743" data-slot="144">
+  <td class="n">16</td>
+  <td class="map"><a href="https://blpstoremap.netlify.app/#piano=1554743" target="_blank" rel="noopener" title="Open on the store map">144</a></td>
+  <td class="ser"><a href="https://blpstoremap.netlify.app/#piano=1554743" target="_blank" rel="noopener">1554743</a></td>
+  <td class="tuned "><span class="d">Jun 30, 2026</span><span class="age">3 mo ago</span></td>
+  <td class="yr">2015</td>
+  <td class="mk">Hallet Davis</td>
+  <td class="md">Grand</td>
+  <td class="pr">$9,998</td>
+  <td class="chk"><label><input type="checkbox" id="g-1554743" data-k="good"><span>Good</span></label></td>
+  <td class="chk"><label><input type="checkbox" id="t-1554743" data-k="tune"><span>Needs tuning</span></label></td>
+  <td class="notes"><input type="text" id="n-1554743" data-k="note" placeholder="" aria-label="Notes for 1554743"></td>
+</tr>
+<tr class="p" data-serial="2890414" data-slot="130">
+  <td class="n">17</td>
+  <td class="map"><a href="https://blpstoremap.netlify.app/#piano=2890414" target="_blank" rel="noopener" title="Open on the store map">130</a></td>
+  <td class="ser"><a href="https://blpstoremap.netlify.app/#piano=2890414" target="_blank" rel="noopener">2890414</a></td>
+  <td class="tuned "><span class="d">Aug 26, 2026</span><span class="age">1 mo ago</span></td>
+  <td class="yr">New</td>
+  <td class="mk">Hallet Davis</td>
+  <td class="md">170</td>
+  <td class="pr">$12,998</td>
+  <td class="chk"><label><input type="checkbox" id="g-2890414" data-k="good"><span>Good</span></label></td>
+  <td class="chk"><label><input type="checkbox" id="t-2890414" data-k="tune"><span>Needs tuning</span></label></td>
+  <td class="notes"><input type="text" id="n-2890414" data-k="note" placeholder="" aria-label="Notes for 2890414"></td>
+</tr>
+<tr class="p" data-serial="81891577" data-slot="115">
+  <td class="n">18</td>
+  <td class="map"><a href="https://blpstoremap.netlify.app/#piano=81891577" target="_blank" rel="noopener" title="Open on the store map">115</a></td>
+  <td class="ser"><a href="https://blpstoremap.netlify.app/#piano=81891577" target="_blank" rel="noopener">81891577</a></td>
+  <td class="tuned "><span class="d">Jun 3, 2026</span><span class="age">4 mo ago</span></td>
+  <td class="yr">New</td>
+  <td class="mk">A. Geyer</td>
+  <td class="md">GG-160</td>
+  <td class="pr">$11,998</td>
+  <td class="chk"><label><input type="checkbox" id="g-81891577" data-k="good"><span>Good</span></label></td>
+  <td class="chk"><label><input type="checkbox" id="t-81891577" data-k="tune"><span>Needs tuning</span></label></td>
+  <td class="notes"><input type="text" id="n-81891577" data-k="note" placeholder="" aria-label="Notes for 81891577"></td>
+</tr>
+<tr class="p" data-serial="81891385" data-slot="101">
+  <td class="n">19</td>
+  <td class="map"><a href="https://blpstoremap.netlify.app/#piano=81891385" target="_blank" rel="noopener" title="Open on the store map">101</a></td>
+  <td class="ser"><a href="https://blpstoremap.netlify.app/#piano=81891385" target="_blank" rel="noopener">81891385</a></td>
+  <td class="tuned "><span class="d">Jun 2, 2026</span><span class="age">4 mo ago</span></td>
+  <td class="yr">New</td>
+  <td class="mk">A. Geyer</td>
+  <td class="md">GG-186</td>
+  <td class="pr">$13,998</td>
+  <td class="chk"><label><input type="checkbox" id="g-81891385" data-k="good"><span>Good</span></label></td>
+  <td class="chk"><label><input type="checkbox" id="t-81891385" data-k="tune"><span>Needs tuning</span></label></td>
+  <td class="notes"><input type="text" id="n-81891385" data-k="note" placeholder="" aria-label="Notes for 81891385"></td>
+</tr>
+<tr class="p" data-serial="316512" data-slot="92">
+  <td class="n">20</td>
+  <td class="map"><a href="https://blpstoremap.netlify.app/#piano=316512" target="_blank" rel="noopener" title="Open on the store map">92</a></td>
+  <td class="ser"><a href="https://blpstoremap.netlify.app/#piano=316512" target="_blank" rel="noopener">316512</a></td>
+  <td class="tuned "><span class="d">Aug 25, 2026</span><span class="age">1 mo ago</span></td>
+  <td class="yr">1919</td>
+  <td class="mk">Kimball</td>
+  <td class="md">Upright</td>
+  <td class="pr">$14,998</td>
+  <td class="chk"><label><input type="checkbox" id="g-316512" data-k="good"><span>Good</span></label></td>
+  <td class="chk"><label><input type="checkbox" id="t-316512" data-k="tune"><span>Needs tuning</span></label></td>
+  <td class="notes"><input type="text" id="n-316512" data-k="note" placeholder="" aria-label="Notes for 316512"></td>
+</tr>
+<tr class="p" data-serial="2750092" data-slot="100">
+  <td class="n">21</td>
+  <td class="map"><a href="https://blpstoremap.netlify.app/#piano=2750092" target="_blank" rel="noopener" title="Open on the store map">100</a></td>
+  <td class="ser"><a href="https://blpstoremap.netlify.app/#piano=2750092" target="_blank" rel="noopener">2750092</a></td>
+  <td class="tuned "><span class="d">Aug 6, 2026</span><span class="age">2 mo ago</span></td>
+  <td class="yr">1978</td>
+  <td class="mk">Yamaha</td>
+  <td class="md">C7B</td>
+  <td class="pr">$29,998</td>
+  <td class="chk"><label><input type="checkbox" id="g-2750092" data-k="good"><span>Good</span></label></td>
+  <td class="chk"><label><input type="checkbox" id="t-2750092" data-k="tune"><span>Needs tuning</span></label></td>
+  <td class="notes"><input type="text" id="n-2750092" data-k="note" placeholder="" aria-label="Notes for 2750092"></td>
+</tr>
+<tr class="p" data-serial="155" data-slot="114">
+  <td class="n">22</td>
+  <td class="map"><a href="https://blpstoremap.netlify.app/#piano=155" target="_blank" rel="noopener" title="Open on the store map">114</a></td>
+  <td class="ser"><a href="https://blpstoremap.netlify.app/#piano=155" target="_blank" rel="noopener">155</a></td>
+  <td class="tuned none"><span class="d none">No record</span><span class="age">none on calendar since Apr 2025</span></td>
+  <td class="yr">~1990</td>
+  <td class="mk">Schafer &amp; Sons</td>
+  <td class="md">G-5A</td>
+  <td class="pr">$14,248</td>
+  <td class="chk"><label><input type="checkbox" id="g-155" data-k="good"><span>Good</span></label></td>
+  <td class="chk"><label><input type="checkbox" id="t-155" data-k="tune"><span>Needs tuning</span></label></td>
+  <td class="notes"><input type="text" id="n-155" data-k="note" placeholder="" aria-label="Notes for 155"></td>
+</tr>
+<tr class="p" data-serial="G077818" data-slot="129">
+  <td class="n">23</td>
+  <td class="map"><a href="https://blpstoremap.netlify.app/#piano=G077818" target="_blank" rel="noopener" title="Open on the store map">129</a></td>
+  <td class="ser"><a href="https://blpstoremap.netlify.app/#piano=G077818" target="_blank" rel="noopener">G077818</a></td>
+  <td class="tuned none"><span class="d none">No record</span><span class="age">none on calendar since Apr 2025</span></td>
+  <td class="yr">1993</td>
+  <td class="mk">Young Chang</td>
+  <td class="md">G-150</td>
+  <td class="pr">$9,998</td>
+  <td class="chk"><label><input type="checkbox" id="g-G077818" data-k="good"><span>Good</span></label></td>
+  <td class="chk"><label><input type="checkbox" id="t-G077818" data-k="tune"><span>Needs tuning</span></label></td>
+  <td class="notes"><span class="flag booked">Tuning booked Mon 10/12 8:00am</span><input type="text" id="n-G077818" data-k="note" placeholder="" aria-label="Notes for G077818"></td>
+</tr>
+<tr class="p" data-serial="4870" data-slot="143">
+  <td class="n">24</td>
+  <td class="map"><a href="https://blpstoremap.netlify.app/#piano=4870" target="_blank" rel="noopener" title="Open on the store map">143</a></td>
+  <td class="ser"><a href="https://blpstoremap.netlify.app/#piano=4870" target="_blank" rel="noopener">4870</a></td>
+  <td class="tuned none"><span class="d none">No record</span><span class="age">none on calendar since Apr 2025</span></td>
+  <td class="yr">1869</td>
+  <td class="mk">Decker Bros</td>
+  <td class="md">Concert Grand</td>
+  <td class="pr">$29,998</td>
+  <td class="chk"><label><input type="checkbox" id="g-4870" data-k="good"><span>Good</span></label></td>
+  <td class="chk"><label><input type="checkbox" id="t-4870" data-k="tune"><span>Needs tuning</span></label></td>
+  <td class="notes"><span class="flag phase">Log phase: Paused</span><input type="text" id="n-4870" data-k="note" placeholder="" aria-label="Notes for 4870"></td>
+</tr>
+<tr class="p" data-serial="G118620" data-slot="128">
+  <td class="n">25</td>
+  <td class="map"><a href="https://blpstoremap.netlify.app/#piano=G118620" target="_blank" rel="noopener" title="Open on the store map">128</a></td>
+  <td class="ser"><a href="https://blpstoremap.netlify.app/#piano=G118620" target="_blank" rel="noopener">G118620</a></td>
+  <td class="tuned none"><span class="d none">No record</span><span class="age">none on calendar since Apr 2025</span></td>
+  <td class="yr">1991</td>
+  <td class="mk">Weber</td>
+  <td class="md">WG-50</td>
+  <td class="pr">$8,998</td>
+  <td class="chk"><label><input type="checkbox" id="g-G118620" data-k="good"><span>Good</span></label></td>
+  <td class="chk"><label><input type="checkbox" id="t-G118620" data-k="tune"><span>Needs tuning</span></label></td>
+  <td class="notes"><input type="text" id="n-G118620" data-k="note" placeholder="" aria-label="Notes for G118620"></td>
+</tr>
+<tr class="p" data-serial="80147" data-slot="91">
+  <td class="n">26</td>
+  <td class="map"><a href="https://blpstoremap.netlify.app/#piano=80147" target="_blank" rel="noopener" title="Open on the store map">91</a></td>
+  <td class="ser"><a href="https://blpstoremap.netlify.app/#piano=80147" target="_blank" rel="noopener">80147</a></td>
+  <td class="tuned "><span class="d">May 18, 2026</span><span class="age">4 mo ago</span></td>
+  <td class="yr">1890</td>
+  <td class="mk">Chickering</td>
+  <td class="md">Upright</td>
+  <td class="pr">$14,998</td>
+  <td class="chk"><label><input type="checkbox" id="g-80147" data-k="good"><span>Good</span></label></td>
+  <td class="chk"><label><input type="checkbox" id="t-80147" data-k="tune"><span>Needs tuning</span></label></td>
+  <td class="notes"><span class="flag booked">Tuning booked Tue 10/13 8:00am</span><input type="text" id="n-80147" data-k="note" placeholder="" aria-label="Notes for 80147"></td>
+</tr>
+<tr class="p" data-serial="96464" data-slot="112">
+  <td class="n">27</td>
+  <td class="map"><a href="https://blpstoremap.netlify.app/#piano=96464" target="_blank" rel="noopener" title="Open on the store map">112</a></td>
+  <td class="ser"><a href="https://blpstoremap.netlify.app/#piano=96464" target="_blank" rel="noopener">96464</a></td>
+  <td class="tuned "><span class="d">Aug 14, 2026</span><span class="age">1 mo ago</span></td>
+  <td class="yr">1900</td>
+  <td class="mk">Steinway &amp; Sons</td>
+  <td class="md">A</td>
+  <td class="pr">$49,998</td>
+  <td class="chk"><label><input type="checkbox" id="g-96464" data-k="good"><span>Good</span></label></td>
+  <td class="chk"><label><input type="checkbox" id="t-96464" data-k="tune"><span>Needs tuning</span></label></td>
+  <td class="notes"><input type="text" id="n-96464" data-k="note" placeholder="" aria-label="Notes for 96464"></td>
+</tr>
+<tr class="p" data-serial="99151" data-slot="153">
+  <td class="n">28</td>
+  <td class="map"><a href="https://blpstoremap.netlify.app/#piano=99151" target="_blank" rel="noopener" title="Open on the store map">153</a></td>
+  <td class="ser"><a href="https://blpstoremap.netlify.app/#piano=99151" target="_blank" rel="noopener">99151</a></td>
+  <td class="tuned "><span class="d">Jun 26, 2026</span><span class="age">3 mo ago</span></td>
+  <td class="yr">1901</td>
+  <td class="mk">Steinway</td>
+  <td class="md">B</td>
+  <td class="pr">$425,000</td>
+  <td class="chk"><label><input type="checkbox" id="g-99151" data-k="good"><span>Good</span></label></td>
+  <td class="chk"><label><input type="checkbox" id="t-99151" data-k="tune"><span>Needs tuning</span></label></td>
+  <td class="notes"><span class="flag phase">Log phase: QC &amp; Assembly</span><input type="text" id="n-99151" data-k="note" placeholder="" aria-label="Notes for 99151"></td>
+</tr>
+<tr class="p" data-serial="8017" data-slot="141">
+  <td class="n">29</td>
+  <td class="map"><a href="https://blpstoremap.netlify.app/#piano=8017" target="_blank" rel="noopener" title="Open on the store map">141</a></td>
+  <td class="ser"><a href="https://blpstoremap.netlify.app/#piano=8017" target="_blank" rel="noopener">8017</a></td>
+  <td class="tuned none"><span class="d none">No record</span><span class="age">none on calendar since Apr 2025</span></td>
+  <td class="yr">1966</td>
+  <td class="mk">Astin Weight</td>
+  <td class="md">Spinet</td>
+  <td class="pr">$2,998</td>
+  <td class="chk"><label><input type="checkbox" id="g-8017" data-k="good"><span>Good</span></label></td>
+  <td class="chk"><label><input type="checkbox" id="t-8017" data-k="tune"><span>Needs tuning</span></label></td>
+  <td class="notes"><input type="text" id="n-8017" data-k="note" placeholder="" aria-label="Notes for 8017"></td>
+</tr>
+<tr class="p" data-serial="2788360" data-slot="126">
+  <td class="n">30</td>
+  <td class="map"><a href="https://blpstoremap.netlify.app/#piano=2788360" target="_blank" rel="noopener" title="Open on the store map">126</a></td>
+  <td class="ser"><a href="https://blpstoremap.netlify.app/#piano=2788360" target="_blank" rel="noopener">2788360</a></td>
+  <td class="tuned "><span class="d">Aug 20, 2026</span><span class="age">1 mo ago</span></td>
+  <td class="yr">New</td>
+  <td class="mk">Hallet Davis</td>
+  <td class="md">188</td>
+  <td class="pr">$14,998</td>
+  <td class="chk"><label><input type="checkbox" id="g-2788360" data-k="good"><span>Good</span></label></td>
+  <td class="chk"><label><input type="checkbox" id="t-2788360" data-k="tune"><span>Needs tuning</span></label></td>
+  <td class="notes"><input type="text" id="n-2788360" data-k="note" placeholder="" aria-label="Notes for 2788360"></td>
+</tr>
+<tr class="p" data-serial="31849" data-slot="111">
+  <td class="n">31</td>
+  <td class="map"><a href="https://blpstoremap.netlify.app/#piano=31849" target="_blank" rel="noopener" title="Open on the store map">111</a></td>
+  <td class="ser"><a href="https://blpstoremap.netlify.app/#piano=31849" target="_blank" rel="noopener">31849</a></td>
+  <td class="tuned "><span class="d">May 15, 2026</span><span class="age">4 mo ago</span></td>
+  <td class="yr">1885</td>
+  <td class="mk">Hallet Davis</td>
+  <td class="md">Grand</td>
+  <td class="pr">$13,998</td>
+  <td class="chk"><label><input type="checkbox" id="g-31849" data-k="good"><span>Good</span></label></td>
+  <td class="chk"><label><input type="checkbox" id="t-31849" data-k="tune"><span>Needs tuning</span></label></td>
+  <td class="notes"><input type="text" id="n-31849" data-k="note" placeholder="" aria-label="Notes for 31849"></td>
+</tr>
+<tr class="p" data-serial="315991" data-slot="97">
+  <td class="n">32</td>
+  <td class="map"><a href="https://blpstoremap.netlify.app/#piano=315991" target="_blank" rel="noopener" title="Open on the store map">97</a></td>
+  <td class="ser"><a href="https://blpstoremap.netlify.app/#piano=315991" target="_blank" rel="noopener">315991</a></td>
+  <td class="tuned "><span class="d">Aug 5, 2026</span><span class="age">2 mo ago</span></td>
+  <td class="yr">New</td>
+  <td class="mk">Hailun</td>
+  <td class="md">178</td>
+  <td class="pr">$24,998</td>
+  <td class="chk"><label><input type="checkbox" id="g-315991" data-k="good"><span>Good</span></label></td>
+  <td class="chk"><label><input type="checkbox" id="t-315991" data-k="tune"><span>Needs tuning</span></label></td>
+  <td class="notes"><input type="text" id="n-315991" data-k="note" placeholder="" aria-label="Notes for 315991"></td>
+</tr>
+<tr class="zone"><td colspan="11"><b>Bottom of the stairs</b><span>By the admin front desk</span><em>6 pianos</em></td></tr>
+<tr class="p" data-serial="IJC01114" data-slot="139">
+  <td class="n">33</td>
+  <td class="map"><a href="https://blpstoremap.netlify.app/#piano=IJC01114" target="_blank" rel="noopener" title="Open on the store map">139</a></td>
+  <td class="ser"><a href="https://blpstoremap.netlify.app/#piano=IJC01114" target="_blank" rel="noopener">IJC01114</a></td>
+  <td class="tuned none"><span class="d none">No record</span><span class="age">none on calendar since Apr 2025</span></td>
+  <td class="yr">2000</td>
+  <td class="mk">Samick</td>
+  <td class="md">Console</td>
+  <td class="pr">$2,998</td>
+  <td class="chk"><label><input type="checkbox" id="g-IJC01114" data-k="good"><span>Good</span></label></td>
+  <td class="chk"><label><input type="checkbox" id="t-IJC01114" data-k="tune"><span>Needs tuning</span></label></td>
+  <td class="notes"><input type="text" id="n-IJC01114" data-k="note" placeholder="" aria-label="Notes for IJC01114"></td>
+</tr>
+<tr class="p" data-serial="583056" data-slot="123">
+  <td class="n">34</td>
+  <td class="map"><a href="https://blpstoremap.netlify.app/#piano=583056" target="_blank" rel="noopener" title="Open on the store map">123</a></td>
+  <td class="ser"><a href="https://blpstoremap.netlify.app/#piano=583056" target="_blank" rel="noopener">583056</a></td>
+  <td class="tuned "><span class="d">Sep 3, 2026</span><span class="age">1 mo ago</span></td>
+  <td class="yr">1955</td>
+  <td class="mk">Baldwin</td>
+  <td class="md">Acrosonic</td>
+  <td class="pr">$3,498</td>
+  <td class="chk"><label><input type="checkbox" id="g-583056" data-k="good"><span>Good</span></label></td>
+  <td class="chk"><label><input type="checkbox" id="t-583056" data-k="tune"><span>Needs tuning</span></label></td>
+  <td class="notes"><input type="text" id="n-583056" data-k="note" placeholder="" aria-label="Notes for 583056"></td>
+</tr>
+<tr class="p" data-serial="R14976" data-slot="109">
+  <td class="n">35</td>
+  <td class="map"><a href="https://blpstoremap.netlify.app/#piano=R14976" target="_blank" rel="noopener" title="Open on the store map">109</a></td>
+  <td class="ser"><a href="https://blpstoremap.netlify.app/#piano=R14976" target="_blank" rel="noopener">R14976</a></td>
+  <td class="tuned none"><span class="d none">No record</span><span class="age">none on calendar since Apr 2025</span></td>
+  <td class="yr">1993</td>
+  <td class="mk">Kimball</td>
+  <td class="md">580P</td>
+  <td class="pr">$6,998</td>
+  <td class="chk"><label><input type="checkbox" id="g-R14976" data-k="good"><span>Good</span></label></td>
+  <td class="chk"><label><input type="checkbox" id="t-R14976" data-k="tune"><span>Needs tuning</span></label></td>
+  <td class="notes"><input type="text" id="n-R14976" data-k="note" placeholder="" aria-label="Notes for R14976"></td>
+</tr>
+<tr class="p" data-serial="315929" data-slot="96">
+  <td class="n">36</td>
+  <td class="map"><a href="https://blpstoremap.netlify.app/#piano=315929" target="_blank" rel="noopener" title="Open on the store map">96</a></td>
+  <td class="ser"><a href="https://blpstoremap.netlify.app/#piano=315929" target="_blank" rel="noopener">315929</a></td>
+  <td class="tuned "><span class="d">Sep 1, 2026</span><span class="age">1 mo ago</span></td>
+  <td class="yr">New</td>
+  <td class="mk">Hailun</td>
+  <td class="md">218</td>
+  <td class="pr">$39,998</td>
+  <td class="chk"><label><input type="checkbox" id="g-315929" data-k="good"><span>Good</span></label></td>
+  <td class="chk"><label><input type="checkbox" id="t-315929" data-k="tune"><span>Needs tuning</span></label></td>
+  <td class="notes"><input type="text" id="n-315929" data-k="note" placeholder="" aria-label="Notes for 315929"></td>
+</tr>
+<tr class="p" data-serial="313754" data-slot="95">
+  <td class="n">37</td>
+  <td class="map"><a href="https://blpstoremap.netlify.app/#piano=313754" target="_blank" rel="noopener" title="Open on the store map">95</a></td>
+  <td class="ser"><a href="https://blpstoremap.netlify.app/#piano=313754" target="_blank" rel="noopener">313754</a></td>
+  <td class="tuned "><span class="d">Aug 4, 2026</span><span class="age">2 mo ago</span></td>
+  <td class="yr">New</td>
+  <td class="mk">Hailun</td>
+  <td class="md">178</td>
+  <td class="pr">$22,998</td>
+  <td class="chk"><label><input type="checkbox" id="g-313754" data-k="good"><span>Good</span></label></td>
+  <td class="chk"><label><input type="checkbox" id="t-313754" data-k="tune"><span>Needs tuning</span></label></td>
+  <td class="notes"><input type="text" id="n-313754" data-k="note" placeholder="" aria-label="Notes for 313754"></td>
+</tr>
+<tr class="p" data-serial="38180" data-slot="88">
+  <td class="n">38</td>
+  <td class="map"><a href="https://blpstoremap.netlify.app/#piano=38180" target="_blank" rel="noopener" title="Open on the store map">88</a></td>
+  <td class="ser"><a href="https://blpstoremap.netlify.app/#piano=38180" target="_blank" rel="noopener">38180</a></td>
+  <td class="tuned "><span class="d">Aug 13, 2026</span><span class="age">1 mo ago</span></td>
+  <td class="yr">1918</td>
+  <td class="mk">Merrill</td>
+  <td class="md">Upright</td>
+  <td class="pr">$7,998</td>
+  <td class="chk"><label><input type="checkbox" id="g-38180" data-k="good"><span>Good</span></label></td>
+  <td class="chk"><label><input type="checkbox" id="t-38180" data-k="tune"><span>Needs tuning</span></label></td>
+  <td class="notes"><span class="flag booked">Tuning booked Wed 10/14 8:00am</span><span class="flag phase">Log phase: 1st Tuning</span><input type="text" id="n-38180" data-k="note" placeholder="" aria-label="Notes for 38180"></td>
+</tr>
+<tr class="zone"><td colspan="11"><b>Balcony</b><span>Up the stairs, above the showroom</span><em>10 pianos</em></td></tr>
+<tr class="p" data-serial="IJRIG0092" data-slot="254">
+  <td class="n">39</td>
+  <td class="map"><a href="https://blpstoremap.netlify.app/#piano=IJRIG0092" target="_blank" rel="noopener" title="Open on the store map">254</a></td>
+  <td class="ser"><a href="https://blpstoremap.netlify.app/#piano=IJRIG0092" target="_blank" rel="noopener">IJRIG0092</a></td>
+  <td class="tuned none"><span class="d none">No record</span><span class="age">none on calendar since Apr 2025</span></td>
+  <td class="yr">2008</td>
+  <td class="mk">Kohler &amp; Campbell</td>
+  <td class="md">Grand</td>
+  <td class="pr">$7,998</td>
+  <td class="chk"><label><input type="checkbox" id="g-IJRIG0092" data-k="good"><span>Good</span></label></td>
+  <td class="chk"><label><input type="checkbox" id="t-IJRIG0092" data-k="tune"><span>Needs tuning</span></label></td>
+  <td class="notes"><input type="text" id="n-IJRIG0092" data-k="note" placeholder="" aria-label="Notes for IJRIG0092"></td>
+</tr>
+<tr class="p" data-serial="IKNFG0114" data-slot="255">
+  <td class="n">40</td>
+  <td class="map"><a href="https://blpstoremap.netlify.app/#piano=IKNFG0114" target="_blank" rel="noopener" title="Open on the store map">255</a></td>
+  <td class="ser"><a href="https://blpstoremap.netlify.app/#piano=IKNFG0114" target="_blank" rel="noopener">IKNFG0114</a></td>
+  <td class="tuned none"><span class="d none">No record</span><span class="age">none on calendar since Apr 2025</span></td>
+  <td class="yr">2014</td>
+  <td class="mk">Johannes Seiler</td>
+  <td class="md">Grand</td>
+  <td class="pr">$13,998</td>
+  <td class="chk"><label><input type="checkbox" id="g-IKNFG0114" data-k="good"><span>Good</span></label></td>
+  <td class="chk"><label><input type="checkbox" id="t-IKNFG0114" data-k="tune"><span>Needs tuning</span></label></td>
+  <td class="notes"><input type="text" id="n-IKNFG0114" data-k="note" placeholder="" aria-label="Notes for IKNFG0114"></td>
+</tr>
+<tr class="p" data-serial="2263" data-slot="265">
+  <td class="n">41</td>
+  <td class="map"><a href="https://blpstoremap.netlify.app/#piano=2263" target="_blank" rel="noopener" title="Open on the store map">265</a></td>
+  <td class="ser"><a href="https://blpstoremap.netlify.app/#piano=2263" target="_blank" rel="noopener">2263</a></td>
+  <td class="tuned none"><span class="d none">No record</span><span class="age">none on calendar since Apr 2025</span></td>
+  <td class="yr">1880</td>
+  <td class="mk">Promberger &amp; Sohn</td>
+  <td class="md">Grand</td>
+  <td class="pr">$3,998</td>
+  <td class="chk"><label><input type="checkbox" id="g-2263" data-k="good"><span>Good</span></label></td>
+  <td class="chk"><label><input type="checkbox" id="t-2263" data-k="tune"><span>Needs tuning</span></label></td>
+  <td class="notes"><span class="flag phase">Log phase: 2nd Tuning</span><span class="flag warn">Log section says sold, not delivered. Confirm.</span><input type="text" id="n-2263" data-k="note" placeholder="" aria-label="Notes for 2263"></td>
+</tr>
+<tr class="p" data-serial="1324742" data-slot="266">
+  <td class="n">42</td>
+  <td class="map"><a href="https://blpstoremap.netlify.app/#piano=1324742" target="_blank" rel="noopener" title="Open on the store map">266</a></td>
+  <td class="ser"><a href="https://blpstoremap.netlify.app/#piano=1324742" target="_blank" rel="noopener">1324742</a></td>
+  <td class="tuned "><span class="d">Jul 30, 2026</span><span class="age">2 mo ago</span></td>
+  <td class="yr">1982</td>
+  <td class="mk">Kawai</td>
+  <td class="md">KG-3D</td>
+  <td class="pr">$9,998</td>
+  <td class="chk"><label><input type="checkbox" id="g-1324742" data-k="good"><span>Good</span></label></td>
+  <td class="chk"><label><input type="checkbox" id="t-1324742" data-k="tune"><span>Needs tuning</span></label></td>
+  <td class="notes"><input type="text" id="n-1324742" data-k="note" placeholder="" aria-label="Notes for 1324742"></td>
+</tr>
+<tr class="p" data-serial="12992" data-slot="268">
+  <td class="n">43</td>
+  <td class="map"><a href="https://blpstoremap.netlify.app/#piano=12992" target="_blank" rel="noopener" title="Open on the store map">268</a></td>
+  <td class="ser"><a href="https://blpstoremap.netlify.app/#piano=12992" target="_blank" rel="noopener">12992</a></td>
+  <td class="tuned old"><span class="d">Oct 23, 2025</span><span class="age">11 mo ago</span></td>
+  <td class="yr">2013</td>
+  <td class="mk">Irmler</td>
+  <td class="md">F160</td>
+  <td class="pr">$9,998</td>
+  <td class="chk"><label><input type="checkbox" id="g-12992" data-k="good"><span>Good</span></label></td>
+  <td class="chk"><label><input type="checkbox" id="t-12992" data-k="tune"><span>Needs tuning</span></label></td>
+  <td class="notes"><input type="text" id="n-12992" data-k="note" placeholder="" aria-label="Notes for 12992"></td>
+</tr>
+<tr class="p" data-serial="D96158" data-slot="252">
+  <td class="n">44</td>
+  <td class="map"><a href="https://blpstoremap.netlify.app/#piano=D96158" target="_blank" rel="noopener" title="Open on the store map">252</a></td>
+  <td class="ser"><a href="https://blpstoremap.netlify.app/#piano=D96158" target="_blank" rel="noopener">D96158</a></td>
+  <td class="tuned none"><span class="d none">No record</span><span class="age">none on calendar since Apr 2025</span></td>
+  <td class="yr">1990</td>
+  <td class="mk">Kimball</td>
+  <td class="md">Grand</td>
+  <td class="pr">$14,998</td>
+  <td class="chk"><label><input type="checkbox" id="g-D96158" data-k="good"><span>Good</span></label></td>
+  <td class="chk"><label><input type="checkbox" id="t-D96158" data-k="tune"><span>Needs tuning</span></label></td>
+  <td class="notes"><input type="text" id="n-D96158" data-k="note" placeholder="" aria-label="Notes for D96158"></td>
+</tr>
+<tr class="p" data-serial="2590961" data-slot="271">
+  <td class="n">45</td>
+  <td class="map"><a href="https://blpstoremap.netlify.app/#piano=2590961" target="_blank" rel="noopener" title="Open on the store map">271</a></td>
+  <td class="ser"><a href="https://blpstoremap.netlify.app/#piano=2590961" target="_blank" rel="noopener">2590961</a></td>
+  <td class="tuned none"><span class="d none">No record</span><span class="age">none on calendar since Apr 2025</span></td>
+  <td class="yr">1978</td>
+  <td class="mk">Yamaha</td>
+  <td class="md">U1H</td>
+  <td class="pr">$5,898</td>
+  <td class="chk"><label><input type="checkbox" id="g-2590961" data-k="good"><span>Good</span></label></td>
+  <td class="chk"><label><input type="checkbox" id="t-2590961" data-k="tune"><span>Needs tuning</span></label></td>
+  <td class="notes"><input type="text" id="n-2590961" data-k="note" placeholder="" aria-label="Notes for 2590961"></td>
+</tr>
+<tr class="p" data-serial="315905" data-slot="284">
+  <td class="n">46</td>
+  <td class="map"><a href="https://blpstoremap.netlify.app/#piano=315905" target="_blank" rel="noopener" title="Open on the store map">284</a></td>
+  <td class="ser"><a href="https://blpstoremap.netlify.app/#piano=315905" target="_blank" rel="noopener">315905</a></td>
+  <td class="tuned none"><span class="d none">No record</span><span class="age">none on calendar since Apr 2025</span></td>
+  <td class="yr">New</td>
+  <td class="mk">Hailun</td>
+  <td class="md">HG 178</td>
+  <td class="pr">$22,998</td>
+  <td class="chk"><label><input type="checkbox" id="g-315905" data-k="good"><span>Good</span></label></td>
+  <td class="chk"><label><input type="checkbox" id="t-315905" data-k="tune"><span>Needs tuning</span></label></td>
+  <td class="notes"><input type="text" id="n-315905" data-k="note" placeholder="" aria-label="Notes for 315905"></td>
+</tr>
+<tr class="p" data-serial="1990415" data-slot="300">
+  <td class="n">47</td>
+  <td class="map"><a href="https://blpstoremap.netlify.app/#piano=1990415" target="_blank" rel="noopener" title="Open on the store map">300</a></td>
+  <td class="ser"><a href="https://blpstoremap.netlify.app/#piano=1990415" target="_blank" rel="noopener">1990415</a></td>
+  <td class="tuned none"><span class="d none">No record</span><span class="age">none on calendar since Apr 2025</span></td>
+  <td class="yr">1975</td>
+  <td class="mk">Yamaha</td>
+  <td class="md">U1H</td>
+  <td class="pr">$5,198</td>
+  <td class="chk"><label><input type="checkbox" id="g-1990415" data-k="good"><span>Good</span></label></td>
+  <td class="chk"><label><input type="checkbox" id="t-1990415" data-k="tune"><span>Needs tuning</span></label></td>
+  <td class="notes"><input type="text" id="n-1990415" data-k="note" placeholder="" aria-label="Notes for 1990415"></td>
+</tr>
+<tr class="p" data-serial="3685312" data-slot="316">
+  <td class="n">48</td>
+  <td class="map"><a href="https://blpstoremap.netlify.app/#piano=3685312" target="_blank" rel="noopener" title="Open on the store map">316</a></td>
+  <td class="ser"><a href="https://blpstoremap.netlify.app/#piano=3685312" target="_blank" rel="noopener">3685312</a></td>
+  <td class="tuned none"><span class="d none">No record</span><span class="age">none on calendar since Apr 2025</span></td>
+  <td class="yr">1983</td>
+  <td class="mk">Yamaha</td>
+  <td class="md">U1M</td>
+  <td class="pr">$5,898</td>
+  <td class="chk"><label><input type="checkbox" id="g-3685312" data-k="good"><span>Good</span></label></td>
+  <td class="chk"><label><input type="checkbox" id="t-3685312" data-k="tune"><span>Needs tuning</span></label></td>
+  <td class="notes"><input type="text" id="n-3685312" data-k="note" placeholder="" aria-label="Notes for 3685312"></td>
+</tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="foot">
+    <div class="sig">Signed<span></span></div>
+    <div>Last tuned comes from the pianomoving.blp tuning calendar. "No record" means no tuning event on the calendar since April 2025, so treat it as overdue.</div>
+  </div>
+
+  <details>
+    <summary>Pianos on the floor that are not on this list (70)</summary>
+    <div class="skips"><div class="skipgrp"><h4>Tuned within the last 30 days <span>11</span></h4><ul><li><a href="https://blpstoremap.netlify.app/#piano=121109" target="_blank" rel="noopener">#113</a> 1906 Steinway &amp; Sons A <span class="sm">tuned Oct 2, 2026</span></li><li><a href="https://blpstoremap.netlify.app/#piano=2173583" target="_blank" rel="noopener">#127</a> NEW Hallet Davis GP160 <span class="sm">tuned Sep 30, 2026</span></li><li><a href="https://blpstoremap.netlify.app/#piano=1708455" target="_blank" rel="noopener">#140</a> 1982 Wurlitzer P137 <span class="sm">tuned Sep 17, 2026</span></li><li><a href="https://blpstoremap.netlify.app/#piano=54523" target="_blank" rel="noopener">#142</a> 1956 Grinnell Bros Spinet <span class="sm">tuned Sep 17, 2026</span></li><li><a href="https://blpstoremap.netlify.app/#piano=3949471" target="_blank" rel="noopener">#149</a> 1984 Yamaha W120BW <span class="sm">tuned Sep 29, 2026</span></li><li><a href="https://blpstoremap.netlify.app/#piano=63270" target="_blank" rel="noopener">#150</a> 2012 Irmler Upright <span class="sm">tuned Sep 16, 2026</span></li><li><a href="https://blpstoremap.netlify.app/#piano=140204" target="_blank" rel="noopener">#89</a> 1910 Steinway Upright <span class="sm">tuned Sep 15, 2026</span></li><li><a href="https://blpstoremap.netlify.app/#piano=41783" target="_blank" rel="noopener">#90</a> 1900 Knabe Upright <span class="sm">tuned Sep 28, 2026</span></li><li><a href="https://blpstoremap.netlify.app/#piano=313723" target="_blank" rel="noopener">#99</a> NEW Hailun 161 <span class="sm">tuned Oct 5, 2026</span></li><li><a href="https://blpstoremap.netlify.app/#piano=88735" target="_blank" rel="noopener">#125</a> 1908 Bechstein V-202 <span class="sm">tuned Sep 30, 2026</span></li><li><a href="https://blpstoremap.netlify.app/#piano=343593" target="_blank" rel="noopener">#138</a> 1943 Baldwin Acrosonic Spinet <span class="sm">tuned Sep 29, 2026</span></li></ul></div><div class="skipgrp"><h4>No current price <span>30</span></h4><ul><li><a href="https://blpstoremap.netlify.app/#piano=451912" target="_blank" rel="noopener">#251</a> 1977 Steinway &amp; Sons M</li><li><a href="https://blpstoremap.netlify.app/#piano=K80755" target="_blank" rel="noopener">#258</a> 1950 Kemble Baby Grand</li><li><a href="https://blpstoremap.netlify.app/#piano=37230" target="_blank" rel="noopener">#259</a> 1920 Baldwin Grand</li><li><a href="https://blpstoremap.netlify.app/#piano=34626" target="_blank" rel="noopener">#272</a> 1876 Steinway Upright</li><li><a href="https://blpstoremap.netlify.app/#piano=64210" target="_blank" rel="noopener">#274</a> 1888 Steinway Upright</li><li><a href="https://blpstoremap.netlify.app/#piano=142136" target="_blank" rel="noopener">#275</a> 1910 Steinway Upright</li><li><a href="https://blpstoremap.netlify.app/#piano=35256" target="_blank" rel="noopener">#277</a> 1905 Davies and Son Upright</li><li><a href="https://blpstoremap.netlify.app/#piano=113162" target="_blank" rel="noopener">#277a</a> 1908 Steinway Upright</li><li><a href="https://blpstoremap.netlify.app/#piano=54870" target="_blank" rel="noopener">#278</a> 1893 Emerson Upright</li><li><a href="https://blpstoremap.netlify.app/#piano=20092" target="_blank" rel="noopener">#283</a> 1888 Erard Grand</li><li><a href="https://blpstoremap.netlify.app/#piano=48885" target="_blank" rel="noopener">#287</a> 1925 Baldwin Grand</li><li><a href="https://blpstoremap.netlify.app/#piano=41621" target="_blank" rel="noopener">#297</a> 1911 Estey Upright</li><li><a href="https://blpstoremap.netlify.app/#piano=3320" target="_blank" rel="noopener">#298</a> 1890 Harvard Upright</li><li><a href="https://blpstoremap.netlify.app/#piano=25111" target="_blank" rel="noopener">#299</a> 1880 Knabe Upright</li><li><a href="https://blpstoremap.netlify.app/#piano=A19182" target="_blank" rel="noopener">#303</a> 1990 Kawai 602-M</li><li><a href="https://blpstoremap.netlify.app/#piano=19407" target="_blank" rel="noopener">#310</a> 1910 Mason &amp; Hamlin A</li><li><a href="https://blpstoremap.netlify.app/#piano=139732" target="_blank" rel="noopener">#312</a> 1947 Knabe Baby Grand</li><li><a href="https://blpstoremap.netlify.app/#piano=7931" target="_blank" rel="noopener">#313</a> 1892 Mason &amp; Hamlin Upright</li><li><a href="https://blpstoremap.netlify.app/#piano=35811" target="_blank" rel="noopener">#314</a> 1913 Pianola Spinet</li><li><a href="https://blpstoremap.netlify.app/#piano=135476" target="_blank" rel="noopener">#315</a> 1909 Beckwith Upright</li><li><a href="https://blpstoremap.netlify.app/#piano=31427" target="_blank" rel="noopener">#317</a> 1885 Hallet Davis Upright</li><li><a href="https://blpstoremap.netlify.app/#piano=32087" target="_blank" rel="noopener">#319</a> 1875 Steinway Upright</li><li><a href="https://blpstoremap.netlify.app/#piano=82009" target="_blank" rel="noopener">#320</a> 1892 Chickering Upright</li><li><a href="https://blpstoremap.netlify.app/#piano=70879" target="_blank" rel="noopener">#321</a> 1905 Kingsbury Upright</li><li><a href="https://blpstoremap.netlify.app/#piano=84727" target="_blank" rel="noopener">#322</a> 1905 Kingsbury Upright</li><li><a href="https://blpstoremap.netlify.app/#piano=192132" target="_blank" rel="noopener">#323a</a> 1908 Kimball Upright</li><li><a href="https://blpstoremap.netlify.app/#piano=181349" target="_blank" rel="noopener">#137</a> 1916 Steinway V</li><li><a href="https://blpstoremap.netlify.app/#piano=76197" target="_blank" rel="noopener">#157</a> 1893 Steinway Upright</li><li><a href="https://blpstoremap.netlify.app/#piano=62974" target="_blank" rel="noopener">#162</a> 1888 Steinway Upright</li><li><a href="https://blpstoremap.netlify.app/#piano=8328" target="_blank" rel="noopener">#165</a> 1904 Kohler &amp; Chase Upright</li></ul></div><div class="skipgrp"><h4>Not listed for sale <span>29</span></h4><ul><li><a href="https://blpstoremap.netlify.app/#piano=55383" target="_blank" rel="noopener">#250</a> 1948 Mason &amp; Hamlin E</li><li><a href="https://blpstoremap.netlify.app/#piano=T80555" target="_blank" rel="noopener">#254</a>  Hamilton Baby Grand</li><li><a href="https://blpstoremap.netlify.app/#piano=838603" target="_blank" rel="noopener">#256</a> 1969 Yamaha G2</li><li><a href="https://blpstoremap.netlify.app/#piano=66823" target="_blank" rel="noopener">#264</a> 1916 Lester Upright</li><li><a href="https://blpstoremap.netlify.app/#piano=154950" target="_blank" rel="noopener">#279</a> 1911 Steinway Upright</li><li><a href="https://blpstoremap.netlify.app/#piano=81891377" target="_blank" rel="noopener">#282</a>  A. Geyer GG-170</li><li><a href="https://blpstoremap.netlify.app/#piano=81891533" target="_blank" rel="noopener">#285</a>  A. Geyer GG-170</li><li><a href="https://blpstoremap.netlify.app/#piano=81891380" target="_blank" rel="noopener">#286</a>  A. Geyer GG-160</li><li><a href="https://blpstoremap.netlify.app/#piano=95687" target="_blank" rel="noopener">#293</a> 1900 Steinway Upright</li><li><a href="https://blpstoremap.netlify.app/#piano=745310" target="_blank" rel="noopener">#294</a> ~1980 Universal Piano Co. (Los Angeles) Upright</li><li><a href="https://blpstoremap.netlify.app/#piano=126050" target="_blank" rel="noopener">#295</a>  Elite </li><li><a href="https://blpstoremap.netlify.app/#piano=270656" target="_blank" rel="noopener">#302</a> 2001 Yamaha P22</li><li><a href="https://blpstoremap.netlify.app/#piano=47767" target="_blank" rel="noopener">#304</a> 1921 Cable &amp; Sons Upright</li><li><a href="https://blpstoremap.netlify.app/#piano=125621" target="_blank" rel="noopener">#305</a> 1909 Beckwith Upright</li><li><a href="https://blpstoremap.netlify.app/#piano=173035" target="_blank" rel="noopener">#311</a> 1966 Knabe Baby Grand</li><li><a href="https://blpstoremap.netlify.app/#piano=49003" target="_blank" rel="noopener">#324</a> 1915 Heintzman Upright</li><li><a href="https://blpstoremap.netlify.app/#piano=15097" target="_blank" rel="noopener">#327</a> 1909 Conway Upright</li><li><a href="https://blpstoremap.netlify.app/#piano=55662" target="_blank" rel="noopener">#329</a> 1904 Richmond Upright</li><li><a href="https://blpstoremap.netlify.app/#piano=284723" target="_blank" rel="noopener">#331</a> 1928 Gulbransen Upright</li><li><a href="https://blpstoremap.netlify.app/#piano=106494" target="_blank" rel="noopener">#332</a> 1914 Pianista Autopiano Upright</li><li><a href="https://blpstoremap.netlify.app/#piano=56874" target="_blank" rel="noopener">#333</a> 1890 Emerson Upright</li><li><a href="https://blpstoremap.netlify.app/#piano=45073" target="_blank" rel="noopener">#334</a> 1908 McPhail Upright</li><li><a href="https://blpstoremap.netlify.app/#piano=HIJG0085" target="_blank" rel="noopener">#131</a> 1989 Schafer &amp; Sons SS-51</li><li><a href="https://blpstoremap.netlify.app/#piano=asking Hailun for a serial number" target="_blank" rel="noopener">#136</a> NEW Hailun HU-125A</li><li><a href="https://blpstoremap.netlify.app/#piano=485236" target="_blank" rel="noopener">#142a</a> 1946 Kimball Spinet</li><li><a href="https://blpstoremap.netlify.app/#piano=TG0010426" target="_blank" rel="noopener">#110</a> 2004 Weber Grand</li><li><a href="https://blpstoremap.netlify.app/#piano=423387" target="_blank" rel="noopener">#160d</a> 1971 Steinway D</li><li><a href="https://blpstoremap.netlify.app/#piano=IJOEG0377" target="_blank" rel="noopener">#161</a> 2005 Remington RG-185</li><li><a href="https://blpstoremap.netlify.app/#piano=14540" target="_blank" rel="noopener">#164</a> 1908 P.S. Wick Upright</li></ul></div></div>
+  </details>
+</div>
+<script>
+(function() {
+  var KEY = 'blp-tuning-check-2026-10-09';
+  var state = {};
+  try { state = JSON.parse(localStorage.getItem(KEY) || '{}') || {}; } catch (e) { state = {}; }
+  var rows = Array.prototype.slice.call(document.querySelectorAll('tr.p'));
+  var who = document.getElementById('who'), when = document.getElementById('when');
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
+  function stamp() {
+    var d = new Date();
+    return d.toLocaleDateString(undefined, {weekday:'short', month:'short', day:'numeric', year:'numeric'}) + ' ' + d.toLocaleTimeString(undefined, {hour:'numeric', minute:'2-digit'});
+  }
+  function tally() {
+    var g = 0, t = 0;
+    rows.forEach(function(tr) {
+      var s = state[tr.dataset.serial] || {};
+      tr.classList.toggle('good', !!s.good);
+      tr.classList.toggle('tune', !!s.tune);
+      if (s.good) g++; if (s.tune) t++;
+    });
+    document.getElementById('cGood').textContent = g;
+    document.getElementById('cTune').textContent = t;
+    document.getElementById('cLeft').textContent = rows.length - g - t;
+  }
+  rows.forEach(function(tr) {
+    var serial = tr.dataset.serial, s = state[serial] || {};
+    tr.querySelectorAll('[data-k]').forEach(function(el) {
+      var k = el.dataset.k;
+      if (el.type === 'checkbox') el.checked = !!s[k]; else el.value = s[k] || '';
+      el.addEventListener('change', function() {
+        var cur = state[serial] || (state[serial] = {});
+        if (el.type === 'checkbox') {
+          cur[k] = el.checked;
+          if (el.checked) {
+            var other = k === 'good' ? 'tune' : 'good';
+            cur[other] = false;
+            var o = tr.querySelector('[data-k="' + other + '"]'); if (o) o.checked = false;
+          }
+        } else cur[k] = el.value;
+        if (!when.value) { when.value = stamp(); state._when = when.value; }
+        save(); tally();
+      });
+    });
+  });
+  who.value = state._who || ''; when.value = state._when || '';
+  who.addEventListener('input', function() { state._who = who.value; save(); });
+  when.addEventListener('input', function() { state._when = when.value; save(); });
+  document.getElementById('fillWhen').addEventListener('click', function() { when.value = stamp(); state._when = when.value; save(); });
+  document.getElementById('clearAll').addEventListener('click', function() {
+    var keepWho = state._who; state = { _who: keepWho }; save();
+    rows.forEach(function(tr) { tr.querySelectorAll('[data-k]').forEach(function(el) { if (el.type === 'checkbox') el.checked = false; else el.value = ''; }); });
+    when.value = ''; tally();
+  });
+  tally();
+})();
+</script>
