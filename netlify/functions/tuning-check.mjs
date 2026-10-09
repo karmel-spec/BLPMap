@@ -2,7 +2,8 @@
 // worksheet (Brigham 10/9): Korban walks the floor, marks each for-sale
 // piano Good or Needs tuning and jots service notes; the sheet is shared,
 // so a phone on the floor and the desk see the same marks.
-//   POST {op:'mark', serial, mark:'good'|'tune'|'skip'|'', note, idToken} -> {ok, by}
+//   POST {op:'mark', serial, mark:'good'|'tune'|'skip'|'', note, priority?, idToken} -> {ok, by}
+//        priority (⚡ ASAP) only sticks on a 'tune' mark — it puts the piano at the top of the Tuning Queue
 //   POST {op:'clear', idToken}                                      -> {ok, cleared}
 // Stored in Supabase tuning_check (supabase/tuning_check.sql) with the
 // service-role key; browsers read it back with the publishable key.
@@ -62,10 +63,11 @@ export default async (req) => {
     if (!MARKS.includes(mark)) return json({ error: 'mark must be good, tune, skip or empty' }, 400);
     const note = String(body.note || '').trim().slice(0, 300);
     if (mark === 'skip' && note.length < 3) return json({ error: 'say why the piano was skipped' }, 400);
+    const priority = mark === 'tune' && body.priority === true;
     const r = await sb('tuning_check?on_conflict=serial', {
       method: 'POST',
       headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
-      body: JSON.stringify([{ serial, mark, note, marked_by: who.name, marked_at: new Date().toISOString() }]),
+      body: JSON.stringify([{ serial, mark, note, priority, marked_by: who.name, marked_at: new Date().toISOString() }]),
     });
     if (!r.ok) return json({ error: 'Supabase ' + r.status + ': ' + (await r.text()).slice(0, 160) }, 502);
     return json({ ok: true, by: who.name });

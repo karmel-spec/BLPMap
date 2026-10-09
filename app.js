@@ -882,12 +882,17 @@ const QDEFS = {
       const right = p => `<span class="lite">${esc(p.location || '')}</span>`;
       const booked = ti => `📅 Tuning booked ${esc(fmtDay(ti.next.date))} ${esc(ti.next.time || '')}`;
       // 1. worksheet marks, in walk order
-      const marked = rows.filter(r => tchkState(r.p.serial).mark === 'tune').map(r => {
+      const markedRows = rows.filter(r => tchkState(r.p.serial).mark === 'tune');
+      // ⚡ ASAP marks first (walk order within each group)
+      markedRows.sort((a, b) => (tchkState(b.p.serial).asap ? 1 : 0) - (tchkState(a.p.serial).asap ? 1 : 0));
+      const marked = markedRows.map(r => {
         const m = tchkState(r.p.serial), ti = tuningInfo(r.p);
         const det = [m.note ? `<div class="qdet">📝 ${esc(m.note)}</div>` : '',
                      ti.next ? `<div class="qdet">${booked(ti)}</div>` : ''].join('');
-        return {serial: r.p.serial, p: r.p, badge: `<b style="min-width:88px;color:#9e2020">${ti.last ? 'tuned ' + esc(fmtDayYear(ti.last)) : 'no record'}</b>`,
-          sub: m.by ? 'marked by ' + m.by : '', detail: det, main: main(r.p), right: right(r.p)};
+        const last = ti.last ? 'tuned ' + esc(fmtDayYear(ti.last)) : 'no record';
+        return {serial: r.p.serial, p: r.p, asap: !!m.asap,
+          badge: m.asap ? `<b style="min-width:88px;color:#9e2020">⚡ ASAP</b>` : `<b style="min-width:88px;color:#9e2020">${last}</b>`,
+          sub: (m.asap ? last + ' · ' : '') + (m.by ? 'marked by ' + m.by : ''), detail: det, main: main(r.p), right: right(r.p)};
       });
       // 2. tunings already booked on the calendar (any active piano), soonest first
       const have = new Set(marked.map(it => qn(it.serial)));
@@ -932,7 +937,9 @@ function queueItems(key) {
     items.push(it); have.add(qn(it.serial));
   });
   const pos = new Map(st.order.map((x, i) => [qn(x), i]));
-  const rank = (it, i) => pos.has(qn(it.serial)) ? pos.get(qn(it.serial)) : 1e6 + i;
+  // a ⚡ ASAP mark not yet placed by hand goes straight to the top; once a
+  // manager drags the list, their order wins (tuning queue, Brigham 10/9)
+  const rank = (it, i) => pos.has(qn(it.serial)) ? pos.get(qn(it.serial)) : (it.asap ? -1e6 + i : 1e6 + i);
   return items.map((it, i) => ({it, r: rank(it, i)})).sort((a, b) => a.r - b.r).map(x => x.it);
 }
 async function qordSave(key, order, manual) {
@@ -15785,10 +15792,10 @@ const TCHK_STOPS = [
 function tchkLoad(force) {
   if (TCHK.loading || (!force && TCHK.data && Date.now() - TCHK.at < 60000)) return Promise.resolve(TCHK.data || {});
   TCHK.loading = true;
-  return fetch(SB_URL + '/rest/v1/tuning_check?select=serial,mark,note,marked_by,marked_at',
+  return fetch(SB_URL + '/rest/v1/tuning_check?select=serial,mark,note,priority,marked_by,marked_at',
     {headers: {apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY}, cache: 'no-store'})
     .then(r => r.ok ? r.json() : [])
-    .then(rows => { const d = {}; rows.forEach(r => { d[r.serial] = {mark: r.mark || '', note: r.note || '', by: r.marked_by || '', at: r.marked_at || ''}; });
+    .then(rows => { const d = {}; rows.forEach(r => { d[r.serial] = {mark: r.mark || '', note: r.note || '', asap: !!r.priority, by: r.marked_by || '', at: r.marked_at || ''}; });
       TCHK.data = d; TCHK.at = Date.now(); return d; })
     .catch(() => TCHK.data || {})
     .then(d => { TCHK.loading = false; return d; });
@@ -15796,15 +15803,16 @@ function tchkLoad(force) {
 // a mark older than the window is a previous walk — ignore it
 function tchkState(serial) {
   const s = (TCHK.data || {})[serial];
-  if (!s || !s.at || daysSince(s.at.slice(0, 10)) > TCHK_DAYS) return {mark: '', note: '', by: '', at: ''};
+  if (!s || !s.at || daysSince(s.at.slice(0, 10)) > TCHK_DAYS) return {mark: '', note: '', asap: false, by: '', at: ''};
   return s;
 }
 async function tchkSave(serial, patch) {
   const wa = authFields();
   if (!wa.idToken) throw new Error('Sign in with Google (☰ menu) first.');
   const cur = Object.assign({}, tchkState(serial), patch, {by: clockName() || (wa.user && wa.user.name) || '', at: new Date().toISOString()});
+  if (cur.mark !== 'tune') cur.asap = false;   // ⚡ ASAP only means something on a Needs-tuning mark
   const r = await fetch('/api/tuningcheck', {method: 'POST', headers: {'content-type': 'application/json'},
-    body: JSON.stringify({op: 'mark', serial, mark: cur.mark || '', note: cur.note || '', idToken: wa.idToken})});
+    body: JSON.stringify({op: 'mark', serial, mark: cur.mark || '', note: cur.note || '', priority: !!cur.asap, idToken: wa.idToken})});
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
   (TCHK.data || (TCHK.data = {}))[serial] = cur;
@@ -15911,7 +15919,7 @@ function tuningCheckTable() {
   const who = lsGet('tchkWho') || clockName();
   const marks = rows.map(r => tchkState(r.p.serial));
   const good = marks.filter(m => m.mark === 'good').length, tune = marks.filter(m => m.mark === 'tune').length,
-    skip = marks.filter(m => m.mark === 'skip').length;
+    skip = marks.filter(m => m.mark === 'skip').length, asap = marks.filter(m => m.mark === 'tune' && m.asap).length;
   const lastAt = marks.map(m => m.at).filter(Boolean).sort().pop();
   const noRec = rows.filter(r => !r.last).length, booked = rows.filter(r => r.next).length;
   const counts = {}; rows.forEach(r => { counts[r.zone] = (counts[r.zone] || 0) + 1; });
@@ -15936,7 +15944,8 @@ function tuningCheckTable() {
         <td>${esc(tchkYear(p))}</td><td>${esc(p.make)}</td><td>${esc(p.model)}</td>
         <td class="pr">${esc(tchkPrice(p))}</td>
         <td class="chk"><label><input type="checkbox" class="tcmark" data-m="good" ${m.mark === 'good' ? 'checked' : ''}> Good</label></td>
-        <td class="chk"><label><input type="checkbox" class="tcmark" data-m="tune" ${m.mark === 'tune' ? 'checked' : ''}> Needs tuning</label></td>
+        <td class="chk"><label><input type="checkbox" class="tcmark" data-m="tune" ${m.mark === 'tune' ? 'checked' : ''}> Needs tuning</label>
+          <label class="tcasap ${m.mark === 'tune' ? '' : 'off'}" title="priority — goes to the top of the Tuning Queue"><input type="checkbox" class="tcpri" ${m.asap ? 'checked' : ''}> ⚡ ASAP</label></td>
         <td class="skipcell">${m.mark === 'skip'
           ? '<span class="tcskipped">Skipped</span><button type="button" class="tcunskip" title="put it back on the walk">undo</button>'
           : '<button type="button" class="tcskip" title="not a piano to check — say why, and Chris gets it for review">Skip</button>'}</td>
@@ -15961,10 +15970,10 @@ function tuningCheckTable() {
       </div>
     </div>
     <div class="tcroute">${stops}</div>
-    <div class="tctally"><b>${rows.length}</b> pianos to check · <b class="tcgood">${good}</b> good · <b class="tctune">${tune}</b> need tuning · <b class="tcskipn">${skip}</b> skipped · <b class="tcleft">${rows.length - good - tune - skip}</b> left
+    <div class="tctally"><b>${rows.length}</b> pianos to check · <b class="tcgood">${good}</b> good · <b class="tctune">${tune}</b> need tuning (<b class="tcasap-n">${asap}</b> ⚡ ASAP) · <b class="tcskipn">${skip}</b> skipped · <b class="tcleft">${rows.length - good - tune - skip}</b> left
       <span>· ${noRec} with no tuning on the calendar · ${booked} already booked for a tuning (see Notes) · skipped pianos go to Chris for review${TCHK.data ? '' : ' · loading saved marks…'}</span></div>
     <div class="tscroll"><table class="tchktbl">
-      <thead><tr><th></th><th>Map #</th><th>Serial</th><th>Last tuned</th><th>Year</th><th>Make</th><th>Model</th><th>Price</th><th>Good</th><th>Tuning</th><th>Skip</th><th>Notes — sticky key, squeaky pedal, clicks, other service</th></tr></thead>
+      <thead><tr><th></th><th>Map #</th><th>Serial</th><th>Last tuned</th><th>Year</th><th>Make</th><th>Model</th><th>Price</th><th>Good</th><th>Tuning · ⚡ ASAP</th><th>Skip</th><th>Notes — sticky key, squeaky pedal, clicks, other service</th></tr></thead>
       <tbody>${body}</tbody></table></div>
   </div>`;
 }
@@ -15988,7 +15997,7 @@ function tuningCheckPrintHTML() {
         <td>${r.last ? esc(fmtDayYear(r.last)) + '<br><small>' + esc(tchkAge(r.last)) + '</small>' : '<b>No record</b>'}</td>
         <td>${esc(tchkYear(p))}</td><td>${esc(p.make)}</td><td>${esc(p.model)}</td><td class="pr">${esc(tchkPrice(p))}</td>
         <td class="bx">${m.mark === 'good' ? '☒' : '☐'}</td><td class="bx">${m.mark === 'tune' ? '☒' : '☐'}</td>
-        <td class="nt">${flags ? '<small>' + esc(flags) + '</small><br>' : ''}${m.mark === 'skip' ? '<b>SKIPPED</b> — ' : ''}${esc(m.note)}</td>
+        <td class="nt">${flags ? '<small>' + esc(flags) + '</small><br>' : ''}${m.mark === 'skip' ? '<b>SKIPPED</b> — ' : ''}${m.mark === 'tune' && m.asap ? '<b>⚡ ASAP</b> ' : ''}${esc(m.note)}</td>
       </tr>`;
     });
   });
@@ -16035,6 +16044,7 @@ function wireTuningCheck(root, rerender) {
       k = rows.filter(tr => tr.classList.contains('skip')).length;
     box.querySelector('.tcgood').textContent = g; box.querySelector('.tctune').textContent = t;
     box.querySelector('.tcskipn').textContent = k;
+    box.querySelector('.tcasap-n').textContent = rows.filter(tr => tr.classList.contains('tune') && tr.querySelector('.tcpri').checked).length;
     box.querySelector('.tcleft').textContent = rows.length - g - t - k;
     box.querySelector('.tcwhen').value = tchkStamp();
   };
@@ -16065,6 +16075,9 @@ function wireTuningCheck(root, rerender) {
     if (cb.checked && other) other.checked = false;
     const wasSkip = tr.classList.contains('skip');
     tr.classList.toggle('good', mark === 'good'); tr.classList.toggle('tune', mark === 'tune'); tr.classList.remove('skip');
+    const pri = tr.querySelector('.tcpri');
+    tr.querySelector('.tcasap').classList.toggle('off', mark !== 'tune');
+    if (mark !== 'tune' && pri) pri.checked = false;
     tally();
     try {
       await tchkSave(serial, wasSkip ? {mark, note: ''} : {mark});
@@ -16074,8 +16087,16 @@ function wireTuningCheck(root, rerender) {
       const prev = tchkState(serial).mark;
       cb.checked = prev === m; if (other) other.checked = prev === other.dataset.m;
       tr.classList.toggle('good', prev === 'good'); tr.classList.toggle('tune', prev === 'tune'); tr.classList.toggle('skip', prev === 'skip');
+      tr.querySelector('.tcasap').classList.toggle('off', prev !== 'tune'); if (pri) pri.checked = !!tchkState(serial).asap;
       tally(); cfxToast('Couldn’t save that mark — ' + (e.message || e));
     }
+  });
+  // ⚡ ASAP: a priority Needs-tuning mark — it jumps to the top of the Tuning Queue
+  box.querySelectorAll('.tcpri').forEach(cb => cb.onchange = async () => {
+    const tr = cb.closest('.tcrow'), serial = tr.dataset.serial;
+    tally();
+    try { await tchkSave(serial, {asap: cb.checked}); }
+    catch (e) { cb.checked = !!tchkState(serial).asap; tally(); cfxToast('Couldn\u2019t save ASAP — ' + (e.message || e)); }
   });
   box.querySelectorAll('.tcnote').forEach(inp => {
     let saved = inp.value;
