@@ -12,6 +12,7 @@ create table if not exists tuning_check (
   serial text primary key,                  -- Piano Log serial
   mark text not null default '',            -- good | tune | skip | ''
   note text not null default '',
+  priority boolean not null default false,  -- ⚡ ASAP: top of the Tuning Queue (tune marks only)
   marked_by text not null default '',
   marked_at timestamptz not null default now()
 );
@@ -21,3 +22,6 @@ alter table tuning_check enable row level security;
 -- writes ONLY through the service-role key held by the Netlify function,
 -- which verifies the signed-in Google account first
 create policy tuning_check_read on tuning_check for select using (true);
+
+-- added 10/9 (⚡ ASAP): run on an existing table
+alter table tuning_check add column if not exists priority boolean not null default false;

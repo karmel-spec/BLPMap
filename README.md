@@ -44,7 +44,8 @@ never be committed. Without it the app still runs (map + pianos, no moves).
   last 30 days, ordered front door → down the ramp → stairs → balcony from the
   floor plan's own labels. Good / Needs tuning marks and service notes save
   to Supabase `tuning_check` (`supabase/tuning_check.sql`, written by
-  `/api/tuningcheck`) so everyone sees the same sheet; **Skip** requires a
+  `/api/tuningcheck`) so everyone sees the same sheet; **⚡ ASAP** on a
+  Needs-tuning mark puts that piano at the top of the Tuning Queue; **Skip** requires a
   reason and posts it into Chris's agent thread for Brigham, Karmel or Mark
   to approve the Piano Log change. 🖨 Print now gives the paper version.
 - **🎵 Tuning Queue box** (Brigham 10/9): on the first floor by the admin
