@@ -57,6 +57,11 @@ birth story ships in `babybook/story.js`; what she adds is saved through
 | Set `BABYBOOK_PIN` to the family passphrase (any words; case doesn't matter) | Netlify → Site configuration → Environment variables, then redeploy |
 | `SUPABASE_SERVICE_KEY` | already set for the queue boxes; the book reuses it |
 
+Photos go in two ways, both placed by the time they were taken: **+ Photos**
+(pick files on the phone; EXIF time read in the browser) or **Import album**
+(paste a Google Photos share link; the function reads the album and copies
+each photo into the bucket server-side, so it also works from a laptop).
+
 Until `BABYBOOK_PIN` is set the page still shows the whole birth story,
 read-only, with a note that editing isn't configured. With it set, anyone
 with the passphrase can add chapters, moments and photos from a phone;

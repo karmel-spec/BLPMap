@@ -59,6 +59,7 @@
     $('#btn-lock').hidden = state.mode !== 'live';
     $('#add-moment').hidden = state.mode !== 'live';
     $('#add-photos').hidden = state.mode !== 'live';
+    $('#import-album').hidden = state.mode !== 'live';
     $('#add-chapter').hidden = state.mode !== 'live';
     $('#edit-facts').hidden = state.mode !== 'live';
     $('#edit-cover-l').hidden = state.mode !== 'live';
@@ -465,6 +466,33 @@
     pdlg.showModal();
   }
   $('#ps-cancel').addEventListener('click', () => { pdlg.close(); syncChrome(); });
+
+  // Google Photos album → the same placement sheet. The server reads the album and copies
+  // each photo; the taken-at time comes from the album data or the photo's EXIF.
+  const adlg = $('#asheet');
+  $('#import-album').addEventListener('click', () => { $('#a-err').textContent = ''; adlg.showModal(); $('#a-url').focus(); });
+  $('#a-cancel').addEventListener('click', () => adlg.close());
+  const exifToDate = (s) => { const m = /^(\d{4}):(\d{2}):(\d{2}) (\d{2}):(\d{2}):(\d{2})/.exec(s || ''); return m ? new Date(+m[1], m[2] - 1, +m[3], +m[4], +m[5], +m[6]) : null; };
+  const albumToDate = (t) => { if (!t || !t.ms) return null; const utc = new Date(t.ms); if (t.offsetMs == null) return utc; // camera-local wall clock, rebuilt in this browser's zone
+    const d = new Date(t.ms + t.offsetMs); return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds()); };
+  $('#asheetform').addEventListener('submit', async (ev) => {
+    ev.preventDefault(); const url = $('#a-url').value.trim(); if (!url) return;
+    $('#a-go').disabled = true; $('#a-err').textContent = 'Reading the album…';
+    try {
+      const a = await api({ op: 'album', url });
+      const list = a.photos || []; placing = [];
+      for (let i = 0; i < list.length; i++) {
+        $('#a-err').textContent = 'Copying photo ' + (i + 1) + ' of ' + list.length + (a.title ? ' from "' + a.title + '"' : '') + '…';
+        const j = await api({ op: 'import', src: list[i].src });
+        const when = exifToDate(j.takenAt) || albumToDate(list[i].takenAt);
+        placing.push({ url: j.url, thumb: list[i].src.replace(/=[^/]*$/, '') + '=w160-h160-c', when, caption: '', entry: bestEntryFor(when) });
+      }
+      placing.sort((x, y) => (x.when ? x.when.getTime() : 0) - (y.when ? y.when.getTime() : 0));
+      adlg.close(); $('#a-err').textContent = '';
+      if (placing.length) openPlacer(); else setStatus('No photos found in that album.');
+    } catch (e) { $('#a-err').textContent = e.message || String(e); }
+    $('#a-go').disabled = false;
+  });
   $('#psheetform').addEventListener('submit', async (ev) => {
     ev.preventDefault(); $('#ps-err').textContent = 'Placing…'; $('#ps-save').disabled = true;
     try {

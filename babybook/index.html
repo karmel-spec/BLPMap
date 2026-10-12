@@ -28,6 +28,7 @@
   <div class="bar">
     <span class="st" id="status">Opening the book…</span>
     <label class="btn p filebtn" id="add-photos" hidden>+ Photos<input id="bulk-file" type="file" accept="image/*" multiple hidden></label>
+    <button class="btn" type="button" id="import-album" hidden>Import album</button>
     <button class="btn" type="button" id="add-moment" hidden>+ Moment</button>
     <button class="btn" type="button" id="add-chapter" hidden>+ Chapter</button>
     <button class="btn" type="button" id="edit-facts" hidden>Birth facts</button>
@@ -83,6 +84,16 @@
       <button class="btn" type="button" id="f-cancel">Cancel</button>
       <button class="btn p" type="submit" id="f-save">Save</button>
     </div>
+  </form>
+</dialog>
+
+<dialog class="sheet" id="asheet">
+  <form id="asheetform" method="dialog">
+    <h3>Import a Google Photos album</h3>
+    <p class="note">Paste the album's share link. Every photo is copied into the book and matched to the moment nearest the time it was taken; you review the matches before anything is placed.</p>
+    <label>Share link<input id="a-url" placeholder="https://photos.app.goo.gl/…" inputmode="url"></label>
+    <div class="err" id="a-err"></div>
+    <div class="actions"><span class="sp"></span><button class="btn" type="button" id="a-cancel">Cancel</button><button class="btn p" type="submit" id="a-go">Fetch photos</button></div>
   </form>
 </dialog>
 
