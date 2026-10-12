@@ -46,6 +46,23 @@ Only owners, managers and admins may write — the function checks the signed-in
 email against the list in `netlify/functions/queue-order.mjs`; add more with a
 comma-separated `QUEUE_EDITORS` env var.
 
+#### Myles's baby book (`/babybook/`, added 10/12) — one more env var
+Abby's book lives at **https://blpstoremap.netlify.app/babybook/** (the
+birth story ships in `babybook/story.js`; what she adds is saved through
+`/api/babybook` → `netlify/functions/babybook.mjs`). Setup, once:
+
+| Step | Where |
+|---|---|
+| Run `supabase/babybook.sql` (two tables + the public `babybook` photo bucket) | Supabase SQL editor — **already run 10/12** |
+| Set `BABYBOOK_PIN` to the family passphrase (any words; case doesn't matter) | Netlify → Site configuration → Environment variables, then redeploy |
+| `SUPABASE_SERVICE_KEY` | already set for the queue boxes; the book reuses it |
+
+Until `BABYBOOK_PIN` is set the page still shows the whole birth story,
+read-only, with a note that editing isn't configured. With it set, anyone
+with the passphrase can add chapters, moments and photos from a phone;
+Book view paginates the same content for print (Blurb 8×10 layflat with
+bleed, or Letter) and the Print button saves the PDF.
+
 #### Everything else — NONE REQUIRED
 The live site needs no env vars: calendar events are served by the Apps
 Script bridge (`GET <bridge>/exec?fn=events` — the secret iCal address

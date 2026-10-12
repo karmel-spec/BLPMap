@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Hello, Myles</title>
+<meta name="description" content="The birth story of Myles Bryant White, as recorded by his grandma, and the chapters that follow.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT@0,9..144,300..700,100;1,9..144,300..700,100&family=Nunito+Sans:ital,wght@0,400;0,600;0,700;1,400&display=swap">
+<link rel="stylesheet" href="book.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>Hello, <b>Myles</b></h1>
+    <nav class="tabs" role="tablist" aria-label="View">
+      <button role="tab" data-view="read" aria-selected="true">Read</button>
+      <button role="tab" data-view="book" aria-selected="false">Book</button>
+    </nav>
+  </header>
+
+  <form id="pinbar" class="pinbar" hidden>
+    <label for="pin">Family passphrase</label>
+    <input id="pin" type="password" autocomplete="current-password" placeholder="passphrase">
+    <button class="btn p" type="submit" id="pin-go">Open the book</button>
+  </form>
+
+  <div class="bar">
+    <span class="st" id="status">Opening the book…</span>
+    <button class="btn" type="button" id="add-moment" hidden>+ Moment</button>
+    <button class="btn" type="button" id="add-chapter" hidden>+ Chapter</button>
+    <button class="btn" type="button" id="edit-facts" hidden>Birth facts</button>
+    <label class="btn filebtn" id="edit-cover-l" hidden>Cover photo<input id="edit-cover" type="file" accept="image/*" hidden></label>
+    <button class="btn" type="button" id="btn-lock" hidden>Lock</button>
+  </div>
+
+  <section class="view on" id="view-read">
+    <div class="read" id="read"></div>
+  </section>
+
+  <section class="view" id="view-book">
+    <div class="bar" style="margin-bottom:14px">
+      <label class="note" for="size"><b>Page size</b></label>
+      <select id="size" class="btn" style="padding:7px 10px">
+        <option value="blurb">Blurb 8×10 layflat (with bleed)</option>
+        <option value="letter">Letter 8.5×11 (home printing)</option>
+      </select>
+      <span class="note" id="pagecount"></span>
+      <span class="sp" style="flex:1"></span>
+      <button class="btn p" type="button" id="btn-print">Print / Save as PDF</button>
+    </div>
+    <p class="note" id="printhelp" style="margin:0 0 14px">In the print dialog choose Save as PDF, no margins, and turn on background graphics. Leave the paper size as the page suggests.</p>
+    <div class="coverart" id="coverart" hidden><p class="note"><b>Cover art.</b> Blurb builds the wrap-around cover in its own cover editor. Use the cover photo and the words below there.</p></div>
+    <div class="book" id="book"></div>
+  </section>
+</div>
+
+<dialog class="sheet" id="sheet">
+  <form id="sheetform" method="dialog">
+    <h3 id="sh-title">Edit this moment</h3>
+    <div class="row">
+      <label>Chapter<select id="f-chapter"></select></label>
+      <label>Kind<select id="f-kind"><option value="moment">Moment</option><option value="quote">Quote page</option></select></label>
+    </div>
+    <div class="row">
+      <label>Time or date<input id="f-time" placeholder="4:51 AM or Oct 12"></label>
+      <label>Order<input id="f-sort" type="number" step="0.5"></label>
+    </div>
+    <label id="l-title">Title<input id="f-title" placeholder="The first call"></label>
+    <label>Words<textarea id="f-body" placeholder="What happened"></textarea></label>
+    <label id="l-cite">Who said it<input id="f-cite" placeholder="Abby · 2:03 PM"></label>
+    <label>Photos</label>
+    <div class="plist" id="f-photos"></div>
+    <div class="actions">
+      <label class="btn filebtn" id="f-addphoto">+ Add photos<input id="f-file" type="file" accept="image/*" multiple></label>
+      <span class="sp"></span>
+      <button class="btn d" type="button" id="f-delete" data-armed="0">Delete</button>
+    </div>
+    <div class="err" id="f-err"></div>
+    <div class="actions">
+      <span class="sp"></span>
+      <button class="btn" type="button" id="f-cancel">Cancel</button>
+      <button class="btn p" type="submit" id="f-save">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="sheet" id="csheet">
+  <form id="csheetform" method="dialog">
+    <h3>Add a chapter</h3>
+    <label>Chapter name<input id="c-title" placeholder="Coming Home"></label>
+    <label>Subtitle<input id="c-sub" placeholder="The first week"></label>
+    <label>Big label on the opener<input id="c-big" placeholder="Oct 12"></label>
+    <div class="err" id="c-err"></div>
+    <div class="actions"><span class="sp"></span><button class="btn" type="button" id="c-cancel">Cancel</button><button class="btn p" type="submit">Save</button></div>
+  </form>
+</dialog>
+
+<dialog class="sheet" id="fsheet">
+  <form id="fsheetform" method="dialog" class="facts">
+    <h3>Birth facts</h3>
+    <p class="note">These are the tiles on the "He's here" page. Add his weight and length when you have them.</p>
+    <div class="plist" id="fs-list"></div>
+    <div class="actions"><button class="btn" type="button" id="fs-add">+ Add a fact</button></div>
+    <div class="err" id="fs-err"></div>
+    <div class="actions"><span class="sp"></span><button class="btn" type="button" id="fs-cancel">Cancel</button><button class="btn p" type="submit">Save</button></div>
+  </form>
+</dialog>
+
+<script src="story.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

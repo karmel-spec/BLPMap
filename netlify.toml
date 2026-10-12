@@ -48,3 +48,8 @@
   from = "/api/top10"
   to = "/.netlify/functions/top10"
   status = 200
+
+[[redirects]]
+  from = "/api/babybook"
+  to = "/.netlify/functions/babybook"
+  status = 200
