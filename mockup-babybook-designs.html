@@ -1,0 +1,455 @@
+<title>Myles Birth Story Designs</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Crimson+Pro:ital,wght@0,400;0,500;1,400&family=Fraunces:opsz,wght,SOFT@9..144,300..700,100&family=Nunito+Sans:ital,wght@0,400;0,600;0,700;1,400&family=Caveat:wght@400;600&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&display=swap">
+<style>
+/* Layout: a quiet chrome around three stacks of 8.5x11 page previews; one design shown at a time.
+   The pages themselves are a committed single look (ivory paper, sage, tan) and never change with the theme. */
+:root{
+  --bg:#efeae0; --fg:#2f2a24; --muted:#6e665a; --line:#d8cfbf; --chip:#ffffff; --chip-on:#5c6b4f; --chip-on-fg:#fff8ea;
+  /* paper palette, shared by all three designs */
+  --ivory:#f7f2e8; --ivory-2:#efe7d8; --sage:#8a9a7b; --sage-deep:#5c6b4f; --sage-pale:#d6ddcb; --tan:#c9b394; --tan-pale:#e7dac4; --brown:#6b5742; --ink:#3a342c; --ink-soft:#7a7064;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){ --bg:#2a2622; --fg:#ece4d6; --muted:#b3a996; --line:#4a433b; --chip:#3a342e; --chip-on:#a3b18a; --chip-on-fg:#1f1c18; color-scheme:dark } }
+:root[data-theme="dark"]{ --bg:#2a2622; --fg:#ece4d6; --muted:#b3a996; --line:#4a433b; --chip:#3a342e; --chip-on:#a3b18a; --chip-on-fg:#1f1c18; color-scheme:dark }
+
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:"Nunito Sans",system-ui,sans-serif;padding-inline:16px;padding-block:28px 64px}
+.wrap{max-width:1180px;margin:0 auto}
+header.top{display:flex;flex-direction:column;gap:10px;margin-bottom:22px}
+header.top h1{font:500 clamp(26px,4vw,38px)/1.1 "Cormorant Garamond",Georgia,serif;margin:0;letter-spacing:.01em;text-wrap:balance}
+header.top p{margin:0;color:var(--muted);max-width:62ch;font-size:15px;line-height:1.5}
+.tabs{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0 8px}
+.tabs button{appearance:none;border:1px solid var(--line);background:var(--chip);color:var(--fg);border-radius:999px;padding:10px 16px;font:600 14px/1 "Nunito Sans",sans-serif;cursor:pointer;display:flex;align-items:center;gap:8px}
+.tabs button:focus-visible{outline:2px solid var(--chip-on);outline-offset:2px}
+.tabs button[aria-selected="true"]{background:var(--chip-on);color:var(--chip-on-fg);border-color:var(--chip-on)}
+.tabs .sw{width:12px;height:12px;border-radius:50%;border:1px solid rgba(0,0,0,.15)}
+.design{display:none}
+.design.on{display:block}
+.brief{display:grid;grid-template-columns:1fr;gap:14px;border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding-block:16px;margin-bottom:22px;font-size:14px;line-height:1.5}
+@media(min-width:720px){.brief{grid-template-columns:1.2fr 1fr 1fr}}
+.brief h2{font:500 22px/1.2 "Cormorant Garamond",Georgia,serif;margin:0 0 4px}
+.brief b{display:block;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+.brief p{margin:0;color:var(--fg)}
+.pages{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:26px 22px;align-items:start}
+.pg-label{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:0 0 8px}
+
+/* ---- the paper ---- */
+.page{position:relative;width:100%;aspect-ratio:8.5/11;max-width:100%;background:var(--ivory);color:var(--ink);overflow:hidden;box-shadow:0 1px 2px rgba(40,30,10,.12),0 14px 34px -14px rgba(40,30,10,.35);container-type:inline-size;border:1px solid rgba(60,45,20,.08)}
+.page *{min-width:0}
+.ph{background:linear-gradient(135deg,#d6ddcb 0%,#e7dac4 55%,#f1ebdf 100%);position:relative;overflow:hidden}
+.ph::after{content:attr(data-cap);position:absolute;inset:auto 0 0 0;padding:1.6cqw 2.2cqw;font:italic 2.6cqw/1.2 "Crimson Pro",Georgia,serif;color:#5c6b4f;text-align:center;opacity:.85}
+.ph::before{content:"";position:absolute;inset:0;background:radial-gradient(circle at 30% 35%,rgba(255,255,255,.55),transparent 42%),radial-gradient(circle at 70% 70%,rgba(138,154,123,.25),transparent 45%)}
+
+/* ============ A. Linen & Sage ============ */
+.a{font-family:"Crimson Pro",Georgia,serif}
+.a .cov{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;height:100%;padding:9cqw 10cqw;gap:3cqw}
+.a .frame{position:absolute;inset:4.5cqw;border:1px solid var(--sage);outline:1px solid var(--sage);outline-offset:-1.2cqw;pointer-events:none}
+.a .mono{font:500 20cqw/1 "Cormorant Garamond",Georgia,serif;color:var(--sage-deep);letter-spacing:-.02em}
+.a .rule{width:22cqw;height:1px;background:var(--tan)}
+.a .eyebrow{font:500 2.6cqw/1.4 "Cormorant Garamond",serif;letter-spacing:.3em;text-transform:uppercase;color:var(--brown)}
+.a h2{font:500 7.4cqw/1.05 "Cormorant Garamond",Georgia,serif;margin:0;text-wrap:balance}
+.a h2 em{font-style:italic;font-weight:400}
+.a .sub{font:italic 3.3cqw/1.45 "Crimson Pro",serif;color:var(--ink-soft)}
+.a .sprig{width:16cqw;height:auto}
+.a .inner{padding:9cqw 10cqw;height:100%;display:flex;flex-direction:column;gap:3cqw}
+.a .h{font:500 6cqw/1.1 "Cormorant Garamond",serif;margin:0;text-align:center}
+.a .ch{font:500 2.4cqw/1.4 "Cormorant Garamond",serif;letter-spacing:.3em;text-transform:uppercase;color:var(--brown);text-align:center}
+.a .stat{display:grid;grid-template-columns:1fr 1fr;gap:3cqw 5cqw;margin-top:2cqw}
+.a .stat div{border-top:1px solid var(--tan);padding-top:1.8cqw}
+.a .stat b{display:block;font:500 2.2cqw/1.3 "Cormorant Garamond",serif;letter-spacing:.26em;text-transform:uppercase;color:var(--sage-deep);font-weight:600}
+.a .stat span{font:500 5.2cqw/1.1 "Cormorant Garamond",serif;color:var(--ink)}
+.a .stat small{display:block;font:italic 2.6cqw/1.4 "Crimson Pro",serif;color:var(--ink-soft);margin-top:.6cqw}
+.a .tl{display:grid;grid-template-columns:13cqw 1fr;gap:1.6cqw 3cqw;font-size:2.75cqw;line-height:1.45}
+.a .tl time{font:600 2.3cqw/1.5 "Cormorant Garamond",serif;letter-spacing:.14em;color:var(--sage-deep);text-align:right;padding-top:.3cqw;font-variant-numeric:tabular-nums}
+.a .tl p{margin:0}
+.a .tl p b{font-weight:600;color:var(--brown)}
+.a .folio{position:absolute;bottom:1.6cqw;left:0;right:0;text-align:center;font:500 2.3cqw/1 "Cormorant Garamond",serif;letter-spacing:.3em;color:var(--sage)}
+.a .quote{display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;height:100%;padding:10cqw 12cqw;gap:3.5cqw}
+.a .quote blockquote{margin:0;font:italic 500 6.2cqw/1.25 "Cormorant Garamond",serif;text-wrap:balance}
+.a .quote cite{font:2.6cqw/1.5 "Crimson Pro",serif;font-style:normal;letter-spacing:.22em;text-transform:uppercase;color:var(--brown)}
+.a .photo-pg{display:grid;grid-template-rows:1fr auto;height:100%}
+.a .photo-pg .ph{height:100%}
+.a .plate{padding:4cqw 9cqw 7cqw;text-align:center;font:italic 3cqw/1.5 "Crimson Pro",serif;color:var(--ink-soft)}
+.a .plate b{display:block;font:500 3.8cqw/1.3 "Cormorant Garamond",serif;font-style:normal;color:var(--ink);letter-spacing:.02em}
+.a .two{display:grid;grid-template-columns:1fr 1fr;gap:2.4cqw}
+.a .two .ph{aspect-ratio:4/5}
+
+/* ============ B. Arch & Bloom ============ */
+.b{font-family:"Nunito Sans",system-ui,sans-serif}
+.b .cov{height:100%;display:grid;grid-template-rows:auto 1fr auto;padding:7cqw 8cqw 6cqw;background:var(--ivory)}
+.b .arch{width:62cqw;aspect-ratio:3/4;margin:0 auto;border-radius:50cqw 50cqw 0 0;background:var(--sage-pale);padding:2.4cqw;display:flex}
+.b .arch .ph{flex:1;border-radius:50cqw 50cqw 0 0}
+.b .band{background:var(--sage);color:var(--ivory);margin:0 -8cqw -6cqw;padding:5cqw 8cqw 6cqw;text-align:center}
+.b h2{font:300 9.5cqw/1 "Fraunces",Georgia,serif;font-variation-settings:"SOFT" 100,"opsz" 144;margin:0;letter-spacing:-.02em;text-wrap:balance}
+.b h2 b{font-weight:600}
+.b .b-eyebrow{font:700 2.3cqw/1.4 "Nunito Sans",sans-serif;letter-spacing:.22em;text-transform:uppercase;color:var(--brown);text-align:center}
+.b .band .b-eyebrow{color:var(--ivory);opacity:.9}
+.b .band p{margin:1.2cqw 0 0;font:2.8cqw/1.4 "Nunito Sans",sans-serif;opacity:.95}
+.b .inner{padding:8cqw;height:100%;display:flex;flex-direction:column;gap:3cqw}
+.b .h{font:400 7cqw/1.05 "Fraunces",serif;font-variation-settings:"SOFT" 100,"opsz" 144;margin:0;letter-spacing:-.015em}
+.b .h em{font-style:italic;font-weight:300;color:var(--sage-deep)}
+.b .tiles{display:grid;grid-template-columns:1fr 1fr;gap:2.4cqw}
+.b .tile{background:var(--tan-pale);border-radius:3.5cqw;padding:3.2cqw 3.4cqw}
+.b .tile.sg{background:var(--sage-pale)}
+.b .tile b{display:block;font:700 2.1cqw/1.3 "Nunito Sans",sans-serif;letter-spacing:.2em;text-transform:uppercase;color:var(--brown)}
+.b .tile span{display:block;font:500 7cqw/1 "Fraunces",serif;font-variation-settings:"SOFT" 100,"opsz" 144;margin:1cqw 0 .6cqw;color:var(--ink);letter-spacing:-.02em}
+.b .tile small{font:2.5cqw/1.4 "Nunito Sans",sans-serif;color:var(--ink-soft)}
+.b .wide{grid-column:1/-1;display:flex;gap:3cqw;align-items:center}
+.b .wide span{font-size:4.6cqw;margin:0}
+.b .cards{display:flex;flex-direction:column;gap:2cqw}
+.b .card{display:grid;grid-template-columns:auto 1fr;gap:2.6cqw;align-items:start;background:#fff;border-radius:3cqw;padding:2.6cqw 3cqw;border:1px solid var(--tan-pale)}
+.b .pill{background:var(--sage);color:var(--ivory);border-radius:999px;padding:.9cqw 1.9cqw;font:700 2.2cqw/1 "Nunito Sans",sans-serif;letter-spacing:.06em;font-variant-numeric:tabular-nums;white-space:nowrap;margin-top:.3cqw}
+.b .pill.t{background:var(--tan);color:var(--brown)}
+.b .card p{margin:0;font-size:2.7cqw;line-height:1.45}
+.b .card p b{font-weight:700;color:var(--sage-deep)}
+.b .bigtime{font:300 22cqw/1 "Fraunces",serif;font-variation-settings:"SOFT" 100,"opsz" 144;color:var(--sage);letter-spacing:-.04em;margin:-1cqw 0 0}
+.b .quote{height:100%;display:grid;grid-template-rows:1fr auto;}
+.b .quote .top{background:var(--sage);color:var(--ivory);padding:9cqw 8cqw;display:flex;flex-direction:column;justify-content:center;gap:3cqw}
+.b .quote blockquote{margin:0;font:italic 300 7.2cqw/1.15 "Fraunces",serif;font-variation-settings:"SOFT" 100,"opsz" 144;text-wrap:balance}
+.b .quote cite{font:700 2.3cqw/1.4 "Nunito Sans",sans-serif;font-style:normal;letter-spacing:.2em;text-transform:uppercase;opacity:.9}
+.b .quote .bot{padding:5cqw 8cqw 7cqw;display:grid;grid-template-columns:1fr 1fr 1fr;gap:2cqw}
+.b .quote .bot .ph{aspect-ratio:1;border-radius:2.4cqw}
+.b .quote .bot .ph:nth-child(2){border-radius:50cqw 50cqw 2.4cqw 2.4cqw}
+.b .gallery{height:100%;padding:8cqw;display:grid;grid-template-rows:auto 1fr auto;gap:3cqw}
+.b .gallery .grid{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:2.4cqw}
+.b .gallery .ph{border-radius:2.6cqw}
+.b .gallery .ph:first-child{grid-row:1/3;border-radius:50cqw 50cqw 2.6cqw 2.6cqw}
+.b .cap{font:2.6cqw/1.5 "Nunito Sans",sans-serif;color:var(--ink-soft)}
+.b .folio{position:absolute;bottom:3.6cqw;right:8cqw;font:700 2.2cqw/1 "Nunito Sans",sans-serif;letter-spacing:.2em;color:var(--sage)}
+
+/* ============ C. Grandma's Journal ============ */
+.c{font-family:"Libre Baskerville",Georgia,serif;background:
+   repeating-linear-gradient(0deg,transparent 0 7.4cqw,rgba(201,179,148,.38) 7.4cqw calc(7.4cqw + 1px)),
+   var(--ivory)}
+.c.nolines{background:var(--ivory)}
+.c .hand{font-family:"Caveat",cursive}
+.c .tape{position:absolute;width:19cqw;height:5.2cqw;background:repeating-linear-gradient(90deg,rgba(138,154,123,.75) 0 2.2cqw,rgba(214,221,203,.8) 2.2cqw 4.4cqw);opacity:.85;transform:rotate(-4deg);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.c .tape.t{background:repeating-linear-gradient(45deg,rgba(201,179,148,.8) 0 1.4cqw,rgba(231,218,196,.9) 1.4cqw 2.8cqw);transform:rotate(5deg)}
+.c .polaroid{background:#fff;padding:2.4cqw 2.4cqw 6cqw;box-shadow:0 2px 6px rgba(40,30,10,.18);position:relative}
+.c .polaroid .ph{aspect-ratio:1;}
+.c .polaroid .ph::after{display:none}
+.c .polaroid figcaption{position:absolute;left:0;right:0;bottom:1.4cqw;text-align:center;font:600 3.2cqw/1.2 "Caveat",cursive;color:var(--brown)}
+.c .cov{height:100%;padding:10cqw 9cqw;display:flex;flex-direction:column;align-items:center;gap:3cqw;text-align:center}
+.c .cov .polaroid{width:58cqw;transform:rotate(-2.5deg);margin-bottom:2cqw}
+.c h2{font:600 9cqw/1 "Caveat",cursive;color:var(--sage-deep);margin:0}
+.c h2 small{display:block;font:400 4.6cqw/1.2 "Caveat",cursive;color:var(--brown)}
+.c .typed{font:2.5cqw/1.6 "Libre Baskerville",serif;color:var(--ink-soft);letter-spacing:.02em}
+.c .stamp{display:inline-block;border:2px solid var(--brown);color:var(--brown);border-radius:1cqw;padding:1cqw 2cqw;font:700 2.2cqw/1.2 "Nunito Sans",sans-serif;letter-spacing:.2em;text-transform:uppercase;transform:rotate(-6deg);opacity:.8;mix-blend-mode:multiply}
+.c .inner{padding:9cqw 9cqw 9cqw;height:100%;display:flex;flex-direction:column;gap:2.6cqw}
+.c .h{font:600 7.2cqw/1 "Caveat",cursive;color:var(--sage-deep);margin:0}
+.c .entry{display:grid;grid-template-columns:12cqw 1fr;gap:2cqw;align-items:baseline;font-size:2.6cqw;line-height:7.4cqw}
+.c .entry time{font:600 3.4cqw/1 "Caveat",cursive;color:var(--brown);text-align:right}
+.c .entry p{margin:0;line-height:3.7cqw;padding-block:1.85cqw}
+.c .note{position:absolute;font:600 3cqw/1.2 "Caveat",cursive;color:var(--sage-deep);transform:rotate(-3deg);max-width:30cqw}
+.c .note::before{content:"";position:absolute;left:-1.4cqw;top:.4cqw;bottom:.4cqw;width:2px;background:var(--sage)}
+.c .ticket{background:#fff;border:1px dashed var(--tan);padding:2.4cqw 3cqw;display:grid;grid-template-columns:1fr 1fr;gap:1.6cqw 3cqw;font-size:2.4cqw}
+.c .ticket b{display:block;font:700 2cqw/1.3 "Nunito Sans",sans-serif;letter-spacing:.18em;text-transform:uppercase;color:var(--sage-deep)}
+.c .ticket span{font:600 4.4cqw/1.1 "Caveat",cursive;color:var(--ink)}
+.c .scatter{position:relative;height:100%;padding:8cqw}
+.c .scatter .polaroid{position:absolute;width:40cqw}
+.c .quote{height:100%;padding:10cqw 10cqw;display:flex;flex-direction:column;justify-content:center;gap:4cqw;text-align:center}
+.c .quote blockquote{margin:0;font:600 7.6cqw/1.1 "Caveat",cursive;color:var(--sage-deep);text-wrap:balance}
+.c .quote cite{font:2.5cqw/1.6 "Libre Baskerville",serif;font-style:italic;color:var(--ink-soft)}
+.c .strip{background:var(--tan-pale);padding:2.6cqw 3cqw;font:2.5cqw/1.55 "Libre Baskerville",serif;clip-path:polygon(0 4%,3% 0,97% 2%,100% 8%,99% 96%,96% 100%,2% 98%,0 92%)}
+.c .folio{position:absolute;bottom:3.4cqw;left:0;right:0;text-align:center;font:600 3cqw/1 "Caveat",cursive;color:var(--sage)}
+
+.foot{margin-top:40px;border-top:1px solid var(--line);padding-top:18px;font-size:14px;line-height:1.55;color:var(--muted);max-width:70ch}
+.foot b{color:var(--fg)}
+@media (prefers-reduced-motion:no-preference){.design.on{animation:in .25s ease-out}}
+@keyframes in{from{opacity:.4;transform:translateY(4px)}to{opacity:1;transform:none}}
+</style>
+
+<div class="wrap">
+<header class="top">
+  <h1>Three designs for Myles's birth story</h1>
+  <p>Each one is set in Abby's nursery palette of ivory, sage and tan. The pages below are letter-size previews using the real timeline from October 10, 2026. Photo frames are placeholders until the album is linked.</p>
+  <div class="tabs" role="tablist" aria-label="Design">
+    <button role="tab" id="tab-a" aria-selected="true" aria-controls="design-a"><span class="sw" style="background:#8a9a7b"></span>A · Linen &amp; Sage</button>
+    <button role="tab" id="tab-b" aria-selected="false" aria-controls="design-b"><span class="sw" style="background:#a3b18a"></span>B · Arch &amp; Bloom</button>
+    <button role="tab" id="tab-c" aria-selected="false" aria-controls="design-c"><span class="sw" style="background:#c9b394"></span>C · Grandma's Journal</button>
+  </div>
+</header>
+
+<!-- ================= A ================= -->
+<section class="design on" id="design-a" role="tabpanel" aria-labelledby="tab-a">
+  <div class="brief">
+    <div><h2>A · Linen &amp; Sage</h2><p>An heirloom keepsake. Centered classic typography, a monogram cover, thin tan rules and a sage double frame. Reads like a book that gets passed down.</p></div>
+    <div><b>Feel</b><p>Quiet, timeless, formal. The least "trendy" of the three, which means it will look right in twenty years.</p></div>
+    <div><b>Best for</b><p>A hardcover photo book (Artifact Uprising, Mixbook) and a framed first page in the nursery.</p></div>
+  </div>
+  <div class="pages">
+    <div><p class="pg-label">Cover</p>
+      <div class="page a"><div class="frame"></div>
+        <div class="cov">
+          <div class="mono">M</div>
+          <div class="rule"></div>
+          <div class="eyebrow">The Birth of</div>
+          <h2>Myles Bryant <em>White</em></h2>
+          <div class="sub">Saturday, the tenth of October, 2026<br>1:17 in the afternoon<br>Orem Community Hospital, Room 115</div>
+          <svg class="sprig" viewBox="0 0 64 40" fill="none" stroke="#8a9a7b" stroke-width="1.2" stroke-linecap="round"><path d="M32 38V6"/><path d="M32 30c-8-2-14-8-16-16 8 2 14 8 16 16zM32 30c8-2 14-8 16-16-8 2-14 8-16 16zM32 20c-6-2-10-6-12-12 6 2 10 6 12 12zM32 20c6-2 10-6 12-12-6 2-10 6-12 12z"/></svg>
+        </div>
+      </div></div>
+    <div><p class="pg-label">Page 1 · Arrival</p>
+      <div class="page a"><div class="frame"></div>
+        <div class="inner">
+          <div class="ch">His Arrival</div>
+          <h3 class="h">Welcome to the world</h3>
+          <div class="stat">
+            <div><b>Born</b><span>1:17 PM</span><small>Beau guessed 1:13. Abby guessed 2:30.</small></div>
+            <div><b>Apgar</b><span>8 &amp; 9</span><small>Points lost only for color.</small></div>
+            <div><b>Delivered by</b><span style="font-size:3.6cqw">Midwife &amp; Nurse Kendra</span><small>Dr. Hill on standby.</small></div>
+            <div><b>Weight guesses</b><span style="font-size:3.6cqw">7 lb 8 oz · 7 lb 11 oz</span><small>Abby's guess was Beau's exact birth weight.</small></div>
+          </div>
+          <div class="two" style="margin-top:auto">
+            <div class="ph" data-cap="First cry"></div>
+            <div class="ph" data-cap="Skin to skin with Mom"></div>
+          </div>
+        </div>
+        <div class="folio">· 1 ·</div>
+      </div></div>
+    <div><p class="pg-label">Page 4 · Timeline</p>
+      <div class="page a"><div class="frame"></div>
+        <div class="inner">
+          <div class="ch">Early Morning</div>
+          <h3 class="h">The waters break</h3>
+          <div class="tl">
+            <time>4:51 AM</time><p><b>The first call.</b> You called at 4:51, but I missed it because I was cooking breakfast for Dad. You called Dad next to say your water broke and you were headed to Orem Community to deliver a 10/10 perfect baby. I love that Dad thought of that first.</p>
+            <time>4:56 AM</time><p><b>"Mom, my water broke!"</b> I called you right back and your excitement was palpable through the phone. You and Beau were already in the car.</p>
+            <time>5:00 AM</time><p><b>Breakfast request.</b> Beau texted: "Bring breakfast."</p>
+            <time>5:15 AM</time><p><b>The breakfast run.</b> IHOP veggie omelettes, hash browns and fruit. I called Grandma Diny and left her an elated voicemail. The second I hung up, happy tears started rolling.</p>
+            <time>7:40 AM</time><p><b>Hospital breakfast.</b> Abby took one look at the sausage and waffles, popped the lid right back on, and laughed: "That can be Beau food!"</p>
+          </div>
+        </div>
+        <div class="folio">· 4 ·</div>
+      </div></div>
+    <div><p class="pg-label">Page 9 · A photo page</p>
+      <div class="page a">
+        <div class="photo-pg">
+          <div class="ph" data-cap="Full-bleed photo"></div>
+          <div class="plate"><b>The storm rolls in</b>Outside the double windows, Hurricane Rachel crossed Utah Valley with flood warnings and electricity in the air. Inside Room 115, laughter had returned.</div>
+        </div>
+      </div></div>
+    <div><p class="pg-label">Page 12 · A quote page</p>
+      <div class="page a"><div class="frame"></div>
+        <div class="quote">
+          <svg class="sprig" viewBox="0 0 64 40" fill="none" stroke="#c9b394" stroke-width="1.2" stroke-linecap="round"><path d="M32 38V6"/><path d="M32 30c-8-2-14-8-16-16 8 2 14 8 16 16zM32 30c8-2 14-8 16-16-8 2-14 8-16 16z"/></svg>
+          <blockquote>"I wish I could bottle this feeling and keep it forever."</blockquote>
+          <cite>Abby · 2:03 PM</cite>
+          <div class="rule"></div>
+          <blockquote style="font-size:4.6cqw">"It's so fun to see my baby sharing his baby with my other babies."</blockquote>
+          <cite>Rachel · 6:27 PM</cite>
+        </div>
+        <div class="folio">· 12 ·</div>
+      </div></div>
+    <div><p class="pg-label">Later chapter · how new entries look</p>
+      <div class="page a"><div class="frame"></div>
+        <div class="inner">
+          <div class="ch">Chapter Two</div>
+          <h3 class="h">Coming home</h3>
+          <div class="tl">
+            <time>Oct 12</time><p><b>Discharge day.</b> Abby adds the story here from her phone. The same time column, the same type, so the book stays one book.</p>
+            <time>Oct 24</time><p><b>Two weeks.</b> Weight, first outing, who visited.</p>
+            <time>Nov 10</time><p><b>One month.</b> A photo and a few lines.</p>
+          </div>
+          <div class="two" style="margin-top:auto">
+            <div class="ph" data-cap="Car seat, going home"></div>
+            <div class="ph" data-cap="The nursery"></div>
+          </div>
+        </div>
+        <div class="folio">· 24 ·</div>
+      </div></div>
+  </div>
+</section>
+
+<!-- ================= B ================= -->
+<section class="design" id="design-b" role="tabpanel" aria-labelledby="tab-b">
+  <div class="brief">
+    <div><h2>B · Arch &amp; Bloom</h2><p>Modern nursery. Arch-shaped photo windows, soft sage color bands, rounded tan tiles for the facts, and big friendly numerals for the moments that matter.</p></div>
+    <div><b>Feel</b><p>Warm, current, a little playful. Matches the arch-and-sage nursery look that's everywhere right now.</p></div>
+    <div><b>Best for</b><p>A softcover layflat book and the web version, since the cards and tiles translate directly to a phone screen.</p></div>
+  </div>
+  <div class="pages">
+    <div><p class="pg-label">Cover</p>
+      <div class="page b">
+        <div class="cov">
+          <div class="b-eyebrow">A birth story · October 10, 2026</div>
+          <div class="arch"><div class="ph" data-cap=""></div></div>
+          <div class="band">
+            <h2>Hello, <b>Myles</b></h2>
+            <p>Myles Bryant White · 1:17 PM · Orem, Utah</p>
+          </div>
+        </div>
+      </div></div>
+    <div><p class="pg-label">Page 1 · Arrival</p>
+      <div class="page b">
+        <div class="inner">
+          <h3 class="h">He's <em>here.</em></h3>
+          <div class="tiles">
+            <div class="tile sg"><b>Born at</b><span>1:17</span><small>in the afternoon</small></div>
+            <div class="tile"><b>Apgar</b><span>8 · 9</span><small>points lost only for color</small></div>
+            <div class="tile"><b>Room</b><span>115</span><small>Orem Community Hospital</small></div>
+            <div class="tile sg"><b>Dad's guess</b><span>1:13</span><small>four minutes off</small></div>
+            <div class="tile wide"><div><b>First visitors</b><small>Uncle Thayne, Grandpa Larson, Louis, JoJo, then the whole White family at six.</small></div></div>
+          </div>
+          <div class="ph" style="flex:1;border-radius:3cqw" data-cap="Myles, minutes old"></div>
+        </div>
+        <div class="folio">01</div>
+      </div></div>
+    <div><p class="pg-label">Page 4 · Timeline</p>
+      <div class="page b">
+        <div class="inner">
+          <div class="b-eyebrow" style="text-align:left">Early morning</div>
+          <div class="bigtime">4:51</div>
+          <div class="cards">
+            <div class="card"><span class="pill">4:51 AM</span><p><b>The first call.</b> Missed while cooking Dad breakfast after his ER trip. You called Dad next: water broke, headed to Orem Community to deliver a 10/10 perfect baby.</p></div>
+            <div class="card"><span class="pill">4:56 AM</span><p><b>"Mom, my water broke!"</b> Already in the car with Beau.</p></div>
+            <div class="card"><span class="pill t">5:00 AM</span><p><b>Beau texts:</b> "Bring breakfast." IHOP veggie omelettes, hash browns, fruit.</p></div>
+            <div class="card"><span class="pill t">5:15 AM</span><p><b>Grandma Diny's voicemail,</b> then happy tears the second I hung up.</p></div>
+            <div class="card"><span class="pill">7:40 AM</span><p><b>Hospital breakfast.</b> One look at the sausage and waffles: "That can be Beau food!"</p></div>
+          </div>
+        </div>
+        <div class="folio">04</div>
+      </div></div>
+    <div><p class="pg-label">Page 9 · Photo grid</p>
+      <div class="page b">
+        <div class="gallery">
+          <h3 class="h" style="font-size:5.6cqw">The room at <em>noon</em></h3>
+          <div class="grid">
+            <div class="ph" data-cap="Peanut ball rest"></div>
+            <div class="ph" data-cap="Raspberry shirt"></div>
+            <div class="ph" data-cap="Storm over the valley"></div>
+          </div>
+          <p class="cap">Beau wore a Pacific Sunwear shirt covered in raspberries, Abby's favorite fruit, and said he felt like he'd played a full football game.</p>
+        </div>
+        <div class="folio">09</div>
+      </div></div>
+    <div><p class="pg-label">Page 12 · A quote page</p>
+      <div class="page b">
+        <div class="quote">
+          <div class="top">
+            <blockquote>"I wish I could bottle this feeling and keep it forever."</blockquote>
+            <cite>Abby · 2:03 PM</cite>
+          </div>
+          <div class="bot">
+            <div class="ph" data-cap=""></div><div class="ph" data-cap=""></div><div class="ph" data-cap=""></div>
+          </div>
+        </div>
+      </div></div>
+    <div><p class="pg-label">Later chapter · how new entries look</p>
+      <div class="page b">
+        <div class="inner">
+          <div class="b-eyebrow" style="text-align:left">Chapter two · Coming home</div>
+          <div class="bigtime" style="font-size:12cqw">Oct 12</div>
+          <div class="cards">
+            <div class="card"><span class="pill t">Oct 12</span><p><b>Discharge day.</b> Abby adds this from her phone. New entries get the same card and pill.</p></div>
+            <div class="card"><span class="pill t">Oct 24</span><p><b>Two weeks.</b> Weight, first outing, visitors.</p></div>
+            <div class="card"><span class="pill t">Nov 10</span><p><b>One month.</b> A photo and a few lines.</p></div>
+          </div>
+          <div class="ph" style="flex:1;border-radius:50cqw 50cqw 3cqw 3cqw" data-cap="Home"></div>
+        </div>
+        <div class="folio">24</div>
+      </div></div>
+  </div>
+</section>
+
+<!-- ================= C ================= -->
+<section class="design" id="design-c" role="tabpanel" aria-labelledby="tab-c">
+  <div class="brief">
+    <div><h2>C · Grandma's Journal</h2><p>A scrapbook in Karmel's own voice. Ruled paper, Polaroid frames with washi tape, a stamped room number, and handwritten margin notes next to the typed record.</p></div>
+    <div><b>Feel</b><p>Personal, tactile, funny. Leans into the fact that this was witnessed and written by Grandma.</p></div>
+    <div><b>Best for</b><p>A spiral or linen journal print, and it's the easiest for Abby to keep adding to, since a new entry is just another note and Polaroid.</p></div>
+  </div>
+  <div class="pages">
+    <div><p class="pg-label">Cover</p>
+      <div class="page c nolines">
+        <div class="cov">
+          <figure class="polaroid" style="margin:0">
+            <div class="tape" style="top:-2.6cqw;left:18cqw"></div>
+            <div class="ph" data-cap=""></div>
+            <figcaption>Myles, 1:17 PM</figcaption>
+          </figure>
+          <h2>The Birth of Myles<small>October 10, 2026</small></h2>
+          <div class="typed">as witnessed and lovingly recorded<br>by his Grandma, Karmel Larson</div>
+          <span class="stamp">Room 115 · Orem Community</span>
+        </div>
+      </div></div>
+    <div><p class="pg-label">Page 1 · Arrival</p>
+      <div class="page c nolines">
+        <div class="inner">
+          <h3 class="h">He's here!</h3>
+          <div class="ticket">
+            <div><b>Born</b><span>1:17 PM</span></div>
+            <div><b>Apgar</b><span>8 &amp; 9</span></div>
+            <div><b>Beau's guess</b><span>1:13 PM</span></div>
+            <div><b>Abby's guess</b><span>2:30 PM</span></div>
+            <div><b>Weight guesses</b><span>7-8 &amp; 7-11</span></div>
+            <div><b>Team</b><span>Midwife, Kendra</span></div>
+          </div>
+          <div class="scatter" style="padding:0;flex:1">
+            <figure class="polaroid" style="left:2cqw;top:3cqw;transform:rotate(-5deg);margin:0"><div class="tape t" style="top:-2.4cqw;right:-3cqw"></div><div class="ph" data-cap=""></div><figcaption>first cry</figcaption></figure>
+            <figure class="polaroid" style="right:2cqw;top:12cqw;transform:rotate(4deg);margin:0"><div class="tape" style="top:-2.4cqw;left:-3cqw"></div><div class="ph" data-cap=""></div><figcaption>Dad's skin to skin</figcaption></figure>
+          </div>
+        </div>
+        <div class="folio">1</div>
+      </div></div>
+    <div><p class="pg-label">Page 4 · Timeline</p>
+      <div class="page c">
+        <div class="inner" style="padding-top:7.4cqw">
+          <h3 class="h" style="line-height:7.4cqw">Early morning</h3>
+          <div class="entry"><time>4:51</time><p>Missed your first call. I was cooking breakfast for Dad after his ER trip. You called Dad next: "water broke, headed to Orem Community to deliver a 10/10 perfect baby."</p></div>
+          <div class="entry"><time>4:56</time><p>"Mom, my water broke!" You and Beau were already in the car.</p></div>
+          <div class="entry"><time>5:00</time><p>Beau: "Bring breakfast." IHOP veggie omelettes, hash browns, fruit.</p></div>
+          <div class="entry"><time>5:15</time><p>Called Grandma Diny. Happy tears the second I hung up.</p></div>
+          <div class="entry"><time>7:40</time><p>Hospital breakfast. One look at the sausage and waffles: "That can be Beau food!"</p></div>
+        </div>
+        <div class="note" style="right:6cqw;bottom:14cqw">I love that Dad thought of that first.</div>
+        <div class="folio">4</div>
+      </div></div>
+    <div><p class="pg-label">Page 9 · Photo page</p>
+      <div class="page c nolines">
+        <div class="scatter">
+          <figure class="polaroid" style="left:7cqw;top:9cqw;transform:rotate(-6deg);margin:0;width:44cqw"><div class="tape" style="top:-2.6cqw;left:12cqw"></div><div class="ph" data-cap=""></div><figcaption>the storm rolling in</figcaption></figure>
+          <figure class="polaroid" style="right:6cqw;top:30cqw;transform:rotate(5deg);margin:0;width:44cqw"><div class="tape t" style="top:-2.6cqw;right:10cqw"></div><div class="ph" data-cap=""></div><figcaption>raspberry shirt</figcaption></figure>
+          <figure class="polaroid" style="left:14cqw;top:58cqw;transform:rotate(2deg);margin:0;width:44cqw"><div class="tape" style="top:-2.6cqw;left:14cqw"></div><div class="ph" data-cap=""></div><figcaption>Cafe Rio feast, 2:25</figcaption></figure>
+          <div class="note" style="right:8cqw;top:10cqw">"Hurricane Rachel" and flood warnings, and inside: laughter.</div>
+        </div>
+      </div></div>
+    <div><p class="pg-label">Page 12 · A quote page</p>
+      <div class="page c nolines">
+        <div class="quote">
+          <blockquote>"I wish I could bottle this feeling and keep it forever."</blockquote>
+          <cite>Abby, 2:03 PM. Followed immediately by "Did I poop?" Answer: "Nope!"</cite>
+          <div class="strip">Rachel looked around the crowded hospital room at 6:27 and summed up the day: <em>"It's so fun to see my baby sharing his baby with my other babies!"</em></div>
+        </div>
+        <div class="folio">12</div>
+      </div></div>
+    <div><p class="pg-label">Later chapter · how new entries look</p>
+      <div class="page c">
+        <div class="inner" style="padding-top:7.4cqw">
+          <h3 class="h" style="line-height:7.4cqw">Coming home</h3>
+          <div class="entry"><time>Oct 12</time><p>Discharge day. Abby writes it in her own hand (or types; both fit).</p></div>
+          <div class="entry"><time>Oct 24</time><p>Two weeks old. Weight, first outing, who came by.</p></div>
+          <div class="entry"><time>Nov 10</time><p>One month. A Polaroid and a few lines.</p></div>
+        </div>
+        <figure class="polaroid" style="position:absolute;right:8cqw;bottom:9cqw;width:38cqw;transform:rotate(3deg);margin:0"><div class="tape t" style="top:-2.4cqw;left:10cqw"></div><div class="ph" data-cap=""></div><figcaption>home</figcaption></figure>
+        <div class="folio">24</div>
+      </div></div>
+  </div>
+</section>
+
+<div class="foot">
+  <p><b>How the print book and the web app fit together.</b> Whichever design you pick becomes one page template. The story lives as a list of chapters and entries (time, text, photos). The web version renders that list on a phone and lets Abby add a chapter or an entry with photos. The print version renders the same list as letter-size pages with page breaks, ready to save as a PDF and upload to a photo-book printer.</p>
+</div>
+</div>
+
+<script>
+(function(){
+  var tabs=[].slice.call(document.querySelectorAll('[role=tab]'));
+  function show(id){
+    tabs.forEach(function(t){var on=t.getAttribute('aria-controls')===id;t.setAttribute('aria-selected',on?'true':'false');document.getElementById(t.getAttribute('aria-controls')).classList.toggle('on',on);});
+    try{location.hash=id.replace('design-','');}catch(e){}
+  }
+  tabs.forEach(function(t){t.addEventListener('click',function(){show(t.getAttribute('aria-controls'));});});
+  var h=(location.hash||'').replace('#','');
+  if(h==='b'||h==='c'||h==='a')show('design-'+h);
+})();
+</script>
