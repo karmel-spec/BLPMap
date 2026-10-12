@@ -11,6 +11,7 @@ window.MYLES_STORY = {
     parents: 'Beau and Abby White',
     recorder: 'his Grandma, Karmel Larson',
     date: 'Saturday, October 10, 2026',
+    dateISO: '2026-10-10',
     dateShort: 'October 10, 2026',
     place: 'Orem Community Hospital, Room 115',
     city: 'Orem, Utah',

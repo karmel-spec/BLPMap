@@ -58,6 +58,7 @@
     pinbar.hidden = state.mode !== 'locked';
     $('#btn-lock').hidden = state.mode !== 'live';
     $('#add-moment').hidden = state.mode !== 'live';
+    $('#add-photos').hidden = state.mode !== 'live';
     $('#add-chapter').hidden = state.mode !== 'live';
     $('#edit-facts').hidden = state.mode !== 'live';
     $('#edit-cover-l').hidden = state.mode !== 'live';
@@ -352,6 +353,139 @@
     } catch (err) { $('#f-err').textContent = err.message || String(err); }
     $('#f-save').disabled = false; $('#f-delete').dataset.armed = '0'; $('#f-delete').textContent = 'Delete';
   }
+
+  /* ---------- photos placed by timestamp ---------- */
+  // DateTimeOriginal straight out of the JPEG's EXIF block (no library), else the file's own date.
+  function exifDate(file) {
+    return new Promise(resolve => {
+      const fallback = file.lastModified ? new Date(file.lastModified) : null;
+      const r = new FileReader();
+      r.onerror = () => resolve(fallback);
+      r.onload = () => { try { resolve(parseExif(new DataView(r.result)) || fallback); } catch (e) { resolve(fallback); } };
+      r.readAsArrayBuffer(file.slice(0, 256 * 1024));
+    });
+  }
+  function parseExif(v) {
+    if (v.byteLength < 4 || v.getUint16(0) !== 0xFFD8) return null;
+    let o = 2;
+    while (o + 4 <= v.byteLength) {
+      const marker = v.getUint16(o), len = v.getUint16(o + 2);
+      if (marker === 0xFFE1 && o + 10 < v.byteLength && v.getUint32(o + 4) === 0x45786966) {
+        const t = o + 10, le = v.getUint16(t) === 0x4949;
+        const g16 = (p) => v.getUint16(p, le), g32 = (p) => v.getUint32(p, le);
+        const find = (ifd, tag) => { const n = g16(ifd); for (let i = 0; i < n; i++) { const e = ifd + 2 + i * 12; if (e + 12 > v.byteLength) return -1; if (g16(e) === tag) return e; } return -1; };
+        const ex = find(t + g32(t + 4), 0x8769); if (ex < 0) return null;
+        const exifIfd = t + g32(ex + 8);
+        let e = find(exifIfd, 0x9003); if (e < 0) e = find(exifIfd, 0x9004); if (e < 0) return null;
+        const off = t + g32(e + 8); let s = '';
+        for (let i = 0; i < 19 && off + i < v.byteLength; i++) s += String.fromCharCode(v.getUint8(off + i));
+        const m = /^(\d{4}):(\d{2}):(\d{2}) (\d{2}):(\d{2}):(\d{2})/.exec(s); if (!m) return null;
+        return new Date(+m[1], m[2] - 1, +m[3], +m[4], +m[5], +m[6]);
+      }
+      if ((marker & 0xFF00) !== 0xFF00 || marker === 0xFFDA) break;
+      o += 2 + len;
+    }
+    return null;
+  }
+  const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+  const birthDay = () => { const d = (SEED.book.dateISO || '2026-10-10').split('-'); return new Date(+d[0], d[1] - 1, +d[2]); };
+  function labelMinutes(label) {       // "4:51 AM" -> minutes since midnight, else null
+    const m = /^(\d{1,2}):(\d{2})\s*(AM|PM)?/i.exec(String(label || '').trim()); if (!m) return null;
+    let h = +m[1] % 12; if (/pm/i.test(m[3] || '')) h += 12; if (!m[3] && +m[1] <= 6) h += 12;   // bare "1:17" in this book is afternoon
+    return h * 60 + +m[2];
+  }
+  function labelDay(label) {           // "Oct 12" or "Oct 12, 2026" -> Date at midnight, else null
+    const m = /^([A-Za-z]{3})[a-z]*\.?\s+(\d{1,2})(?:,?\s*(\d{4}))?/.exec(String(label || '').trim()); if (!m) return null;
+    const mo = MONTHS.indexOf(m[1].toLowerCase()); if (mo < 0) return null;
+    const b = birthDay(); let y = m[3] ? +m[3] : b.getFullYear(); if (!m[3] && mo < b.getMonth()) y += 1;
+    return new Date(y, mo, +m[2]);
+  }
+  const sameDay = (a, b) => a && b && a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  // Every entry gets a wall-clock instant: timed moments on the birth day, dated labels on their day,
+  // untimed ones inherit the previous entry's. Returns [{entry, at}] in book order.
+  function entryInstants() {
+    const out = []; const b = birthDay(); let last = b.getTime();
+    state.chapters.forEach(ch => {
+      const chDay = labelDay(ch.big) || labelDay(ch.title);
+      entriesOf(ch.id).forEach(e => {
+        let at = null; const mins = labelMinutes(e.time), day = labelDay(e.time);
+        if (day) at = day.getTime() + (12 * 60) * 60000;
+        else if (mins != null) at = (chDay || b).getTime() + mins * 60000;
+        else at = last;
+        last = at; out.push({ entry: e, at });
+      });
+    });
+    return out;
+  }
+  function bestEntryFor(when) {        // the latest moment at or just before the photo, on the same day
+    const inst = entryInstants(); if (!inst.length) return null;
+    if (!when) return inst[inst.length - 1].entry;
+    const t = when.getTime();
+    const day = inst.filter(x => sameDay(new Date(x.at), when));
+    if (!day.length) return null;
+    let pick = day[0]; day.forEach(x => { if (x.at <= t + 60000) pick = x; });
+    return pick.entry;
+  }
+  const fmtWhen = (d) => d ? d.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'no date in the photo';
+
+  const pdlg = $('#psheet');
+  let placing = [];
+  $('#bulk-file').addEventListener('change', async (ev) => {
+    const files = [...ev.target.files]; ev.target.value = ''; if (!files.length) return;
+    placing = [];
+    const lbl = $('#add-photos'); lbl.classList.add('busy');
+    try {
+      for (let i = 0; i < files.length; i++) {
+        setStatus('Reading photo ' + (i + 1) + ' of ' + files.length + '…');
+        const when = await exifDate(files[i]);
+        const data = await resizeImage(files[i], 2400);
+        setStatus('Uploading photo ' + (i + 1) + ' of ' + files.length + '…');
+        const j = await api({ op: 'upload', type: 'image/jpeg', data });
+        placing.push({ url: j.url, thumb: data, when, caption: '', entry: bestEntryFor(when) });
+      }
+      placing.sort((a, b) => (a.when ? a.when.getTime() : 0) - (b.when ? b.when.getTime() : 0));
+      openPlacer();
+    } catch (e) { setStatus(e.message || String(e)); }
+    lbl.classList.remove('busy'); if (state.mode === 'live' && !placing.length) syncChrome();
+  });
+  function openPlacer() {
+    const list = $('#ps-list'); list.innerHTML = ''; $('#ps-err').textContent = '';
+    placing.forEach((ph, i) => {
+      const row = el('div', 'ps'); const img = el('img'); img.src = ph.thumb; img.alt = ''; row.appendChild(img);
+      row.appendChild(el('div', 'when', fmtWhen(ph.when)));
+      const sel = el('select'); sel.id = 'ps-sel-' + i;
+      state.chapters.forEach(ch => { const og = el('optgroup'); og.label = ch.title;
+        entriesOf(ch.id).forEach(e => { const o = el('option', null, (e.time ? e.time + ' · ' : '') + (e.title || e.body.slice(0, 40))); o.value = e.id; og.appendChild(o); });
+        const nw = el('option', null, '+ New moment in ' + ch.title); nw.value = 'new:' + ch.id; og.appendChild(nw); sel.appendChild(og); });
+      sel.value = ph.entry ? ph.entry.id : 'new:' + (state.chapters[state.chapters.length - 1] || {}).id;
+      sel.addEventListener('change', () => { ph.target = sel.value; }); ph.target = sel.value; row.appendChild(sel);
+      const cap = el('input'); cap.placeholder = 'Caption (optional)'; cap.id = 'ps-cap-' + i; cap.addEventListener('input', () => { ph.caption = cap.value; }); row.appendChild(cap);
+      list.appendChild(row);
+    });
+    pdlg.showModal();
+  }
+  $('#ps-cancel').addEventListener('click', () => { pdlg.close(); syncChrome(); });
+  $('#psheetform').addEventListener('submit', async (ev) => {
+    ev.preventDefault(); $('#ps-err').textContent = 'Placing…'; $('#ps-save').disabled = true;
+    try {
+      const byTarget = new Map();
+      placing.forEach(ph => { const k = ph.target; if (!byTarget.has(k)) byTarget.set(k, []); byTarget.get(k).push(ph); });
+      for (const [k, phs] of byTarget) {
+        let e;
+        if (k.startsWith('new:')) {
+          const chId = k.slice(4); const ex = entriesOf(chId); const first = phs[0].when;
+          const timeLabel = first ? (sameDay(first, birthDay()) ? first.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : first.toLocaleDateString([], { month: 'short', day: 'numeric' })) : '';
+          e = { id: uid(), chapter: chId, time: timeLabel, sort: (ex.length ? ex[ex.length - 1].sort : 0) + 1, kind: 'moment', title: '', body: 'Photos' + (timeLabel ? ' from ' + timeLabel : ''), cite: '', photos: [] };
+        } else { e = JSON.parse(JSON.stringify(state.entries.find(x => x.id === k))); }
+        e.photos = (e.photos || []).concat(phs.map(ph => ({ url: ph.url, caption: ph.caption || '' })));
+        await api({ op: 'save_entry', entry: e });
+        const row = { id: e.id, chapter: e.chapter, time_label: e.time, sort: e.sort, kind: e.kind, title: e.title, body: e.body, cite: e.cite, photos: e.photos, deleted: false };
+        state.db.entries = state.db.entries.filter(r => r.id !== e.id).concat([row]);
+      }
+      merge(); renderAll(); pdlg.close(); placing = []; syncChrome();
+    } catch (err) { $('#ps-err').textContent = err.message || String(err); }
+    $('#ps-save').disabled = false;
+  });
 
   // chapter editor
   const cdlg = $('#csheet');
