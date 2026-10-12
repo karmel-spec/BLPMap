@@ -3,16 +3,16 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Hello, Myles</title>
+<title>The Birth of Myles</title>
 <meta name="description" content="The birth story of Myles Bryant White, as recorded by his grandma, and the chapters that follow.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT@0,9..144,300..700,100;1,9..144,300..700,100&family=Nunito+Sans:ital,wght@0,400;0,600;0,700;1,400&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Crimson+Pro:ital,wght@0,400;0,600;1,400&display=swap">
 <link rel="stylesheet" href="book.css">
 </head>
 <body>
 <div class="wrap">
   <header class="top">
-    <h1>Hello, <b>Myles</b></h1>
+    <h1>The Birth of <b>Myles</b></h1>
     <nav class="tabs" role="tablist" aria-label="View">
       <button role="tab" data-view="read" aria-selected="true">Read</button>
       <button role="tab" data-view="book" aria-selected="false">Book</button>
@@ -50,7 +50,7 @@
       <button class="btn p" type="button" id="btn-print">Print / Save as PDF</button>
     </div>
     <p class="note" id="printhelp" style="margin:0 0 14px">In the print dialog choose Save as PDF, no margins, and turn on background graphics. Leave the paper size as the page suggests.</p>
-    <div class="coverart" id="coverart" hidden><p class="note"><b>Cover art.</b> Blurb builds the wrap-around cover in its own cover editor. Use the cover photo and the words below there.</p></div>
+    <div class="coverart" id="coverart" hidden><p class="note"><b>Cover art.</b> Blurb builds the wrap-around cover in its own cover editor. Recreate the monogram cover below there (an ivory cover with the "M" and the words), or save this page as an image and place it full-bleed.</p></div>
     <div class="book" id="book"></div>
   </section>
 </div>
@@ -60,7 +60,7 @@
     <h3 id="sh-title">Edit this moment</h3>
     <div class="row">
       <label>Chapter<select id="f-chapter"></select></label>
-      <label>Kind<select id="f-kind"><option value="moment">Moment</option><option value="quote">Quote page</option></select></label>
+      <label>Kind<select id="f-kind"><option value="moment">Moment</option><option value="feature">Featured page (own page, photo full bleed)</option><option value="quote">Quote page</option></select></label>
     </div>
     <div class="row">
       <label>Time or date<input id="f-time" placeholder="4:51 AM or Oct 12"></label>

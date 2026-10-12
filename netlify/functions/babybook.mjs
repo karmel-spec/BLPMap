@@ -74,7 +74,7 @@ export default async (req) => {
       if (!id) return json({ error: 'entry id required' }, 400);
       const photos = Array.isArray(en.photos) ? en.photos.slice(0, 12).map(p => ({
         url: str(p && p.url, 400), caption: str(p && p.caption, 200) })).filter(p => /^https:\/\//.test(p.url)) : [];
-      const kind = ['moment', 'quote', 'cover', 'facts'].includes(en.kind) ? en.kind : 'moment';
+      const kind = ['moment', 'quote', 'feature', 'cover', 'facts'].includes(en.kind) ? en.kind : 'moment';
       const row = { id, chapter: safeId(en.chapter), time_label: str(en.time, 40), sort: Number(en.sort) || 0, kind,
         title: str(en.title, 160), body: str(en.body, 4000), cite: str(en.cite, 200), photos,
         deleted: en.deleted === true, updated_at: new Date().toISOString() };

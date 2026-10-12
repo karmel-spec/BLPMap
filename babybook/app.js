@@ -92,16 +92,16 @@
     state.chapters.forEach(ch => {
       const sec = el('section', 'ch');
       const head = el('div', 'ch-head');
-      head.appendChild(el('div', 'big', ch.big || ''));
-      head.appendChild(el('div', 'eyebrow', ch.title));
+      head.appendChild(el('div', 'eyebrow', ch.title + (ch.big ? ' · ' + ch.big : '')));
       const h2 = el('h2', null, ch.subtitle || ch.title); head.appendChild(h2);
       sec.appendChild(head);
       entriesOf(ch.id).forEach(e => {
         const live = state.mode === 'live';
-        if (e.kind === 'quote') {
-          const q = el(live ? 'button' : 'div', 'q'); if (live) q.type = 'button';
-          const bq = el('blockquote', null, e.body); q.appendChild(bq);
-          if (e.cite) q.appendChild(el('cite', null, e.cite));
+        if (e.kind === 'quote' || e.kind === 'feature') {
+          const q = el(live ? 'button' : 'div', 'q' + (e.kind === 'feature' ? ' f' : '')); if (live) q.type = 'button';
+          if (e.kind === 'feature') { q.appendChild(el('cite', null, e.time || '')); q.appendChild(el('h3', null, e.title)); q.appendChild(el('p', null, e.body)); }
+          else { q.appendChild(el('blockquote', null, e.body)); if (e.cite) q.appendChild(el('cite', null, e.cite)); }
+          if (e.photos && e.photos.length) { const ph = el('div', 'ph'); e.photos.forEach(x => { const i = el('img'); i.src = x.url; i.alt = x.caption || ''; i.loading = 'lazy'; ph.appendChild(i); }); q.appendChild(ph); }
           if (live) q.addEventListener('click', () => openEditor(e));
           sec.appendChild(q); return;
         }
@@ -142,81 +142,114 @@
   }
   $('#size').addEventListener('change', () => { sizeKey = $('#size').value; try { localStorage.setItem('babybook_size', sizeKey); } catch (e) {} applySize(); renderBook(); });
 
+  // Pages are measured as they're filled, so the web fonts must be in before the
+  // flow runs; a later swap would reflow the text and spill past the page.
+  let fontsSettled = false;
+  const FONTS = ['500 16px "Cormorant Garamond"', 'italic 500 16px "Cormorant Garamond"', '600 16px "Cormorant Garamond"', '400 16px "Crimson Pro"', 'italic 400 16px "Crimson Pro"', '600 16px "Crimson Pro"'];
+  if (document.fonts && document.fonts.load) {
+    Promise.all(FONTS.map(f => document.fonts.load(f).catch(() => null))).then(() => { fontsSettled = true; if ($('#view-book').classList.contains('on')) renderBook(); });
+    document.fonts.addEventListener('loadingdone', () => { if ($('#view-book').classList.contains('on')) renderBook(); });
+  } else fontsSettled = true;
+
   function renderBook() {
     applySize();
     const root = $('#book'); root.innerHTML = '';
     const b = state.book;
     const page = (cls) => { const p = el('div', 'page' + (cls ? ' ' + cls : '')); root.appendChild(p); return p; };
-    // inner is a normal block, so its height is the content height; the page itself clips
-    const fits = (p) => p.firstChild.getBoundingClientRect().height <= p.clientHeight * 0.985;
+    // .inner is a normal block (the .frame overlay is absolute), so its height is the content height; the page itself clips
+    const fits = (p) => p.querySelector('.inner').getBoundingClientRect().height <= p.clientHeight * 0.985;
 
-    // cover
-    { const p = page('cover'); const c = el('div', 'cov');
-      c.appendChild(el('div', 'eyebrow', 'A birth story · ' + b.dateShort));
-      const arch = el('div', 'arch');
-      if (b.coverPhoto) { const i = el('img'); i.src = b.coverPhoto.url; i.alt = ''; arch.appendChild(i); } else arch.appendChild(el('div', 'ph-empty', 'cover photo'));
-      c.appendChild(arch);
-      const band = el('div', 'band'); const h = el('h2'); h.appendChild(document.createTextNode('Hello, ')); h.appendChild(el('b', null, b.name)); band.appendChild(h);
-      band.appendChild(el('p', null, b.fullName + ' · ' + b.born + ' ' + b.bornAmPm + ' · ' + b.city)); c.appendChild(band); p.appendChild(c); }
+    const SPRIG = '<svg class="sprig" viewBox="0 0 64 40" fill="none" stroke="COLOR" stroke-width="1.2" stroke-linecap="round"><path d="M32 38V6"/><path d="M32 30c-8-2-14-8-16-16 8 2 14 8 16 16zM32 30c8-2 14-8 16-16-8 2-14 8-16 16zM32 20c-6-2-10-6-12-12 6 2 10 6 12 12zM32 20c6-2 10-6 12-12-6 2-10 6-12 12z"/></svg>';
+    const sprig = (color) => { const t = document.createElement('template'); t.innerHTML = SPRIG.replace('COLOR', color); return t.content.firstChild; };
+    const frame = (p) => { p.appendChild(el('div', 'frame')); return p; };
+    const photoPage = (ph, title) => {   // full-bleed photo with an ivory caption plate
+      const p = page('photo'); const g = el('div', 'photo-pg');
+      const img = el('img'); img.src = ph.url; img.alt = ph.caption || ''; g.appendChild(img);
+      const plate = el('div', 'plate'); if (title) plate.appendChild(el('b', null, title)); plate.appendChild(document.createTextNode(ph.caption || '')); g.appendChild(plate);
+      p.appendChild(g); return p;
+    };
+
+    // cover: monogram
+    { const p = frame(page('cover')); const c = el('div', 'cov');
+      c.appendChild(el('div', 'mono', b.name.charAt(0)));
+      c.appendChild(el('div', 'rule'));
+      c.appendChild(el('div', 'eyebrow', 'The birth of'));
+      const h = el('h2'); const parts = b.fullName.split(' '); h.appendChild(document.createTextNode(parts.slice(0, -1).join(' ') + ' ')); h.appendChild(el('em', null, parts[parts.length - 1])); c.appendChild(h);
+      c.appendChild(el('div', 'sub', b.date + '\n' + b.born + ' in the ' + (b.bornAmPm === 'PM' ? 'afternoon' : 'morning') + '\n' + b.place)); c.lastChild.style.whiteSpace = 'pre-line';
+      c.appendChild(sprig('#8a9a7b')); p.appendChild(c); }
+
+    // frontispiece: the cover photo, full bleed
+    if (b.coverPhoto) photoPage(b.coverPhoto, b.fullName);
 
     // dedication
-    { const p = page('ded'); const i = el('div', 'inner');
-      i.appendChild(el('div', 'eyebrow', 'The birth of'));
-      i.appendChild(el('h2', 'h', b.fullName));
-      i.appendChild(el('div', 'sub', b.parents + ' welcoming their firstborn son'));
+    { const p = frame(page('ded')); const i = el('div', 'inner'); i.style.height = '100%'; i.style.justifyContent = 'center'; i.style.gap = '3.2cqw';
+      i.appendChild(el('div', 'ch', 'A birth story'));
+      i.appendChild(el('h2', 'h', b.parents + ' welcoming their firstborn son'));
       i.appendChild(el('div', 'rule'));
-      i.appendChild(el('div', 'sub', b.date + '\n' + b.place)); i.lastChild.style.whiteSpace = 'pre-line';
+      const d = el('div', null, b.date + '\n' + b.place); d.style.cssText = 'text-align:center;font:italic 3.1cqw/1.55 var(--body);color:var(--ink-soft);white-space:pre-line'; i.appendChild(d);
       i.appendChild(el('div', 'rule'));
-      i.appendChild(el('div', 'sub', 'As witnessed and lovingly recorded by ' + b.recorder)); p.appendChild(i); }
+      const r = el('div', null, 'As witnessed and lovingly recorded by ' + b.recorder); r.style.cssText = 'text-align:center;font:italic 3.1cqw/1.55 var(--body);color:var(--ink-soft)'; i.appendChild(r);
+      p.appendChild(i); }
 
-    // facts
-    { const p = page('facts'); const i = el('div', 'inner');
-      const h = el('h2', 'h'); h.appendChild(document.createTextNode("He's ")); h.appendChild(el('em', null, 'here.')); i.appendChild(h);
-      const tiles = el('div', 'tiles');
-      (b.facts || []).forEach(f => { const t = el('div', 'tile' + (f.tone === 'sage' ? ' sg' : '')); t.appendChild(el('b', null, f.label));
-        const s = el('span', String(f.value || '').length > 6 ? 'long' : '', f.value); t.appendChild(s); t.appendChild(el('small', null, f.note || '')); tiles.appendChild(t); });
-      const team = el('div', 'tile txt'); team.appendChild(el('b', null, 'Delivery team')); team.appendChild(el('small', null, b.team)); tiles.appendChild(team);
-      const vis = el('div', 'tile txt'); vis.appendChild(el('b', null, 'First visitors')); vis.appendChild(el('small', null, b.visitors)); tiles.appendChild(vis);
-      i.appendChild(tiles); p.appendChild(i); }
+    // arrival facts
+    { const p = frame(page('facts')); const i = el('div', 'inner');
+      i.appendChild(el('div', 'ch', 'His arrival'));
+      i.appendChild(el('h2', 'h', 'Welcome to the world'));
+      const st = el('div', 'stat');
+      (b.facts || []).forEach(f => { const c = el('div'); c.appendChild(el('b', null, f.label));
+        c.appendChild(el('span', String(f.value || '').length > 6 ? 'long' : '', f.value)); if (f.note) c.appendChild(el('small', null, f.note)); st.appendChild(c); });
+      const team = el('div'); team.appendChild(el('b', null, 'Delivery team')); team.appendChild(el('span', 'txt', b.team)); st.appendChild(team);
+      const vis = el('div'); vis.appendChild(el('b', null, 'First visitors')); vis.appendChild(el('span', 'txt', b.visitors)); st.appendChild(vis);
+      i.appendChild(st); p.appendChild(i); }
 
     // chapters
     state.chapters.forEach(ch => {
-      let p = page(); let inner = el('div', 'inner'); p.appendChild(inner);
-      inner.appendChild(el('div', 'eyebrow', ch.title));
-      inner.appendChild(el('div', 'big' + ((ch.big || '').length > 5 ? ' sm' : ''), ch.big || ''));
-      if (ch.subtitle) { const st = el('h2', 'h', ch.subtitle); st.style.fontSize = '5.2cqw'; inner.appendChild(st); }
+      let p = frame(page()); let inner = el('div', 'inner'); p.appendChild(inner);
+      inner.appendChild(el('div', 'ch', ch.title));
+      inner.appendChild(el('h2', 'h', ch.subtitle || ch.title));
+      inner.appendChild(el('div', 'rule'));
       const items = [];
       entriesOf(ch.id).forEach(e => {
         if (e.kind === 'quote') { items.push({ quote: e }); return; }
-        const card = el('div', 'card' + ((e.body.length + e.title.length) > 170 ? ' long' : '')); card.appendChild(el('span', pillClass(e), e.time || '·'));
-        const t = el('p'); if (e.title) t.appendChild(el('b', null, e.title + ' ')); t.appendChild(document.createTextNode(e.body)); card.appendChild(t);
-        items.push({ node: card });
-        if (e.photos && e.photos.length) {
-          for (let k = 0; k < e.photos.length; k += 3) {
-            const grp = e.photos.slice(k, k + 3); const g = el('div', 'photos n' + grp.length);
-            grp.forEach((x, idx) => g.appendChild(photoFig(x, grp.length > 1 && idx === 0 ? 'arch' : ''))); items.push({ node: g });
-          }
-        }
+        if (e.kind === 'feature') { items.push({ feature: e }); return; }
+        const row = el('div', 'row'); row.appendChild(el('time', null, e.time || ''));
+        const t = el('p'); if (e.title) t.appendChild(el('b', null, e.title + '. ')); t.appendChild(document.createTextNode(e.body)); row.appendChild(t);
+        items.push({ node: row });
+        const ph = e.photos || [];
+        for (let k = 0; k + 1 < ph.length; k += 2) { const g = el('div', 'two'); ph.slice(k, k + 2).forEach(x => g.appendChild(photoFig(x))); items.push({ node: g }); }
+        if (ph.length % 2 === 1) items.push({ photo: ph[ph.length - 1], title: e.title });
       });
       items.forEach(it => {
         if (it.quote) {
-          const e = it.quote; const q = page('quote'); const qi = el('div', 'inner');
-          const top = el('div', 'qtop'); const bq = el('blockquote', e.body.length > 90 ? 'long' : '', e.body); top.appendChild(bq);
-          if (e.cite) top.appendChild(el('cite', null, e.cite)); qi.appendChild(top);
-          const bot = el('div', 'qbot'); if (e.photos && e.photos.length) { const g = el('div', 'photos n' + Math.min(3, e.photos.length)); e.photos.slice(0, 3).forEach(x => g.appendChild(photoFig(x))); bot.appendChild(g); }
-          qi.appendChild(bot); q.appendChild(qi);
+          const e = it.quote; const q = frame(page('quote')); const qi = el('div', 'quote');
+          qi.appendChild(sprig('#c9b394'));
+          qi.appendChild(el('blockquote', e.body.length > 90 ? 'long' : '', e.body));
+          if (e.cite) qi.appendChild(el('cite', null, e.cite));
+          if (e.photos && e.photos.length) { qi.appendChild(el('div', 'rule')); const g = el('div', 'two'); e.photos.slice(0, 2).forEach(x => g.appendChild(photoFig(x))); qi.appendChild(g); }
+          q.appendChild(qi); p = null; return;
+        }
+        if (it.feature) {
+          // a moment that deserves its own page: full-bleed photo with the words on the plate,
+          // or, until a photo is attached, a centered page of its own
+          const e = it.feature; const ph = (e.photos || [])[0];
+          if (ph) { const fp = photoPage(ph, e.title); const plate = fp.querySelector('.plate'); plate.textContent = ''; plate.appendChild(el('b', null, e.title + (e.time ? ' · ' + e.time : ''))); plate.appendChild(document.createTextNode(e.body + (ph.caption ? ' ' + ph.caption : ''))); }
+          else { const fp = frame(page('feature')); const fi = el('div', 'quote'); fi.appendChild(sprig('#c9b394')); fi.appendChild(el('div', 'ch', e.time || '')); fi.appendChild(el('h2', 'h', e.title)); fi.appendChild(el('div', 'rule')); const bd = el('div', 'fbody', e.body); fi.appendChild(bd); fp.appendChild(fi); }
+          (e.photos || []).slice(1).forEach(x => photoPage(x, e.title));
           p = null; return;
         }
-        if (!p) { p = page(); inner = el('div', 'inner'); p.appendChild(inner); }
+        if (it.photo) { photoPage(it.photo, it.title); p = null; return; }
+        if (!p) { p = frame(page()); inner = el('div', 'inner'); p.appendChild(inner); }
         inner.appendChild(it.node);
-        if (!fits(p)) { inner.removeChild(it.node); p = page(); inner = el('div', 'inner'); p.appendChild(inner); inner.appendChild(it.node); }
+        if (!fits(p)) { inner.removeChild(it.node); p = frame(page()); inner = el('div', 'inner'); p.appendChild(inner); inner.appendChild(it.node); }
       });
     });
 
     // closing
-    { const p = page('end'); const i = el('div', 'inner');
-      i.appendChild(el('div', 'big', 'To be continued'));
-      i.appendChild(el('div', 'eyebrow', 'Day one of ' + b.name + "'s story"));
+    { const p = frame(page('end')); const i = el('div', 'inner');
+      i.appendChild(sprig('#8a9a7b'));
+      i.appendChild(el('div', 'ch', 'Day one of ' + b.name + "'s story"));
+      i.appendChild(el('h2', 'h', 'To be continued'));
+      i.appendChild(el('div', 'rule'));
       i.appendChild(el('div', 'sub', 'Recorded in Room 115 by ' + b.recorder + '. The next chapters are Abby\'s to write.')); p.appendChild(i); }
 
     // cover handling, even page count, recto/verso sheets
@@ -227,10 +260,10 @@
     if (size.coverSeparate) { const cv = root.firstChild; coverart.appendChild(cv); }
     if (size.coverSeparate && root.children.length % 2 === 1) { const blank = page('blank'); blank.appendChild(el('div', 'inner')); }
     [...root.children].forEach((pg, n) => {
-      const pageNo = size.coverSeparate ? n + 1 : n;           // Blurb: dedication is page 1 (recto)
+      const pageNo = size.coverSeparate ? n + 1 : n;           // Blurb: first inside page is page 1 (recto)
       const recto = pageNo % 2 === 1;
-      if (pageNo > 0 && !pg.classList.contains('quote') && !pg.classList.contains('end') && !pg.classList.contains('blank')) pg.appendChild(el('div', 'folio' + (recto ? '' : ' verso'), String(pageNo).padStart(2, '0')));
-      const sheet = el('div', 'sheet ' + (recto ? 'recto' : 'verso')); root.replaceChild(sheet, pg); sheet.appendChild(pg);
+      if (pageNo > 0 && !/quote|end|blank|photo|ded|feature/.test(pg.className)) pg.appendChild(el('div', 'folio', '· ' + pageNo + ' ·'));
+      const leaf = el('div', 'leaf ' + (recto ? 'recto' : 'verso')); root.replaceChild(leaf, pg); leaf.appendChild(pg);
     });
     const n = root.children.length;
     $('#pagecount').textContent = n + ' pages' + (size.coverSeparate ? ' inside' + (n < 20 ? ' (Blurb needs at least 20)' : '') : '');
@@ -250,7 +283,7 @@
     editing = { entry: e, isNew };
     $('#sh-title').textContent = isNew ? 'Add a moment' : 'Edit this moment';
     const sel = $('#f-chapter'); sel.innerHTML = ''; state.chapters.forEach(c => { const o = el('option', null, c.title); o.value = c.id; sel.appendChild(o); }); sel.value = e.chapter;
-    $('#f-kind').value = e.kind === 'quote' ? 'quote' : 'moment';
+    $('#f-kind').value = ['quote', 'feature'].includes(e.kind) ? e.kind : 'moment';
     $('#f-time').value = e.time; $('#f-sort').value = e.sort; $('#f-title').value = e.title; $('#f-body').value = e.body; $('#f-cite').value = e.cite;
     $('#f-delete').hidden = isNew; $('#f-err').textContent = '';
     renderPhotoList(); kindChanged();
