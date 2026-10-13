@@ -2347,3 +2347,7 @@ table.tchktbl td.chk .tcasap{display:inline-flex;margin-left:8px;color:#9e2020}
 table.tchktbl td.chk .tcasap.off{display:none}
 table.tchktbl td.chk .tcasap input{width:15px;height:15px}
 .tctally b.tcasap-n{color:#9e2020}
+
+/* whiteboard: remove a request (Alex 10/13) */
+.wbrm{border:1px solid #d9d3c9;background:#fff;color:#8a847b;border-radius:7px;padding:2px 8px;font-size:12px;cursor:pointer;line-height:1.4}
+.wbrm.armed{border-color:#9e2020;color:#fff;background:#9e2020;font-weight:700}

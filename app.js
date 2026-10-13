@@ -14232,7 +14232,11 @@ async function openTrainingDoc(t) {
  * Store Map user (clockName), falling back to "Team". */
 const WHITEBOARD_API = 'https://blpsalesapp.netlify.app/.netlify/functions/whiteboard';
 const WB_KEY = 'pianoman';
-const WB = {rows: null, loading: false, err: null, busy: false, showArrived: false};
+const WB = {rows: null, loading: false, err: null, busy: false, showArrived: false, armed: 0, undo: null};
+// remove a request (Alex 10/13, 101326martin02): whoever added it, before it's
+// ordered — managers & admins any time
+const wbCanRemove = r => isTeamAdmin() || (!r.ordered && !r.arrived
+  && String(r.by || '').trim().toLowerCase() === wbWho().trim().toLowerCase());
 const WB_COLS = [['Parts', 'running low on'], ['Supplies', ''], ['Tools', 'suggestions & upgrades']];
 const wbWho = () => clockName() || 'Team';
 async function wbFetch(bg) {
@@ -14296,6 +14300,7 @@ function wbItemHTML(r) {
       ${tied ? `<span class="wnote">${wbTieChip(r)}</span>` : ''}
       <span class="wmeta">${esc(r.by)}${r.added ? ' · ' + esc(r.added) : ''}</span></span>
     <span style="display:flex;gap:5px;flex-direction:column;align-items:flex-end">
+      ${r.row && wbCanRemove(r) ? `<button class="wbrm ${WB.armed === r.row ? 'armed' : ''}" data-row="${r.row}" title="remove this request">${WB.armed === r.row ? 'Remove?' : '✕'}</button>` : ''}
       <button class="tpillw ${r.ordered ? 'on' : ''}" data-row="${r.row}" data-act="ordered" data-on="${r.ordered ? '1' : ''}"
         title="${esc(r.orderedAt)}">Ordered${r.ordered ? ' ✓' : ''}</button>
       <button class="tpillw ${r.arrived ? 'on' : ''}" data-row="${r.row}" data-act="arrived" data-on="${r.arrived ? '1' : ''}"
@@ -14348,6 +14353,27 @@ function wbWire(v) {
       inp.value = ''; if (forInp) forInp.value = ''; rerender(); refetch();
     } catch (e) { const m = v.querySelector('.wbmsg'); if (m) { m.className = 'wbmsg err'; m.textContent = '✗ ' + (e.message || e); } b.disabled = false; }
   });
+  v.querySelectorAll('.wbrm').forEach(btn => btn.onclick = async ev => {
+    ev.stopPropagation();
+    const row = +btn.dataset.row; if (!row || WB.busy) return;
+    if (WB.armed !== row) { WB.armed = row; rerender(); setTimeout(() => { if (WB.armed === row) { WB.armed = 0; rerender(); } }, 4000); return; }
+    WB.armed = 0; WB.busy = true;
+    const i = WB.rows.findIndex(r => r.row === row), rec = WB.rows[i];
+    if (i >= 0) WB.rows.splice(i, 1);
+    WB.undo = rec ? {row, item: rec.item, rec, at: i} : null; WB.err = null;
+    rerender();
+    try { await wbPost({action: 'remove', row, item: rec ? rec.item : ''}); }
+    catch (e) { if (rec) WB.rows.splice(i, 0, rec); WB.undo = null; WB.err = '✗ ' + (e.message || e); rerender(); }
+    WB.busy = false;
+  });
+  const un = v.querySelector('.wbundo');
+  if (un) un.onclick = async () => {
+    const u = WB.undo; if (!u || WB.busy) return;
+    WB.busy = true;
+    try { await wbPost({action: 'remove', row: u.row, item: u.item, on: false}); WB.rows.splice(Math.min(u.at, WB.rows.length), 0, u.rec); WB.undo = null; }
+    catch (e) { WB.err = '✗ ' + (e.message || e); }
+    WB.busy = false; rerender();
+  };
   v.querySelectorAll('.tpillw').forEach(btn => btn.onclick = async ev => {
     ev.stopPropagation();
     if (WB.busy) return;
@@ -14381,7 +14407,7 @@ function renderWhiteboard() {
       <button class="wbctl wbToggleDone">${WB.showArrived ? 'Hide arrived items' : 'Show arrived items'}</button>
       <button class="wbctl wbRefresh">Refresh</button>
     </div>
-    <div class="wbmsg${WB.err ? ' err' : ''}">${WB.err ? esc(WB.err) : (WB.loading && !WB.rows ? 'Loading…' : '')}</div>
+    <div class="wbmsg${WB.err ? ' err' : ''}">${WB.err ? esc(WB.err) : WB.undo ? `Removed “${esc(WB.undo.item)}” <button class="wbctl wbundo">undo</button>` : (WB.loading && !WB.rows ? 'Loading…' : '')}</div>
     ${WB.rows ? wbBoardHTML() : ''}`;
   window.scrollTo(0, y);
   v.querySelector('.wbRefresh').onclick = () => { WB.err = null; wbFetch(true); };
