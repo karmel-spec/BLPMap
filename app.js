@@ -143,13 +143,21 @@ async function bridgeFetch(url, opts, budgetMs) {
   try {
     const body = JSON.parse(opts && opts.body || '{}');
     if (body.action && RELAY_ACTIONS.test(body.action)) {
+      // Delivered: the relay waits longer and then checks the Piano Log before
+      // answering (Walter 10/13), so give it the time — and never fall through
+      // to a second direct send of a Delivered change
+      const isDel = body.action === 'setphase' && /^delivered$/i.test(String(body.phase || ''));
       const rr = await fetchT(RELAY_URL, {method: 'POST',
         headers: {'content-type': 'application/json'},
-        body: JSON.stringify({...body, relayKey: 'pianoman'})}, 20000);
+        body: JSON.stringify({...body, relayKey: 'pianoman'})}, isDel ? 32000 : 20000).catch(e => {
+          if (isDel) throw Object.assign(new Error('no answer about the Delivered change — check the map before trying again'), {delivered: true});
+          throw e;
+        });
+      if (isDel && !(rr.ok || rr.status === 502)) throw Object.assign(new Error('the Delivered change could not be sent — try again'), {delivered: true});
       if (rr.ok || rr.status === 502) return rr;   // real result, queued-ack, or honest error
       // relay itself unreachable/misconfigured — fall through to the bridge
     }
-  } catch (e) { /* non-JSON body or relay down — use the bridge directly */ }
+  } catch (e) { if (e && e.delivered) throw e; /* non-JSON body or relay down — use the bridge directly */ }
   for (let a = 0; a < 4; a++) {
     const remaining = deadline - Date.now();
     if (remaining < 3000) throw new Error('bridge budget exhausted');
@@ -7574,7 +7582,7 @@ async function setPhase(p, phase, pop, extra) {
     }
   } catch (e) {
     revertPhase(p, was, sel, edit);
-    msg.className = 'phmsg err'; msg.textContent = '✗ ' + e.message + ' — not saved';
+    msg.className = 'phmsg err'; msg.textContent = '✗ ' + e.message + (e && e.delivered ? '' : ' — not saved');
   } finally {
     if (sel) sel.disabled = false;
   }
