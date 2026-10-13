@@ -1799,7 +1799,7 @@ function focusPiano(p) {
   const target = sl ? {x: sl.x + sl.w / 2, y: sl.y + sl.h / 2}
     : (S.tempXY || {})[p.row] || (S.binXY || {})[p.row] || (S.rentXY || {})[p.row] || (S.comingXY || {})[p.row] || (S.serviceXY || {})[p.row] || (S.holdingXY || {})[p.row];
   if (target) {
-    S.zoom = Math.max(S.zoom, 2.4); sizePlan();
+    S.zoom = Math.max(S.zoom, 2.4); S.zoomHome = false; sizePlan();
     const sc = $('#mapscroll');
     const k = sc.querySelector('svg').clientWidth / (S.drawW || f.width);
     sc.scrollLeft = target.x * k - sc.clientWidth / 2;
@@ -1817,7 +1817,7 @@ function focusSpot(id) {
   const f = S.map.floors[S.floor];
   const sl = f.slots.find(x => x.id.toLowerCase() === id.toLowerCase());
   if (!sl) return;
-  S.zoom = Math.max(S.zoom, 2.4); sizePlan();
+  S.zoom = Math.max(S.zoom, 2.4); S.zoomHome = false; sizePlan();
   const sc = $('#mapscroll');
   const k = sc.querySelector('svg').clientWidth / (S.drawW || f.width);
   sc.scrollLeft = (sl.x + sl.w / 2) * k - sc.clientWidth / 2;
@@ -3095,11 +3095,30 @@ function fillClass(hex) {
 
 // size the SVG like a document: card width x true sheet proportions,
 // so the user scrolls down through the building exactly like the sheet
+// Desktop home view (Mark 10/7, 100726hales51): fit-width on a wide screen
+// drew the tall floors ~4½ screens deep with pianos 300px wide. On a wide
+// window the map now opens about 2½ screens deep (width = 1.25 × the map
+// window's height, never wider than fit-width) and can zoom out until the
+// whole floor fits. Phones and narrow windows keep fit-width as home and floor.
+// S.zoom stays a multiple of fit-width; S.zoomHome = follow the home view.
+function homeZoom() {
+  const sc = $('#mapscroll');
+  if (!sc || sc.clientWidth < 1000) return 1;
+  return Math.min(1, Math.max(700, sc.clientHeight * 1.25) / Math.max(320, sc.clientWidth - 2));
+}
+function minZoom() {
+  const f = S.map && S.map.floors[S.floor];
+  const sc = $('#mapscroll');
+  if (!f || !sc || sc.clientWidth < 1000) return 1;
+  const W = S.drawW || f.width, H = S.drawH || f.height;
+  return Math.min(homeZoom(), sc.clientHeight / (Math.max(320, sc.clientWidth - 2) * H / W));
+}
 function sizePlan() {
   const f = S.map && S.map.floors[S.floor];
   if (!f) return;
   const W = S.drawW || f.width, H = S.drawH || f.height;
   const sc = $('#mapscroll');
+  if (S.zoomHome !== false) S.zoom = homeZoom();
   const w = Math.max(320, sc.clientWidth - 2) * S.zoom;
   const svg = $('#plan');
   svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
@@ -17045,7 +17064,7 @@ document.querySelectorAll('.navitem[data-view]').forEach(el =>
 // floor, full-width zoom, no search, no open card/report, nav drawer closed
 function goHome() {
   history.replaceState(null, '', location.pathname);
-  S.floor = 0; S.search = ''; S.zoom = 1; S.focusRow = null; S.openReport = null;
+  S.floor = 0; S.search = ''; S.zoomHome = true; S.focusRow = null; S.openReport = null;
   popPinned = false; $('#pop').hidden = true;
   const search = $('#search'); if (search) search.value = '';
   syncSearchClear();
@@ -17515,9 +17534,10 @@ function zoomAt(k, cx, cy) {
   const sc = $('#mapscroll');
   const r = sc.getBoundingClientRect();
   const prev = S.zoom;
-  S.zoom = Math.min(8, Math.max(1, S.zoom * k));
+  S.zoom = Math.min(8, Math.max(minZoom(), S.zoom * k));
   const real = S.zoom / prev;
   if (real === 1) return;
+  S.zoomHome = false;
   const ox = (cx ?? r.left + r.width / 2) - r.left;
   const oy = (cy ?? r.top + r.height / 2) - r.top;
   const px = sc.scrollLeft + ox, py = sc.scrollTop + oy;
@@ -17542,7 +17562,7 @@ function zoomAt(k, cx, cy) {
 })();
 $('#zoomIn').onclick = () => zoomAt(1.4);
 $('#zoomOut').onclick = () => zoomAt(1 / 1.4);
-$('#zoomFit').onclick = () => { S.zoom = 1; sizePlan(); };
+$('#zoomFit').onclick = () => { S.zoomHome = true; sizePlan(); };
 $('#mapscroll').addEventListener('wheel', e => {
   if (!e.ctrlKey && !e.metaKey) return;      // plain scroll stays native
   e.preventDefault();
@@ -17550,7 +17570,7 @@ $('#mapscroll').addEventListener('wheel', e => {
 }, {passive: false});
 $('#mapscroll').addEventListener('dblclick', e => {
   if (e.target.closest('.piano') || e.target.closest('.slot')) return;
-  S.zoom = 1; sizePlan();
+  S.zoomHome = true; sizePlan();
 });
 
 boot();
