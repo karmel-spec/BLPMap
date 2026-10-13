@@ -7738,7 +7738,8 @@ function cabTokens(p) {
 // Back in piano ⇒ the bridge frees the plate's rack slat + temp spot (Walter
 // 9/28); mirror that locally so the rack and Plate Queue repaint at once
 function plateBackHome(p, status) {
-  if (status !== 'Back in piano' && status !== 'In piano') return;
+  // At Curtis Harper frees the slat too (Walter 10/13) — the plate has left storage
+  if (status !== 'Back in piano' && status !== 'In piano' && status !== 'At Curtis Harper') return;
   p.plateTemp = '';
   p.cabinetry = cabTokens(p).filter(t => !/^\d+p$/i.test(t)).join(', ');
   try { renderMap(); } catch (e) {}

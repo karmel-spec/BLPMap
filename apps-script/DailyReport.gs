@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-13.6';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-13.7';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -9166,7 +9166,9 @@ function setPlateStatus_(req) {
   // Back in piano ⇒ the plate has left storage (Walter 9/28): free its rack
   // slat (the "12p" token on the CABINETRY cell) and clear any written-in temp
   // spot, so the rack and the Plate Queue stop showing a plate that is gone.
-  if (val === 'Back in piano' || val === 'In piano') {
+  // At Curtis Harper too (Walter 10/13): Conover 4329 went to Curtis and kept
+  // showing lilac on rack slat 5p until it was removed by hand.
+  if (val === 'Back in piano' || val === 'In piano' || val === 'At Curtis Harper') {
     try {
       var freed = [], tempCleared = false;
       var cabCol = -1, tmpCol = -1;
@@ -9187,7 +9189,7 @@ function setPlateStatus_(req) {
       if (freed.length || tempCleared) {
         out.freedSlats = freed; out.tempCleared = tempCleared;
         logAct_(String((req._g && (req._g.name || req._g.email)) || req.who || 'Store Map'), 'Plate storage freed', found.summary || req.serial,
-          (freed.length ? 'slat ' + freed.join(', ') : '') + (freed.length && tempCleared ? ' + ' : '') + (tempCleared ? 'temp spot' : '') + ' — plate back in piano');
+          (freed.length ? 'slat ' + freed.join(', ') : '') + (freed.length && tempCleared ? ' + ' : '') + (tempCleared ? 'temp spot' : '') + (val === 'At Curtis Harper' ? ' — plate went to Curtis Harper' : ' — plate back in piano'));
       }
     } catch (ePS) { out.storageNote = 'plate storage not cleared: ' + String(ePS).slice(0, 120); }
   }
