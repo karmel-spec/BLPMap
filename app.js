@@ -4399,7 +4399,9 @@ async function punchVerify(action, p, phase, fallbackMsg) {
  * inspection → pass advances the phase, fail creates a 🔁 Rework card. */
 // phases whose advance is gated by a manager mini-QC. Downbearing MUST stay:
 // the plate hides the work afterwards, so rework is off the table.
-const QC_PHASES = ['CAP', 'PRSB - Downbearing'];
+// + Notching and Pins (Walter 10/13, Hunter's 100926rawlings09): it has its own manager
+// checklist; Restringing and DHRT keep the tech's self-check when advancing
+const QC_PHASES = ['CAP', 'PRSB - Downbearing', 'PRSB - Notching and Pins'];
 // phases that NEVER need a mini-QC to advance — the training-month catch-all
 // below does not apply to them either:
 //   Post Sale QC — the pre-delivery final QC is itself the check (Mark 9/8)
