@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-13.4';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-13.5';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -5893,17 +5893,32 @@ function applyScheduleLocked_(req) {
   } catch (eB) { bookedTunes = []; }
   // standing rule (Brigham 2026-08-17): every scheduled piano event carries the
   // piano's CURRENT map spot in the Google event's location field (bare value)
-  var spotBySerial = {};
+  var spotBySerial = {}, plateBySerial = {};
   try {
     var live = JSON.parse(UrlFetchApp.fetch(APP_URL + '/api/data').getContentText());
     (live.pianos || []).forEach(function (p) {
       if (p.serial && p.location) spotBySerial[String(p.serial)] = String(p.location);
+      if (p.serial && p.plateStatus) plateBySerial[String(p.serial)] = String(p.plateStatus).trim();
     });
   } catch (e) { /* no map data — events just go out without locations */ }
   function spotFor_(title) {
     var runs = String(title || '').match(/\d{3,}/g) || [];
     for (var i = 0; i < runs.length; i++) {
       if (spotBySerial[runs[i]]) return spotBySerial[runs[i]];
+    }
+    return '';
+  }
+  // Plate-ready guard (Walter 10/13, Scheduling Rule 94): a restring block is
+  // not created while the card's plate status says the plate is out and not
+  // yet refinished — Removed, Plate storage — BEFORE, At Curtis Harper. The
+  // draft gave Alex "Steinway 3536 - Restringing" with its plate still in
+  // BEFORE storage. AFTER, Back in piano, In piano and untracked go out as usual.
+  function plateNotReady_(title) {
+    if (!/\brestring|\bstringing\b/i.test(String(title || ''))) return '';
+    var runs = String(title || '').match(/[A-Za-z]*\d{3,}[A-Za-z0-9]*/g) || [];
+    for (var i = 0; i < runs.length; i++) {
+      var st = plateBySerial[runs[i]] || plateBySerial[runs[i].replace(/\D/g, '')];
+      if (st && /^(removed|plate storage\s*\W*\s*before|at curtis)/i.test(st)) return st;
     }
     return '';
   }
@@ -5933,7 +5948,7 @@ function applyScheduleLocked_(req) {
     // in-store / QC calendars count too, since they show on the tech's calendar.
     // Blocks Approve creates are added as it goes, so a plan that lists the
     // same block twice makes it once.
-    var onCal = {}, alreadyOn = [];
+    var onCal = {}, alreadyOn = [], plateHeld = [];
     var calKey_ = function (title, when) {
       return String(title || '').toLowerCase().replace(/[^a-z0-9]+/g, '') + '|' + Math.round(when.getTime() / 60000);
     };
@@ -5965,6 +5980,11 @@ function applyScheduleLocked_(req) {
           var ck = calKey_(evTitle, d1);
           if (onCal[ck]) {
             alreadyOn.push(Utilities.formatDate(d1, 'America/Denver', 'EEE h:mm a') + ' ' + evTitle.slice(0, 40));
+            return;
+          }
+          var plateSt = plateNotReady_(evTitle);
+          if (plateSt) {
+            plateHeld.push(Utilities.formatDate(d1, 'America/Denver', 'EEE h:mm a') + ' ' + evTitle.slice(0, 40) + ' (plate: ' + plateSt + ')');
             return;
           }
           var cleanNote = calDescription_(b[4]);
@@ -6032,6 +6052,7 @@ function applyScheduleLocked_(req) {
     var res = {tech: tch.name, events: made, failed: failed};
     if (alreadyBooked.length) res.alreadyBooked = alreadyBooked;
     if (alreadyOn.length) res.alreadyOnCalendar = alreadyOn;
+    if (plateHeld.length) res.plateNotReady = plateHeld;
     if (tuned) res.onTuningCal = tuned;
     if (tuneFellBack) res.tuningFellBackToOwnCal = tuneFellBack;
     if (fieldHeld) res.fieldKeptOffCalendar = fieldHeld;
