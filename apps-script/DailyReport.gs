@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-13.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-13.4';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -5802,6 +5802,15 @@ var CHATTER_RE = [
 function calDescription_(note) {
   var s = String(note || '').replace(/\s+/g, ' ').trim();
   s = s.replace(/[\u2019\u2018]/g, "'");               // curly apostrophes → straight, so "Today's list" is recognised
+  // [CAL: …] = words a note asked to put on the calendar, copied verbatim by the
+  // Planner AI. They go on top untouched and never meet the chatter filter
+  // (Walter 10/13: Garrett's "Lupita is still restringing…" was fused into a
+  // "NEW per Brigham's note" sentence and dropped).
+  var cal = [];
+  s = s.replace(/\[\s*CAL\s*:\s*([^\]]*)\]/gi, function (_, t) {
+    t = String(t).trim(); if (t && cal.indexOf(t) < 0) cal.push(t); return ' ';
+  }).replace(/\s+/g, ' ').trim();
+  var calTxt = cal.join('\n').slice(0, 1000);
   // planner metadata inside a job line — "(queue #27, PRSB — Downbearing)" —
   // is dropped on its own so the job itself survives (Walter 10/2: Korban's
   // whole Today's list vanished because "queue #27" read as chatter)
@@ -5827,8 +5836,8 @@ function calDescription_(note) {
     }
     keep.push(t);
   }
-  var out = keep.join(' ').trim();
-  return out.slice(0, 400);
+  var out = keep.join(' ').trim().slice(0, 400);
+  return calTxt && out ? calTxt + '\n' + out : (calTxt || out);
 }
 
 function applySchedule_(req) {
