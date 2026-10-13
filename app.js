@@ -10245,6 +10245,7 @@ async function movePiano(p, dest, pop, confirmed) {
   const {pin, ok} = writeAuth();
   if (!ok) { msg.textContent = 'A team PIN is required to move pianos.'; return; }
   msg.textContent = 'Updating Piano Log…';
+  const prevLoc = p.location || '';
   try {
     // straight to the Apps Script bridge; text/plain avoids CORS preflight
     const r = await bridgeFetch(BRIDGE_URL, {
@@ -10276,12 +10277,39 @@ async function movePiano(p, dest, pop, confirmed) {
       const edit = pendingEdits.get(p.row) || {};
       edit.location = j.location; pendingEdits.set(p.row, edit);
       index(); renderKpis(); renderMap(); renderReport();
+      if (!j.moved && j.qid) watchQueuedMove(j.qid, p, dest, prevLoc, msg);
     } else {
       msg.className = 'mvmsg err'; msg.textContent = '✗ ' + (j.error || 'update failed');
     }
   } catch (e) {
     msg.className = 'mvmsg err'; msg.textContent = '✗ ' + e.message + ' — not saved';
   }
+}
+/* Follow up a "⏳ Saved" move (Hunter 10/9, 100926rawlings10): the queue used
+ * to drop a move the bridge refused (the Petrof 2046 was below the SOLD
+ * divider, so every try failed) and the card never said. Every 20 s for up to
+ * 6 min it asks the relay where the queued move stands: landed → ✓; failed →
+ * ✗ with the reason, and the map goes back to the old spot. */
+function watchQueuedMove(qid, p, dest, prevLoc, msg) {
+  const t0 = Date.now();
+  const say = (cls, txt) => { if (msg && msg.isConnected) { msg.className = 'mvmsg ' + cls; msg.textContent = txt; } };
+  const tick = async () => {
+    if (Date.now() - t0 > 360000) { say('', `⏳ Still waiting on Google for the move to ${dest} — check the map in a few minutes.`); return; }
+    let j = null;
+    try { j = await (await fetchT(RELAY_URL + '?key=pianoman&qid=' + encodeURIComponent(qid), {cache: 'no-store'}, 15000)).json(); } catch (e) {}
+    if (j && j.status === 'done') { say('ok', `✓ Moved to ${dest}`); return; }
+    if (j && j.status === 'failed') {
+      const why = /sold section/i.test(j.error || '') ? 'this piano is marked delivered / sold in the Piano Log' : (j.error || 'the bridge refused it');
+      say('err', `✗ The move to ${dest} didn't go through — ${why}.`);
+      const edit = pendingEdits.get(p.row);
+      if (edit && edit.location === dest) { delete edit.location; if (!Object.keys(edit).length) pendingEdits.delete(p.row); else pendingEdits.set(p.row, edit); }
+      if (p.location === dest) { p.location = prevLoc; p.isSlot = SLOT_RE.test(prevLoc); }
+      index(); renderKpis(); renderMap(); renderReport();
+      return;
+    }
+    setTimeout(tick, 20000);
+  };
+  setTimeout(tick, 15000);
 }
 /* Shop queue reorder. The queue is the row order of the Custom Shopwork
    section, so the bridge physically moves the piano's row — anchored by the
