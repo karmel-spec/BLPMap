@@ -5820,6 +5820,9 @@ function cfxComposeNote(ymd, inT, outT, text) {
 const CLOCK_PSEUDO = {TIDY: 'Shop tidying', MGMT: 'Management', KEYS: 'Miscellaneous keytops'};
 // 🎹 Miscellaneous keytops (Walter 10/13): keytop-only jobs for an outside organ
 // restorer — Marcelo's own clock category, outside every track and phase
+const MAINT_PEOPLE = ['korbangreenhalgh.blp@gmail.com', 'matthewwessman.blp@gmail.com', 'jacobmower.blp@gmail.com', 'markhales.blp@gmail.com'];
+const maintOk = () => MAINT_PEOPLE.includes(userEmail())
+  || /^(korban|matthew|jacob|mark)\b/i.test(clockName());   // building maintenance card (Walter 10/13)
 const isMarcelo = () => /^marcelo\b/i.test(clockName()) || /^marcelo/i.test(userEmail());
 const clockLabel = (clock, serial) => {
   const p = CLOCK_PSEUDO[String(serial || '').toUpperCase()];
@@ -13857,6 +13860,9 @@ function renderDash() {
       // 🔧 building maintenance (Korban via Melissa 9/16, request 091626terry43):
       // lightbulbs, sheetrock, painting — not tidying, not a piano. Pseudo-serial MAINT.
       const onMaint = o && o.serial === 'MAINT';
+      // Korban, Matthew, Jacob and Mark only (Walter 10/13); anyone already on
+      // maintenance time still sees the card so they can end it
+      if (!onMaint && !maintOk()) return '';
       return `<div class="dbench db-maint">
         <h4>🔧 Building maintenance</h4>
         ${onMaint ? `<div class="dline now"><b>On building maintenance</b> since ${fmtT(o.start)} —
