@@ -4620,14 +4620,27 @@ async function updateClPill() {
  * 100926rawlings12). It now rides 10px above the dock's real top edge, and
  * re-measures whenever the dock changes size or the window does. */
 function placeClPill() {
+  const d = document.getElementById('mydock');
+  const dockOn = d && !d.hidden && d.getBoundingClientRect().height > 0;
+  if (d && !d._clObs && typeof ResizeObserver === 'function') { d._clObs = new ResizeObserver(placeClPill); d._clObs.observe(d); }
+  // the map's zoom buttons sit in the same corner as the clock dock — lift
+  // them just clear of it when the two overlap (Jacob 10/9, 100926mower28)
+  const z = document.querySelector('.zoomctrl');
+  if (z) {
+    z.style.bottom = '';
+    if (dockOn) {
+      const zr = z.getBoundingClientRect(), dr = d.getBoundingClientRect();
+      if (zr.height && zr.bottom > dr.top - 8 && zr.right > dr.left && zr.left < dr.right) {
+        z.style.bottom = Math.round(10 + zr.bottom - (dr.top - 8)) + 'px';
+      }
+    }
+  }
   const pill = document.getElementById('clPill');
   if (!pill || pill.hidden) return;
-  const d = document.getElementById('mydock');
   let gap = 74;
-  if (d && !d.hidden) {
+  if (dockOn) {
     const r = d.getBoundingClientRect();
-    if (r.height) gap = Math.max(16, Math.round(window.innerHeight - r.top + 10));
-    if (!d._clObs && typeof ResizeObserver === 'function') { d._clObs = new ResizeObserver(placeClPill); d._clObs.observe(d); }
+    gap = Math.max(16, Math.round(window.innerHeight - r.top + 10));
   }
   pill.style.bottom = gap + 'px';
   document.documentElement.style.setProperty('--clpad', (gap + 46) + 'px');   // the card scrolls clear of it
