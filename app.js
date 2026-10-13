@@ -4595,7 +4595,7 @@ async function updateClPill() {
     const pp = S.data.pianos.find(x => x.serial === o.serial);
     ph = pp ? String(pp.phase || '').trim() : '';
   }
-  const active = o && o.serial && o.serial !== 'MGMT' && o.serial !== 'TIDY' && o.serial !== 'MAINT' && CHECKLIST_PHASES.includes(ph || o.phase) ? (ph || o.phase) : null;
+  const active = o && o.serial && o.serial !== 'MGMT' && o.serial !== 'TIDY' && o.serial !== 'MAINT' && o.serial !== 'KEYS' && CHECKLIST_PHASES.includes(ph || o.phase) ? (ph || o.phase) : null;
   if (!active) { if (pill) pill.hidden = true; return; }
   const st = await clFetch(o.serial, active);
   const work = clVariantItems(st.items, S.data.pianos.find(x => x.serial === o.serial) || {}, 'work');
@@ -5817,7 +5817,10 @@ function cfxComposeNote(ymd, inT, outT, text) {
  * reachable by typing "TIDY" into a box labelled "piano serial", which nobody
  * would guess — so a tidying punch could not be reported as wrong (Walter
  * 9/18). They are first-class choices now, everywhere a clock is picked. */
-const CLOCK_PSEUDO = {TIDY: 'Shop tidying', MGMT: 'Management'};
+const CLOCK_PSEUDO = {TIDY: 'Shop tidying', MGMT: 'Management', KEYS: 'Miscellaneous keytops'};
+// 🎹 Miscellaneous keytops (Walter 10/13): keytop-only jobs for an outside organ
+// restorer — Marcelo's own clock category, outside every track and phase
+const isMarcelo = () => /^marcelo\b/i.test(clockName()) || /^marcelo/i.test(userEmail());
 const clockLabel = (clock, serial) => {
   const p = CLOCK_PSEUDO[String(serial || '').toUpperCase()];
   return p || (String(clock || '') + (serial ? ' #' + serial : ''));
@@ -5835,7 +5838,7 @@ function clockFixModal(prefill) {
       <option value="pay">My day clock (payroll)</option>
       <option value="piano">A piano work clock</option>
       <option value="TIDY">Shop tidying</option>
-      <option value="MGMT">Management</option></select>
+      <option value="MGMT">Management</option>${isMarcelo() ? '<option value="KEYS">Miscellaneous keytops</option>' : ''}</select>
       <input type="text" class="cf-serial" placeholder="piano serial" style="display:none"></div>
     <div class="rfbar">
       <label class="rfd">day <input type="date" class="cf-date" value="${today}" max="${today}"></label>
@@ -11562,13 +11565,13 @@ function payTimeTable() {
   const byPhase = {}, byPiano = {};
   tl.forEach(r => {
     byPhase[r.phase || '(no phase)'] = (byPhase[r.phase || '(no phase)'] || 0) + r.minutes;
-    const pk = (r.piano || r.phase || '?') + (r.serial && !/^(MGMT|TIDY)$/i.test(r.serial) ? ' #' + r.serial : '');
+    const pk = (r.piano || r.phase || '?') + (r.serial && !/^(MGMT|TIDY|MAINT|KEYS)$/i.test(r.serial) ? ' #' + r.serial : '');
     byPiano[pk] = (byPiano[pk] || 0) + r.minutes;
   });
   const phaseRows = Object.entries(byPhase).sort((a, b) => b[1] - a[1]);
   const pianoRows = Object.entries(byPiano).sort((a, b) => b[1] - a[1]).slice(0, 40);
   const sessions = showTl ? [...tl].sort((a, b) => new Date(b.start) - new Date(a.start)).slice(0, 600) : [];
-  const pianoLabel = r => /^(MGMT|TIDY)$/i.test(r.serial || '') ? '—' : `${esc(r.piano || '?')} <small>#${esc(r.serial)}</small>`;
+  const pianoLabel = r => /^(MGMT|TIDY|MAINT|KEYS)$/i.test(r.serial || '') ? '—' : `${esc(r.piano || '?')} <small>#${esc(r.serial)}</small>`;
   CSV_EXPORTS.paydays = () => ['payroll-punches.csv',
     [['Date', 'Team member', 'Clock in', 'Clock out', 'Minutes', 'Hours (decimal)', 'Note'],
      ...rows.map(r => [r.date, r.tech, fmtT(r.start), r.end ? fmtT(r.end) : 'OPEN', r.minutes, hDec(r.minutes), r.note])]];
@@ -12595,8 +12598,8 @@ function scorecardTable() {
   const inWin = iso => iso && new Date(iso).getTime() >= cut;
   const tl = unvoided(S.tlRows).filter(r => inWin(r.start) && !/test/i.test(r.phase) && !/FAKE/.test(r.serial || ''));
   const mins = rows => rows.reduce((a, r) => a + (r.minutes || 0), 0);
-  const pianoRows = tl.filter(r => !/^(Moving|Admin \/ Misc|Management|Shop Tidying|Building Maintenance)/.test(r.phase)
-    && r.serial !== 'MGMT' && r.serial !== 'TIDY' && r.serial !== 'MAINT');
+  const pianoRows = tl.filter(r => !/^(Moving|Admin \/ Misc|Management|Shop Tidying|Building Maintenance|Miscellaneous Keytops)/.test(r.phase)
+    && r.serial !== 'MGMT' && r.serial !== 'TIDY' && r.serial !== 'MAINT' && r.serial !== 'KEYS');
   const trainRows = tl.filter(r => /^Training/.test(r.phase));
   const reworkRows = tl.filter(r => /^Rework|re-?do|fix(ing)? (earlier|previous)/i.test(r.phase));
   const workH = mins(pianoRows) / 60, trainH = mins(trainRows) / 60, reworkH = mins(reworkRows) / 60;
@@ -13867,6 +13870,23 @@ function renderDash() {
         <div class="maintmsg phmsg"></div>
       </div>`;
     })()}
+    ${isMarcelo() ? (() => {
+      // 🎹 miscellaneous keytops (Walter 10/13): an organ restorer's keytops —
+      // replacing keytops only, outside every track and phase. Pseudo-serial KEYS.
+      const onKeys = o && o.serial === 'KEYS';
+      return `<div class="dbench db-keys">
+        <h4>🎹 Miscellaneous keytops</h4>
+        ${onKeys ? `<div class="dline now"><b>On miscellaneous keytops</b> since ${fmtT(o.start)} —
+              <span class="cctime" data-start="${esc(o.start)}">${clockElapsed(o.start)}</span></div>
+            <button class="paybtn keysoff">■ End keytop time</button>
+            <div class="dline dim">Opening a piano card and clocking in there switches you back to piano time automatically.</div>`
+          : o && o.serial !== 'MGMT' ? `<div class="dline">You're on <b>#${esc(o.serial)}</b> — one tap moves you to miscellaneous keytops and closes that session.</div>
+            <button class="paybtn keyson">🎹 Switch to miscellaneous keytops</button>`
+          : `<button class="paybtn keyson">▶ Clock into miscellaneous keytops</button>
+            <div class="dline dim">Keytop replacement for outside work, like the organ restorer's keys — not tied to one of our pianos.</div>`}
+        <div class="keysmsg phmsg"></div>
+      </div>`;
+    })() : ''}
     ${myWeekCard()}
     <div class="dbench db-timeoff">
       <h4>🏖 Time off</h4>
@@ -13946,6 +13966,25 @@ function renderDash() {
     const j = await punch('clockout', null, '', 'dash'); clearTimeout(slow_bOff);
     const bm = body.querySelector('.maintmsg');
     if (j.error) { if (bm) { bm.className = 'maintmsg phmsg err'; bm.textContent = j.error; } bOff.disabled = false; bOff.textContent = '■ End maintenance time'; }
+    else renderDash();
+  };
+  const kOn = body.querySelector('.keyson'), kOff = body.querySelector('.keysoff');
+  if (kOn) kOn.onclick = async () => {
+    if (Date.now() - CLOCK.punchedAt < 2000) return;
+    kOn.disabled = true; kOn.textContent = clockingText('in');
+    const slow_kOn = punchSlow(kOn, 'in');
+    const j = await punch('clockin', {serial: 'KEYS', row: ''}, 'Miscellaneous Keytops', 'dash'); clearTimeout(slow_kOn);
+    const km = body.querySelector('.keysmsg');
+    if (j.error) { if (km) { km.className = 'keysmsg phmsg err'; km.textContent = j.error; } kOn.disabled = false; kOn.textContent = '🎹 Miscellaneous keytops'; }
+    else renderDash();
+  };
+  if (kOff) kOff.onclick = async () => {
+    if (Date.now() - CLOCK.punchedAt < 2000) return;
+    kOff.disabled = true; kOff.textContent = clockingText('out');
+    const slow_kOff = punchSlow(kOff, 'out');
+    const j = await punch('clockout', null, '', 'dash'); clearTimeout(slow_kOff);
+    const km = body.querySelector('.keysmsg');
+    if (j.error) { if (km) { km.className = 'keysmsg phmsg err'; km.textContent = j.error; } kOff.disabled = false; kOff.textContent = '■ End keytop time'; }
     else renderDash();
   };
   /* History filters. Changing "from" can ask for more than is loaded, so the
