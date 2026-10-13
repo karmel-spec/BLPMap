@@ -4635,6 +4635,17 @@ function placeClPill() {
       }
     }
   }
+  // the agent faces (bottom-right) sit above the zoom buttons when the two
+  // would overlap — they landed on "+" once the zoom moved up (Mark 10/13,
+  // 101326hales53). Only on screens where both show.
+  const ag = document.querySelector('.agf-stack');
+  if (ag) {
+    ag.style.bottom = '';
+    const zr2 = z ? z.getBoundingClientRect() : null, ar = ag.getBoundingClientRect();
+    if (zr2 && zr2.height && ar.height && ar.left < zr2.right && ar.right > zr2.left && ar.bottom > zr2.top - 8) {
+      ag.style.bottom = Math.round(window.innerHeight - zr2.top + 10) + 'px';
+    }
+  }
   const pill = document.getElementById('clPill');
   if (!pill || pill.hidden) return;
   let gap = 74;
@@ -16985,6 +16996,7 @@ function switchView(v) {
   if (v === 'buffing') { S.openReport = 'buffing'; preloadReport('buffing'); v = 'report'; setTimeout(renderReport, 0); }
   if (v === 'training') renderTraining();   // re-check gated rows for whoever is signed in NOW
   S.view = v; showView(v); closeNav();
+  setTimeout(() => { try { placeClPill(); } catch (eP) {} }, 0);   // zoom/face/pill placement (10/13)
   // a leftover page scroll (from panning the map) can slide a view's top —
   // and its ✕ — up underneath the sticky header, where iOS bounce keeps it
   if (v !== 'map') {
@@ -17572,6 +17584,7 @@ boot();
     const want = agentsFor();
     if (want.join(',') !== builtFor) buildFaces(want);
     stack.classList.toggle('show', !!authUser());
+    try { placeClPill(); } catch (eP) {}   // keep the faces clear of the zoom buttons (10/13)
   }
   refreshFaces();
   setInterval(refreshFaces, 4000);   // pick up sign-in / a different person without a reload
