@@ -47,7 +47,8 @@ const TRACKS = ['Rebuild', 'Hybrid', 'Refurbish', 'Refinish', 'Technology', 'Old
 // Admin section: client payment plans, the shop-progress milestones that
 // trigger a payment email to info@, and the client's admin-experience steps
 const KEY_SERVICE = ['Ivory', 'Plastic', 'Ebony'];   // key-top service, multi-select
-const PAY_PLANS = ['Pd in Full', 'Pay upon completion', '12 Month', '24 Month', '4 Progress Payments', 'Financed'];
+// 2 Progress Payments (Melissa 10/10, 101026terry89): smaller jobs like refinishing-only — due at 50% and at completion
+const PAY_PLANS = ['Pd in Full', 'Pay upon completion', '12 Month', '24 Month', '2 Progress Payments', '4 Progress Payments', 'Financed'];
 // refinishing-only jobs pay upon completion (Brigham 9/18): when a piano's
 // work track is nothing but Refinish and no plan is set, the card shows and
 // saves "Pay upon completion" on its own
@@ -8037,8 +8038,10 @@ async function checkPayMilestone(p, pop) {
   const payAsk = p.payPlan === 'Pd in Full' ? ''
     : p.payPlan === PAY_ON_COMPLETION
       ? `\n\nPayment for this work is due upon completion — nothing is due at this milestone.`
-    : p.payPlan === '4 Progress Payments'
+    : p.payPlan === '4 Progress Payments' || (p.payPlan === '2 Progress Payments' && (milestone === 50 || milestone === 100))
       ? `\n\nWith the ${milestone}% milestone reached, this is also the point in your payment plan where the next progress payment comes due. We'll send the invoice separately — and as always, reach out with any questions.`
+    : p.payPlan === '2 Progress Payments'
+      ? `\n\nNothing is due at this milestone — your next progress payment comes due ${milestone < 50 ? 'at the 50% mark' : 'at completion'}.`
       : monthly
         ? `\n\nYour monthly payment plan (${p.payPlan.replace(/^Monthly\s*/i, '')}) simply continues as arranged — nothing extra is due at this milestone.`
         : `\n\nA friendly note that per your ${p.payPlan} plan, this milestone is a great time for the next payment — we'll send the details separately.`;
