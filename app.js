@@ -4611,7 +4611,26 @@ async function updateClPill() {
   pill.hidden = false;
   pill.textContent = `📋 ${active} checklist · ${doneN}/${work.length}`;
   pill.onclick = () => openWorkChecklist(o.serial, active);
+  placeClPill();
 }
+/* The pill sat a fixed 74px up, so when the clock dock opened taller (search
+ * box showing) it covered the dock's timer and Switch button (Hunter 10/9,
+ * 100926rawlings12). It now rides 10px above the dock's real top edge, and
+ * re-measures whenever the dock changes size or the window does. */
+function placeClPill() {
+  const pill = document.getElementById('clPill');
+  if (!pill || pill.hidden) return;
+  const d = document.getElementById('mydock');
+  let gap = 74;
+  if (d && !d.hidden) {
+    const r = d.getBoundingClientRect();
+    if (r.height) gap = Math.max(16, Math.round(window.innerHeight - r.top + 10));
+    if (!d._clObs && typeof ResizeObserver === 'function') { d._clObs = new ResizeObserver(placeClPill); d._clObs.observe(d); }
+  }
+  pill.style.bottom = gap + 'px';
+  document.documentElement.style.setProperty('--clpad', (gap + 46) + 'px');   // the card scrolls clear of it
+}
+addEventListener('resize', () => placeClPill());
 /* 🎬 per-step training media (Brigham 9/4): photos live in checklist col I
  * ('FILEID|Caption' ;;-joined), videos in col H ('ytid@sec|Title' or
  * 'drive:FILEID|Title'). Managers/owners attach them from the bench sheet. */
@@ -5440,6 +5459,7 @@ function renderDock() {
     const p = S.data.pianos.find(x => x.row === +el.dataset.row);
     if (p) { focusPiano(p); lsSet('sec_clock', 'open'); }
   });
+  placeClPill();   // the checklist pill follows the dock's height (Hunter 10/9)
 }
 // live tickers. (The 15-minute "still on it?" idle nudge was removed 9/15 —
 // Mark: real tasks run for hours; the next-day forgotten-clock sweep on the
