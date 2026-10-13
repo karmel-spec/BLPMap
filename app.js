@@ -3097,14 +3097,14 @@ function fillClass(hex) {
 // so the user scrolls down through the building exactly like the sheet
 // Desktop home view (Mark 10/7, 100726hales51): fit-width on a wide screen
 // drew the tall floors ~4½ screens deep with pianos 300px wide. On a wide
-// window the map now opens about 2½ screens deep (width = 1.25 × the map
-// window's height, never wider than fit-width) and can zoom out until the
-// whole floor fits. Phones and narrow windows keep fit-width as home and floor.
+// window the map now opens about 3 screens deep (width = 1.5 × the map
+// window's height, never wider than fit-width; 1.25 was a touch too far out,
+// Walter 10/13) and can zoom out until the whole floor fits. Phones and narrow windows keep fit-width as home and floor.
 // S.zoom stays a multiple of fit-width; S.zoomHome = follow the home view.
 function homeZoom() {
   const sc = $('#mapscroll');
   if (!sc || sc.clientWidth < 1000) return 1;
-  return Math.min(1, Math.max(700, sc.clientHeight * 1.25) / Math.max(320, sc.clientWidth - 2));
+  return Math.min(1, Math.max(800, sc.clientHeight * 1.5) / Math.max(320, sc.clientWidth - 2));
 }
 function minZoom() {
   const f = S.map && S.map.floors[S.floor];
