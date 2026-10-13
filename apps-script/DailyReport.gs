@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-13.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-13.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -3005,11 +3005,7 @@ function setPhase_(req) {
  * check-back. Owners / payroll admins only; refuses anything already on the
  * map. req: {serial, toRow?, phase, note?, checkBack?} */
 function undeliver_(req, who) {
-  // ONE-OFF (Walter 10/13, Hunter's 100926rawlings11): Petrof 2046 went off the map
-  // on 9/28 via a queued Delivered. This key works for serial 2046 only and is
-  // removed in the next deploy.
-  var oneOff = req.key === 'pianoman-undeliver-2046' && String(req.serial || '').trim() === '2046';
-  if (!payrollAdmin_(req._g) && !oneOff) return {error: 'owners / lead admin only'};
+  if (!payrollAdmin_(req._g)) return {error: 'owners / lead admin only'};   // the 10/13 Petrof 2046 one-off key is gone
   var phase = String(req.phase || '').trim();
   if (!phase || PHASE_VALUES.indexOf(phase) < 0 || phase === 'Delivered') return {error: 'a real non-Delivered phase is required'};
   var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
