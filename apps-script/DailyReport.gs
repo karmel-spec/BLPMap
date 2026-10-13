@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-13.5';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-13.6';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -1143,6 +1143,7 @@ function doPost(e) {
     if (req.action === 'taskcard') {
       return json_(taskCard_(req, who));
     }
+    if (req.action === 'soldsweep') return json_(soldSweep_(req));
     if (req.action === 'requeststatus') {
       var rs = setRequestStatus_(req);
       if (rs.ok) logAct_(who, 'App request ' + rs.status, rs.id, rs.text);
@@ -2995,6 +2996,49 @@ function setPhase_(req) {
   return {ok: true, row: movedTo || found.row, summary: found.summary,
           previous: prev, phase: phase, note: note, checkBack: cb,
           movedToSold: !!movedTo, done: autoDone, autoCompleted: !!autoDone};
+}
+
+/* 🧾 Below SOLD means Delivered (Walter 10/13): a row dragged below the SOLD
+ * divider by hand kept its old phase (For Sale, Exit Prep - Admin, CAP …), so
+ * its card read wrong and every action on it failed with "serial not found
+ * above the SOLD section". This sweep sets CURRENT PHASE to Delivered on any
+ * row below the divider whose phase is filled in and isn't Delivered. Rows
+ * with a blank phase (the old archive) are left alone. A row whose serial
+ * also sits ABOVE the divider (an active twin, e.g. Steinway 55038) is only
+ * reported, never written. Logged as "Phase auto-set" — not "Phase change",
+ * which the queue's stale-replay check reads. salesapp2 sold-sweep-cron
+ * calls it every 15 min in the daytime; dryrun:true only lists. */
+function soldSweep_(req) {
+  var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+  var sd = soldDividerRow_(sh), last = sh.getLastRow();
+  if (sd >= last) return {ok: true, changed: [], twins: []};
+  var col = phaseCol_(sh);
+  var serials = sh.getRange(1, 3, last, 1).getValues();
+  var summaries = sh.getRange(1, 4, last, 1).getValues();
+  var phases = sh.getRange(sd + 1, col, last - sd, 1).getValues();
+  var above = {};
+  for (var i = 2; i < sd - 1; i++) {
+    var sa = String(serials[i][0] || '').trim().toLowerCase();
+    if (sa && sa !== '?') above[sa] = true;
+  }
+  var changed = [], twins = [];
+  for (var k = 0; k < phases.length; k++) {
+    var row = sd + 1 + k;
+    var ser = String(serials[row - 1][0] || '').trim();
+    var ph = String(phases[k][0] || '').trim();
+    if (!ser || !ph || ph === 'Delivered') continue;
+    var item = {row: row, serial: ser, summary: String(summaries[row - 1][0] || '').split('\n')[0].slice(0, 60), was: ph};
+    if (above[ser.toLowerCase()]) { twins.push(item); continue; }
+    changed.push(item);
+  }
+  if (!req.dryrun) {
+    changed.forEach(function (it) {
+      sh.getRange(it.row, col).setValue('Delivered');
+      logAct_('Store Map (below SOLD)', 'Phase auto-set', it.summary || it.serial,
+        it.was + ' → Delivered (row ' + it.row + ' is below the SOLD divider)');
+    });
+  }
+  return {ok: true, dryrun: !!req.dryrun, soldRow: sd, changed: changed, twins: twins};
 }
 
 /* ↩️ Undo a mistaken Delivered (Walter 9/28): Claude's own test of the new
