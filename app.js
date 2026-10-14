@@ -11948,8 +11948,19 @@ function adjRow(clock, r, label, sub, dateCell) {
         <span class="adjmsg phmsg"></span></td></tr>`;
   }
   const hint = S.adjEdit.hint ? `<div class="lite" style="font-size:11.5px;margin-bottom:6px;white-space:normal">📎 ${esc(S.adjEdit.hint)}</div>` : '';
+  // piano sessions can be re-pointed at another piano / phase (Walter 10/14):
+  // Alex's 10/9 session was clocked on the wrong piano
+  const pre = S.adjEdit.pre || {};
+  const pianoFields = clock !== 'piano' ? '' : `<div style="margin-bottom:6px">
+      <span class="rfd">piano <input type="text" class="adjserial" list="adjserials" autocomplete="off" style="width:150px"
+        placeholder="serial · or TIDY / MGMT" value="${esc(pre.serial != null ? pre.serial : (r.serial || ''))}"></span>
+      <span class="rfd">phase <input type="text" class="adjphase" list="adjphases" autocomplete="off" style="width:170px"
+        value="${esc(pre.phase != null ? pre.phase : (r.phase || ''))}"></span>
+      <datalist id="adjserials">${(S.data.pianos || []).filter(x => x.active && x.serial && x.serial !== '?')
+        .map(x => `<option value="${esc(x.serial)}">${esc(x.summary || '')}</option>`).join('')}</datalist>
+      <datalist id="adjphases">${PHASES.map(x => `<option value="${esc(x)}">`).join('')}</datalist></div>`;
   return `<tr class="adjediting">${dt}<td>${label}</td><td>${sub}</td>
-    <td colspan="3">${hint}<span class="rfd">start <input type="datetime-local" class="adjstart" value="${(S.adjEdit.pre && S.adjEdit.pre.start) || toLocalInput(r.start)}"></span>
+    <td colspan="3">${hint}${pianoFields}<span class="rfd">start <input type="datetime-local" class="adjstart" value="${(S.adjEdit.pre && S.adjEdit.pre.start) || toLocalInput(r.start)}"></span>
       <span class="rfd">end <input type="datetime-local" class="adjend" value="${(S.adjEdit.pre && S.adjEdit.pre.end) || toLocalInput(r.end)}"></span>
       <button class="csvbtn adjsave" data-clock="${clock}" data-row="${r.row}">Save</button>
       <button class="adjedit adjcancel">cancel</button>
@@ -13293,27 +13304,35 @@ function renderReport() {
     const tr = b.closest('tr');
     const start = tr.querySelector('.adjstart').value, end = tr.querySelector('.adjend').value;
     const msg = tr.querySelector('.adjmsg');
+    const serEl = tr.querySelector('.adjserial'), phEl = tr.querySelector('.adjphase');
+    const serial = serEl ? serEl.value.trim() : null, phase = phEl ? phEl.value.trim() : null;
     if (!start) { msg.textContent = 'start time required'; return; }
+    if (serEl && !serial) { msg.textContent = 'piano serial required'; return; }
     if (adjExpired()) {   // renew first — a redirect mid-save would lose this edit
-      adjStashAndRenew({adjEdit: {clock: b.dataset.clock, row: +b.dataset.row, pre: {start, end}, hint: (S.adjEdit || {}).hint || '', fromFix: (S.adjEdit || {}).fromFix || null}});
+      adjStashAndRenew({adjEdit: {clock: b.dataset.clock, row: +b.dataset.row, pre: {start, end, serial, phase}, hint: (S.adjEdit || {}).hint || '', fromFix: (S.adjEdit || {}).fromFix || null}});
       return;
     }
+    const was = ((b.dataset.clock === 'piano' ? S.tlRows : []) || []).find(x => x.row === +b.dataset.row) || {};
+    const pianoChange = serEl && serial.toLowerCase() !== String(was.serial || '').toLowerCase();
+    const phaseChange = phEl && phase !== String(was.phase || '');
     const whoName = (tr.children[1] && tr.children[1].textContent.trim().split('\n')[0]) || '';
     if (!adjSanity(start, end, whoName)) return;
     b.disabled = true; msg.textContent = 'saving…'; msg.classList.remove('adjerr');
     const slow = adjSlowNotice(msg, 'saving');
     const j = await adjustPost({action: 'adjustclock', clock: b.dataset.clock, row: +b.dataset.row,
-      start: new Date(start).toISOString(), end: end ? new Date(end).toISOString() : ''});
+      start: new Date(start).toISOString(), end: end ? new Date(end).toISOString() : '',
+      ...(pianoChange ? {serial} : {}), ...(phaseChange ? {phase} : {})});
     clearTimeout(slow);
     const who = (tr.children[1] && tr.children[1].textContent.trim().split('\n')[0]) || 'punch';
-    if (!adjFeedback(msg, j, `saved — ${who}: ${fmtT(new Date(start).toISOString())} → ${end ? fmtT(new Date(end).toISOString()) : 'open'}`)) { b.disabled = false; return; }
+    if (!adjFeedback(msg, j, `saved — ${who}: ${fmtT(new Date(start).toISOString())} → ${end ? fmtT(new Date(end).toISOString()) : 'open'}${pianoChange ? ' · now ' + (j.piano || serial) : ''}`)) { b.disabled = false; return; }
     b.textContent = '✓ saved';
     const savedClock = b.dataset.clock, savedRow = +b.dataset.row;
     // linked by ✎ Apply, or — Melissa 9/8 — found by matching the punch the
     // manager edited directly (before the patch moves its date)
     const fromFix = (S.adjEdit || {}).fromFix || cfxAutoLink(savedClock, savedRow);
     adjPatchLocal(savedClock, savedRow, new Date(start).toISOString(), end ? new Date(end).toISOString() : '',
-      savedClock === 'pay' ? {note: 'adjusted just now — syncing…'} : {});
+      savedClock === 'pay' ? {note: 'adjusted just now — syncing…'}
+        : {...(pianoChange ? {serial: j.serial || serial, piano: j.piano || serial} : {}), ...(phaseChange ? {phase: j.phase != null ? j.phase : phase} : {})});
     S.adjEdit = null;
     renderReport();   // row closes at once with the new times
     setTimeout(() => { const el = document.querySelector(`.rpt[data-r="clockadjust"] .adjedit[data-clock="${savedClock}"][data-row="${savedRow}"]`); const row = el && el.closest('tr'); if (row) { row.scrollIntoView({behavior: 'smooth', block: 'center'}); row.classList.add('adjflash'); setTimeout(() => row.classList.remove('adjflash'), 2500); } }, 0);

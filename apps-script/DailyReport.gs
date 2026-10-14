@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-13.7';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-14.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -4778,10 +4778,36 @@ function adjustClock_(req) {
     if (!(trow >= 2) || trow > tsh.getLastRow()) return {error: 'bad row'};
     var trng = tsh.getRange(trow, 1, 1, 9), tcur = trng.getValues()[0];   // one read, one write
     var oldBy = String(tcur[8] || '');
+    /* a different piano / phase (Walter 10/14): Alex's 10/9 session was
+     * clocked on the wrong piano, and the only fix was voiding it and adding
+     * a whole new session. serial (optional) re-points the row — a Piano Log
+     * piano above SOLD or a pseudo-serial (MGMT/TIDY/MAINT/KEYS); phase
+     * (optional) replaces the phase. The stamp says what it was before. */
+    var moved = '';
+    var newSer = req.serial == null ? '' : String(req.serial).trim();
+    if (newSer && newSer.toLowerCase() !== String(tcur[1] || '').trim().toLowerCase()) {
+      if (newSer === '?') return {error: 'pick a piano with a real serial'};
+      var pseudoUp = newSer.toUpperCase();
+      var pseudoLbl = {MGMT: 'Management', TIDY: 'Shop tidying', MAINT: 'Building maintenance', KEYS: 'Miscellaneous keytops'}[pseudoUp] || '';
+      var newSum = pseudoLbl;
+      if (pseudoLbl) newSer = pseudoUp;
+      else {
+        var fp = findPiano_(pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID)), newSer, null);
+        if (fp.error) return {error: 'serial ' + newSer + ' — ' + fp.error};
+        newSum = fp.summary || '';
+      }
+      moved = ' · piano was ' + (String(tcur[2] || '') || '—') + ' #' + String(tcur[1] || '');
+      tcur[1] = newSer; tcur[2] = newSum;
+    }
+    if (req.phase != null && String(req.phase).trim() !== String(tcur[3] || '').trim()) {
+      moved += ' · phase was ' + (String(tcur[3] || '') || '—');
+      tcur[3] = String(req.phase).trim();
+    }
     tcur[4] = start.toISOString(); tcur[5] = end ? end.toISOString() : ''; tcur[6] = mins;
-    tcur[8] = (oldBy ? oldBy + ' · ' : '') + stamp;
+    tcur[8] = (oldBy ? oldBy + ' · ' : '') + stamp + moved;
     trng.setValues([tcur]);
-    return {ok: true, tech: String(tcur[0] || ''), piano: String(tcur[2] || '')};
+    return {ok: true, tech: String(tcur[0] || ''), piano: String(tcur[2] || ''),
+            serial: String(tcur[1] || ''), phase: String(tcur[3] || '')};
   });
 }
 /* Team-member "please fix my clock" requests — one tab, worked from the
