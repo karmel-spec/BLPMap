@@ -238,17 +238,39 @@ async function fetchTuningMarks() {
 }
 function buildTuningQueue(pianos, tunings, marks) {
   const now = Date.now();
-  const up = ((tunings && tunings.upcoming) || []).map(r => String(r[2] || '').toUpperCase()).join(' | ');
+  const upcoming = (tunings && tunings.upcoming) || [];
   const lastBy = (tunings && tunings.lastBySerial) || {};
+  const lastByTag = (tunings && tunings.lastByTag) || {};
+  // short serials (Conover 4329) and letter serials match by tag — app.js tuneTagKeys
+  const tagKeys = title => {
+    const s = String(title || ''), keys = new Set();
+    for (const m of s.matchAll(/#\s*([A-Za-z0-9-]{2,})/g)) keys.add('#' + m[1].toLowerCase());
+    for (const m of s.matchAll(/\b([A-Za-z0-9-]*[A-Za-z][A-Za-z0-9-]*\d[A-Za-z0-9-]*|[A-Za-z0-9-]*\d[A-Za-z0-9-]*[A-Za-z][A-Za-z0-9-]*)\b/g))
+      if (m[1].length >= 5) keys.add(m[1].toLowerCase());
+    for (const m of s.matchAll(/\d{3,4}(?![\dA-Za-z])/g)) {
+      if (m.index > 0 && /[A-Za-z0-9]/.test(s[m.index - 1])) continue;
+      (s.slice(Math.max(0, m.index - 30), m.index).match(/[A-Za-z][A-Za-z'&-]*/g) || []).forEach(w => keys.add(w.toLowerCase() + ' ' + m[0]));
+    }
+    return keys;
+  };
+  const pianoKeys = p => {
+    const sn = String(p.serial || '').trim(), low = sn.toLowerCase(), keys = ['#' + low];
+    if (/[A-Za-z]/.test(sn) && /\d/.test(sn) && sn.length >= 5) keys.push(low);
+    const mk = String(p.make || '').trim().split(/\s+/)[0].replace(/[^A-Za-z'&-]/g, '').toLowerCase();
+    if (mk && /^\d{3,4}$/.test(sn)) keys.push(mk + ' ' + sn);
+    return keys;
+  };
+  const upTags = upcoming.map(r => ({ T: String(r[2] || '').toUpperCase(), tags: tagKeys(r[2]) }));
   const bySerial = new Map(pianos.filter(p => p.active && p.serial).map(p => [String(p.serial).trim().toUpperCase(), p]));
   return marks
     .filter(m => m.mark === 'tune' && m.serial && m.marked_at && now - Date.parse(m.marked_at) <= 30 * 86400000)
     .map(m => ({ m, p: bySerial.get(String(m.serial).trim().toUpperCase()) }))
     .filter(({ m, p }) => {
       if (!p) return false;
-      const sn = String(p.serial).toUpperCase(), dig = sn.replace(/\D/g, '');
-      if (up.includes(sn) || (dig.length >= 5 && up.includes(dig))) return false;      // already booked
-      const last = dig.length >= 5 ? lastBy[dig] : null;
+      const sn = String(p.serial).toUpperCase(), dig = sn.replace(/\D/g, ''), pk = pianoKeys(p);
+      if (upTags.some(u => (sn.length >= 5 && u.T.includes(sn)) || (dig.length >= 5 && u.T.includes(dig)) || pk.some(k => u.tags.has(k)))) return false;   // already booked
+      let last = dig.length >= 5 ? lastBy[dig] || null : null;
+      pk.forEach(k => { if (lastByTag[k] && (!last || lastByTag[k] > last)) last = lastByTag[k]; });
       return !(last && last >= String(m.marked_at).slice(0, 10));                       // tuned since the mark
     })
     .sort((a, b) => (b.m.priority ? 1 : 0) - (a.m.priority ? 1 : 0) || String(a.m.marked_at).localeCompare(String(b.m.marked_at)))

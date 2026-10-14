@@ -1325,22 +1325,48 @@ function todaysMoves() {
   return S.data.events.filter(e => e.date === t);
 }
 // tuning calendar info for a piano: next scheduled + most recent past
+/* Serial tags in a tuning title (Walter 10/14) — the bridge's tuneTagKeys_
+ * rule: a short serial (Conover 4329) counts only when marked as one, "#4329"
+ * or the make in front ("Conover 4329"); letter-and-digit serials (IJRIG0092)
+ * count as whole tokens. A bare 3–4-digit number is usually a year or size. */
+function tuneTagKeys(title) {
+  const s = String(title || ''), keys = new Set();
+  for (const m of s.matchAll(/#\s*([A-Za-z0-9-]{2,})/g)) keys.add('#' + m[1].toLowerCase());
+  for (const m of s.matchAll(/\b([A-Za-z0-9-]*[A-Za-z][A-Za-z0-9-]*\d[A-Za-z0-9-]*|[A-Za-z0-9-]*\d[A-Za-z0-9-]*[A-Za-z][A-Za-z0-9-]*)\b/g))
+    if (m[1].length >= 5) keys.add(m[1].toLowerCase());
+  for (const m of s.matchAll(/\d{3,4}(?![\dA-Za-z])/g)) {
+    if (m.index > 0 && /[A-Za-z0-9]/.test(s[m.index - 1])) continue;
+    (s.slice(Math.max(0, m.index - 30), m.index).match(/[A-Za-z][A-Za-z'&-]*/g) || []).forEach(w => keys.add(w.toLowerCase() + ' ' + m[0]));
+  }
+  return keys;
+}
+function pianoTuneKeys(p) {
+  const sn = String(p.serial || '').trim(), low = sn.toLowerCase(), keys = ['#' + low];
+  if (/[A-Za-z]/.test(sn) && /\d/.test(sn) && sn.length >= 5) keys.push(low);
+  const mk = String(p.make || '').trim().split(/\s+/)[0].replace(/[^A-Za-z'&-]/g, '').toLowerCase();
+  if (mk && /^\d{3,4}$/.test(sn)) keys.push(mk + ' ' + sn);
+  return keys;
+}
 function tuningInfo(p) {
   const t = S.data.tunings;
-  if (!t || !p.serial || p.serial.length < 5) return {};
+  if (!t || !p.serial || p.serial.trim().length < 3) return {};
   // match case-insensitively, and fall back to the digit run alone —
   // calendar titles write serials like "g118620" or drop the letter prefix
   const sn = p.serial.toUpperCase();
   const dig = p.serial.replace(/\D/g, '');
+  const pk = pianoTuneKeys(p);
   const hit = list => list.filter(r => {
     const t = r[2].toUpperCase();
-    return t.includes(sn) || (dig.length >= 5 && t.includes(dig));
+    if ((sn.length >= 5 && t.includes(sn)) || (dig.length >= 5 && t.includes(dig))) return true;
+    const tk = tuneTagKeys(r[2]);
+    return pk.some(k => tk.has(k));
   });
   const up = hit(t.upcoming || [])[0];
   const hist = hit(t.past || []);
-  // the raw past[] list is capped at 800 events; lastBySerial covers the
-  // full 540-day window so old tunings still show a date
-  const lb = (t.lastBySerial && dig.length >= 5 && t.lastBySerial[dig]) || null;
+  // the raw past[] list is capped at 800 events; lastBySerial / lastByTag
+  // cover the full 540-day window so old tunings still show a date
+  let lb = (t.lastBySerial && dig.length >= 5 && t.lastBySerial[dig]) || null;
+  pk.forEach(k => { const d = t.lastByTag && t.lastByTag[k]; if (d && (!lb || d > lb)) lb = d; });
   const lastHist = hist.length ? hist[hist.length - 1][0] : null;
   return {next: up ? {date: up[0], time: up[1]} : null,
           last: (lastHist && lb) ? (lastHist > lb ? lastHist : lb) : (lastHist || lb),

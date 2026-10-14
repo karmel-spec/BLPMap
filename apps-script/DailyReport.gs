@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-14.6';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-14.7';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -421,9 +421,53 @@ function doGet(e) {
  * titles contain a 5+ digit run, i.e. a serial) so the map can color
  * scheduled pianos and show "last tuned". 30-min cache.
  */
+/* Serial tags in a tuning event's title (Walter 10/14): short serials like
+ * Conover 4329 never matched — only 5+-digit runs did, because a bare
+ * 3–4-digit number is usually a year, size or model. A short serial counts
+ * when the title marks it as one: "#4329" (how Request → Tuning writes it)
+ * or the make in front of it ("Conover 4329", Korban's format). Letter-and-
+ * digit serials (IJRIG0092) count as whole tokens. Same rule in app.js
+ * (tuneTagKeys) and netlify/functions/data.mjs. */
+function tuneTagKeys_(title) {
+  var s = String(title || ''), keys = {}, m;
+  var re1 = /#\s*([A-Za-z0-9-]{2,})/g;
+  while ((m = re1.exec(s))) keys['#' + m[1].toLowerCase()] = 1;
+  var re2 = /\b([A-Za-z0-9-]*[A-Za-z][A-Za-z0-9-]*\d[A-Za-z0-9-]*|[A-Za-z0-9-]*\d[A-Za-z0-9-]*[A-Za-z][A-Za-z0-9-]*)\b/g;
+  while ((m = re2.exec(s))) if (m[1].length >= 5) keys[m[1].toLowerCase()] = 1;
+  var re3 = /\d{3,4}(?![\dA-Za-z])/g;
+  while ((m = re3.exec(s))) {
+    if (m.index > 0 && /[A-Za-z0-9]/.test(s.charAt(m.index - 1))) continue;   // part of a longer token
+    var words = s.slice(Math.max(0, m.index - 30), m.index).match(/[A-Za-z][A-Za-z'&-]*/g) || [];
+    for (var w = 0; w < words.length; w++) keys[words[w].toLowerCase() + ' ' + m[0]] = 1;
+  }
+  return Object.keys(keys);
+}
+function pianoTuneKeys_(p) {
+  var sn = String((p && p.serial) || '').trim(), low = sn.toLowerCase(), keys = ['#' + low];
+  if (/[A-Za-z]/.test(sn) && /\d/.test(sn) && sn.length >= 5) keys.push(low);
+  var mk = String((p && p.make) || '').trim().split(/\s+/)[0].replace(/[^A-Za-z'&-]/g, '').toLowerCase();
+  if (mk && /^\d{3,4}$/.test(sn)) keys.push(mk + ' ' + sn);
+  return keys;
+}
+/* newest past tuning date for a piano: 5+-digit run, else its serial tags */
+function lastTunedFor_(t, p) {
+  var dig = String((p && p.serial) || '').replace(/\D/g, '');
+  var best = (dig.length >= 5 && t.lastBySerial && t.lastBySerial[dig]) || null;
+  var tags = t.lastByTag || {}, keys = pianoTuneKeys_(p);
+  for (var i = 0; i < keys.length; i++) if (tags[keys[i]] && (!best || tags[keys[i]] > best)) best = tags[keys[i]];
+  return best;
+}
+function tuningTitleIsFor_(title, p) {
+  var t = String(title || '').toUpperCase(), sn = String((p && p.serial) || '').trim().toUpperCase(), dig = sn.replace(/\D/g, '');
+  if (sn.length >= 5 && t.indexOf(sn) !== -1) return true;
+  if (dig.length >= 5 && t.indexOf(dig) !== -1) return true;
+  var tk = tuneTagKeys_(title), pk = pianoTuneKeys_(p);
+  for (var i = 0; i < pk.length; i++) if (tk.indexOf(pk[i]) !== -1) return true;
+  return false;
+}
 function tunings_() {
   var cache = CacheService.getScriptCache();
-  var hit = cache.get('tunings2');
+  var hit = cache.get('tunings3');
   if (hit) return JSON.parse(hit);
   var tz = 'America/Denver';
   var now = new Date();
@@ -433,6 +477,7 @@ function tunings_() {
   // calendar already gave us; two identical events on ONE calendar are a real
   // double booking and both stay listed.
   var seenOn = {};   // date|time|serial digits -> index of the calendar it came from
+  var lastByTag = {};   // serial tag (#4329 · conover 4329 · ijrig0092) -> newest past date
   var lastBy = {};   // digit-run -> newest past tuning date, over the FULL
                      // 540-day window (past[] itself is capped at 800 rows,
                      // which silently hid tunings older than ~10 months)
@@ -444,7 +489,8 @@ function tunings_() {
                             new Date(now.getTime() + 60 * 86400000));
     for (var i = 0; i < evs.length; i++) {
       var t = evs[i].getTitle() || '';
-      if (!/\d{5,}/.test(t)) continue;   // only piano-ish events (serial in title)
+      // only piano-ish events: a 5+-digit serial, or a marked short one (#4329 · Conover 4329)
+      if (!/\d{5,}/.test(t) && !tuneTagKeys_(t).length) continue;
       var st = evs[i].getStartTime();
       var rec = [Utilities.formatDate(st, tz, 'yyyy-MM-dd'),
                  Utilities.formatDate(st, tz, 'HH:mm'),
@@ -458,14 +504,18 @@ function tunings_() {
         for (var r2 = 0; r2 < runs.length; r2++) {
           if (!lastBy[runs[r2]] || rec[0] > lastBy[runs[r2]]) lastBy[runs[r2]] = rec[0];
         }
+        var tags = tuneTagKeys_(t);
+        for (var r3 = 0; r3 < tags.length; r3++) {
+          if (!lastByTag[tags[r3]] || rec[0] > lastByTag[tags[r3]]) lastByTag[tags[r3]] = rec[0];
+        }
       } else { upcoming.push(rec); }
     }
   }
   if (!seenCal) return {error: 'no tuning calendar shared with ' + 'the bridge account (brigham@)', upcoming: [], past: []};
   var bySt = function (a, b) { return (a[0] + a[1]) < (b[0] + b[1]) ? -1 : 1; };
   past.sort(bySt); upcoming.sort(bySt);
-  var out = {upcoming: upcoming, past: past.slice(-800), lastBySerial: lastBy};
-  try { cache.put('tunings2', JSON.stringify(out), 1800); } catch (ig) {}
+  var out = {upcoming: upcoming, past: past.slice(-800), lastBySerial: lastBy, lastByTag: lastByTag};
+  try { cache.put('tunings3', JSON.stringify(out), 1800); } catch (ig) {}
   return out;
 }
 
@@ -6575,8 +6625,6 @@ function smStandup_(pianos, R) {
 // the day of the standup it's actually prepping the team for.
 function smTuningQueue_(pianos) {
   var t = tunings_();
-  var lastBy = t.lastBySerial || {};
-  var upTitles = (t.upcoming || []).map(function (r) { return String(r[2]).toUpperCase(); }).join(' | ');
   var now = Date.now();
   function daysSince(iso) { return Math.floor((now - new Date(iso + 'T12:00').getTime()) / 86400000); }
   var out = [];
@@ -6586,10 +6634,9 @@ function smTuningQueue_(pianos) {
     var loc = String(p.location || '').trim();
     if (!loc || /rent|attic|sold|deliver|storage|shop|where did/i.test(loc)) continue;
     if (/digital|realpiano|clavinova|keyboard/i.test([p.make, p.model, p.summary, p.type].join(' '))) continue;
-    var sn = String(p.serial).toUpperCase();
-    var dig = sn.replace(/\D/g, '');
-    if (upTitles.indexOf(sn) !== -1 || (dig.length >= 5 && upTitles.indexOf(dig) !== -1)) continue;
-    var last = (dig.length >= 5 && lastBy[dig]) || null;
+    var booked = (t.upcoming || []).some(function (r) { return tuningTitleIsFor_(r[2], p); });
+    if (booked) continue;
+    var last = lastTunedFor_(t, p);   // short serials too (Walter 10/14)
     var rank, note;
     if (last) {
       var d = daysSince(last);
