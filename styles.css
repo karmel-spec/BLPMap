@@ -1108,6 +1108,7 @@ button.cfxapply:hover{border-color:#9e2020;color:#9e2020}
 .whomenu .whohead small{display:block;font-size:11px;color:#8a929a;font-weight:500}
 .whomenu .whohead .whoexp{color:#9e2020;font-weight:700}
 .whomenu .whoout{color:#9e2020}
+.whomenu .whoin{color:#1f6f43;font-weight:600}
 
 /* move-to-occupied-spot inline confirmation (window.confirm is blocked
    in some embedded browsers, so it lives in the card's .mvmsg line) */

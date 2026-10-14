@@ -10074,9 +10074,13 @@ function renderAuth() {
           <div><b>${esc(u.name || '')}</b>
             ${u.email ? `<small>${esc(u.email)}</small>` : ''}
             ${roleTag ? `<small><i class="rolechip">${roleTag}</i></small>` : (u.pinOnly ? '<small>signed in · team PIN</small>' : '')}
-            ${expired ? '<small class="whoexp">session expired — sign in again (☰ menu)</small>' : ''}</div>
+            ${expired ? '<small class="whoexp">session expired — sign in again</small>' : ''}</div>
         </div>
-        <button class="whoout">⏻ Sign out</button>`;
+        ${expired ? '<button class="whoin">🔐 Sign in again</button> ' : ''}<button class="whoout">⏻ Sign out</button>`;
+      // an expired session only offered Sign out, and "sign in again (☰ menu)"
+      // pointed at a button that wasn't there (Walter 10/14)
+      const again = m.querySelector('.whoin');
+      if (again) again.onclick = () => { m.hidden = true; oidcLogin(u.email || ''); };
       m.querySelector('.whoout').onclick = () => {
         m.hidden = true;
         if (confirm('Sign out ' + (u.name || 'this user') + '?\n\nThe sign-in screen comes back so the next person can log in as themselves.')) signOut();
