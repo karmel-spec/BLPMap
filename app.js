@@ -15719,10 +15719,14 @@ function tbAgeChip(c) {
 /* 💬 text a card's answer / next steps to teammates (Brigham 8/28) — the
  * same team-picker as sharing a report by text: tap names, then one sms:
  * link opens the user's Messages app with everything prefilled. */
-// a computer (no touch screen, not a phone/tablet) can't open Messages from an sms: link
+// a computer can't reliably open Messages from an sms: link. Windows / Linux /
+// Chromebook always count (a touch-screen laptop still has no Messages app);
+// a Mac counts unless it is really an iPad in desktop mode (coarse pointer).
 function ctOnComputer() {
-  return !/iPhone|iPad|iPod|Android/i.test(navigator.userAgent || '')
-    && !(window.matchMedia && matchMedia('(pointer: coarse)').matches);
+  const ua = navigator.userAgent || '';
+  if (/iPhone|iPod|Android/i.test(ua)) return false;
+  if (/Windows|Linux|CrOS/i.test(ua) && !/Android/i.test(ua)) return true;
+  return !/iPad/i.test(ua) && !(window.matchMedia && matchMedia('(pointer: coarse)').matches);
 }
 function openCardTextModal(c) {
   const ov = modalShell('cardtextmodal', `
@@ -15750,7 +15754,8 @@ function openCardTextModal(c) {
           `<button class="shper ${sel.has(i) ? 'on' : ''}" data-i="${i}">${sel.has(i) ? '✓ ' : ''}${esc(t.name)}</button>`).join('')
       + `<div class="shacts">${sel.size
           ? `<a class="shbtn shgo ct-go" href="#">💬 ${ctOnComputer() ? 'Send text to' : 'Text'} ${sel.size === 1 ? esc(picked[0].name.split(' ')[0]) : sel.size + ' people'}</a>
-             ${ctOnComputer() ? `<div class="lite" style="font-size:11.5px;margin-top:6px">From a computer this goes out from the shop's texting number, signed “From ${esc((clockName() || 'you').split(' ')[0])}”, and asks them to reply to your phone.</div>` : ''}
+             ${ctOnComputer() ? `<div class="lite" style="font-size:11.5px;margin-top:6px">From a computer this goes out from the shop's texting number, signed “From ${esc((clockName() || 'you').split(' ')[0])}”, and asks them to reply to your phone.
+               <a href="#" class="ct-sms" style="margin-left:6px">Open in Messages instead</a> (Macs with iMessage)</div>` : ''}
              <div class="ct-note phmsg" style="margin-top:4px"></div>`
           : '<i>tap who should get it — then one text goes to them all</i>'}</div>`;
     list.querySelectorAll('.shper').forEach(b => b.onclick = () => {
@@ -15763,6 +15768,11 @@ function openCardTextModal(c) {
       }
       paint();
     });
+    const alt = list.querySelector('.ct-sms');   // a Mac with Messages set up can still use the old way
+    if (alt) alt.onclick = ev3 => {
+      ev3.preventDefault();
+      location.href = 'sms:' + picked.map(t => t.phone).join(',') + '?&body=' + encodeURIComponent(body());
+    };
     const go = list.querySelector('.ct-go');
     if (go) go.onclick = async ev2 => {
       ev2.preventDefault();   // build at tap time so the latest message rides along
