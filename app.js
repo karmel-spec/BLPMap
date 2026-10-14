@@ -15789,6 +15789,17 @@ function openCardTextModal(c) {
       const note = list.querySelector('.ct-note');
       if (!wa.ok) { note.textContent = 'Sign in first.'; return; }
       go.style.pointerEvents = 'none'; go.textContent = 'sending…'; note.textContent = '';
+      if (adjExpired()) {   // Google renews the sign-in hourly — renew in page, keep the typed message
+        note.textContent = '🔐 renewing your Google sign-in…';
+        try { if (window.google && google.accounts && google.accounts.id) google.accounts.id.prompt(); } catch (e) {}
+        for (let i = 0; i < 32 && adjExpired(); i++) await new Promise(r => setTimeout(r, 250));
+        if (adjExpired()) {
+          go.style.pointerEvents = ''; go.textContent = '💬 Send text';
+          note.textContent = '✗ Your Google sign-in expired — sign in again (☰ menu) and send once more.';
+          return;
+        }
+        note.textContent = '';
+      }
       try {
         const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
           headers: {'content-type': 'text/plain;charset=utf-8'},
