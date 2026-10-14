@@ -1,5 +1,5 @@
 // /api/agent — in-app chat with a BLP agent (Chris, Lindsay, Melody, Carla,
-// Clara, Arnold, Ivory, Marcus) through the BLP Agent Console
+// Clarence (slug clara), Arnold, Ivory, Marcus) through the BLP Agent Console
 // (blpagents.netlify.app), which is every agent's switchboard since
 // 2026-10-08: it stores the thread (Supabase agent_messages), wakes the
 // agent's Grok Bot (or runs the in-app vault runner for an agent whose Bot
@@ -23,7 +23,7 @@ const AGENTS_KEY = process.env.BLP_AGENTS_KEY || '';
 // public web client of the "BLP Store Map" Google Cloud project (same as app.js)
 const GOOGLE_CLIENT_ID = '110628682621-v65mkaoanv87sp75ggdfcrglfr7bkr8p.apps.googleusercontent.com';
 const AGENTS = ['lindsay', 'melody', 'carla', 'chris', 'clara', 'arnold', 'ivory', 'marcus'];
-const NAMES = { lindsay: 'Lindsay', melody: 'Melody', carla: 'Carla', chris: 'Chris', clara: 'Clara', arnold: 'Arnold', ivory: 'Ivory', marcus: 'Marcus' };
+const NAMES = { lindsay: 'Lindsay', melody: 'Melody', carla: 'Carla', chris: 'Chris', clara: 'Clarence', arnold: 'Arnold', ivory: 'Ivory', marcus: 'Marcus' };
 const SB_URL = (process.env.SUPABASE_URL || 'https://ismacawxfvvllfinibbf.supabase.co').replace(/\/$/, '');
 // either spelling works — Supabase's dashboard calls it the service_role key
 const SB_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || '';

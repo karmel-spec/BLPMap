@@ -3862,7 +3862,7 @@ function openSuggestBox() {
             .map(a => `<option ${a === 'Store Map' ? 'selected' : ''}>${a}</option>`).join('')}</select></label>
         <label class="sgsellbl">Train an agent <select class="sgsel sgagent" title="optional — suggest training for one of the AI agents">
           <option value="">— none —</option>
-          ${['Arnold', 'Chris', 'Clara', 'Ivory', 'Lindsay', 'Marcus', 'Melody'].map(a => `<option ${a === 'Chris' ? 'selected' : ''}>${a}</option>`).join('')}</select></label>
+          ${['Arnold', 'Chris', 'Clarence', 'Ivory', 'Lindsay', 'Marcus', 'Melody'].map(a => `<option ${a === 'Chris' ? 'selected' : ''}>${a}</option>`).join('')}</select></label>
       </div>
       <textarea class="sgtext" maxlength="1500" placeholder="What's wrong / what would make it better? A sentence or two is plenty."></textarea>
       <div class="sgrow">
@@ -17800,7 +17800,7 @@ boot();
   };
   const INFO = {
     chris: {name: 'Chris', role: 'the shop', tip: 'Ask Chris a question — shop help', bot: 'chrislarsonbot'},
-    clara: {name: 'Clara', role: 'admin, scheduling, your inbox', bot: 'claralarsonbot'},
+    clara: {name: 'Clarence', role: 'admin, scheduling, your inbox', bot: 'claralarsonbot'},   // renamed from Clara 2026-10-13; slug stays clara
     arnold: {name: 'Arnold', role: 'sales & leads', bot: 'arnoldlarsonbot'},
     ivory: {name: 'Ivory', role: 'tuning revenue & reactivation', bot: 'ivorylarsonbot'},
     melody: {name: 'Melody', role: 'admin & customer service', bot: 'melodylarsonbot'},
