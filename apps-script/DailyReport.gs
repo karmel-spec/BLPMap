@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-14.7';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-14.8';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -358,6 +358,13 @@ function doGet(e) {
   // Calendar read for the cloud scheduling routine (Brigham 9/11): the cloud
   // agent has no Google login, so it reads tech / tuning / QC / moving
   // calendars through here. Key-gated; read-only; 60-day window max.
+  // 👀 the shop brief rendered, nothing sent (Walter 10/14) — key-gated like calevents
+  if (e && e.parameter && e.parameter.fn === 'shopbriefpreview') {
+    var pkey = String(e.parameter.key || '');
+    if (pkey !== TEAM_PIN && pkey.toLowerCase() !== 'pianoman') return json_({error: 'unauthorized'});
+    try { return HtmlService.createHtmlOutput(shopManagerHtml_(buildShopManagerReport_(0))).setTitle('Shop brief preview'); }
+    catch (errP) { return json_({error: String(errP)}); }
+  }
   if (e && e.parameter && e.parameter.fn === 'calevents') {
     var ckey = String(e.parameter.key || '');
     if (ckey !== TEAM_PIN && ckey.toLowerCase() !== 'pianoman') return json_({error: 'unauthorized'});
@@ -6795,6 +6802,30 @@ function buildShopManagerReport_(dayOffset) {
     var rank = {overdue: 0, missing: 1, today: 2, ok: 3};
     return rank[a.state] - rank[b.state];
   });
+  // ⏸ paused and on-hold pianos sit with the waiting ones (Walter 10/14):
+  // Paused phase, or HOLD written in the phase / status / owner note
+  R.held = pianos.filter(function (p) {
+    if (/^waiting/i.test(String(p.phase || ''))) return false;   // already in R.waiting
+    return /^paused/i.test(String(p.phase || ''))
+      || /\bon hold\b|\bhold\b/i.test(String(p.phase || '') + ' ' + String(p.status || '') + ' ' + String(p.owner || '').slice(0, 80));
+  }).map(function (p) {
+    var why = /^paused/i.test(String(p.phase || '')) ? 'Paused' : 'On hold';
+    var m = /(on hold[^\n]{0,60}|\*?on hold[^*\n]*\*?)/i.exec(String(p.owner || '') + ' ' + String(p.status || ''));
+    return {p: p, why: why, note: m ? m[1].replace(/\*/g, '').trim() : (p.waitNote || '')};
+  });
+  // 🏖 time off in the next 7 days (Walter 10/14) — everyone on the Time Off
+  // tab (techs, interns, refinishers), approved or still waiting, not denied
+  R.timeOff = [];
+  try {
+    var tz0 = 'America/Denver';
+    var today0 = Utilities.formatDate(new Date(), tz0, 'yyyy-MM-dd');
+    var week0 = Utilities.formatDate(new Date(Date.now() + 7 * 86400000), tz0, 'yyyy-MM-dd');
+    R.timeOff = timeOffRows_().rows.filter(function (r) {
+      if (/denied|declined|rejected|cancel/i.test(r.status)) return false;
+      var st = r.start || '', en = r.end || r.start || '';
+      return st && st <= week0 && en >= today0;
+    }).sort(function (a, b) { return (a.start + a.who) < (b.start + b.who) ? -1 : 1; });
+  } catch (eTO) { R.timeOff = []; }
 
   // stalled: in one work phase longer than its standard
   R.stalled = [];
@@ -7002,27 +7033,16 @@ function shopManagerHtml_(R) {
     return '<b>' + n.name + '</b>' + (n.pos ? ' — ' + n.pos : '')
       + ' <span style="color:#8a847b">(day ' + (n.days + 1) + ')</span>';
   }));
-  su('🚚', 'Celebrate — finished & delivered', (SU.delivered || []).map(function (d) {
-    return '<b>' + d.piano + '</b> left the shop yesterday <span style="color:#8a847b">(logged by ' + d.who + ')</span> 🎉';
-  }));
+  // Celebrate, Work Clock wins and Today's focus came out of the brief (Walter 10/14)
   su('🤝', 'Teamwork spotlight', (SU.teamwork || []).map(function (t) {
     return '<b>' + t.piano + '</b> (' + t.why + ') — built by <b>' + t.techs.length + ' techs</b>: '
       + t.techs.join(', ') + '. Take a bow.';
   }));
-  var champLines = [];
-  if (SU.champ) champLines.push('<b>' + SU.champ.tech + '</b> led the Work Clock yesterday — '
-    + SU.champ.hours + ' h across ' + SU.champ.pianos + (SU.champ.pianos === 1 ? ' piano' : ' pianos') + ' 🏆');
-  (SU.personalBests || []).forEach(function (pb) {
-    if (SU.champ && pb.tech === SU.champ.tech) return;
-    champLines.push('<b>' + pb.tech + '</b> set a personal-best day — ' + pb.hours + ' h logged 📈');
-  });
-  su('🏆', 'Work Clock wins', champLines);
   su('🛡', 'Safety minute', SU.safety ? ['<i>' + SU.safety + '</i>'] : []);
   su('⭐', 'Standard of the day', SU.standard ? ['<i>' + SU.standard + '</i>'
     + ' <a href="https://blpshop.netlify.app/#policies-stime-management" '
     + 'style="color:#9e2020;font-size:12px;white-space:nowrap">full standards ↗</a>'] : []);
   su('📣', 'Standup notes', SU.notes || []);
-  su('🎯', 'Today’s focus', SU.focus || []);
   H.push('</div>');
 
   // page 2 starts here — every other section's header lands on its own page
@@ -7031,21 +7051,24 @@ function shopManagerHtml_(R) {
   // at a glance
   var alerts = R.blocked.length + R.noCab.length + R.noTrack.length + R.noPhase.length;
   H.push('<p style="font:13px/1.6 Helvetica,Arial;color:#2b2f33;margin:0 0 4px">'
-    + '<b>' + R.activity.total + '</b> changes logged since yesterday · '
     + '<b>' + R.moves.length + '</b> moves today · '
     + '<b style="color:' + (alerts ? '#9e2020' : '#2e7d4f') + '">' + alerts + '</b> items needing attention'
     + '</p>');
 
-  sec('⏱', 'Hours clocked yesterday', R.clockedTotal + ' h',
-    'From the per-piano Work Clock. Live status and job costing: Shop Manager → Shop Board.');
-  if (R.clocked && R.clocked.length) {
-    ul(R.clocked.map(function (x) {
-      return '<b>' + x.tech + '</b> — ' + x.hours + ' h across ' + x.pianos
-        + (x.pianos === 1 ? ' piano' : ' pianos');
+  // 🏖 who's out in the next 7 days (Walter 10/14)
+  sec('🏖', 'Time off — next 7 days', R.timeOff.length,
+    'Everyone on the Time Off tab — techs, interns, refinishers. Approve or deny from the Time Off report.');
+  if (R.timeOff.length) {
+    ul(R.timeOff.map(function (r) {
+      var fmt = function (iso) { var d = new Date(iso + 'T12:00:00'); return isNaN(d) ? iso : Utilities.formatDate(d, 'America/Denver', 'EEE M/d'); };
+      var span = r.end && r.end !== r.start ? fmt(r.start) + ' – ' + fmt(r.end) : fmt(r.start);
+      var ok = /^approved/i.test(r.status);
+      return '<b>' + esc_(r.who) + '</b> — ' + span + (r.times ? ' · ' + esc_(r.times) : '')
+        + (r.note ? '<br><span style="font-size:12px;color:#6f6a63">' + esc_(String(r.note).slice(0, 140)) + '</span>' : '')
+        + ' ' + (ok ? pill('APPROVED', '#eaf5ec', '#2f7d4f') : pill('NOT APPROVED YET', '#fdf3ec', '#8a6a00'));
     }));
   } else {
-    H.push('<p style="margin:0 0 8px;font:12.5px Helvetica,Arial;color:#8a847b">No punches yesterday — '
-      + 'remind the team: the ⏱ Work Clock on every piano card (or scanning the shop tag) is how hours land in job costing.</p>');
+    H.push('<p style="margin:0 0 8px;font:12.5px Helvetica,Arial;color:#8a847b">Nobody has time off in the next 7 days.</p>');
   }
   if (R.appLive && R.appLive.length) {
     var LICON = {bug: '🐛', edit: '✏️', idea: '💡'};
@@ -7091,32 +7114,7 @@ function shopManagerHtml_(R) {
       + 'already on the calendar drop off on their own. Full queue: Store Map \u2192 Reports \u2192 \ud83c\udfaf Task Queues.');
     ul(R.tuningQueue.map(function (x) { return ref(x.p) + ' \u2014 ' + esc_(x.note); }));
   }
-  if (R.suggestions && R.suggestions.length) {
-    var SICON = {bug: '🐛', edit: '✏️', idea: '💡'};
-    var SPILL = {'Requested': ['#eeeeee', '#555555'], 'In progress': ['#fdf3ec', '#9a5b13'],
-                 'Live': ['#eaf2fd', '#2c5d96'], 'Tested': ['#eaf5ec', '#2f7d4f']};
-    sec('💡', 'App suggestions this week', R.suggestions.length,
-      'From the team via the Store Map\u2019s 💡 button \u2014 thank the names you see here.');
-    ul(R.suggestions.map(function (x) {
-      var c = SPILL[x.status] || SPILL.Requested;
-      return '<b>' + x.who + '</b> \u2014 ' + (SICON[x.type] || '💡') + ' '
-        + String(x.text).slice(0, 110) + ' ' + pill(x.status, c[0], c[1]);
-    }));
-  }
-  if (R.activity.total) {
-    sec('📋', 'Yesterday in the map', R.activity.total, 'Every change is logged under the name that made it.');
-    var whos = [];
-    for (var w in R.activity.byWho) {
-      var list = R.activity.byWho[w];
-      whos.push('<b>' + w + '</b> — ' + list.length + ' change' + (list.length > 1 ? 's' : '')
-        + '<br><span style="color:#6f6a63;font-size:12px">'
-        + list.slice(0, 8).map(function (a) {
-            return a.t + ' · ' + a.action + (a.piano ? ' — ' + a.piano : '');
-          }).join('<br>')
-        + (list.length > 8 ? '<br>… and ' + (list.length - 8) + ' more' : '') + '</span>');
-    }
-    ul(whos);
-  }
+  // App suggestions and Yesterday in the map came out of the brief (Walter 10/14)
 
   if (R.advances.length) {
     sec('▶', 'Phase advances — is the next tech lined up?', R.advances.length);
@@ -7136,8 +7134,9 @@ function shopManagerHtml_(R) {
     }));
   }
 
-  if (R.waiting.length) {
-    sec('⏳', 'Waiting on…', R.waiting.length, 'Overdue and missing check-back dates first.');
+  if (R.waiting.length || R.held.length) {
+    sec('⏸', 'Paused, waiting & on hold', R.waiting.length + R.held.length,
+      'Waiting pianos with overdue or missing check-back dates first, then paused and on-hold pianos.');
     ul(R.waiting.map(function (w) {
       var tag = w.state === 'overdue'
           ? pill('CHECK BACK ' + w.days + 'd OVERDUE', '#fbeaea', '#9e2020')
@@ -7146,7 +7145,16 @@ function shopManagerHtml_(R) {
         : '<span style="font-size:12px;color:#8a847b">check back ' + w.cb + '</span>';
       return ref(w.p) + '<br><span style="font-size:12px;color:#6f6a63">waiting on ' + w.on
         + '</span> ' + tag;
-    }));
+    }).concat(R.held.map(function (h) {
+      return ref(h.p) + '<br><span style="font-size:12px;color:#6f6a63">' + esc_(h.note || h.p.phase || '') + '</span> '
+        + pill(h.why === 'Paused' ? 'PAUSED' : 'ON HOLD', '#f0f2f4', '#5a626a');
+    })));
+  }
+
+  // 🏷 pianos on the map with no phase — its own list now, not a line in Data gaps (Walter 10/14)
+  if (R.noPhase.length) {
+    sec('🏷', 'Pianos with no phase', R.noPhase.length, 'On the map as shop work, but no phase set — open the card and pick one.');
+    ul(R.noPhase.map(function (p) { return ref(p) + ' <span style="font-size:12px;color:#8a847b">· spot ' + smSpot_(p) + '</span>'; }));
   }
 
   // (the 🐢 "sitting longer than the standard" list moved to its own
@@ -7182,8 +7190,6 @@ function shopManagerHtml_(R) {
   }
   if (R.noMap.length) gaps.push('<b>' + R.noMap.length + '</b> shop-work pianos with <b>no map number</b>:'
     + gapList_(R.noMap));
-  if (R.noPhase.length) gaps.push('<b>' + R.noPhase.length + '</b> on the map with <b>no shop phase</b>:'
-    + gapList_(R.noPhase));
   if (R.noTrack.length) gaps.push('<b>' + R.noTrack.length + '</b> with <b>no track</b> — phases can\'t be planned:'
     + gapList_(R.noTrack));
   if (R.noCab.length) gaps.push('<b>' + R.noCab.length + '</b> past PRSB with <b>no cabinetry shelf</b> recorded:'
@@ -7741,7 +7747,7 @@ function briefSms_() {
   (SU.newFaces || []).filter(function (n) { return n.days <= 7; }).forEach(function (n) {
     L.push('WELCOME: ' + n.name + (n.pos ? ' (' + n.pos + ')' : '') + ', day ' + (n.days + 1));
   });
-  if (SU.champ) L.push('Clock leader yesterday: ' + SU.champ.tech + ' - ' + SU.champ.hours + ' h');
+  // (Work Clock leader line removed with the brief's Work Clock wins — Walter 10/14)
   if (SU.safety) L.push('Safety: ' + SU.safety);
   if (SU.standard) L.push('Standard: ' + SU.standard);
 
