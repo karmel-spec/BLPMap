@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-14.19';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-14.20';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -2862,8 +2862,11 @@ function saleSweep_(who) {
   for (var r = 2; r < n; r++) {   // data starts row 3 (index 2)
     if (!String(serials[r][0] || '').trim() && !String(stat[r][0] || '').trim()) continue;
     var ph = String(phases[r][0] || '').trim();
-    var st = String(stat[r][0] || '').toLowerCase();
-    var isSale = ph === 'For Sale' || ph === 'Sale Pending' || ph === 'Sold' || st.indexOf('for sale') >= 0;
+    // phase only (Walter 10/14, Melissa 100126terry77): the 9/4 run also took
+    // any piano whose STATUS mentioned "for sale" — pre-sale balcony pianos
+    // nobody had touched came out with keys Done, plate In piano and bass
+    // strings + decals "Installed 9/4/26"
+    var isSale = ph === 'For Sale' || ph === 'Sale Pending' || ph === 'Sold';
     if (!isSale) continue;
     counts.pianos++;
     if (ph !== 'For Sale' && !KEEP.test(ph)) { phases[r][0] = 'For Sale'; counts.phase++; }
