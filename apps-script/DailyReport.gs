@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-14.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-14.4';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -8545,8 +8545,8 @@ function t_(lang, en, es) { return lang === 'es' ? es : en; }
 /* 💬 a task-board card's Text button on a COMPUTER (Brigham 10/13,
  * 101326larson15): the phone's sms: link does nothing on a desktop browser,
  * so the computer sends it through the shop texting number instead. Says who
- * it's from and to reply to their own phone (replies to the shop number go to
- * the SMS command gateway, not to a person). Sent now, not held for quiet
+ * it's from; a reply comes back to the shop number and sms-inbound passes it
+ * to the sender's phone (replyTo thread). Sent now, not held for quiet
  * hours — a person chose to send it. Google sign-in required. */
 function cardText_(req, who) {
   var g = req._g || {};
@@ -8557,13 +8557,16 @@ function cardText_(req, who) {
   var body = String(req.message || '').trim().slice(0, 900);
   if (!names.length || !body) return {error: 'pick who gets it and write a message'};
   var first = from.split(/\s+/)[0];
-  var msg = '\ud83d\udcac From ' + first + ':\n' + body + '\n(Reply to ' + first + "'s own phone \u2014 this number doesn't pass replies on.)";
+  // replies to this text come back here and sms-inbound hands them to the
+  // sender's phone (replyTo thread, Walter 10/14) — so "just reply" is true
+  var msg = '\ud83d\udcac From ' + first + ':\n' + body + '\n(Just reply to this text \u2014 it goes to ' + first + '.)';
   var sent = [], failed = [];
   names.forEach(function (n) {
     try {
       var r = UrlFetchApp.fetch('https://blpsalesapp.netlify.app/.netlify/functions/request-notify', {
         method: 'post', contentType: 'application/json', muteHttpExceptions: true,
-        payload: JSON.stringify({key: 'pianoman', name: n, message: msg, now: true})});
+        payload: JSON.stringify({key: 'pianoman', name: n, message: msg, now: true,
+          replyTo: from, thread: String(req.card || '').slice(0, 120)})});
       var j = {}; try { j = JSON.parse(r.getContentText()); } catch (eJ) {}
       if (j.sent) sent.push(n); else failed.push(n + (j.reason ? ' (' + j.reason + ')' : ''));
     } catch (e) { failed.push(n); }

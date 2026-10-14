@@ -15754,7 +15754,7 @@ function openCardTextModal(c) {
           `<button class="shper ${sel.has(i) ? 'on' : ''}" data-i="${i}">${sel.has(i) ? '✓ ' : ''}${esc(t.name)}</button>`).join('')
       + `<div class="shacts">${sel.size
           ? `<a class="shbtn shgo ct-go" href="#">💬 ${ctOnComputer() ? 'Send text to' : 'Text'} ${sel.size === 1 ? esc(picked[0].name.split(' ')[0]) : sel.size + ' people'}</a>
-             ${ctOnComputer() ? `<div class="lite" style="font-size:11.5px;margin-top:6px">From a computer this goes out from the shop's texting number, signed “From ${esc((clockName() || 'you').split(' ')[0])}”, and asks them to reply to your phone.
+             ${ctOnComputer() ? `<div class="lite" style="font-size:11.5px;margin-top:6px">From a computer this goes out from the shop's texting number, signed “From ${esc((clockName() || 'you').split(' ')[0])}”. Their reply is passed straight to your phone.
                <a href="#" class="ct-sms" style="margin-left:6px">Open in Messages instead</a> (Macs with iMessage)</div>` : ''}
              <div class="ct-note phmsg" style="margin-top:4px"></div>`
           : '<i>tap who should get it — then one text goes to them all</i>'}</div>`;
