@@ -15719,6 +15719,11 @@ function tbAgeChip(c) {
 /* 💬 text a card's answer / next steps to teammates (Brigham 8/28) — the
  * same team-picker as sharing a report by text: tap names, then one sms:
  * link opens the user's Messages app with everything prefilled. */
+// a computer (no touch screen, not a phone/tablet) can't open Messages from an sms: link
+function ctOnComputer() {
+  return !/iPhone|iPad|iPod|Android/i.test(navigator.userAgent || '')
+    && !(window.matchMedia && matchMedia('(pointer: coarse)').matches);
+}
 function openCardTextModal(c) {
   const ov = modalShell('cardtextmodal', `
     <span class="x">✕</span>
@@ -15744,7 +15749,9 @@ function openCardTextModal(c) {
       + phonesCache.map((t, i) =>
           `<button class="shper ${sel.has(i) ? 'on' : ''}" data-i="${i}">${sel.has(i) ? '✓ ' : ''}${esc(t.name)}</button>`).join('')
       + `<div class="shacts">${sel.size
-          ? `<a class="shbtn shgo ct-go" href="#">💬 Text ${sel.size === 1 ? esc(picked[0].name.split(' ')[0]) : sel.size + ' people'}</a>`
+          ? `<a class="shbtn shgo ct-go" href="#">💬 ${ctOnComputer() ? 'Send text to' : 'Text'} ${sel.size === 1 ? esc(picked[0].name.split(' ')[0]) : sel.size + ' people'}</a>
+             ${ctOnComputer() ? `<div class="lite" style="font-size:11.5px;margin-top:6px">From a computer this goes out from the shop's texting number, signed “From ${esc((clockName() || 'you').split(' ')[0])}”, and asks them to reply to your phone.</div>` : ''}
+             <div class="ct-note phmsg" style="margin-top:4px"></div>`
           : '<i>tap who should get it — then one text goes to them all</i>'}</div>`;
     list.querySelectorAll('.shper').forEach(b => b.onclick = () => {
       if (b.classList.contains('shall')) {
@@ -15757,10 +15764,33 @@ function openCardTextModal(c) {
       paint();
     });
     const go = list.querySelector('.ct-go');
-    if (go) go.onclick = ev2 => {
+    if (go) go.onclick = async ev2 => {
       ev2.preventDefault();   // build at tap time so the latest message rides along
-      location.href = 'sms:' + picked.map(t => t.phone).join(',')
-        + '?&body=' + encodeURIComponent(body());
+      if (!ctOnComputer()) {
+        location.href = 'sms:' + picked.map(t => t.phone).join(',')
+          + '?&body=' + encodeURIComponent(body());
+        return;
+      }
+      // a computer has no Messages app behind sms: — the click did nothing
+      // (Brigham 10/13, 101326larson15). Send through the shop texting number.
+      const wa = writeAuth();
+      const note = list.querySelector('.ct-note');
+      if (!wa.ok) { note.textContent = 'Sign in first.'; return; }
+      go.style.pointerEvents = 'none'; go.textContent = 'sending…'; note.textContent = '';
+      try {
+        const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+          headers: {'content-type': 'text/plain;charset=utf-8'},
+          body: JSON.stringify({pin: wa.pin, action: 'cardtext', names: picked.map(t => t.name),
+            message: body(), card: c.text.slice(0, 60), ...authFields()})}, 60000);
+        const j = await r.json();
+        if (j.error && !(j.sent && j.sent.length)) throw new Error(j.error);
+        go.textContent = '✓ sent to ' + j.sent.map(n => n.split(' ')[0]).join(', ');
+        if (j.failed && j.failed.length) note.textContent = '⚠ not sent: ' + j.failed.join(', ');
+        else setTimeout(() => { ov.hidden = true; }, 1600);
+      } catch (e) {
+        go.style.pointerEvents = ''; go.textContent = '💬 Send text';
+        note.textContent = '✗ ' + e.message;
+      }
     };
   };
   if (phonesCache) { paint(); msgIn.focus(); return; }

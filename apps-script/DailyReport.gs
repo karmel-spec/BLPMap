@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-14.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-14.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -1382,6 +1382,7 @@ function doPost(e) {
     if (req.action === 'phones') {
       return json_(teamPhones_());
     }
+    if (req.action === 'cardtext') return json_(cardText_(req, who));
     if (req.action === 'clockin') {
       var cin = clockIn_(req);
       return json_(timed_(cin, t0));
@@ -8541,6 +8542,35 @@ function teamLang_(name, hint) {
 }
 function t_(lang, en, es) { return lang === 'es' ? es : en; }
 
+/* 💬 a task-board card's Text button on a COMPUTER (Brigham 10/13,
+ * 101326larson15): the phone's sms: link does nothing on a desktop browser,
+ * so the computer sends it through the shop texting number instead. Says who
+ * it's from and to reply to their own phone (replies to the shop number go to
+ * the SMS command gateway, not to a person). Sent now, not held for quiet
+ * hours — a person chose to send it. Google sign-in required. */
+function cardText_(req, who) {
+  var g = req._g || {};
+  var from = String(g.name || '').trim();
+  if (!from) return {error: 'Sign in with Google to send texts from a computer.'};
+  var names = (Array.isArray(req.names) ? req.names : []).map(function (n) { return String(n || '').trim(); })
+    .filter(Boolean).slice(0, 30);
+  var body = String(req.message || '').trim().slice(0, 900);
+  if (!names.length || !body) return {error: 'pick who gets it and write a message'};
+  var first = from.split(/\s+/)[0];
+  var msg = '\ud83d\udcac From ' + first + ':\n' + body + '\n(Reply to ' + first + "'s own phone \u2014 this number doesn't pass replies on.)";
+  var sent = [], failed = [];
+  names.forEach(function (n) {
+    try {
+      var r = UrlFetchApp.fetch('https://blpsalesapp.netlify.app/.netlify/functions/request-notify', {
+        method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+        payload: JSON.stringify({key: 'pianoman', name: n, message: msg, now: true})});
+      var j = {}; try { j = JSON.parse(r.getContentText()); } catch (eJ) {}
+      if (j.sent) sent.push(n); else failed.push(n + (j.reason ? ' (' + j.reason + ')' : ''));
+    } catch (e) { failed.push(n); }
+  });
+  logAct_(who, 'Card text sent', String(req.card || '').slice(0, 60), 'to ' + sent.join(', ') + (failed.length ? ' · not sent: ' + failed.join(', ') : ''));
+  return {ok: sent.length > 0, sent: sent, failed: failed, error: sent.length ? undefined : 'not sent: ' + failed.join(', ')};
+}
 function notifyTeam_(names, message) {
   for (var i = 0; i < names.length; i++) {
     try {
