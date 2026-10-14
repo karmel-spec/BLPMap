@@ -7675,6 +7675,11 @@ async function setPhase(p, phase, pop, extra) {
     } else if (j.ok) {
       p.phase = j.phase != null ? j.phase : phase;
       edit.phase = p.phase;   // keep protecting until /api/data catches up
+      // queued (10/14): the relay saved it and is applying it in the
+      // background right now — follow it like a queued move, so a refusal
+      // ("serial not found above the SOLD section", changed since) comes
+      // back to the card instead of leaving a phase that never landed
+      if (j.queued && j.qid) watchQueuedPhase(j.qid, p, phase, was, sel, edit, msg);
       // a delivered piano has no mini-QC left to do — withdraw any pending
       // request so it stops glowing in the queue (Mark 9/28, Weber 33045)
       if (phase === 'Delivered') fetch(PHASEQC_URL, {method: 'POST', headers: {'content-type': 'application/json'},
@@ -7909,7 +7914,7 @@ async function saveCabinetry(p, list, pop) {
     // just set rather than blanking the rack until the feed catches up
     // (Mark 9/28: plates "wouldn't show they had moved")
     if (typeof j.cabinetry === 'string') { p.cabinetry = j.cabinetry; edit.cabinetry = j.cabinetry; }
-    if (msg) { msg.className = 'cabmsg phmsg ok'; msg.textContent = j.queued ? '\u23f3 saved \u2014 the bridge is slow, it lands within a few minutes' : '\u2713 saved'; }
+    if (msg) { msg.className = 'cabmsg phmsg ok'; msg.textContent = j.queued ? '\u23f3 saved \u2014 the bridge is slow, it lands within about a minute' : '\u2713 saved'; }
     if (!$('#pop').hidden) openPop(p.row, S.popAnchor, true);   // refresh card if visible
     return true;
   } catch (e) {
@@ -10340,7 +10345,7 @@ async function movePiano(p, dest, pop, confirmed) {
       msg.className = 'mvmsg ok';
       msg.textContent = j.moved
         ? `✓ Moved from ${j.previous || '—'} to ${j.location}` + (known ? '' : ' (not a numbered map spot — it will show in reports)')
-        : `⏳ Saved — the bridge is slow right now; the move to ${dest} lands within a few minutes. No need to retry.`;
+        : `⏳ Saved — the bridge is slow right now; the move to ${dest} usually lands within 30 s. No need to retry.`;
       applyBumps(j.bumped);
       if (j.bumped && j.bumped.length) {
         msg.textContent += ` — bumped ${j.bumped.map(b => b.summary || 'a piano').join(', ')} to the attic`;
@@ -10383,6 +10388,32 @@ function watchQueuedMove(qid, p, dest, prevLoc, msg) {
     setTimeout(tick, 20000);
   };
   setTimeout(tick, 15000);
+}
+/* Follow up a queued phase change (10/14), same relay status the move
+ * watcher uses: since the relay drains a queued write at once it normally
+ * lands in 15–30 s. Landed → the "✓ Saved" stands (and the bridge's own
+ * answer, e.g. For Sale auto-ticks, arrives with the next data refresh);
+ * failed → ✗ with the reason and the card goes back to the old phase. */
+function watchQueuedPhase(qid, p, phase, was, sel, edit, msg) {
+  const t0 = Date.now();
+  const say = (cls, txt) => { if (msg && msg.isConnected) { msg.className = 'phmsg ' + cls; msg.textContent = txt; } };
+  const tick = async () => {
+    if (Date.now() - t0 > 360000) return;   // the 2.5-min data poll shows the truth from here
+    let j = null;
+    try { j = await (await fetchT(RELAY_URL + '?key=pianoman&qid=' + encodeURIComponent(qid), {cache: 'no-store'}, 15000)).json(); } catch (e) {}
+    if (j && j.status === 'done') {
+      if (j.stale) { say('err', `✗ Not applied — the phase was changed again after this was saved. Refreshing…`); revertPhase(p, was, sel, edit); setTimeout(pianologLiveRefresh, 1200); }
+      return;
+    }
+    if (j && j.status === 'failed') {
+      const why = /sold section/i.test(j.error || '') ? 'this piano is marked delivered / sold in the Piano Log' : (j.error || 'the bridge refused it');
+      say('err', `✗ ${phase} didn't go through — ${why}.`);
+      revertPhase(p, was, sel, edit);
+      return;
+    }
+    setTimeout(tick, 15000);
+  };
+  setTimeout(tick, 12000);
 }
 /* Shop queue reorder. The queue is the row order of the Custom Shopwork
    section, so the bridge physically moves the piano's row — anchored by the
