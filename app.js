@@ -5177,6 +5177,9 @@ async function openQcRail(id) {
   // name, editable — Brigham often inspects on a tech's phone during training
   let inspector = clockName() || '';
   const miscItems = [];   // typed-in extra items awaiting their first verdict
+  // what's typed in the Miscellaneous box survives a redraw (Jacob 10/5,
+  // 100526mower26: every Pass / Rework tap redrew the sheet and wiped it)
+  let miscDraft = '';
   // Brigham 9/17: the inspection is a clocked piano session. Start clocks the
   // inspector into this piano (under THEIR name, even on a tech's phone);
   // Approve / Send back clocks them out again (closing the rail does not).
@@ -5273,6 +5276,12 @@ async function openQcRail(id) {
   const render = () => {
       // Curtis 9/17 (request 091726biggs04): re-rendering reset the sheet to the top on every tap — keep the scroll position
       const _ps = ov.querySelector('.dsheet'); const _keep = _ps ? _ps.scrollTop : 0;
+      // …and keep the cursor in the box being typed in (the 8 s live check redraws too)
+      const _ae = document.activeElement, _inOv = _ae && ov.contains(_ae);
+      const _focus = _inOv && _ae.classList.contains('qcmisctxt') ? '.qcmisctxt'
+        : _inOv && _ae.classList.contains('qcgen') ? '.qcgen'
+        : _inOv && _ae.classList.contains('qcnotetxt') && _ae.closest('.qcnotebox') ? `.qcnotebox[data-t="${CSS.escape(_ae.closest('.qcnotebox').dataset.t)}"] .qcnotetxt` : '';
+      const _caret = _focus && typeof _ae.selectionStart === 'number' ? [_ae.selectionStart, _ae.selectionEnd] : null;
     const v = live.verdicts || {};
     // miscellaneous items (Brigham 9/17): anything typed in the bottom row
     // becomes its own verdict line — judged verdicts plus ones still being noted
@@ -5331,7 +5340,7 @@ async function openQcRail(id) {
       ${canJudge && !settled ? `<div class="qcmisc">
         <span style="font-size:10px;letter-spacing:1px;color:#8a847b;text-transform:uppercase">Miscellaneous</span>
         <div class="qcmiscrow">
-          <input class="qcmisctxt" maxlength="300" ${inspecting ? '' : 'disabled'} placeholder="anything out of the ordinary — e.g. cracked key slip, missing caster…">
+          <input class="qcmisctxt" maxlength="300" ${inspecting ? '' : 'disabled'} value="${esc(miscDraft)}" placeholder="anything out of the ordinary — e.g. cracked key slip, missing caster…">
           <button class="qcmiscp" title="passes" ${inspecting ? '' : 'disabled style="opacity:.4"'}>✓ Pass</button>
           <button class="qcmiscf" title="needs rework" ${inspecting ? '' : 'disabled style="opacity:.4"'}>✗ Rework</button></div></div>` : ''}
       ${canJudge && !settled ? `<div style="margin-top:14px">
@@ -5343,6 +5352,7 @@ async function openQcRail(id) {
         ${!all && !anyFail ? '<div class="dssub" style="margin-top:6px">Judge every item first — Approve needs all ✓, Send back needs at least one ✗.</div>' : ''}</div>` : ''}
       ${!canJudge && !settled ? '<div class="dssub" style="margin-top:10px">Waiting on a manager — this updates live.</div>' : ''}`;
       { const _ns = ov.querySelector('.dsheet'); if (_ns && _keep) _ns.scrollTop = _keep; }
+      if (_focus) { const _el = ov.querySelector(_focus); if (_el) { _el.focus({preventScroll: true}); if (_caret) try { _el.setSelectionRange(_caret[0], _caret[1]); } catch (e) {} } }
     ov.querySelector('.dsx').onclick = close;
     ov.querySelectorAll('.qctech').forEach(t => t.onclick = ev => { ev.preventDefault(); openTechFolder(t.dataset.serial, t); });
     ov.querySelectorAll('.qcpw').forEach(t => t.onclick = ev => {
@@ -5374,10 +5384,12 @@ async function openQcRail(id) {
       if (!txt) { miscIn.focus(); miscIn.style.borderColor = '#9e2020'; return; }
       if (shown.some(it => it.text.toLowerCase() === txt.toLowerCase())) { miscIn.style.borderColor = '#9e2020'; miscIn.title = 'already on the list'; return; }
       miscItems.push(txt);
+      miscDraft = '';   // it's on the list now — clear the box
       if (verdict === 'pass') { keepGen(); sendVerdict(txt, 'pass', ''); }
       else openNote(txt, 'fail');
     };
     if (miscIn) {
+      miscIn.oninput = () => { miscDraft = miscIn.value; miscIn.style.borderColor = ''; };
       miscIn.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); miscGo('pass'); } };
       ov.querySelector('.qcmiscp').onclick = () => miscGo('pass');
       ov.querySelector('.qcmiscf').onclick = () => miscGo('fail');
