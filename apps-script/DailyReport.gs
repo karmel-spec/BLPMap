@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-14.15';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-14.16';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -6963,7 +6963,9 @@ function smTocId_(title) {
 function shopManagerHtml_(R) {
   var H = [];
   var TOC = [];
+  var SEGS = [];   // where each section starts in H — reordered at the end (Walter 10/14)
   function sec(icon, title, count, note) {
+    SEGS.push({key: title, start: H.length});
     var id = smTocId_(title);
     TOC.push({id: id, label: icon + ' ' + title});
     H.push('<h2 id="' + id + '" style="font:700 13px/1.4 Helvetica,Arial,sans-serif;letter-spacing:1.5px;'
@@ -7039,6 +7041,7 @@ function shopManagerHtml_(R) {
   // ---------- Morning Standup — first thing the 8AM huddle reads ----------
   var SU = R.standup || {};
   TOC.push({id: 'sec-morning-standup', label: '🌅 Morning Standup'});
+  SEGS.push({key: 'Morning Standup', start: H.length});
   H.push('<div id="sec-morning-standup" style="background:#faf8f4;border:1px solid #e6dfd2;border-radius:10px;padding:14px 16px;margin:2px 0 18px">');
   H.push('<div style="font:800 13px Helvetica,Arial;letter-spacing:2px;color:#9e2020;margin-bottom:10px">'
     + '🌅 MORNING STANDUP · 8AM</div>');
@@ -7118,12 +7121,7 @@ function shopManagerHtml_(R) {
   // Printables came out of the brief (Walter 10/14)
   // Client reports ready to send came out of the brief (Walter 10/14)
   // Field tunings (reminder calls) came out of the brief (Walter 10/14)
-  if (R.tuningQueue && R.tuningQueue.length) {
-    sec('🎵', 'Showroom tuning queue \u2014 Korban\u2019s next ' + R.tuningQueue.length, R.tuningQueue.length,
-      'For-sale floor pianos, most-overdue first, from the tuning calendars \u2014 pianos with a tuning '
-      + 'already on the calendar drop off on their own. Full queue: Store Map \u2192 Reports \u2192 \ud83c\udfaf Task Queues.');
-    ul(R.tuningQueue.map(function (x) { return ref(x.p) + ' \u2014 ' + esc_(x.note); }));
-  }
+  // Showroom tuning queue came out of the brief (Walter 10/14)
   // App suggestions and Yesterday in the map came out of the brief (Walter 10/14)
 
   if (R.advances.length) {
@@ -7174,19 +7172,7 @@ function shopManagerHtml_(R) {
   // (the 🐢 "sitting longer than the standard" list moved to its own
   //  Store Map report — linked in the footer below)
 
-  if (R.openSpots.length && R.queueUp.length) {
-    sec('🔄', 'Open spots — next up in the queue', null,
-      R.openSpots.length + ' numbered spot' + (R.openSpots.length > 1 ? 's are' : ' is')
-      + ' free. Recommended for the in-store moves list — approve before scheduling.');
-    ul(R.queueUp.map(function (p) {
-      return pill('QUEUE #' + p.queuePos, '#f0f2f4', '#5a626a') + ' ' + ref(p)
-        + '<br><span style="font-size:12px;color:#6f6a63">currently: ' + (p.location || '—')
-        + (p.track ? ' · track: ' + p.track : ' · <b style="color:#9e2020">no track set</b>') + '</span>';
-    }));
-    H.push('<p style="font:12px Helvetica,Arial;color:#8a847b;margin:2px 0 0">Open: '
-      + R.openSpots.slice(0, 30).map(function (s) { return '#' + s.id; }).join(', ')
-      + (R.openSpots.length > 30 ? ' …' : '') + '</p>');
-  }
+  // Open spots came out of the brief (Walter 10/14)
 
   var gaps = [];
   // one piano per line, ALWAYS with the serial (Brigham 8/27)
@@ -7287,6 +7273,30 @@ function shopManagerHtml_(R) {
     + '<a href="' + APP_URL + '" style="color:#9e2020">open the map</a> · '
     + R.total + ' active pianos</p>');
   H.push('</div></div>');
+
+  // section order (Walter 10/14). Sections not listed keep their old order
+  // after these; the reports list and footer stay last.
+  var ORDER = ['Morning Standup', 'Clock follow-ups', 'Time off', 'Paused, waiting', 'Phase advances',
+               'Phase looks stale', 'Pianos with no phase', 'Housekeeping', 'Data gaps', 'Exit Prep', 'New in the apps'];
+  var LAST = 'All Store Map reports';
+  var rank = function (key) {
+    if (key.indexOf(LAST) === 0) return 1000;
+    for (var oi = 0; oi < ORDER.length; oi++) if (key.indexOf(ORDER[oi]) === 0) return oi;
+    return 500;
+  };
+  if (SEGS.length) {
+    SEGS.sort(function (a, b) { return a.start - b.start; });
+    var head0 = H.slice(0, SEGS[0].start);
+    var chunks = SEGS.map(function (sg, i) {
+      return {key: sg.key, i: i, html: H.slice(sg.start, i + 1 < SEGS.length ? SEGS[i + 1].start : H.length)};
+    });
+    chunks.sort(function (a, b) { return (rank(a.key) - rank(b.key)) || (a.i - b.i); });
+    H = head0.concat.apply(head0, chunks.map(function (c) { return c.html; }));
+    var tocRank = function (t) { return rank(String(t.label).replace(/^\S+\s+/, '')); };
+    TOC = TOC.map(function (t, i) { return {t: t, i: i}; })
+      .sort(function (a, b) { return (tocRank(a.t) - tocRank(b.t)) || (a.i - b.i); })
+      .map(function (x) { return x.t; });
+  }
 
   // now that every section (and its anchor) is known, splice the jump-links
   // bar in at the top — right after the header, right before Morning Standup
