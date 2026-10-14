@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-14.10';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-14.11';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -7091,10 +7091,7 @@ function shopManagerHtml_(R) {
     + '115 shop tags — storage &amp; idle pianos (2 per page, ready to print)</a> '
     + '<span style="color:#8a847b">prepared 8/25</span>',
   ];
-  if (PRINTABLES.length) {
-    sec('📎', 'Printables', PRINTABLES.length, 'Print-ready batches — open, print, done.');
-    ul(PRINTABLES);
-  }
+  // Printables came out of the brief (Walter 10/14)
   if (R.clientReady && R.clientReady.length) {
     sec('🤝', 'Client reports ready to send', R.clientReady.length,
       'Opt-in client-report pianos with shop activity this week — review the draft and email it from the Shop Manager’s Client Reports page.');
@@ -7102,14 +7099,7 @@ function shopManagerHtml_(R) {
       return '<b>' + esc_(x.summary) + '</b> #' + esc_(x.serial) + (x.phase ? ' · ' + esc_(x.phase) : '');
     }));
   }
-  if (R.fieldCalls && R.fieldCalls.length) {
-    sec('📞', 'Field tunings — reminder calls & confirmations (next 2 days)', R.fieldCalls.length,
-      'From McKinly’s and Curtis’s own calendars — call to confirm, or clear cancelled slots.');
-    ul(R.fieldCalls.map(function (x) {
-      return '<b>' + esc_(x.when) + '</b> · ' + esc_(x.tech) + ' · ' + esc_(x.title)
-        + ' ' + pill(esc_(x.flag), '#fdf3ec', '#9a5b13');
-    }));
-  }
+  // Field tunings (reminder calls) came out of the brief (Walter 10/14)
   if (R.tuningQueue && R.tuningQueue.length) {
     sec('🎵', 'Showroom tuning queue \u2014 Korban\u2019s next ' + R.tuningQueue.length, R.tuningQueue.length,
       'For-sale floor pianos, most-overdue first, from the tuning calendars \u2014 pianos with a tuning '
