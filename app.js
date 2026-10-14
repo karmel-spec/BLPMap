@@ -10988,7 +10988,7 @@ const PLATE_STAGES = ['In piano', 'Removed', 'Plate storage — BEFORE',
 const PLATE_HW_STAGES = ['Needs buffing', 'In buffing queue', 'Buffing', 'Buffed', 'Installed'];
 // 🎨 finish choices (Melissa 9/16, request 091626terry44) — mirrors CARD_FIELDS in the bridge
 // keytops: two ivory choices (Melissa 9/25, 092526terry62) — what Marcelo does differs
-const CARD_FIELD_OPTS = {plateFinish: ['Brass', 'Nickel', 'Copper', 'No electroplating'], keytopMaterial: ['White Acrylic', 'Off-white Acrylic', 'Ivory - clean & leave as is', 'Ivory - replace damaged keys']};
+const CARD_FIELD_OPTS = {plateFinish: ['Brass', 'Nickel', 'Copper', 'No electroplating'], keytopMaterial: ['White Acrylic', 'Off-white Acrylic', 'Ivory - clean & leave as is', 'Ivory - replace damaged keys', 'No key service']};   // No key service: Melissa 10/13 (101326terry91) — refurbs, minor repairs, refinishing-only
 const CARD_FIELD_LABEL = {plateFinish: 'Plating finish', keytopMaterial: 'Keytop material'};
 // read the scope of work / notes and propose a finish when none is set yet
 function cfGuess(p, f) {
@@ -11003,6 +11003,8 @@ function cfGuess(p, f) {
     if (/\bbrass\b/i.test(txt)) return 'Brass';
     return '';
   }
+  // Melissa 10/13 (101326terry91): lighter jobs leave the keys alone
+  if (/\bno\s+key\s*(?:top)?\s*(?:service|work)\b|\b(?:don'?t|do not|not)\s+(?:touch|do|service)\s+(?:the\s+)?keys?\b|\b(?:leave|keep)\s+(?:the\s+)?keys?\s+(?:as[- ]is|alone)\b/i.test(txt)) return 'No key service';
   if (/off[- ]?white|antique[- ]white|cream(?:y)?\s+(?:acrylic|keytops?)/i.test(txt)) return 'Off-white Acrylic';
   if (/\b(replace|repair|fix|patch)\w*\s+(?:the\s+|any\s+)?(?:damaged|broken|chipped|cracked|missing)\s+(?:ivor|keys?|keytops?)/i.test(txt)
       && /\bivor(?:y|ies)\b/i.test(txt)) return 'Ivory - replace damaged keys';
@@ -11182,7 +11184,9 @@ const TQ_DEFS = [
   {key: 'keys', icon: '🎹', title: 'KEY SERVICE / KEYTOPS',
    // the keytop selector is the authority: Done drops a piano off this
    // queue even when the old key-work note still reads like a request (8/28)
+   // "No key service" keytop material (Melissa 10/13) takes it off too
    need: p => !taskAutoDone(p, 'keys') && !/^Done/i.test(p.keytopStatus || '')
+     && (p.keytopMaterial || '').trim() !== 'No key service'
      && ['needed', 'noted'].includes(taskStatus(taskVal(p, 'keys'))),
    note: p => [p.keytopMaterial ? '🎨 ' + p.keytopMaterial : '', p.keytopStatus, taskVal(p, 'keys')].filter(Boolean).join(' · '),
    // In Progress first, then In Key Queue #n, then Evaluate (Brigham 9/17)
