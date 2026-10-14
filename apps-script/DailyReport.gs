@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-14.8';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-14.9';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -6795,7 +6795,7 @@ function buildShopManagerReport_(dayOffset) {
         else if (days === 0) state = 'today';
       }
     }
-    R.waiting.push({p: p, on: p.waitNote || String(p.phase).replace(/^Waiting on /i, ''),
+    R.waiting.push({p: p, on: String(p.waitNote || String(p.phase).replace(/^Waiting on /i, '')).replace(/^\s*waiting on\s+/i, ''),
                     cb: cb, state: state, days: days});
   });
   R.waiting.sort(function (a, b) {
@@ -6863,8 +6863,10 @@ function buildShopManagerReport_(dayOffset) {
   R.noTrack = pianos.filter(function (p) {
     return smIsShopwork_(p) && !String(p.track || '').trim();
   });
+  // every active piano on a map spot with a blank phase (Walter 10/14) — it
+  // used to count only the CUSTOM SHOPWORK section, which found none
   R.noPhase = pianos.filter(function (p) {
-    return smIsShopwork_(p) && p.isSlot && !String(p.phase || '').trim();
+    return p.active !== false && !p.coming && p.isSlot && !String(p.phase || '').trim();
   });
   R.noCab = pianos.filter(function (p) {
     return smIsShopwork_(p) && smPhaseIdx_(p.phase) >= 3 && smPhaseIdx_(p.phase) <= 12
@@ -7154,7 +7156,9 @@ function shopManagerHtml_(R) {
   // 🏷 pianos on the map with no phase — its own list now, not a line in Data gaps (Walter 10/14)
   if (R.noPhase.length) {
     sec('🏷', 'Pianos with no phase', R.noPhase.length, 'On the map as shop work, but no phase set — open the card and pick one.');
-    ul(R.noPhase.map(function (p) { return ref(p) + ' <span style="font-size:12px;color:#8a847b">· spot ' + smSpot_(p) + '</span>'; }));
+    ul(R.noPhase.map(function (p) {
+      return ref(p) + (p.section ? ' <span style="font-size:12px;color:#8a847b">· ' + esc_(String(p.section).slice(0, 40)) + '</span>' : '');
+    }));
   }
 
   // (the 🐢 "sitting longer than the standard" list moved to its own
