@@ -154,11 +154,18 @@ export default async (req) => {
     const pianos = pr.pianos;
     try { mergeComing(pianos, comingRows); } catch (e) { console.warn('[data] won_coming merge skipped:', String(e).slice(0, 120)); }
     const { events, tunings } = cal;
-    let tuningQueue = null;
-    try { tuningQueue = tchkRows ? buildTuningQueue(pianos, tunings, tchkRows) : null; } catch (e) { console.warn('[data] tuning queue skipped:', String(e).slice(0, 120)); }
+    // the queue needs the tuning calendar to leave out booked pianos — on a
+    // freshly started instance it is still loading, so say so instead of
+    // sending a list with booked pianos in it (found 10/14: Hailun 277589)
+    let tqPart = {};
+    try {
+      if (!tchkRows) tqPart = {};
+      else if (!calCache.tunings) tqPart = { tuningQueuePending: 'tuning calendar still loading — fetch /api/data again in 30 seconds for tuningQueue' };
+      else tqPart = { tuningQueue: buildTuningQueue(pianos, tunings, tchkRows) };
+    } catch (e) { console.warn('[data] tuning queue skipped:', String(e).slice(0, 120)); }
     const payload = {
       pianos, events, crew: crewToday(events), tunings,
-      ...(tuningQueue ? { tuningQueue } : {}),
+      ...tqPart,
       fetchedAt: new Date().toLocaleString('sv-SE', { timeZone: TZ }).replace(' ', 'T'),
       stale: false, calendarConfigured: events.length > 0 || calCache.icsConfigured,
       source: pr.source, mirrorSyncedAt: pr.lastSync, readMs: Date.now() - t0,
