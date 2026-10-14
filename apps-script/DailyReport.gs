@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-14.22';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-14.23';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -8716,9 +8716,13 @@ function cardText_(req, who) {
   return {ok: sent.length > 0, sent: sent, failed: failed, error: sent.length ? undefined : 'not sent: ' + failed.join(', ')};
 }
 function notifyTeam_(names, message) {
+  // -background: Netlify answers 202 at once and sends in the background, so a
+  // user action that texts a manager (clock-fix request → Mark/Melissa) no
+  // longer waits on the token + phone sheet + Twilio round trip (Avery 10/9,
+  // request 100926moore07 — "taking forever, never said it was sent")
   for (var i = 0; i < names.length; i++) {
     try {
-      UrlFetchApp.fetch('https://blpsalesapp.netlify.app/.netlify/functions/request-notify', {
+      UrlFetchApp.fetch('https://blpsalesapp.netlify.app/.netlify/functions/request-notify-background', {
         method: 'post', contentType: 'application/json',
         payload: JSON.stringify({key: 'pianoman', name: names[i], message: message}),
         muteHttpExceptions: true});

@@ -5993,11 +5993,21 @@ function clockFixModal(prefill) {
       [pseudo ? CLOCK_PSEUDO[pseudo] + ' clock.' : '', text].filter(Boolean).join(' '));
     sendBtn.disabled = true; const sendWas = sendBtn.textContent; sendBtn.textContent = 'Sending…';
     msg.textContent = 'sending…';
+    // Avery 10/9 (request 100926moore07): a slow bridge left "sending…" up for
+    // minutes with no word — say so, and keep saying so, until the answer lands
+    const t0 = Date.now();
+    const slowTimer = setInterval(() => {
+      const secs = Math.round((Date.now() - t0) / 1000);
+      msg.textContent = secs < 25 ? tr('still sending — Google is slow, keep this open…', 'todavía enviando — Google está lento, no cierres esto…')
+        : tr(`still working (${secs}s) — if this closes, check 🛠 Time Clock Adjustments; it's usually already on the list`, `todavía trabajando (${secs}s) — si se cierra, revisa 🛠 Ajustes del reloj; normalmente ya está en la lista`);
+    }, 8000);
     // file it in the language the app is set to, so the "your clock is fixed"
     // text comes back in that language without anyone maintaining a list
     const j = await clockFixPost({action: 'clockfix', clock, serial, note,
       date: ymd, inAt: inT, outAt: outT, lang: es() ? 'es' : 'en'});
-    if (j.error) { msg.textContent = j.error; sendBtn.disabled = false; sendBtn.textContent = sendWas; return; }
+    clearInterval(slowTimer);
+    if (!j || j.error) { msg.textContent = (j && j.error) || 'no reply from the bridge — check 🛠 Time Clock Adjustments before sending again'; sendBtn.disabled = false; sendBtn.textContent = sendWas; return; }
+    if (false) { msg.textContent = j.error; sendBtn.disabled = false; sendBtn.textContent = sendWas; return; }
     ov.querySelector('.dsheet').innerHTML = j.duplicate
       ? '<h3>✅ Already on the list</h3><div class="dssub">You had already sent this one — it hasn’t been filed twice. The fix will show on your dashboard once it’s made.</div>'
       : '<h3>✅ Request sent</h3><div class="dssub">It’s on the adjustments list — the fix will show on your dashboard once it’s made.</div>';
