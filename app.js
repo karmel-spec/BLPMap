@@ -14939,6 +14939,22 @@ const TB_HEADSHOTS = {
 const TB_ALIAS = {'alisa merrill': 'alisa miller'};
 const TB_DISPLAY = {'alisa miller': 'Alisa Miller'};   // name shown on the face strip
 const tbNorm = n => { const k = String(n || '').trim().toLowerCase().replace(/\s+/g, ' '); return TB_ALIAS[k] || k; };
+/* Hand-back (Mark 10/14, via Brigham): a card someone else sent you comes back
+ * to THEM when you tap Done — into their ✅ BACK TO YOU column with a
+ * "finished by <you>" chip — instead of vanishing into the archive. Done on
+ * a card that is already in Back to you (or one you made yourself) archives. */
+const tbHandBack = c => !!(c && c.from) && tbNorm(c.from) !== tbNorm(c.owner) && c.col !== 'back';
+const tbFirst = n => String(n || '').trim().split(/\s+/)[0] || '';
+const tbIsVirtualCol = k => String(k || '').startsWith('mir:') || k === 'back' || k === 'sent';
+async function tbHandBackSend(c) {
+  const was = {owner: c.owner, col: c.col, from: c.from, order: c.order};
+  c.owner = was.from; c.col = 'back'; c.from = tbMe(); c.order = -(Date.now() / 1e6);   // instant
+  renderTaskBoard();
+  const j = await tbSend({op: 'reassign', id: c.id, owner: was.from, back: 1, from: tbMe(), note: '✅ finished'});
+  if (!j) { Object.assign(c, was); renderTaskBoard(); }
+  else if (j.line) c.notes = j.line + '\n' + (c.notes || '');
+  return !!j;
+}
 // full access to every board: the face strip + open/edit/add on anyone's
 // board — owners (Brigham, Karmel) plus Melissa (Brigham 8/28) and Mark, the
 // lead manager (Brigham 9/17): every team member's face bubble, so he can
@@ -15295,31 +15311,42 @@ function renderTaskBoard() {
   }
   // mirrored columns from other boards ("Melissa's Ask Brigham", "Lisa's questions"…)
   mirrors.sort((a, b) => a.label.localeCompare(b.label)).forEach(m => boardCols.push([m.vkey, m.label]));
+  // ✅ BACK TO YOU (left-most, only while something is in it) and 📤 SENT — the
+  // cards you handed to others, so the conversation stays visible on your own
+  // board while the card sits on theirs (Mark 10/14)
+  if (TB.rows.some(r => sameOwner(r.owner, TB.person) && r.col === 'back') && !boardCols.some(c => c[0] === 'back')) boardCols.unshift(['back', '✅ BACK TO YOU']);
+  const sentCards = TB.rows.filter(r => r.from && sameOwner(r.from, TB.person) && !sameOwner(r.owner, TB.person) && r.col !== 'archived' && !isAskCard(r));
+  if (sentCards.length && !boardCols.some(c => c[0] === 'sent')) boardCols.push(['sent', '📤 SENT — WAITING ON OTHERS']);
+  const colLabelOf = (owner, key) => { const hit = tbColsOf(owner).find(([k]) => k === key); return hit ? hit[1] : (key === 'back' ? 'Back to you' : key); };
   const colKeys = boardCols.map(c => c[0]);
   const homeCol = r => isAskCard(r) ? mirrorMap[tbNorm(r.owner) + ':' + r.col]
     : (colKeys.includes(r.col) ? r.col : (r.col === 'archived' ? 'archived' : colKeys[0]));
   const ordVal = r => (r.order === null || r.order === undefined || r.order === '')
     ? 1e9 - Date.parse(r.created || 0) / 1e6 : Number(r.order);
   const col = (key, label) => {
-    const cards = mine.filter(r => homeCol(r) === key)
+    const cards = (key === 'sent' ? sentCards.slice() : mine.filter(r => homeCol(r) === key))
       .sort((a, b) => ordVal(a) - ordVal(b));
     return `<div class="kcol ${key === 'done' ? 'kdone' : ''}" data-col="${key}">
-      <h4><span>${esc(label)}${canEdit && !key.startsWith('mir:') ? ` <button class="kcolren" data-k="${esc(key)}" title="rename column">✎</button><button class="kcolmv" data-k="${esc(key)}" data-d="-1" title="move column left">◀</button><button class="kcolmv" data-k="${esc(key)}" data-d="1" title="move column right">▶</button>` : ''}</span> <i>${cards.length}</i></h4>
+      <h4><span>${esc(label)}${canEdit && !tbIsVirtualCol(key) ? ` <button class="kcolren" data-k="${esc(key)}" title="rename column">✎</button><button class="kcolmv" data-k="${esc(key)}" data-d="-1" title="move column left">◀</button><button class="kcolmv" data-k="${esc(key)}" data-d="1" title="move column right">▶</button>` : ''}</span> <i>${cards.length}</i></h4>
       ${cards.map(c => `<div class="kcard" draggable="false" data-id="${esc(c.id)}">
         <b>${esc(c.text)}</b>
         <div class="chips">
           ${c.pending ? '<span class="chip c-dueok">saving…</span>' : ''}
           ${key.startsWith('mir:') ? `<span class="chip c-dueok">asked by ${esc(String(c.owner).split(/\s+/)[0])}</span>` : ''}
+          ${key === 'sent' ? `<span class="chip c-sent">on ${esc(tbFirst(c.owner))}'s board · ${esc(colLabelOf(c.owner, c.col))}</span>` : ''}
+          ${c.col === 'back' && c.from ? `<span class="chip c-back">✅ finished by ${esc(tbFirst(c.from))}</span>` : ''}
           ${c.serial ? `<span class="chip c-piano" data-serial="${esc(c.serial)}">🎹 ${esc(c.serial)}</span>` : ''}
           ${tbDueChip(c.due, c.col)}
-          ${c.from ? `<span class="chip c-from">from ${esc(c.from.split(/\s+/)[0])}</span>` : ''}
+          ${c.from && c.col !== 'back' && key !== 'sent' ? `<span class="chip c-from">from ${esc(c.from.split(/\s+/)[0])}</span>` : ''}
           ${isSnoozed(c) ? `<span class="chip c-snooze">💤 until ${esc(c.snooze.slice(5))}</span>` : ''}
           ${(c.notes || '').trim() ? `<span class="chip c-notes">🗒 ${String(c.notes).split('\n').filter(Boolean).length}</span>` : ''}
           ${tbAgeChip(c)}
         </div>
-        ${canEdit ? `<div class="kmove"><span class="kgrab">⠿ drag</span>
+        ${canEdit && key !== 'sent' ? `<div class="kmove"><span class="kgrab">⠿ drag</span>
           <button class="kreassign" data-id="${esc(c.id)}" title="hand this card to someone else's board">↪ Reassign</button>
-          <button class="karch" data-id="${esc(c.id)}" title="archive — done and off the board (never deleted)">✔ Done</button>
+          ${tbHandBack(c)
+            ? `<button class="karch kback" data-id="${esc(c.id)}" title="finished — the card goes back to ${esc(tbFirst(c.from))}'s board, in ✅ Back to you">✔ Done → back to ${esc(tbFirst(c.from))}</button>`
+            : `<button class="karch" data-id="${esc(c.id)}" title="archive — done and off the board (never deleted)">✔ Done</button>`}
         </div>` : ''}
       </div>`).join('') || '<div class="kempty">—</div>'}
     </div>`;
@@ -15478,6 +15505,7 @@ function renderTaskBoard() {
   el.querySelectorAll('.karch').forEach(b => b.onclick = async () => {
     const c = TB.rows.find(r => r.id === b.dataset.id);
     if (!c) return;
+    if (tbHandBack(c)) { tbHandBackSend(c); return; }
     const was = c.col;
     c.col = 'archived';
     renderTaskBoard();
@@ -15510,7 +15538,7 @@ function renderTaskBoard() {
   // ◀ ▶ reorder columns (Brigham 9/11): swap with the neighbour, persist the order
   el.querySelectorAll('.kcolmv').forEach(b => b.onclick = ev2 => {
     ev2.stopPropagation();
-    const real = boardCols.filter(c => !String(c[0]).startsWith('mir:'));
+    const real = boardCols.filter(c => !tbIsVirtualCol(c[0]));
     const i = real.findIndex(c => c[0] === b.dataset.k), j = i + (+b.dataset.d);
     if (i < 0 || j < 0 || j >= real.length) return;
     const next = real.slice(); [next[i], next[j]] = [next[j], next[i]];
@@ -15571,7 +15599,7 @@ function renderTaskBoard() {
         if (!scrollRAF) scrollRAF = requestAnimationFrame(autoScroll);
         ghost.style.left = (e.clientX - 40) + 'px'; ghost.style.top = (e.clientY - 16) + 'px';
         const over = document.elementsFromPoint(e.clientX, e.clientY)
-          .find(n => n.classList && n.classList.contains('kcol') && n !== colEl && n !== ghost && !String(n.dataset.col || '').startsWith('mir:'));
+          .find(n => n.classList && n.classList.contains('kcol') && n !== colEl && n !== ghost && !tbIsVirtualCol(n.dataset.col || ''));
         clearMarks(); target = null;
         if (over) {
           const r = over.getBoundingClientRect();
@@ -15588,7 +15616,7 @@ function renderTaskBoard() {
         if (ghost) ghost.remove();
         colEl.classList.remove('kcollift');
         if (!target) return;
-        const real = boardCols.filter(c => !String(c[0]).startsWith('mir:'));
+        const real = boardCols.filter(c => !tbIsVirtualCol(c[0]));
         const from = real.findIndex(c => c[0] === key);
         if (from < 0 || !real.some(c => c[0] === target.key)) return;
         const next = real.slice(); const [item] = next.splice(from, 1);
@@ -15794,7 +15822,7 @@ function renderTaskBoard() {
         else order = (prev + next) / 2;
         ph.remove();
         const newCol = colEl.dataset.col;
-        if (newCol.startsWith('mir:')) {   // mirrored columns are views, not destinations
+        if (tbIsVirtualCol(newCol) && newCol !== 'back') {   // mirrored / sent columns are views, not destinations
           TB.dragJustHappened = true; setTimeout(() => { TB.dragJustHappened = false; }, 250);
           renderTaskBoard(); return;
         }
@@ -15845,7 +15873,7 @@ function openReassignModal(c) {
     const cm = document.getElementById('cardmodal');
     if (cm) cm.hidden = true;
     renderTaskBoard();
-    tbSend({op: 'reassign', id: c.id, owner: who, note}).then(j => {
+    tbSend({op: 'reassign', id: c.id, owner: who, note, from: tbMe()}).then(j => {
       if (j) { c.notes = (j.line || '') + '\n' + (was.notes || ''); }
       else { Object.assign(c, was); renderTaskBoard(); }
     });
@@ -15980,6 +16008,7 @@ function openCardModal(c, canEdit) {
   const ov = modalShell('cardmodal', `
     <span class="x">✕</span>
     <h3>🗒 Card${added ? ` <small class="cm-added">added ${new Date(added).toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'})}</small>` : ''}</h3>
+    <div class="cm-who">${c.col === 'back' && c.from ? `<span class="chip c-back">✅ finished by ${esc(tbFirst(c.from))}</span> ` : c.from ? `<span class="chip c-from">from ${esc(tbFirst(c.from))}</span> ` : ''}<span class="chip c-dueok">on ${esc(tbFirst(c.owner))}'s board</span></div>
     <textarea class="cm-text" maxlength="2000" rows="2" ${canEdit ? '' : 'readonly'}>${esc(c.text)}</textarea>
     <div class="cm-grid">
       <div><label>Column</label><select class="cm-col" ${canEdit ? '' : 'disabled'}>
@@ -15994,7 +16023,7 @@ function openCardModal(c, canEdit) {
       <button class="cm-szpick">📅 pick date</button><input type="date" class="cm-szdate" tabindex="-1">
       ${c.snooze ? `<button data-sz="0">✕ wake up (${esc(c.snooze)})</button>` : ''}</div>` : ''}
     <label style="margin-top:10px">Notes & links ${canEdit ? '<small>— paste links, they become clickable</small>' : ''}</label>
-    ${canEdit ? `<div class="movebox"><input class="cm-note" maxlength="300" placeholder="add a note or paste a link…">
+    ${canEdit ? `<div class="movebox"><input class="cm-note" maxlength="300" placeholder="${c.from && tbNorm(c.from) !== tbNorm(c.owner) ? `reply — ${esc(tbFirst(tbNorm(c.owner) === tbNorm(tbMe()) ? c.from : c.owner))} is notified` : 'add a note or paste a link…'}">
       <button class="mvgo cm-noteadd">Add</button>
       <button class="mvgo cm-photo" title="attach a photo">📸</button>
       <button class="mvgo cm-video" title="attach a video (up to ~30 seconds)">🎬</button>
@@ -16009,7 +16038,7 @@ function openCardModal(c, canEdit) {
     ${canEdit ? `<div class="cm-actions">
       <button class="cm-reassign">↪ Reassign</button>
       <button class="cm-sms">💬 Text</button>
-      <button class="cm-del">✔ Done — archive</button></div>` : ''}`);
+      ${tbHandBack(c) ? `<button class="cm-del cm-back">✔ Done → back to ${esc(tbFirst(c.from))}</button>` : `<button class="cm-del">✔ Done — archive</button>`}</div>` : ''}`);
   const msg = ov.querySelector('.cm-msg');
   const save = async patch => {
     msg.textContent = 'saving…';
@@ -16134,6 +16163,7 @@ function openCardModal(c, canEdit) {
     ov.querySelector('.cm-sms').onclick = () => { ov.hidden = true; openCardTextModal(c); };
     ov.querySelector('.cm-reassign').onclick = () => { ov.hidden = true; openReassignModal(c); };
     ov.querySelector('.cm-del').onclick = () => {
+      if (tbHandBack(c)) { ov.hidden = true; tbHandBackSend(c); return; }
       const was = c.col;
       c.col = 'archived'; ov.hidden = true; renderTaskBoard();   // instant
       tbSend({op: 'archive', id: c.id}).then(j => {

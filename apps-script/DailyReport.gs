@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-14.23';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-14.24';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -8197,8 +8197,9 @@ function taskCard_(req, who) {
   }
   if (row < 0) return {error: 'card not found'};
   // whose board this card sits on + its text, for change notifications
-  var rowVals = sh.getRange(row, 2, 1, 3).getValues()[0];
-  var rowOwner = String(rowVals[0] || ''), rowText = String(rowVals[2] || '');
+  var rowVals = sh.getRange(row, 2, 1, 6).getValues()[0];
+  var rowOwner = String(rowVals[0] || ''), rowText = String(rowVals[2] || ''), rowFrom = String(rowVals[5] || '');
+  var tbLink = APP_URL + '/#card=' + encodeURIComponent(String(req.id || ''));
   if (op === 'move') {
     var col = String(req.col || '').slice(0, 24);
     if (!col) return {error: 'bad column'};
@@ -8226,6 +8227,15 @@ function taskCard_(req, who) {
     var prev = String(sh.getRange(row, 11).getValue() || '').trim();
     sh.getRange(row, 11).setValue(prev ? line + '\n' + prev : line);
     tbNotify_(rowOwner, who, 'added a note — ' + txt.slice(0, 80), String(req.id), rowText);
+    // the OTHER side of the card hears every note too (Mark 10/14): when the
+    // card's owner writes, the person who sent it gets a text — the
+    // conversation lives on the card instead of in side texts
+    try {
+      var normN = function (s) { return String(s || '').trim().toLowerCase().replace(/\s+/g, ' '); };
+      if (rowFrom && normN(name) === normN(rowOwner) && normN(rowFrom) !== normN(rowOwner)) {
+        notifyTeam_([rowFrom], '💬 ' + (name || 'Someone') + ' replied on the card you sent — "' + txt.slice(0, 120) + '" · reply on the card: ' + tbLink);
+      }
+    } catch (eC) { /* best-effort */ }
     // @mentions (Melissa 8/29): "@brigham" in a note pings that person
     // directly — text for the owners, BLP email for everyone else. The
     // card owner already got the plain note notification above.
@@ -8252,18 +8262,25 @@ function taskCard_(req, who) {
     var target = String(req.owner || '').trim().slice(0, 40);
     if (!target) return {error: 'who gets it?'};
     var prevOwner = String(sh.getRange(row, 2).getValue() || '');
+    var back = !!req.back;   // Done on a card someone sent you → back to THEM (Mark 10/14)
     sh.getRange(row, 2).setValue(target);          // new owner
-    sh.getRange(row, 3).setValue('todo');          // lands in their To Do
+    sh.getRange(row, 3).setValue(back ? 'back' : 'todo');   // ✅ Back to you, or their To Do
     sh.getRange(row, 7).setValue(name.slice(0, 30));   // from = who handed it over
     sh.getRange(row, 10).setValue(-(Date.now() / 1e6));  // top of their board
-    var rnote = '\u21aa reassigned from ' + (prevOwner || 'someone') + ' to ' + target
-      + (req.note ? ' \u2014 ' + String(req.note).trim().slice(0, 200) : '');
+    var rnote = back
+      ? '\u2705 finished by ' + (name || 'team') + ' \u2014 back to ' + target
+      : '\u21aa reassigned from ' + (prevOwner || 'someone') + ' to ' + target
+        + (req.note ? ' \u2014 ' + String(req.note).trim().slice(0, 200) : '');
     var stamp = Utilities.formatDate(new Date(), 'America/Denver', 'M/d');
     var line = stamp + ' ' + (name || 'team') + ': ' + rnote;
     var prev = String(sh.getRange(row, 11).getValue() || '').trim();
     sh.getRange(row, 11).setValue(prev ? line + '\n' + prev : line);
-    tbNotify_(target, who, 'sent a card to your board'
-      + (req.note ? ' — ' + String(req.note).trim().slice(0, 80) : ''), String(req.id), rowText);
+    if (back) {
+      try { notifyTeam_([target], '\u2705 ' + (name || 'Someone') + ' finished your card \u201c' + rowText.slice(0, 90) + '\u201d \u2014 it is back on your board under \u2705 Back to you: ' + tbLink); } catch (eB) {}
+    } else {
+      tbNotify_(target, who, 'sent a card to your board'
+        + (req.note ? ' — ' + String(req.note).trim().slice(0, 80) : ''), String(req.id), rowText);
+    }
     return {ok: true, line: line};
   }
   if (op === 'del' || op === 'archive') {
