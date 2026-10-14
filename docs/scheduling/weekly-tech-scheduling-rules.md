@@ -12,7 +12,17 @@ Recurring task: draft a Mon–Fri work proposal for BLP technicians (PDF for
 Brigham's review; first one delivered 2026-07-27 to ~/Desktop). May later
 write directly to Google Calendars after approval.
 
-Data sources: Store Map /api/data (phases, tracks, queuePos), Piano Log
+**Korban's tuning slots (Walter 2026-10-14, also on the Scheduling Rules tab):**
+pre-booked tunings on the 03-In Store Tuning calendar stay exactly as they are.
+Open slots are filled in this order: (1) chip tunings, (2) tunings a piano's
+card phase calls for (1st / 2nd tuning), (3) the **Tuning Queue** —
+`tuningQueue` in Store Map /api/data: pianos marked "Needs tuning" on the
+Showroom Tuning Check that nobody has booked, already in order (⚡ ASAP first,
+then walk order), each with its spot and service note. The queue REPLACES
+picking for-sale floor pianos yourself. Queue pianos that don't fit carry to
+the following week (overflow rule).
+
+Data sources: Store Map /api/data (phases, tracks, queuePos, tuningQueue), Piano Log
 CURRENT SHOPWORK sections, latest Friday reports (report sheet year tab),
 tech specialties tab + intern note (Sequence sheet 1k9ToAeueEg5WOtaY91xXzL-a0l_AJsSZWw23tcAWECU),
 track defs (track tabs / track-defs endpoint), Task Status tab (concurrent tasks).

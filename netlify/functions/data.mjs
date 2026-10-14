@@ -146,15 +146,19 @@ export default async (req) => {
     const t0 = Date.now();
     // pianos (mirror, ~0.3 s; CSV fallback) and the calendars run together;
     // the calendars wait at most 1.5 s when there is no copy yet
-    const [pr, cal, comingRows] = await Promise.all([
+    const [pr, cal, comingRows, tchkRows] = await Promise.all([
       loadPianos(activeOnly), calendars(1500),
       fetchComing().catch(e => { console.warn('[data] won_coming merge skipped:', String(e).slice(0, 120)); return []; }),
+      fetchTuningMarks().catch(e => { console.warn('[data] tuning marks skipped:', String(e).slice(0, 120)); return null; }),
     ]);
     const pianos = pr.pianos;
     try { mergeComing(pianos, comingRows); } catch (e) { console.warn('[data] won_coming merge skipped:', String(e).slice(0, 120)); }
     const { events, tunings } = cal;
+    let tuningQueue = null;
+    try { tuningQueue = tchkRows ? buildTuningQueue(pianos, tunings, tchkRows) : null; } catch (e) { console.warn('[data] tuning queue skipped:', String(e).slice(0, 120)); }
     const payload = {
       pianos, events, crew: crewToday(events), tunings,
+      ...(tuningQueue ? { tuningQueue } : {}),
       fetchedAt: new Date().toLocaleString('sv-SE', { timeZone: TZ }).replace(' ', 'T'),
       stale: false, calendarConfigured: events.length > 0 || calCache.icsConfigured,
       source: pr.source, mirrorSyncedAt: pr.lastSync, readMs: Date.now() - t0,
@@ -209,6 +213,40 @@ function mergeComing(pianos, rows) {
       coming: true, handoffId: h.id, leadId: h.lead_id || '', portalProjectId: h.portal_project_id || '',
     });
   });
+}
+
+/* ---------- 🎵 Tuning Queue for the Friday draft (Walter 10/14) ----------
+ * The pianos Korban marked "Needs tuning" on the Showroom Tuning Check that
+ * nobody has booked yet. The draft routine reads /api/data, and this list is
+ * what fills Korban's open slots after chip tunings and card-phase tunings
+ * (Scheduling Rules). A mark counts for 30 days (the worksheet's window);
+ * a piano drops off once a tuning is on the In-Store calendar or it has been
+ * tuned since the mark. Order: ⚡ ASAP first, then the order the marks were
+ * made, which is the order Korban walked the floor. */
+async function fetchTuningMarks() {
+  const r = await fetch(SB_URL + '/rest/v1/tuning_check?select=serial,mark,note,priority,marked_by,marked_at&mark=eq.tune',
+    { headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY }, signal: AbortSignal.timeout(6000) });
+  if (!r.ok) throw new Error('tuning_check ' + r.status);
+  return r.json();
+}
+function buildTuningQueue(pianos, tunings, marks) {
+  const now = Date.now();
+  const up = ((tunings && tunings.upcoming) || []).map(r => String(r[2] || '').toUpperCase()).join(' | ');
+  const lastBy = (tunings && tunings.lastBySerial) || {};
+  const bySerial = new Map(pianos.filter(p => p.active && p.serial).map(p => [String(p.serial).trim().toUpperCase(), p]));
+  return marks
+    .filter(m => m.mark === 'tune' && m.serial && m.marked_at && now - Date.parse(m.marked_at) <= 30 * 86400000)
+    .map(m => ({ m, p: bySerial.get(String(m.serial).trim().toUpperCase()) }))
+    .filter(({ m, p }) => {
+      if (!p) return false;
+      const sn = String(p.serial).toUpperCase(), dig = sn.replace(/\D/g, '');
+      if (up.includes(sn) || (dig.length >= 5 && up.includes(dig))) return false;      // already booked
+      const last = dig.length >= 5 ? lastBy[dig] : null;
+      return !(last && last >= String(m.marked_at).slice(0, 10));                       // tuned since the mark
+    })
+    .sort((a, b) => (b.m.priority ? 1 : 0) - (a.m.priority ? 1 : 0) || String(a.m.marked_at).localeCompare(String(b.m.marked_at)))
+    .map(({ m, p }, i) => ({ rank: i + 1, serial: p.serial, piano: p.summary || '', spot: p.location || '',
+      asap: !!m.priority, note: m.note || '', markedBy: m.marked_by || '', markedAt: m.marked_at }));
 }
 
 export { parsePianos, PIANO_LOG_CSV };
