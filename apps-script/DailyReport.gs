@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-14.5';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-14.6';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -6225,9 +6225,21 @@ function schedRulesSheet_() {
 function addSchedRule_(req, who) {
   var g = req._g;
   if (!timelogAdmin_(g)) return {error: 'Only owners and the shop managers can add scheduling rules (Google sign-in required).'};
-  var rule = String(req.rule || '').trim().slice(0, 400);
+  // 1000 not 400 (Walter 10/14): Korban's tuning-slot rule was cut off mid-word
+  var rule = String(req.rule || '').trim().slice(0, 1000);
   if (!rule) return {error: 'write the rule first'};
   var sh = schedRulesSheet_();
+  // replaceRow: rewrite one rule in place — only while that row still starts
+  // with `expect`, so a stale page can never overwrite a different rule
+  if (req.replaceRow) {
+    var rr = Number(req.replaceRow);
+    if (!(rr >= 2) || rr > sh.getLastRow()) return {error: 'bad rule row'};
+    var curRule = String(sh.getRange(rr, 2).getValue() || '');
+    var exp = String(req.expect || '').trim();
+    if (!exp || curRule.indexOf(exp) !== 0) return {error: 'that rule row changed — reload and try again'};
+    sh.getRange(rr, 1, 1, 3).setValues([[Utilities.formatDate(new Date(), 'America/Denver', 'M/d/yy h:mm a'), rule, String((g && (g.name || g.email)) || who || '')]]);
+    return {ok: true, rule: rule, replaced: rr, rules: sh.getLastRow() - 1};
+  }
   sh.appendRow([Utilities.formatDate(new Date(), 'America/Denver', 'M/d/yy h:mm a'), rule, String((g && (g.name || g.email)) || who || '')]);
   return {ok: true, rule: rule, rules: sh.getLastRow() - 1};
 }

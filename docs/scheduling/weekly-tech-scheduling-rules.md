@@ -19,8 +19,9 @@ card phase calls for (1st / 2nd tuning), (3) the **Tuning Queue** —
 `tuningQueue` in Store Map /api/data: pianos marked "Needs tuning" on the
 Showroom Tuning Check that nobody has booked, already in order (⚡ ASAP first,
 then walk order), each with its spot and service note. The queue REPLACES
-picking for-sale floor pianos yourself. Queue pianos that don't fit carry to
-the following week (overflow rule). If /api/data answers with `tuningQueuePending`
+picking for-sale floor pianos yourself. **Queue pianos never carry over** to
+the following week — the next walk re-marks them. Only chip tunings,
+card-phase tunings and Store Map request tunings overflow (overflow rule). If /api/data answers with `tuningQueuePending`
 instead of `tuningQueue`, the tuning calendar was still loading — fetch again
 after 30 seconds; never fill Korban's slots from a missing queue.
 
