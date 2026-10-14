@@ -35,9 +35,9 @@ The map, moves and calendar need no env vars (see below). **Agent chat**
 Without the key `/api/agent` answers 501 and the chat window shows
 "agent chat not configured" — the rest of the app is unaffected. The
 function verifies the signed-in Google ID token (BLP accounts only) before
-forwarding anything, and if the gateway is down it reports that plainly;
+forwarding anything, and if the Agent Console is down it reports that plainly;
 no stand-in ever answers for an agent (Brigham's rule, same as Marcus).
-Local dev: put `"gateway_key"` in `config.json` (gitignored) — `server.py`
+Local dev: put `"agents_key"` (the Agent Console passcode) in `config.json` (gitignored) — `server.py`
 mirrors the function.
 
 The same `SUPABASE_SERVICE_KEY` also powers `/api/queue` (hand-set order and

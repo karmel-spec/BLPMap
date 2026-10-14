@@ -650,12 +650,14 @@ def bridge_call(payload):
 
 
 
-# ---- in-app agent chat (local dev mirror of netlify/functions/agent-chat.mjs) ----
-# Proxies to the BLP Agent Gateway on the agents' Mac. Needs "gateway_key"
-# (and optionally "gateway_url") in config.json, or BLP_GATEWAY_KEY in the env.
-GATEWAY_URL = (os.environ.get('BLP_GATEWAY_URL') or _CFG.get('gateway_url')
-               or 'https://agents.brighamlarsonpianos.com').rstrip('/')
-GATEWAY_KEY = os.environ.get('BLP_GATEWAY_KEY') or _CFG.get('gateway_key', '')
+# ---- in-app agent chat (local mirror of netlify/functions/agent-chat.mjs) ----
+# Since 2026-10-08 the agents are Grok Bots reached through the BLP Agent Console
+# (blpagents.netlify.app), not the Hermes gateway on a Mac. Needs "agents_key"
+# (the console's team passcode; optionally "agents_url") in config.json, or
+# BLP_AGENTS_KEY / BLP_AGENTS_URL in the env.
+AGENTS_URL = (os.environ.get('BLP_AGENTS_URL') or _CFG.get('agents_url')
+              or 'https://blpagents.netlify.app').rstrip('/')
+AGENTS_KEY = os.environ.get('BLP_AGENTS_KEY') or _CFG.get('agents_key', '')
 SB_URL = (os.environ.get('SUPABASE_URL') or _CFG.get('supabase_url')
           or 'https://ismacawxfvvllfinibbf.supabase.co').rstrip('/')
 SB_SERVICE_KEY = (os.environ.get('SUPABASE_SERVICE_KEY') or os.environ.get('SUPABASE_SERVICE_ROLE_KEY')
@@ -663,6 +665,7 @@ SB_SERVICE_KEY = (os.environ.get('SUPABASE_SERVICE_KEY') or os.environ.get('SUPA
 GOOGLE_CLIENT_ID = '110628682621-v65mkaoanv87sp75ggdfcrglfr7bkr8p.apps.googleusercontent.com'
 AGENT_SLUGS = ['lindsay', 'melody', 'carla', 'chris', 'clara', 'arnold', 'ivory', 'marcus']
 AGENT_NAMES = {s: s.capitalize() for s in AGENT_SLUGS}
+AGENT_NAMES['clara'] = 'Clarence'   # renamed 2026-10-13; slug stays clara
 _TOKENS = {}
 
 
@@ -697,13 +700,13 @@ def verify_google(tok):
     return u
 
 
-def gateway_call(path, payload=None):
-    if not GATEWAY_KEY:
-        raise RuntimeError('agent chat not configured — add "gateway_key" to config.json')
+def console_call(path, payload=None):
+    """Call the Agent Console with the team key. GET when payload is None."""
+    if not AGENTS_KEY:
+        raise RuntimeError('agent chat not configured — add "agents_key" (the Agent Console passcode) to config.json')
     data = json.dumps(payload).encode() if payload is not None else None
-    req = urllib.request.Request(GATEWAY_URL + path, data=data, method='POST' if data else 'GET',
-                                 headers={'Content-Type': 'application/json',
-                                          'x-blp-gateway-key': GATEWAY_KEY})
+    req = urllib.request.Request(AGENTS_URL + path, data=data, method='POST' if data else 'GET',
+                                 headers={'Content-Type': 'application/json', 'x-blp-key': AGENTS_KEY})
     try:
         with urllib.request.urlopen(req, timeout=20) as r:
             return json.loads(r.read())
@@ -713,11 +716,10 @@ def gateway_call(path, payload=None):
             msg = json.loads(body).get('error') or body
         except Exception:
             msg = body
-        raise RuntimeError('Agent gateway %s: %s' % (e.code, msg[:160]))
+        raise RuntimeError('Agent Console %s: %s' % (e.code, msg[:160]))
     except Exception as e:
-        raise RuntimeError("Could not reach the agent gateway (the Hermes agents on the agents' Mac). "
-                           "Check that the Mac is awake, the gateway is up and the Cloudflare tunnel is "
-                           "connected, then try again. Nothing was answered on the agent's behalf. (%s)" % e)
+        raise RuntimeError("Could not reach the BLP Agent Console (blpagents.netlify.app), which relays messages "
+                           "to the agents. Try again in a moment. Nothing was answered on the agent's behalf. (%s)" % e)
 
 
 def store_messages(rows):
@@ -813,25 +815,17 @@ def agent_dispatch(req):
     who = verify_google(req.get('idToken'))
     if not who:
         return {'error': 'Sign in with your BLP Google account first.'}, 401
-    first = who['name'].split()[0]
-    transcript = str(req.get('transcript', ''))[:12000]
-    parts = [
-        'You are being messaged from the BLP Store Map web app (local dev) by %s <%s>. '
-        'Answer as yourself — the same %s as on Telegram — using your vault files and memory as usual. '
-        'Reply in plain text for a small chat window: short paragraphs, no markdown tables or headings. '
-        'You never post, send or change anything on their behalf from here unless they ask you to.'
-        % (who['name'], who['email'], AGENT_NAMES[slug]),
-        ('RECENT THREAD (this chat window):\n' + transcript) if transcript else '',
-        first + ': ' + message,
-    ]
-    rec = gateway_call('/agents/%s/runs' % slug,
-                       {'input': '\n\n'.join(p for p in parts if p), 'requester': first + ' <store map>'})
-    if not rec.get('run_id'):
-        return {'error': 'gateway accepted the message but returned no run id'}, 502
-    stored = store_messages([{'agent': slug, 'role': 'user', 'who': who['name'],
-                              'who_email': who['email'], 'body': message}])
-    return {'run_id': rec['run_id'], 'session_id': rec.get('session_id'),
-            'status': rec.get('status', 'started'), 'stored': stored}, 200
+    channel_note = ('You are being messaged from the BLP Store Map web app (blpstoremap.netlify.app) — a small chat '
+                    'window beside the live shop map. Answer as yourself, the same %s as on Telegram. Reply in plain '
+                    'text for a small chat window: short paragraphs, no markdown tables or headings. You never post, '
+                    'send or change anything on their behalf from here unless they ask you to.' % AGENT_NAMES[slug])
+    rec = console_call('/api/agents/%s/chat' % slug,
+                       {'message': message, 'who': who['name'], 'email': who['email'], 'channelNote': channel_note})
+    if not rec.get('jobId'):
+        return {'error': 'the console accepted the message but returned no job id'}, 502
+    # the console stores both turns in agent_messages (the thread the map reads back)
+    return {'run_id': str(rec['jobId']), 'status': rec.get('status', 'pending'),
+            'engine': rec.get('engine'), 'stored': True}, 200
 
 
 class Handler(SimpleHTTPRequestHandler):
@@ -903,9 +897,10 @@ class Handler(SimpleHTTPRequestHandler):
             return
         if self.path.split('?')[0] == '/api/agent' and 'health' in self.path:
             try:
-                h = gateway_call('/health')
+                h = console_call('/api/agents/live')
                 agents = {k.lower(): bool(v and v.get('up')) for k, v in (h.get('agents') or {}).items()}
-                self._json({'ok': bool(h.get('ok')), 'machine': h.get('machine', ''), 'agents': agents})
+                engines = {k.lower(): (v or {}).get('engine', '') for k, v in (h.get('agents') or {}).items()}
+                self._json({'ok': bool(h.get('configured')), 'machine': h.get('machine', 'cloud'), 'agents': agents, 'engines': engines})
             except Exception as exc:
                 self._json({'ok': False, 'agents': {}, 'error': str(exc)})
             return
@@ -913,20 +908,17 @@ class Handler(SimpleHTTPRequestHandler):
             q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
             slug = (q.get('slug') or [''])[0].lower()
             run = (q.get('run') or [''])[0]
-            if slug not in AGENT_SLUGS or not re.match(r'^[\w.-]{1,80}$', run):
+            if slug not in AGENT_SLUGS or not re.match(r'^\d{1,12}$', run):
                 self._json({'error': 'slug and run required'}, 400)
                 return
             if not verify_google(self.headers.get('x-blp-idtoken')):
                 self._json({'error': 'Sign in with your BLP Google account first.'}, 401)
                 return
             try:
-                st = gateway_call('/agents/%s/runs/%s' % (slug, urllib.parse.quote(run)))
-                stored = False
-                if st.get('status') == 'completed' and (st.get('output') or '').strip():
-                    stored = store_messages([{'agent': slug, 'role': 'agent', 'who': AGENT_NAMES[slug],
-                                              'body': st['output'].strip(), 'run_id': run}])
-                self._json({'status': st.get('status'), 'output': st.get('output'),
-                            'error': st.get('error'), 'stored': stored})
+                st = console_call('/api/agents/%s/chat/jobs/%s' % (slug, run))
+                status = 'completed' if st.get('status') == 'done' else 'failed' if st.get('status') == 'failed' else 'running'
+                self._json({'status': status, 'output': (st.get('reply') or '') if status == 'completed' else None,
+                            'error': st.get('error'), 'engine': st.get('engine'), 'stored': status == 'completed'})
             except Exception as exc:
                 self._json({'error': str(exc)}, 502)
             return

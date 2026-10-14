@@ -17816,7 +17816,7 @@ boot();
     lindsay: {name: 'Lindsay', role: "operations, Karmel's assistant", bot: 'lindsaystrategistbot'},
     carla: {name: 'Carla', role: 'BLP helper', bot: 'carlalarsonbot'},
   };
-  const POLL_MS = 2500, MAX_WAIT_MS = 10 * 60 * 1000, KEEP = 80;
+  const POLL_MS = 1000, MAX_WAIT_MS = 10 * 60 * 1000, KEEP = 80;   // 1 s polling (Brigham 10/14: replies felt slow)
 
   function userKey() {
     const u = authUser();

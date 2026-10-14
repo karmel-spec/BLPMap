@@ -3,7 +3,7 @@
   "daily_email": false,
   "bridge_url": "https://script.google.com/macros/s/DEPLOYMENT_ID/exec",
   "bridge_secret": "PASTE_SECRET_HERE",
-  "gateway_url": "https://agents.brighamlarsonpianos.com",
-  "gateway_key": "PASTE_AGENT_GATEWAY_KEY_HERE",
-  "supabase_service_key": "PASTE_SUPABASE_SERVICE_ROLE_KEY_HERE"
+  "supabase_service_key": "PASTE_SUPABASE_SERVICE_ROLE_KEY_HERE",
+  "agents_url": "https://blpagents.netlify.app",
+  "agents_key": "PASTE_THE_AGENT_CONSOLE_PASSCODE_HERE"
 }
