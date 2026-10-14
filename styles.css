@@ -2352,3 +2352,7 @@ table.tchktbl td.chk .tcasap input{width:15px;height:15px}
 /* whiteboard: remove a request (Alex 10/13) */
 .wbrm{border:1px solid #d9d3c9;background:#fff;color:#8a847b;border-radius:7px;padding:2px 8px;font-size:12px;cursor:pointer;line-height:1.4}
 .wbrm.armed{border-color:#9e2020;color:#fff;background:#9e2020;font-weight:700}
+/* 🧰 outside-project clock-in: kind of work + what/for whom (Melissa 10/13) */
+.outfields{display:flex;gap:6px;margin:6px 0 8px}
+.outfields select{flex:0 0 auto;font-size:13px;padding:6px 8px;border:1px solid #cfd6dc;border-radius:7px;background:#fff}
+.outfields input{flex:1;min-width:0;font-size:13px;padding:6px 8px;border:1px solid #cfd6dc;border-radius:7px}

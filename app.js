@@ -4617,7 +4617,7 @@ async function updateClPill() {
     const pp = S.data.pianos.find(x => x.serial === o.serial);
     ph = pp ? String(pp.phase || '').trim() : '';
   }
-  const active = o && o.serial && o.serial !== 'MGMT' && o.serial !== 'TIDY' && o.serial !== 'MAINT' && o.serial !== 'KEYS' && CHECKLIST_PHASES.includes(ph || o.phase) ? (ph || o.phase) : null;
+  const active = o && o.serial && o.serial !== 'MGMT' && o.serial !== 'TIDY' && o.serial !== 'MAINT' && o.serial !== 'KEYS' && o.serial !== 'OUTSIDE' && CHECKLIST_PHASES.includes(ph || o.phase) ? (ph || o.phase) : null;
   if (!active) { if (pill) pill.hidden = true; return; }
   const st = await clFetch(o.serial, active);
   const work = clVariantItems(st.items, S.data.pianos.find(x => x.serial === o.serial) || {}, 'work');
@@ -5883,13 +5883,21 @@ function cfxComposeNote(ymd, inT, outT, text) {
  * reachable by typing "TIDY" into a box labelled "piano serial", which nobody
  * would guess — so a tidying punch could not be reported as wrong (Walter
  * 9/18). They are first-class choices now, everywhere a clock is picked. */
-const CLOCK_PSEUDO = {TIDY: 'Shop tidying', MGMT: 'Management', KEYS: 'Miscellaneous keytops'};
+const CLOCK_PSEUDO = {TIDY: 'Shop tidying', MGMT: 'Management', KEYS: 'Miscellaneous keytops', OUTSIDE: 'Outside project'};
 // 🎹 Miscellaneous keytops (Walter 10/13): keytop-only jobs for an outside organ
 // restorer — Marcelo's own clock category, outside every track and phase
 const MAINT_PEOPLE = ['korbangreenhalgh.blp@gmail.com', 'matthewwessman.blp@gmail.com', 'jacobmower.blp@gmail.com', 'markhales.blp@gmail.com'];
 const maintOk = () => MAINT_PEOPLE.includes(userEmail())
   || /^(korban|matthew|jacob|mark)\b/i.test(clockName());   // building maintenance card (Walter 10/13)
 const isMarcelo = () => /^marcelo\b/i.test(clockName()) || /^marcelo/i.test(userEmail());
+// 🧰 Outside project (Melissa 10/13, 101326terry90): the cracked lyre, an organ
+// restorer's keys — work on something that isn't one of our pianos. Pseudo-
+// serial OUTSIDE; the tech names the job and picks the kind of work. Alex,
+// Curtis, Jake, McKinly, Matthew, Mark and Jacob for now (Walter 10/14).
+const OUTSIDE_PEOPLE = ['alexmartin.blp@gmail.com', 'jakepulver.blp@gmail.com', 'matthewwessman.blp@gmail.com', 'markhales.blp@gmail.com', 'jacobmower.blp@gmail.com'];
+const OUTSIDE_KINDS = ['Repair', 'Keytops', 'Refinishing', 'Other'];
+const outsideOk = () => OUTSIDE_PEOPLE.includes(userEmail())
+  || /^(alex|curtis|jake|mckinly|matthew|mark|jacob)\b/i.test(clockName());
 const clockLabel = (clock, serial) => {
   const p = CLOCK_PSEUDO[String(serial || '').toUpperCase()];
   return p || (String(clock || '') + (serial ? ' #' + serial : ''));
@@ -5907,7 +5915,7 @@ function clockFixModal(prefill) {
       <option value="pay">My day clock (payroll)</option>
       <option value="piano">A piano work clock</option>
       <option value="TIDY">Shop tidying</option>
-      <option value="MGMT">Management</option>${isMarcelo() ? '<option value="KEYS">Miscellaneous keytops</option>' : ''}</select>
+      <option value="MGMT">Management</option>${isMarcelo() ? '<option value="KEYS">Miscellaneous keytops</option>' : ''}${outsideOk() ? '<option value="OUTSIDE">Outside project</option>' : ''}</select>
       <input type="text" class="cf-serial" placeholder="piano serial" style="display:none"></div>
     <div class="rfbar">
       <label class="rfd">day <input type="date" class="cf-date" value="${today}" max="${today}"></label>
@@ -11673,13 +11681,13 @@ function payTimeTable() {
   const byPhase = {}, byPiano = {};
   tl.forEach(r => {
     byPhase[r.phase || '(no phase)'] = (byPhase[r.phase || '(no phase)'] || 0) + r.minutes;
-    const pk = (r.piano || r.phase || '?') + (r.serial && !/^(MGMT|TIDY|MAINT|KEYS)$/i.test(r.serial) ? ' #' + r.serial : '');
+    const pk = (r.piano || r.phase || '?') + (r.serial && !/^(MGMT|TIDY|MAINT|KEYS|OUTSIDE)$/i.test(r.serial) ? ' #' + r.serial : '');
     byPiano[pk] = (byPiano[pk] || 0) + r.minutes;
   });
   const phaseRows = Object.entries(byPhase).sort((a, b) => b[1] - a[1]);
   const pianoRows = Object.entries(byPiano).sort((a, b) => b[1] - a[1]).slice(0, 40);
   const sessions = showTl ? [...tl].sort((a, b) => new Date(b.start) - new Date(a.start)).slice(0, 600) : [];
-  const pianoLabel = r => /^(MGMT|TIDY|MAINT|KEYS)$/i.test(r.serial || '') ? '—' : `${esc(r.piano || '?')} <small>#${esc(r.serial)}</small>`;
+  const pianoLabel = r => /^(MGMT|TIDY|MAINT|KEYS|OUTSIDE)$/i.test(r.serial || '') ? '—' : `${esc(r.piano || '?')} <small>#${esc(r.serial)}</small>`;
   CSV_EXPORTS.paydays = () => ['payroll-punches.csv',
     [['Date', 'Team member', 'Clock in', 'Clock out', 'Minutes', 'Hours (decimal)', 'Note'],
      ...rows.map(r => [r.date, r.tech, fmtT(r.start), r.end ? fmtT(r.end) : 'OPEN', r.minutes, hDec(r.minutes), r.note])]];
@@ -12718,7 +12726,7 @@ function scorecardTable() {
   const tl = unvoided(S.tlRows).filter(r => inWin(r.start) && !/test/i.test(r.phase) && !/FAKE/.test(r.serial || ''));
   const mins = rows => rows.reduce((a, r) => a + (r.minutes || 0), 0);
   const pianoRows = tl.filter(r => !/^(Moving|Admin \/ Misc|Management|Shop Tidying|Building Maintenance|Miscellaneous Keytops)/.test(r.phase)
-    && r.serial !== 'MGMT' && r.serial !== 'TIDY' && r.serial !== 'MAINT' && r.serial !== 'KEYS');
+    && r.serial !== 'MGMT' && r.serial !== 'TIDY' && r.serial !== 'MAINT' && r.serial !== 'KEYS' && r.serial !== 'OUTSIDE');
   const trainRows = tl.filter(r => /^Training/.test(r.phase));
   const reworkRows = tl.filter(r => /^Rework|re-?do|fix(ing)? (earlier|previous)/i.test(r.phase));
   const workH = mins(pianoRows) / 60, trainH = mins(trainRows) / 60, reworkH = mins(reworkRows) / 60;
@@ -14000,6 +14008,28 @@ function renderDash() {
         <div class="maintmsg phmsg"></div>
       </div>`;
     })()}
+    ${(() => {
+      const onOut = o && o.serial === 'OUTSIDE';
+      if (!onOut && !outsideOk()) return '';
+      let last = {}; try { last = JSON.parse(lsGet('outsideJob') || '{}') || {}; } catch (e) {}
+      if (last.day !== denverDay(new Date().toISOString())) last = {};   // yesterday's job doesn't carry over
+      const fields = `<div class="outfields">
+          <select class="outkind">${OUTSIDE_KINDS.map(k => `<option ${k === (last.kind || 'Repair') ? 'selected' : ''}>${k}</option>`).join('')}</select>
+          <input type="text" class="outjob" maxlength="80" placeholder="what / for whom — e.g. Ferguson lyre, cracked on move" value="${esc(last.job || '')}">
+        </div>`;
+      return `<div class="dbench db-outside">
+        <h4>🧰 Outside project</h4>
+        ${onOut ? `<div class="dline now"><b>${esc(o.phase || 'Outside project')} — ${esc(o.piano || 'Outside project')}</b> since ${fmtT(o.start)} —
+              <span class="cctime" data-start="${esc(o.start)}">${clockElapsed(o.start)}</span></div>
+            <button class="paybtn outoff">■ End outside-project time</button>
+            <div class="dline dim">Opening a piano card and clocking in there switches you back to piano time automatically.</div>`
+          : o && o.serial !== 'MGMT' ? `<div class="dline">You're on <b>#${esc(o.serial)}</b> — one tap moves you to the outside project and closes that session.</div>
+            ${fields}<button class="paybtn outon">🧰 Switch to this outside project</button>`
+          : `${fields}<button class="paybtn outon">▶ Clock into this outside project</button>
+            <div class="dline dim">Work on something that isn't one of our pianos — a cracked lyre, an organ's keys. Say what it is so the hours can be found later.</div>`}
+        <div class="outmsg phmsg"></div>
+      </div>`;
+    })()}
     ${isMarcelo() ? (() => {
       // 🎹 miscellaneous keytops (Walter 10/13): an organ restorer's keytops —
       // replacing keytops only, outside every track and phase. Pseudo-serial KEYS.
@@ -14096,6 +14126,29 @@ function renderDash() {
     const j = await punch('clockout', null, '', 'dash'); clearTimeout(slow_bOff);
     const bm = body.querySelector('.maintmsg');
     if (j.error) { if (bm) { bm.className = 'maintmsg phmsg err'; bm.textContent = j.error; } bOff.disabled = false; bOff.textContent = '■ End maintenance time'; }
+    else renderDash();
+  };
+  const oOn = body.querySelector('.outon'), oOff = body.querySelector('.outoff');
+  if (oOn) oOn.onclick = async () => {
+    if (Date.now() - CLOCK.punchedAt < 2000) return;
+    const kind = (body.querySelector('.outkind') || {}).value || 'Other';
+    const job = String((body.querySelector('.outjob') || {}).value || '').trim();
+    const om = body.querySelector('.outmsg');
+    if (!job) { if (om) { om.className = 'outmsg phmsg err'; om.textContent = 'Say what the project is (what / for whom) so the hours can be found later.'; } return; }
+    try { lsSet('outsideJob', JSON.stringify({kind, job, day: denverDay(new Date().toISOString())})); } catch (e) {}
+    oOn.disabled = true; oOn.textContent = clockingText('in');
+    const slow_oOn = punchSlow(oOn, 'in');
+    const j = await punch('clockin', {serial: 'OUTSIDE', row: '', summary: job}, kind, 'dash'); clearTimeout(slow_oOn);
+    if (j.error) { if (om) { om.className = 'outmsg phmsg err'; om.textContent = j.error; } oOn.disabled = false; oOn.textContent = '🧰 Outside project'; }
+    else { if (CLOCK.open) CLOCK.open.piano = job; renderDash(); }
+  };
+  if (oOff) oOff.onclick = async () => {
+    if (Date.now() - CLOCK.punchedAt < 2000) return;
+    oOff.disabled = true; oOff.textContent = clockingText('out');
+    const slow_oOff = punchSlow(oOff, 'out');
+    const j = await punch('clockout', null, '', 'dash'); clearTimeout(slow_oOff);
+    const om = body.querySelector('.outmsg');
+    if (j.error) { if (om) { om.className = 'outmsg phmsg err'; om.textContent = j.error; } oOff.disabled = false; oOff.textContent = '■ End outside-project time'; }
     else renderDash();
   };
   const kOn = body.querySelector('.keyson'), kOff = body.querySelector('.keysoff');
