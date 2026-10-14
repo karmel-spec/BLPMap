@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-14.21';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-14.22';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -1666,6 +1666,7 @@ function doPost(e) {
     if (req.action === 'cardmedia') {
       return json_(cardMedia_(req, who));
     }
+    if (req.action === 'handbookpatch') return json_(handbookPatch_(req, who));
     if (req.action === 'videosession') return json_(videoSession_(req, who));
     if (req.action === 'videodone') return json_(videoDone_(req, who));
     if (req.action === 'videothumb') return json_(videoThumb_(req, who));
@@ -2176,6 +2177,49 @@ function mediaFolderFor_(sh, row, serial, kind) {
  * PUTs pass CORS. `videodone` logs the finished file to the ACTIVITY LOG. */
 var VIDEO_FOLDER_NAMES = {before: 'Before Video', after: 'After Video', progress: 'Progress Video'};
 function videoKind_(k) { return k === 'after' ? 'after' : k === 'progress' ? 'progress' : 'before'; }
+/* ===== HANDBOOK PATCH (10/14) — replace the tail of the Restoration Handbook Doc =====
+ * `gog docs write` can only append raw text (and inherits the last paragraph's
+ * style — our 10/14 append landed as Heading 2 lines, which the Shop app's
+ * handbook parser then split into 25 bogus sections). This runs as karmel@
+ * through the Docs REST API with the script's existing Drive scope: delete
+ * everything from the first paragraph that starts with `marker` to the end,
+ * then append `blocks` [{text, style: HEADING_1|HEADING_2|NORMAL_TEXT}] with
+ * real paragraph styles. Only the handbook doc; team PIN via doPost. */
+var HANDBOOK_DOC_ID = '1at8y6h6pphLmAL5gaE2TzfHeDv5Xn9xdbWVdozvxhxA';
+function handbookPatch_(req, who) {
+  var marker = String(req.marker || '').trim();
+  var blocks = Array.isArray(req.blocks) ? req.blocks : [];
+  if (!marker || !blocks.length) return {error: 'marker and blocks required'};
+  var tok = ScriptApp.getOAuthToken();
+  var base = 'https://docs.googleapis.com/v1/documents/' + HANDBOOK_DOC_ID;
+  var doc = JSON.parse(UrlFetchApp.fetch(base, {headers: {Authorization: 'Bearer ' + tok}, muteHttpExceptions: true}).getContentText());
+  if (!doc.body) return {error: 'could not read the doc: ' + JSON.stringify(doc).slice(0, 200)};
+  var content = doc.body.content, start = -1, endIndex = content[content.length - 1].endIndex;
+  for (var i = 0; i < content.length; i++) {
+    var para = content[i].paragraph; if (!para) continue;
+    var text = (para.elements || []).map(function (e) { return e.textRun ? e.textRun.content : ''; }).join('');
+    if (text.replace(/^\s+/, '').indexOf(marker) === 0) { start = content[i].startIndex; break; }
+  }
+  var reqs = [];
+  // the doc must keep its final newline: delete up to endIndex-1
+  if (start >= 0 && endIndex - 1 > start) reqs.push({deleteContentRange: {range: {startIndex: start, endIndex: endIndex - 1}}});
+  var at = start >= 0 ? start : endIndex - 1;
+  // insert all text at once (newline-terminated paragraphs), then style each
+  var full = blocks.map(function (b) { return String(b.text || '').replace(/[\r\n]+/g, ' ') + '\n'; }).join('');
+  reqs.push({insertText: {location: {index: at}, text: full}});
+  var cursor = at;
+  blocks.forEach(function (b) {
+    var len = String(b.text || '').replace(/[\r\n]+/g, ' ').length + 1;
+    reqs.push({updateParagraphStyle: {range: {startIndex: cursor, endIndex: cursor + len},
+      paragraphStyle: {namedStyleType: /^HEADING_[1-6]$/.test(String(b.style || '')) ? b.style : 'NORMAL_TEXT'}, fields: 'namedStyleType'}});
+    cursor += len;
+  });
+  var res = UrlFetchApp.fetch(base + ':batchUpdate', {method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+    headers: {Authorization: 'Bearer ' + tok}, payload: JSON.stringify({requests: reqs})});
+  if (res.getResponseCode() !== 200) return {error: 'batchUpdate ' + res.getResponseCode() + ': ' + res.getContentText().slice(0, 300)};
+  logAct_(who, 'Handbook patched', 'Restoration Handbook', (start >= 0 ? 'replaced from "' + marker.slice(0, 40) + '"' : 'appended') + ' — ' + blocks.length + ' paragraphs');
+  return {ok: true, deletedFrom: start, inserted: full.length, paragraphs: blocks.length, requests: reqs.length};
+}
 function videoFolderFor_(sh, row, serial, kind) {
   // before/after live in the BEFORE/AFTER VIDEO media columns; progress videos
   // (Brigham 9/18) get their own PROGRESS VIDEO column, created on first use
