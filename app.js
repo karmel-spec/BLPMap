@@ -15741,7 +15741,9 @@ function openCardTextModal(c) {
   const sel = new Set();
   const body = () => (msgIn.value.trim() ? msgIn.value.trim() + '\n' : '')
     + '🗒 ' + c.text.slice(0, 80) + (c.text.length > 80 ? '…' : '') + '\n'
-    + APP_URL + '/#card=' + encodeURIComponent(c.id);
+    // APP_URL was never defined here, so this threw on every tap since 8/28 —
+    // the real reason "nothing happened" (Brigham 10/13, 101326larson15)
+    + (/netlify\.app$/.test(location.hostname) ? location.origin : 'https://blpstoremap.netlify.app') + '/#card=' + encodeURIComponent(c.id);
   const paint = () => {
     if (!phonesCache || !phonesCache.length) {
       list.innerHTML = '<i>no team phone numbers on file yet (Tech Phones tab)</i>';
