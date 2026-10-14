@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-14.12';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-14.13';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -6946,6 +6946,13 @@ function buildShopManagerReport_(dayOffset) {
     return String(e.date || e.start || '').slice(0, 10) === today;
   });
   R.total = pianos.length;
+  // piano name -> serial, so lines built from activity text (clock nudges,
+  // phase advances, teamwork, duplicates) can show the serial too (Walter 10/14)
+  R.serialByName = {};
+  pianos.forEach(function (p) {
+    var nm = String(p.summary || '').trim();
+    if (nm && p.serial && String(p.serial).trim() !== '?' && !R.serialByName[nm]) R.serialByName[nm] = String(p.serial).trim();
+  });
   R.standup = smStandup_(pianos, R);
   return R;
 }
@@ -6994,6 +7001,23 @@ function shopManagerHtml_(R) {
   // has been rendered, so the links always match a real anchor
   var tocInsertAt = H.length;
 
+  // every piano the brief names carries its serial (Walter 10/14): add
+  // " · #serial" after the longest known piano name found in a line of text
+  var SBN = R.serialByName || {};
+  var SBN_KEYS = Object.keys(SBN).filter(function (k) { return k.length >= 6; })
+    .sort(function (a, b) { return b.length - a.length; });
+  function withSer(text) {
+    var t = String(text || '');
+    for (var i = 0; i < SBN_KEYS.length; i++) {
+      var k = SBN_KEYS[i], at = t.indexOf(k);
+      if (at < 0) continue;
+      var ser = SBN[k];
+      if (t.indexOf(ser) !== -1) return t;   // serial already there
+      return t.slice(0, at + k.length) + ' · #' + ser + t.slice(at + k.length);
+    }
+    return t;
+  }
+
   // ⏰ last evening's late-clock texts + time fixes waiting (Brigham 8/27)
   try {
     var nudges = lateNudgesRecent_();
@@ -7003,7 +7027,7 @@ function shopManagerHtml_(R) {
         'Last evening\'s 6pm sweep texted anyone still clocked in (movers excepted); their correction requests land under Time Clock Adjustments.');
       var cf = [];
       nudges.forEach(function (n) {
-        cf.push('📱 texted <b>' + n.who + '</b> — still on ' + n.detail);
+        cf.push('📱 texted <b>' + n.who + '</b> — still on ' + withSer(n.detail));
       });
       if (openFix.length) cf.push('<b style="color:#9e2020">' + openFix.length
         + ' time-clock fix' + (openFix.length === 1 ? '' : 'es')
@@ -7037,7 +7061,7 @@ function shopManagerHtml_(R) {
   }));
   // Celebrate, Work Clock wins and Today's focus came out of the brief (Walter 10/14)
   su('🤝', 'Teamwork spotlight', (SU.teamwork || []).map(function (t) {
-    return '<b>' + t.piano + '</b> (' + t.why + ') — built by <b>' + t.techs.length + ' techs</b>: '
+    return '<b>' + withSer(t.piano) + '</b> (' + t.why + ') — built by <b>' + t.techs.length + ' techs</b>: '
       + t.techs.join(', ') + '. Take a bow.';
   }));
   su('🛡', 'Safety minute', SU.safety ? ['<i>' + SU.safety + '</i>'] : []);
@@ -7105,7 +7129,7 @@ function shopManagerHtml_(R) {
   if (R.advances.length) {
     sec('▶', 'Phase advances — is the next tech lined up?', R.advances.length);
     ul(R.advances.map(function (a) {
-      return '<b>' + a.piano + '</b>' + (a.spot ? ' <span style="color:#8a847b">· map #' + a.spot + '</span>' : '')
+      return '<b>' + withSer(a.piano) + '</b>' + (a.spot ? ' <span style="color:#8a847b">· map #' + a.spot + '</span>' : '')
         + '<br><span style="font-size:12px;color:#6f6a63">' + a.detail + ' — moved by ' + a.who + '</span>'
         + (a.goTo ? '<br>' + pill('GO-TO: ' + a.goTo, '#eef4ff', '#2b5fa8') : '');
     }));
@@ -7223,7 +7247,7 @@ function shopManagerHtml_(R) {
   if (R.activity.dups.length) {
     sec('🗑', 'Marked duplicate yesterday', R.activity.dups.length,
       'Review — restoring is one click in Reports → Marked Duplicates.');
-    ul(R.activity.dups.map(function (d) { return '<b>' + d.piano + '</b> — by ' + d.who; }));
+    ul(R.activity.dups.map(function (d) { return '<b>' + withSer(d.piano) + '</b> — by ' + d.who; }));
   }
 
   if (R.unplaced.length || R.dupSpots.length) {
