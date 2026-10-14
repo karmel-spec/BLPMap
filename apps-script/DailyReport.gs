@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-14.20';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-14.21';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -2494,7 +2494,9 @@ var PHASE_VALUES = ['New Arrival - Admin', 'Assessment', 'CAP',
   // track-sheet steps outside the master 14 (refurbishing/repair tracks) —
   // the app's normTrackPhase canonicalizes the Sequence-sheet wording to
   // these (082726hales17: "unknown phase" saving Key Servicing)
-  'Key Service', 'Refurb Checklist', 'Repair Work', 'Add-ons'];
+  'Key Service', 'Refurb Checklist', 'Repair Work', 'Add-ons',
+  // upright refurbish phases (Jacob 9/22, 092226mower21) — the app expands 'Refurb Checklist' into these for uprights
+  'Cabinetry Cleaning and Prep', 'Action Problems and Hammer Prep', 'Action Lubrication and Alignment', 'Regulation'];
 
 // July 2026 phase rework: how the old phase names translate to the new
 // 14-phase pipeline. Used once by the 'migratephases' action to update

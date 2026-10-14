@@ -547,8 +547,15 @@ function pianoPhases(p) {
   if (ai >= 0 && !seq.includes('PRSB - Notching and Pins')) {
     seq.splice(ai + 1, 0, 'PRSB - Notching and Pins');
   }
+  // Upright refurbishes run the refurb checklist as FOUR phases (Jacob 9/22,
+  // request 092226mower21): the Sequence sheet keeps one "refurb checklist"
+  // column; the app expands it for uprights. Grands keep the single phase.
+  const ri = seq.indexOf('Refurb Checklist');
+  if (ri >= 0 && p.type !== 'grand') seq.splice(ri, 1, ...REFURB_UPRIGHT_PHASES);
   return seq;
 }
+const REFURB_UPRIGHT_PHASES = ['Cabinetry Cleaning and Prep', 'Action Problems and Hammer Prep',
+  'Action Lubrication and Alignment', 'Regulation'];
 function phaseOptions(p, effPh) {
   const list = pianoPhases(p) || PHASES;
   return (effPh && !list.includes(effPh) && !PHASE_STATES.includes(effPh))
@@ -4447,7 +4454,7 @@ async function punchVerify(action, p, phase, fallbackMsg) {
 // the plate hides the work afterwards, so rework is off the table.
 // + Notching and Pins (Walter 10/13, Hunter's 100926rawlings09): it has its own manager
 // checklist; Restringing and DHRT keep the tech's self-check when advancing
-const QC_PHASES = ['CAP', 'PRSB - Downbearing', 'PRSB - Notching and Pins'];
+const QC_PHASES = ['CAP', 'PRSB - Downbearing', 'PRSB - Notching and Pins', 'Action Problems and Hammer Prep'];   // + upright refurb mini-QC (Jacob 9/22)
 // phases that NEVER need a mini-QC to advance — the training-month catch-all
 // below does not apply to them either:
 //   Post Sale QC — the pre-delivery final QC is itself the check (Mark 9/8)
@@ -4459,7 +4466,8 @@ const QC_NEVER = ['Post Sale QC', 'Chip Tuning', '1st Tuning', '2nd Tuning', 'QC
 // Assembly keeps its worksheet even though it no longer gates.
 // 9/17 (Brigham): the handbook trio (bench steps + training view + mini-QC) now
 // covers Notching & Pins, Restringing and DHRT too — seeded on the Phase Checklists tab
-const CHECKLIST_PHASES = QC_PHASES.concat(['PRSB - Notching and Pins', 'Restringing', 'DHRT', 'QC & Assembly', 'Post Sale QC']);
+const CHECKLIST_PHASES = QC_PHASES.concat(['PRSB - Notching and Pins', 'Restringing', 'DHRT', 'QC & Assembly', 'Post Sale QC',
+  'Cabinetry Cleaning and Prep', 'Action Lubrication and Alignment', 'Regulation']);
 // acronym school (Brigham 9/3): TRAINING mode spells acronyms out so newbies
 // learn them; trained techs see the acronyms alone everywhere else.
 const PHASE_LONG = {
