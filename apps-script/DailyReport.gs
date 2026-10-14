@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-14.9';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-14.10';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -7155,9 +7155,11 @@ function shopManagerHtml_(R) {
 
   // 🏷 pianos on the map with no phase — its own list now, not a line in Data gaps (Walter 10/14)
   if (R.noPhase.length) {
-    sec('🏷', 'Pianos with no phase', R.noPhase.length, 'On the map as shop work, but no phase set — open the card and pick one.');
+    sec('🏷', 'Pianos with no phase', R.noPhase.length, 'On a map spot with no phase set — open the card and pick one.');
     ul(R.noPhase.map(function (p) {
-      return ref(p) + (p.section ? ' <span style="font-size:12px;color:#8a847b">· ' + esc_(String(p.section).slice(0, 40)) + '</span>' : '');
+      // the card's status (e.g. "Current Shop Work, Rebuilt"), not its parsed
+      // section — some owner notes are being read as section headers
+      return ref(p) + (p.status ? ' <span style="font-size:12px;color:#8a847b">· ' + esc_(String(p.status).slice(0, 50)) + '</span>' : '');
     }));
   }
 
