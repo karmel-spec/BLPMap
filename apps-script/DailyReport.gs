@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-15.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-15.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -5740,6 +5740,8 @@ function smDeliveryForecast_(pianos, events, refDate) {
     else if (/pre[\s-]?queue/i.test(st) || /^pending shopwork$/i.test(sec)) { ready = false; why = 'Pre-Queue — deposit not received'; }
     else if (h && h.deposit === 'collected') { ready = true; why = 'deposit collected (handoff)'; }
     else if (h) { ready = false; why = h.deposit === 'admin' ? 'deposit assigned to Admin — not confirmed' : 'deposit not discussed at the close'; }
+    // strict (Walter 10/15): YES only with a confirmed deposit — anything else is NO
+    if (ready === null) { ready = false; why = p ? 'deposit not confirmed — card isn\u2019t marked Queue Approved' : 'deposit not confirmed — no card or handoff found'; }
     out.push({date: d, time: String(e.time || ''), summary: sum.slice(0, 110), name: name, p: p,
               lead: h ? h.lead_name : '', pianoLabel: p ? '' : (h ? h.piano : ''), ready: ready, why: why});
   });
@@ -7211,13 +7213,11 @@ function shopManagerHtml_(R) {
     var FC = R.forecast.items || [];
     var fmtD = function (iso) { var dd = new Date(iso + 'T12:00:00'); return isNaN(dd) ? iso : Utilities.formatDate(dd, 'America/Denver', 'EEE M/d'); };
     sec('🚚', 'Delivery Forecasting', FC.length,
-      'Pianos arriving at BLP ' + fmtD(R.forecast.from) + ' – ' + fmtD(R.forecast.to) + ' (moving calendar). Ready to work on = the $1,000 queue deposit is in.');
+      'Pianos arriving at BLP ' + fmtD(R.forecast.from) + ' – ' + fmtD(R.forecast.to) + ' (moving calendar). YES only when the $1,000 queue deposit is confirmed — the card says Queue Approved, or the WON handoff recorded it collected.');
     if (FC.length) {
       ul(FC.map(function (x) {
         var what = x.p ? ref(x.p) : '<b>' + esc_(x.pianoLabel || 'piano') + '</b>' + (x.lead ? ' <span style="color:#8a847b">· ' + esc_(x.lead) + '</span>' : '');
-        var tag = x.ready === true ? pill('READY TO WORK ON: YES', '#eaf5ec', '#2f7d4f')
-          : x.ready === false ? pill('READY TO WORK ON: NO', '#fbeaea', '#9e2020')
-          : pill(x.p ? 'READY? — card not marked Pre-Queue or Queue Approved' : 'READY? — no card or handoff found', '#fdf3ec', '#8a6a00');
+        var tag = x.ready ? pill('READY TO WORK ON: YES', '#eaf5ec', '#2f7d4f') : pill('READY TO WORK ON: NO', '#fbeaea', '#9e2020');
         return '<b>' + fmtD(x.date) + (x.time ? ' ' + esc_(x.time) : '') + '</b> — ' + what + ' ' + tag
           + '<br><span style="font-size:12px;color:#6f6a63">' + esc_(x.summary) + (x.why ? ' · ' + esc_(x.why) : '') + '</span>';
       }));
