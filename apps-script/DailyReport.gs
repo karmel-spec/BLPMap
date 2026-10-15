@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-15.5';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-15.6';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -1201,6 +1201,7 @@ function doPost(e) {
       return json_(taskCard_(req, who));
     }
     if (req.action === 'soldsweep') return json_(soldSweep_(req));
+    if (req.action === 'touchupsfirst') return json_(touchupsFirst_(!!req.dryrun));
     if (req.action === 'requeststatus') {
       var rs = setRequestStatus_(req);
       if (rs.ok) logAct_(who, 'App request ' + rs.status, rs.id, rs.text);
@@ -9627,10 +9628,41 @@ function teamRequest_(req, who) {
 }
 
 var REFINISH_SHEET_ID = '1bfF4pmuGv7TefVlDG4lo_04gRjiX9QYerK4o9qih6kc';   // Doris's refinishing sheet (first tab)
-/* Touch Up → Doris: a "Touch-up" row at the end of her refinishing list (no
- * calendar event since 10/7 — the queue is the to-do), laid out like the rows
- * already there:
- * blank | brand | serial | spot | (level) | request | notes. */
+/* Touch Up → Doris: a "Touch-up" row on her refinishing list (no calendar
+ * event since 10/7 — the queue is the to-do), laid out like the rows already
+ * there: blank | brand | serial | spot | (level) | request | notes.
+ * Row order = priority. Since 10/15 (Walter) a touch-up goes at the TOP — just
+ * under the header, after the touch-ups already there (first come, first
+ * served) — instead of behind every refinishing job. */
+function refinishTouchupSlot_(tab) {
+  var vals = tab.getRange(1, 1, Math.max(tab.getLastRow(), 1), 6).getValues();
+  var hdr = -1;
+  for (var i = 0; i < vals.length; i++) if (String(vals[i][1] || '').trim().toLowerCase() === 'brand') { hdr = i; break; }
+  if (hdr < 0) return -1;
+  var pos = hdr + 1;   // 0-based index of the first data row
+  while (pos < vals.length && /touch/i.test(String(vals[pos][5] || ''))) pos++;
+  return pos + 1;      // 1-based sheet row to insert at
+}
+/* one-off / repair: touch-ups that sit below refinishing jobs move up into
+ * the top touch-up group, keeping their order (Walter 10/15: Merrill 38180) */
+function touchupsFirst_(dry) {
+  var ss = SpreadsheetApp.openById(REFINISH_SHEET_ID);
+  var tab = ss.getSheets().filter(function (t) { return t.getSheetId() === 0; })[0] || ss.getSheets()[0];
+  var moved = [];
+  for (var guard = 0; guard < 50; guard++) {
+    var slot = refinishTouchupSlot_(tab);
+    if (slot < 0) return {error: 'no Brand header row found'};
+    var vals = tab.getRange(1, 1, tab.getLastRow(), 6).getValues();
+    var next = -1;
+    for (var r = slot - 1; r < vals.length; r++) if (/touch/i.test(String(vals[r][5] || '')) && String(vals[r][2] || '').trim()) { next = r + 1; break; }
+    if (next < 0) break;
+    moved.push({from: next, to: slot, piano: String(vals[next - 1][1] || '').trim() + ' ' + String(vals[next - 1][2] || '').trim()});
+    if (dry) break;
+    tab.moveRows(tab.getRange(next + ':' + next), slot);
+    SpreadsheetApp.flush();
+  }
+  return {ok: true, dry: !!dry, moved: moved};
+}
 function touchUpToDoris_(req, found, name, sh, dry) {
   var tz = 'America/Denver', res = {};
   var notes = String(req.notes || '').trim();
@@ -9645,7 +9677,17 @@ function touchUpToDoris_(req, found, name, sh, dry) {
     var brand = make || String(found.summary || '').split('/')[0].trim();
     var row = ['', brand, String(req.serial || ''), String(found.location || ''), '', 'Touch-up',
       (notes || 'touch-up') + ' [' + (name || 'team') + ' ' + Utilities.formatDate(new Date(), tz, 'M/d') + ']'];
-    if (!dry) { tab.appendRow(row); res.sheetRow = tab.getLastRow(); }
+    var slot = refinishTouchupSlot_(tab);
+    if (!dry) {
+      if (slot > 0) {
+        tab.insertRowBefore(slot);
+        var wc = Math.max(tab.getLastColumn(), row.length);
+        // look like a data row, not like the header above it
+        try { tab.getRange(slot + 1, 1, 1, wc).copyTo(tab.getRange(slot, 1, 1, wc), {formatOnly: true}); } catch (eF) {}
+        tab.getRange(slot, 1, 1, row.length).setValues([row]); res.sheetRow = slot;
+      }
+      else { tab.appendRow(row); res.sheetRow = tab.getLastRow(); }   // no header found — the old way
+    } else res.slot = slot;
     res.sheet = ss.getName() + ' → ' + tab.getName();
   } catch (eS) {
     res.sheetError = /permission|access|not found/i.test(String(eS))
