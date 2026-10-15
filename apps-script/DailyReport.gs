@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-14.24';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-15.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -5690,6 +5690,62 @@ function smArrivalName_(sum) {
   }
   return '';
 }
+/* 🚚 Delivery Forecasting (Walter 10/15): every piano arriving at BLP in the
+ * next 14 days (moving calendar — "… to BLP …" or a pickup), matched to its
+ * piano by serial in the title or the client's name, and whether it is READY
+ * TO WORK ON = its $1,000 queue deposit is in. The Piano Log card is the live
+ * record (Queue Approved = yes; Pre-Queue / Pending Shopwork = no); a piano
+ * with neither falls back to the WON handoff's deposit answer (salesapp2
+ * won-deposits — "collected" = yes). */
+function smForecastName_(sum) {
+  var t = String(sum || '');
+  var m = /\bto\s+BLP\b\s*[-–—:,]*\s*([^,\-–—]{4,40})/i.exec(t);
+  if (m) return m[1].replace(/\s+/g, ' ').trim();
+  return smArrivalName_(t);
+}
+function smDeliveryForecast_(pianos, events, refDate) {
+  var tz = 'America/Denver';
+  var from = Utilities.formatDate(refDate || new Date(), tz, 'yyyy-MM-dd');
+  var to = Utilities.formatDate(new Date((refDate || new Date()).getTime() + 14 * 86400000), tz, 'yyyy-MM-dd');
+  var deps = [];
+  try {
+    var dj = JSON.parse(UrlFetchApp.fetch('https://blpsalesapp.netlify.app/.netlify/functions/won-deposits?key=pianoman',
+      {muteHttpExceptions: true}).getContentText());
+    deps = (dj.handoffs || []).filter(function (h) { return !/^zz\b|intake test/i.test(String(h.lead_name || '')); });
+  } catch (eD) { deps = []; }
+  var out = [];
+  (events || []).forEach(function (e) {
+    var sum = String(e.summary || '');
+    var d = String(e.date || '');
+    if (!d || d < from || d > to) return;
+    if (!/\bto\s+BLP\b|\bto\s+the\s+shop\b|pick\s?up|pickup/i.test(sum)) return;          // arrivals only
+    if (/cancel|not happening|tentative|for admin|need(s)? to call|\?\?|bench|plate|skid|board|parts?\b|tool|rug|dolly/i.test(sum)) return;
+    var name = smForecastName_(sum);
+    var low = sum.toLowerCase(), nlow = name.toLowerCase();
+    var p = null;
+    for (var i = 0; i < pianos.length && !p; i++) {               // serial in the title wins
+      var ser = String(pianos[i].serial || '').trim();
+      if (ser.length >= 4 && ser !== '?' && new RegExp('\\b' + ser.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'i').test(sum)) p = pianos[i];
+    }
+    if (!p && nlow.length >= 5) p = pianos.filter(function (x) { return String(x.owner || '').toLowerCase().indexOf(nlow) >= 0; })[0] || null;
+    var h = null;
+    if (nlow.length >= 5) h = deps.filter(function (x) {
+      var ln = String(x.lead_name || '').toLowerCase();
+      return ln && (ln.indexOf(nlow) >= 0 || nlow.indexOf(ln) >= 0);
+    })[0] || null;
+    if (!h && p && p.serial) h = deps.filter(function (x) { return x.serial && String(x.serial) === String(p.serial); })[0] || null;
+    var st = String((p && p.status) || ''), sec = String((p && p.section) || '').trim();
+    var ready = null, why = '';
+    if (/queue approved/i.test(st)) { ready = true; why = 'Queue Approved on the card'; }
+    else if (/pre[\s-]?queue/i.test(st) || /^pending shopwork$/i.test(sec)) { ready = false; why = 'Pre-Queue — deposit not received'; }
+    else if (h && h.deposit === 'collected') { ready = true; why = 'deposit collected (handoff)'; }
+    else if (h) { ready = false; why = h.deposit === 'admin' ? 'deposit assigned to Admin — not confirmed' : 'deposit not discussed at the close'; }
+    out.push({date: d, time: String(e.time || ''), summary: sum.slice(0, 110), name: name, p: p,
+              lead: h ? h.lead_name : '', pianoLabel: p ? '' : (h ? h.piano : ''), ready: ready, why: why});
+  });
+  out.sort(function (a, b) { return (a.date + a.time) < (b.date + b.time) ? -1 : 1; });
+  return {from: from, to: to, items: out};
+}
 function smMissingArrivals_(pianos, events) {
   var out = [];
   (events || []).forEach(function (e) {
@@ -6973,6 +7029,7 @@ function buildShopManagerReport_(dayOffset) {
     return p.active && String(p.tempEntry || '').trim();
   });
   R.missingArrivals = smMissingArrivals_(pianos, data.events || []);
+  try { R.forecast = smDeliveryForecast_(pianos, data.events || [], refDate); } catch (eFc) { R.forecast = null; }
 
   R.soldPending = pianos.filter(function (p) {
     return /sold or completed but not delivered/i.test(p.section || '');
@@ -7147,6 +7204,26 @@ function shopManagerHtml_(R) {
     }));
   } else {
     H.push('<p style="margin:0 0 8px;font:12.5px Helvetica,Arial;color:#8a847b">Nobody has time off in the next 7 days.</p>');
+  }
+
+  // 🚚 Delivery Forecasting (Walter 10/15) — arrivals in the next 14 days and whether each is ready to work on
+  if (R.forecast) {
+    var FC = R.forecast.items || [];
+    var fmtD = function (iso) { var dd = new Date(iso + 'T12:00:00'); return isNaN(dd) ? iso : Utilities.formatDate(dd, 'America/Denver', 'EEE M/d'); };
+    sec('🚚', 'Delivery Forecasting', FC.length,
+      'Pianos arriving at BLP ' + fmtD(R.forecast.from) + ' – ' + fmtD(R.forecast.to) + ' (moving calendar). Ready to work on = the $1,000 queue deposit is in.');
+    if (FC.length) {
+      ul(FC.map(function (x) {
+        var what = x.p ? ref(x.p) : '<b>' + esc_(x.pianoLabel || 'piano') + '</b>' + (x.lead ? ' <span style="color:#8a847b">· ' + esc_(x.lead) + '</span>' : '');
+        var tag = x.ready === true ? pill('READY TO WORK ON: YES', '#eaf5ec', '#2f7d4f')
+          : x.ready === false ? pill('READY TO WORK ON: NO', '#fbeaea', '#9e2020')
+          : pill('READY? — no card or handoff found', '#f0f2f4', '#5a626a');
+        return '<b>' + fmtD(x.date) + (x.time ? ' ' + esc_(x.time) : '') + '</b> — ' + what + ' ' + tag
+          + '<br><span style="font-size:12px;color:#6f6a63">' + esc_(x.summary) + (x.why ? ' · ' + esc_(x.why) : '') + '</span>';
+      }));
+    } else {
+      H.push('<p style="margin:0 0 8px;font:12.5px Helvetica,Arial;color:#8a847b">No pianos arriving in the next 14 days on the moving calendar.</p>');
+    }
   }
   if (R.appLive && R.appLive.length) {
     var LICON = {bug: '🐛', edit: '✏️', idea: '💡'};
@@ -7325,7 +7402,7 @@ function shopManagerHtml_(R) {
 
   // section order (Walter 10/14). Sections not listed keep their old order
   // after these; the reports list and footer stay last.
-  var ORDER = ['Morning Standup', 'Clock follow-ups', 'Time off', 'Data gaps', 'Phase looks stale', 'Phase advances',
+  var ORDER = ['Morning Standup', 'Clock follow-ups', 'Time off', 'Delivery Forecasting', 'Data gaps', 'Phase looks stale', 'Phase advances',
                'Paused, waiting', 'Pianos with no phase', 'Housekeeping', 'Exit Prep', 'New in the apps'];
   var LAST = 'All Store Map reports';
   var rank = function (key) {
