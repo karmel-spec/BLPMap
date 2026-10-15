@@ -69,6 +69,16 @@ never be committed. Without it the app still runs (map + pianos, no moves).
   you across devices, and the search bar in each window searches every
   agent's conversations; the device keeps a copy as an instant cache. A
   "Telegram ↗" link in the header stays as a fallback.
+- **Piano Log writes** (10/14): every change from a card (phase, spot, plate /
+  keytop / cabinetry fields, notes, flags) goes browser → `pianolog-write` on
+  blpsalesapp → **straight into the Piano Log through the Sheets API** with the
+  service account, in about a second, with the same activity-log line the
+  Apps Script bridge wrote (`salesapp2/netlify/functions/lib/pianolog-direct.mts`).
+  Only Delivered, Exit Prep - Admin, prices, keys, media and anything that
+  needs a new column still cross the bridge; a write the bridge can't confirm
+  inside its budget is queued in Supabase `bridge_queue`, drained at once in
+  the background, and the card follows it (`watchQueuedMove` /
+  `watchQueuedPhase`) until it lands or is refused.
 - `app.js` renders the SVG map (scroll-zoom / drag-pan), floor tabs, search,
   KPI tiles, piano popups (deep-link to pianologapp.netlify.app), Move Board,
   and the Unplaced / Duplicate-slot admin report.

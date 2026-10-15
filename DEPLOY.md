@@ -13,6 +13,7 @@ local computer.
 | `/api/slots` (floor-plan geometry, live from the sheet, 6 h cache) | Netlify Function | none — `netlify/functions/slots.mjs` |
 | `/api/agent` (in-app chat with Lindsay / Melody / Chris … — relayed by the Agent Console to each agent's Grok Bot) | Netlify Function | `BLP_AGENTS_KEY` (console team passcode), optional `BLP_AGENTS_URL` |
 | `/api/queue` (drag-to-reorder + ＋ add for the Keytop / Refinish / Plate Q boxes — owners, managers & admins) | Netlify Function | `SUPABASE_SERVICE_KEY`; run `supabase/queue_order.sql` once |
+| Piano Log writes from the cards (phase, spot, fields, notes) | blpsalesapp `pianolog-write` → Sheets API with the service account (`lib/pianolog-direct.mts`), bridge only for Delivered / Exit Prep / prices / keys / media | `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_PRIVATE_KEY` on blpsalesapp; `PIANOLOG_DIRECT_WRITES=off` sends everything back through the bridge |
 | Daily report email (weekdays 6 AM) | Google Apps Script as info@ | `apps-script/DailyReport.gs` |
 | 🎯 Brigham's Top 10 brief (6:15 AM Mon–Sat, Google Doc + email) | Google Apps Script `top10Brief` ← `/api/top10` Netlify Function | run `setupTop10Brief()` once in the bridge project |
 
