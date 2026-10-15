@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-15.4';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-15.5';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -8015,6 +8015,10 @@ function morningBriefs() {
   return r;
 }
 function sendShopManagerReport() {
+  // OFF (Walter 10/15): the briefs go out once, from morningBriefs at ~7:45 AM.
+  // This old evening send still fired Mon–Thu ~6:30 PM from a trigger owned by
+  // another account (this one can't delete it), so everyone got the brief twice.
+  return {ok: true, skipped: 'evening brief retired — morningBriefs sends the brief'};
   var hour = Number(Utilities.formatDate(new Date(), 'America/Denver', 'H'));
   // the briefs moved to an evening send. A stale morning trigger still exists
   // under another account (getProjectTriggers can't delete another user's), so
