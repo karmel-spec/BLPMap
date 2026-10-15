@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-15.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-15.4';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -5713,8 +5713,13 @@ function smDeliveryForecast_(pianos, events, refDate) {
       {muteHttpExceptions: true}).getContentText());
     deps = (dj.handoffs || []).filter(function (h) { return !/^zz\b|intake test/i.test(String(h.lead_name || '')); });
   } catch (eD) { deps = []; }
+  // the bridge's own cached moving calendar, not the data feed's copy — a
+  // freshly started data server answers before its calendar has loaded, and
+  // the forecast came back empty (10/15)
+  var evs = events || [];
+  try { var own = fetchEvents_(); if (own && own.length) evs = own; } catch (eE) {}
   var out = [];
-  (events || []).forEach(function (e) {
+  evs.forEach(function (e) {
     var sum = String(e.summary || '');
     var d = String(e.date || '');
     if (!d || d < from || d > to) return;
