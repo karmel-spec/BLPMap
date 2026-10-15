@@ -15333,7 +15333,7 @@ function renderTaskBoard() {
     const cards = (key === 'sent' ? sentCards.slice() : mine.filter(r => homeCol(r) === key))
       .sort((a, b) => ordVal(a) - ordVal(b));
     return `<div class="kcol ${key === 'done' ? 'kdone' : ''}" data-col="${key}">
-      <h4><span>${esc(label)}${canEdit && !tbIsVirtualCol(key) ? ` <button class="kcolren" data-k="${esc(key)}" title="rename column">✎</button><button class="kcolmv" data-k="${esc(key)}" data-d="-1" title="move column left">◀</button><button class="kcolmv" data-k="${esc(key)}" data-d="1" title="move column right">▶</button>` : ''}</span> <i>${cards.length}</i></h4>
+      <h4><span>${canEdit && !tbIsVirtualCol(key) ? '<span class="kcolgrip" title="drag to move this column left or right">⠿</span>' : ''}${esc(label)}${canEdit && !tbIsVirtualCol(key) ? ` <button class="kcolren" data-k="${esc(key)}" title="rename column">✎</button><button class="kcolmv" data-k="${esc(key)}" data-d="-1" title="move column left">◀</button><button class="kcolmv" data-k="${esc(key)}" data-d="1" title="move column right">▶</button>` : ''}</span> <i>${cards.length}</i></h4>
       ${cards.map(c => `<div class="kcard" draggable="false" data-id="${esc(c.id)}">
         <b>${esc(c.text)}</b>
         <div class="chips">
@@ -15550,18 +15550,22 @@ function renderTaskBoard() {
     const next = real.slice(); [next[i], next[j]] = [next[j], next[i]];
     saveCols(next);
   });
-  // drag whole COLUMNS by their header (Brigham 9/17): mouse drags at once,
-  // touch needs a 350 ms hold (a moving thumb still scrolls the board). The
+  // drag whole COLUMNS by their header (Brigham 9/17, fixed 10/15): the header
+  // is touch-action:none so the browser never turns the touch into a board
+  // scroll (that silently cancelled every touch drag). Mouse and touch both
+  // lift after an 8 px move; a still finger lifts after a 250 ms hold. The
   // drop lands left or right of the column under the pointer; mirrored
-  // question columns stay where the renderer puts them.
+  // question columns and the ✅/📤 views stay where the renderer puts them.
   if (canEdit) el.querySelectorAll('.kcol > h4').forEach(h => {
     const colEl = h.parentElement, key = String(colEl.dataset.col || '');
-    if (key.startsWith('mir:')) return;
+    if (tbIsVirtualCol(key)) return;
     h.classList.add('kgrabbable');
     h.addEventListener('pointerdown', ev => {
       if (ev.target.closest('button')) return;
+      if (ev.pointerType === 'mouse' && ev.button !== 0) return;
+      ev.preventDefault();   // no text selection / native image drag of the header
       const startX = ev.clientX, startY = ev.clientY, isTouch = ev.pointerType !== 'mouse';
-      let dragging = false, ghost = null, holdT = null, armed = !isTouch, lastPt = null, scrollRAF = null, target = null;
+      let dragging = false, ghost = null, holdT = null, armed = true, lastPt = null, scrollRAF = null, target = null;
       const clearMarks = () => el.querySelectorAll('.kcol').forEach(c2 => c2.classList.remove('kcolbefore', 'kcolafter'));
       const lift = (x, y) => {
         dragging = true;
@@ -15577,7 +15581,7 @@ function renderTaskBoard() {
       };
       const blockScroll = e => { if (dragging) e.preventDefault(); };
       if (isTouch) addEventListener('touchmove', blockScroll, {passive: false});
-      if (isTouch) holdT = setTimeout(() => { armed = true; lift(startX, startY); }, 350);
+      if (isTouch) holdT = setTimeout(() => { if (!dragging) lift(startX, startY); }, 250);
       const autoScroll = () => {
         if (!dragging || !lastPt) { scrollRAF = null; return; }
         const kan = el.querySelector('.kan');
