@@ -4359,7 +4359,11 @@ async function punch(action, p, phase, source, endAt, ackNote) {
   // bridge checks the paid day inside the same call ('dayfirst' comes back,
   // nothing is written). Mini-QC inspections ('qc') are exempt.
   const gated = action === 'clockin' && source !== 'qc';
-  if (gated && !PAY.open && PAY.at && Date.now() - PAY.at < 90000) return {error: DAY_FIRST_MSG()};
+  // Avery 10/9 (100926moore05): this used to refuse ON THE PHONE when the
+  // app's own copy of the day clock (read in the last 90 s) said "not clocked
+  // in" — a copy taken before the day punch landed kept refusing until a full
+  // reload. The bridge checks the paid day itself (dayGate below), so it alone
+  // decides; a real "no day" still comes back as 'dayfirst' with this message.
   const body = {pin, action, source: source || 'card', ...authFields()};
   if (gated) body.dayGate = 1;
   if (p) {
