@@ -4769,11 +4769,17 @@ async function openWorkChecklist(serial, phase) {
   const close = () => { ov.remove(); updateClPill(); };
   st.notes = st.notes || new Map();
   const pendNotes = new Map();   // notes typed before the item is checked — ride along with the check
+  // …and survive closing the checklist (Mark 10/15, 101526hales55): the server
+  // keeps a note only with a check, so an unchecked step's note waits on this
+  // device until the step is checked
+  const pendKey = 'clPend|' + serial + '|' + phase;
+  const pendStore = () => { try { const o = {}; pendNotes.forEach((v, k) => { if (v) o[k] = v; }); Object.keys(o).length ? lsSet(pendKey, JSON.stringify(o)) : localStorage.removeItem(pendKey); } catch (e) {} };
+  try { const saved = JSON.parse(lsGet(pendKey) || '{}'); Object.keys(saved).forEach(k => { const i = Number(k); if (!st.done.has(i) && saved[k]) pendNotes.set(i, saved[k]); }); } catch (e) {}
   const save = (idx, done) => {
     st.skips.delete(idx);
     done ? st.done.add(idx) : st.done.delete(idx);
     const note = pendNotes.get(idx) || st.notes.get(idx) || '';
-    if (done && pendNotes.has(idx)) { st.notes.set(idx, pendNotes.get(idx)); pendNotes.delete(idx); }
+    if (done && pendNotes.has(idx)) { st.notes.set(idx, pendNotes.get(idx)); pendNotes.delete(idx); pendStore(); }
     if (!done) st.notes.delete(idx);
     clToggle(serial, phase, idx, done, false, done ? note : '');
     if (done && typeof checkComplete === 'function') setTimeout(checkComplete, 50);
@@ -4782,7 +4788,7 @@ async function openWorkChecklist(serial, phase) {
   // with the check; typed before checking, it rides along when checked
   const saveNote = (idx, note) => {
     if (st.done.has(idx)) { st.notes.set(idx, note); clToggle(serial, phase, idx, true, false, note); }
-    else pendNotes.set(idx, note);
+    else { if (note) pendNotes.set(idx, note); else pendNotes.delete(idx); pendStore(); }
   };
   // Post Sale QC complete → no mini-QC pass-off any more (Mark 9/8, request
   // 090826hales35): the final QC IS the inspection. Mark still gets an FYI
@@ -4866,7 +4872,7 @@ async function openWorkChecklist(serial, phase) {
             ${showFull ? esc(it.text) : `<b>${esc(qcShort(it.text))}</b>`}${it.detail && showFull && !isDone && !isSkip ? `<div style="font-size:11.5px;color:#9a5b13">⚠ ${esc(it.detail)}</div>` : ''}
             ${!isDone && !isSkip ? clMediaRow(it) : ''}
             ${isQcRequestStep(it) ? qcStepBtnHTML(p, phase, st) : ''}
-            ${(st.notes.get(it.i) || pendNotes.get(it.i)) ? `<div style="font-size:11.5px;color:#274b6d">📝 ${esc(st.notes.get(it.i) || pendNotes.get(it.i))}${pendNotes.has(it.i) ? ' <i style="color:#8a847b">(saves with the check)</i>' : ''}</div>` : ''}
+            ${(st.notes.get(it.i) || pendNotes.get(it.i)) ? `<div style="font-size:11.5px;color:#274b6d">📝 ${esc(st.notes.get(it.i) || pendNotes.get(it.i))}${pendNotes.has(it.i) ? ' <i style="color:#8a847b">(kept on this device — goes on the checklist when you check this step)</i>' : ''}</div>` : ''}
             ${isSkip ? `<div style="font-size:11.5px;color:#9a5b13">⏭ skipped — ${esc(st.skips.get(it.i))} <u>undo</u></div>` : ''}</div>
           ${dense ? `<button class="clexp" data-i="${it.i}" title="${expanded.has(it.i) ? 'hide' : 'show'} the full instructions" style="border:1px solid #cfc9bf;background:none;border-radius:8px;padding:3px 8px;color:#57524b;font-size:13px;flex:0 0 auto;height:26px">${expanded.has(it.i) ? '▾' : '▸'}</button>` : ''}
           <button class="clhbbtn" data-i="${it.i}" title="${hbOpen.has(it.i) ? 'hide' : 'read'} the handbook for this step" style="border:1px solid ${hbOpen.has(it.i) ? '#9e2020' : '#cfc9bf'};background:${hbOpen.has(it.i) ? '#fbeaea' : 'none'};border-radius:8px;padding:3px 7px;color:#57524b;font-size:12px;flex:0 0 auto;height:26px">📖</button>
