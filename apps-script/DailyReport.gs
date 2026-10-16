@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-16.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-16.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -904,8 +904,8 @@ function findPiano_(sh, serial, rowOverride) {
  * took 15–34 s of bridge time on EVERY call, and the map's data feed asks on
  * every cache miss of every server instance — those long calls were holding
  * the bridge's execution slots while everything else waited in line.
- * Fresh copy for 5 min; a 6-hour copy is served while another call is already
- * refreshing, or when the download fails. Calendar edits show within ~5 min. */
+ * Fresh copy for 15 min; a 6-hour copy is served while another call is already
+ * refreshing, or when the download fails. Calendar edits show within ~15 min. */
 function fetchEvents_() {
   var c = CacheService.getScriptCache();
   var hit = c.get('mvEv5');
@@ -916,7 +916,8 @@ function fetchEvents_() {
   try {
     var ev = fetchEventsLive_();
     var str = JSON.stringify(ev);
-    if (str.length < 95000) { c.put('mvEv5', str, 300); c.put('mvEvStale', str, 21600); }
+    // 15 min fresh (was 5, Walter 10/16): each refresh held a slot 16–18 s
+    if (str.length < 95000) { c.put('mvEv5', str, 900); c.put('mvEvStale', str, 21600); }
     return ev;
   } catch (err) {
     if (stale) { try { return JSON.parse(stale); } catch (eP) {} }
@@ -3141,6 +3142,13 @@ function setPhase_(req) {
  * which the queue's stale-replay check reads. salesapp2 sold-sweep-cron
  * calls it every 15 min in the daytime; dryrun:true only lists. */
 function soldSweep_(req) {
+  // one at a time (Walter 10/16): stacked cron retries ran it 3× a minute
+  var sc = CacheService.getScriptCache();
+  if (!req.dryrun && sc.get('sweepBusy')) return {ok: true, skipped: 'another sweep is already running', changed: [], twins: []};
+  if (!req.dryrun) sc.put('sweepBusy', '1', 120);
+  try { return soldSweepLocked_(req); } finally { if (!req.dryrun) { try { sc.remove('sweepBusy'); } catch (eS) {} } }
+}
+function soldSweepLocked_(req) {
   var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
   var sd = soldDividerRow_(sh), last = sh.getLastRow();
   if (sd >= last) return {ok: true, changed: [], twins: []};
