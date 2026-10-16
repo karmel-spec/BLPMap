@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-15.6';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-16.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -182,8 +182,30 @@ function sendDailyReport() {
  * this script — Netlify's /api/data fetches events from here, so no
  * env vars or credentials are needed anywhere else.
  */
+/* 📈 request log (Walter 10/16, slow Planner at 8 AM): the last ~250 web
+ * requests and trigger runs with their handler time, kept in CacheService
+ * for 6 h — fn=reqlog&key=pianoman lists them. Written on every json_
+ * reply and by the morning brief / standup runs, so the next slow window
+ * shows what was holding Google's execution slots. */
+var REQ_NAME = '';
+function reqlogAdd_(name, ms) {
+  try {
+    var c = CacheService.getScriptCache();
+    var L = []; try { L = JSON.parse(c.get('reqlog') || '[]'); } catch (eJ) { L = []; }
+    L.push([Utilities.formatDate(new Date(), 'America/Denver', 'HH:mm:ss'), String(name || '?').slice(0, 40), Math.round(ms || 0)]);
+    if (L.length > 250) L = L.slice(-250);
+    c.put('reqlog', JSON.stringify(L), 21600);
+  } catch (eL) { /* diagnostics only */ }
+}
 function doGet(e) {
   REQ_T0 = Date.now();
+  REQ_NAME = 'GET ' + String((e && e.parameter && e.parameter.fn) || '?');
+  if (e && e.parameter && e.parameter.fn === 'reqlog') {
+    var rk = String(e.parameter.key || '');
+    if (rk !== TEAM_PIN && rk.toLowerCase() !== 'pianoman') return json_({error: 'unauthorized'});
+    var RL = []; try { RL = JSON.parse(CacheService.getScriptCache().get('reqlog') || '[]'); } catch (eR) {}
+    return ContentService.createTextOutput(JSON.stringify({ok: true, log: RL})).setMimeType(ContentService.MimeType.JSON);
+  }
   if (e && e.parameter && e.parameter.fn === 'hb') {
     // heartbeat: boot = ms evaluating this file before the handler ran; ms = the
     // handler; sheetMs (with &sheet=1) = one Piano Log read. Wall time minus
@@ -954,6 +976,7 @@ function doPost(e) {
   REQ_T0 = t0;
   try {
     var req = JSON.parse(e.postData.contents);
+    REQ_NAME = 'POST ' + String(req.action || req.fn || '?');
     // three ways in: the team PIN, the server-to-server secret, or a
     // verified Google sign-in from a BLP account (no PIN needed once
     // signed into the map)
@@ -2401,6 +2424,7 @@ function json_(o) {
   if (o && typeof o === 'object' && !Array.isArray(o) && REQ_T0) {
     if (o.ms == null) o.ms = Date.now() - REQ_T0;
     if (o.boot == null) o.boot = REQ_T0 - BOOT_T;
+    if (REQ_NAME && REQ_NAME !== 'GET hb') reqlogAdd_(REQ_NAME, o.ms);
   }
   return ContentService.createTextOutput(JSON.stringify(o))
     .setMimeType(ContentService.MimeType.JSON);
@@ -7998,12 +8022,15 @@ function setupShopManagerBriefing() {
 var SHOP_TEXT_NAMES = ['Mark', 'Matthew', 'Jacob', 'Brigham', 'Karmel'];
 var ADMIN_TEXT_NAMES = ['Melissa', 'Brigham', 'Karmel'];
 function morningBriefs() {
+  var mb0 = Date.now();
   try { scorecardSnapshot_(); } catch (eSnap) { /* trends resume tomorrow */ }
+  reqlogAdd_('TRIGGER morningBriefs: scorecard', Date.now() - mb0);
   var dow = Number(Utilities.formatDate(new Date(), 'America/Denver', 'u'));
   if (dow === 7) return {ok: true, skipped: 'Sunday — no shop/admin brief'};
   var sendShop = dow <= 5;
   var sendAdmin = dow <= 6;
   var r = sendShopManagerReportTo_(SHOPMGR_TO, null, 0, {sendShop: sendShop, sendAdmin: sendAdmin});
+  reqlogAdd_('TRIGGER morningBriefs: briefs built+sent', Date.now() - mb0);
   var day = Utilities.formatDate(new Date(), 'America/Denver', 'EEE M/d');
   if (sendShop) {
     notifyTeam_(SHOP_TEXT_NAMES,
