@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-16.4';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-16.5';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -1625,7 +1625,17 @@ function doPost(e) {
       return json_(setBench_(req, who));
     }
     if (req.action === 'setplatehw') {
-      return json_(setPlateHw_(req, who));
+      // one action, two card fields (Walter 10/16): the STATUS dropdown sends
+      // plateHwStatus, the hardware LOCATION box sends value. Two functions
+      // were both named setPlateHw_, so the later (status) one silently won
+      // and every location save went to the status column.
+      if (req.plateHwStatus != null) {
+        // 🪞 plate hardware buffing status (Korban 9/11, request 091126greenhalgh06)
+        var phw = setPlateHw_(req);
+        if (phw.ok) logAct_(who, 'Plate hardware', phw.summary || req.serial, phw.plateHwStatus || '(cleared)');
+        return json_(phw);
+      }
+      return json_(setPlateHwLoc_(req, who));
     }
     if (req.action === 'setplatetemp') {
       // ⚙️ temp plate spot (Brigham 9/4): oversized plates that don't fit the
@@ -1664,12 +1674,6 @@ function doPost(e) {
       var cfd = setCardField_(req);
       if (cfd.ok) logAct_(who, cfd.label, cfd.summary || req.serial, cfd.value || '(cleared)');
       return json_(cfd);
-    }
-    if (req.action === 'setplatehw') {
-      // 🪞 plate hardware buffing status (Korban 9/11, request 091126greenhalgh06)
-      var phw = setPlateHw_(req);
-      if (phw.ok) logAct_(who, 'Plate hardware', phw.summary || req.serial, phw.plateHwStatus || '(cleared)');
-      return json_(phw);
     }
     if (req.action === 'setplatestatus') {
       var pls = setPlateStatus_(req);
@@ -9318,7 +9322,7 @@ function setBench_(req, who) {
 /* Plate hardware location (Hunter 9/4): where this piano's bag/bin of
  * plate screws, bolts and action holders lives while the plate is out —
  * header-created PLATE HW LOCATION col. */
-function setPlateHw_(req, who) {
+function setPlateHwLoc_(req, who) {
   var val = String(req.value == null ? '' : req.value).trim().slice(0, 80);
   var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
   var found = findPiano_(sh, req.serial, req.row);
