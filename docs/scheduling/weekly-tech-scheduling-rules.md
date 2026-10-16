@@ -12,6 +12,17 @@ Recurring task: draft a Mon–Fri work proposal for BLP technicians (PDF for
 Brigham's review; first one delivered 2026-07-27 to ~/Desktop). May later
 write directly to Google Calendars after approval.
 
+**Resolved bottlenecks stay closed (Walter 2026-10-16, also on the Scheduling Rules tab):**
+a bottleneck answered "Resolved" in the Planner, or shown as cleared in the piano
+card's SCOPE NOTES / PIANO NOTES (/api/data `scopeNotes`, `pianoNotes`), is closed.
+Never carry it into a later draft or re-raise its old cause unless a NEWER weekly
+report or card note says it is blocked again. If the piano still needs a tech,
+raise only that (e.g. "DHRT lane unassigned"). Check the card's Scope Notes and
+Piano Notes before carrying ANY bottleneck forward. (Kranich & Bach 60534 was
+re-raised on 10/16 as "bottom board not located, let-off buttons not ordered"
+after being answered Resolved on 10/2 and twice on 10/13, and the card's scope
+note said "Bottom board located; let-off button issue resolved by Garrett".)
+
 **Korban's tuning slots (Walter 2026-10-14, also on the Scheduling Rules tab):**
 pre-booked tunings on the 03-In Store Tuning calendar stay exactly as they are.
 Open slots are filled in this order: (1) chip tunings, (2) tunings a piano's
