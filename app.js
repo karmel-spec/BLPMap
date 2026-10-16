@@ -9095,9 +9095,19 @@ async function submitService(p, ov, asap) {
     if (j.error === 'unauthorized') { lsDel('blpPin'); throw new Error('Not authorized — sign in again from the ☰ menu.'); }
     if (!j.scheduled) throw new Error(j.error || 'scheduling failed');
     msg.className = 'tmmsg ok';
-    msg.textContent = (asap ? `✓ ASAP booking with ${j.tech}: ` : `✓ Scheduled with ${j.tech}: `)
-      + `${j.date} at ${j.time} (${j.minutes} min) — on the QC & Showroom repairs calendar, invite sent to ${j.tech.split(' ')[0]}.`;
-    setTimeout(() => { ov.hidden = true; }, 3000);
+    const first = j.tech.split(' ')[0];
+    // one appointment per piano (Walter 10/16): the bridge added this request
+    // to the tech's existing appointment on the piano instead of booking twice
+    if (j.combined) {
+      msg.textContent = `✓ Added to ${first}'s existing appointment on this piano: ${j.date} at ${j.time}, `
+        + (j.extended ? `now ${j.minutes} min (+${j.added}).` : `${j.minutes} min — the time could NOT be extended (no room next to it), so tell ${first} it needs ${j.added} more.`)
+        + ' The request text is on the calendar event.';
+    } else {
+      msg.textContent = (asap ? `✓ ASAP booking with ${j.tech}: ` : `✓ Scheduled with ${j.tech}: `)
+        + `${j.date} at ${j.time} (${j.minutes} min) — on the QC & Showroom repairs calendar, invite sent to ${first}.`
+        + (j.otherAppointment ? ` Note: this piano already has a service appointment ${j.otherAppointment}.` : '');
+    }
+    setTimeout(() => { ov.hidden = true; }, j.combined || j.otherAppointment ? 6000 : 3000);
   } catch (e) {
     msg.className = 'tmmsg err'; msg.textContent = '✗ ' + e.message;
     btns.forEach(b => b.disabled = false);

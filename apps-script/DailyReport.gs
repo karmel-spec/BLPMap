@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-16.5';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-16.6';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -1060,7 +1060,10 @@ function doPost(e) {
     }
     if (req.action === 'service') {
       var sv = req.asap ? scheduleServiceAsap_(req) : scheduleService_(req);
-      if (sv.scheduled && !sv.dryrun) logAct_(who, req.asap ? 'ASAP service scheduled' : 'Service scheduled',
+      if (sv.combined && !sv.dryrun) logAct_(who, 'Service combined', sv.summary || req.serial,
+        (sv.tech || '') + ' · ' + (sv.date || '') + ' ' + (sv.time || '') + ' · +' + sv.added + ' min → ' + sv.minutes + ' min'
+        + (sv.extended ? '' : ' (time not extended — no room)'));
+      else if (sv.scheduled && !sv.dryrun) logAct_(who, req.asap ? 'ASAP service scheduled' : 'Service scheduled',
         sv.summary || req.serial,
         (sv.tech || '') + ' · ' + (sv.date || '') + ' ' + (sv.time || '') + ' · ' + (req.minutes || 60) + ' min');
       return json_(sv);
@@ -3387,6 +3390,77 @@ function setMedia_(req, who) {
           detail: MEDIA_NAMES[req.field] + (req.skip ? ' skipped' : ' marked done')};
 }
 
+/* One appointment per piano (Walter 10/16): a service request for a piano
+ * that already has an upcoming Service appointment with the SAME technician
+ * is added to that appointment instead of booking a second one — Merrill
+ * 38180 got two back-to-back hour slots from two requests 28 minutes apart.
+ * The request text goes into the event description and the time is extended
+ * by the new minutes: after the appointment when the tech is free then, else
+ * before it, else the minutes are noted and the time left as it is. A request
+ * naming a DIFFERENT tech still books separately and reports the other
+ * appointment. ASAP requests combine only when the existing appointment is
+ * on or before the ASAP day. */
+function existingService_(master, serial, techId, techName) {
+  var re = new RegExp(' SN ' + String(serial).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(\\s|$)');
+  var now = new Date();
+  var evs = master.getEvents(now, new Date(now.getTime() + 42 * 86400000)).filter(function (ev) {
+    var t = ev.getTitle() || '';
+    return /^(ASAP )?Service: /.test(t) && re.test(t) && !ev.isAllDayEvent();
+  }).sort(function (a, b) { return a.getStartTime() - b.getStartTime(); });
+  if (!evs.length) return null;
+  var first = String(techName || '').split(' ')[0].toLowerCase();
+  var want = String(techId || '').toLowerCase();
+  for (var i = 0; i < evs.length; i++) {
+    var ev = evs[i], same = false;
+    try { same = ev.getGuestList().some(function (g) { return String(g.getEmail() || '').toLowerCase() === want; }); } catch (e) {}
+    if (!same && first) same = new RegExp('— ' + first.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'i').test(ev.getTitle() || '');
+    if (same) return {ev: ev, sameTech: true};
+  }
+  return {ev: evs[0], sameTech: false};
+}
+function serviceWhen_(ev, tz) {
+  return Utilities.formatDate(ev.getStartTime(), tz, 'EEE, MMM d h:mm a');
+}
+function combineService_(master, techCal, hit, req, minutes, found, techName, tz, asap) {
+  var ev = hit.ev;
+  var start = ev.getStartTime(), end = ev.getEndTime();
+  var had = Math.round((end - start) / 60000);
+  var cals = [master].concat(techCal ? [techCal] : []);
+  function free(s, e) {
+    return cals.every(function (c) {
+      return !c.getEvents(s, e).some(function (o) {
+        return o.getId() !== ev.getId() && !o.isAllDayEvent() && o.getStartTime() < e && o.getEndTime() > s;
+      });
+    });
+  }
+  var y = Utilities.formatDate(start, tz, 'yyyy-MM-dd');
+  var dayStart = new Date(y + 'T' + ('0' + TECH_WORK_START).slice(-2) + ':00:00');
+  var dayEnd = new Date(y + 'T' + ('0' + TECH_WORK_END).slice(-2) + ':00:00');
+  var after = new Date(end.getTime() + minutes * 60000), before = new Date(start.getTime() - minutes * 60000);
+  var how = null, ns = start, ne = end;
+  if (after <= dayEnd && free(end, after)) { how = 'after'; ne = after; }
+  else if (before >= dayStart && free(before, start)) { how = 'before'; ns = before; }
+  var total = had + (how ? minutes : 0);
+  var stamp = Utilities.formatDate(new Date(), tz, 'MMM d, h:mm a');
+  var add = '\n\n' + (asap ? 'ASAP request' : 'Also requested') + ' via BLP Store Map (' + stamp + ') — combined into this appointment'
+    + (how ? ', +' + minutes + ' minutes'
+           : ', time NOT extended (no room next to it on ' + techName.split(' ')[0] + "'s calendar) — " + minutes + ' more minutes asked for')
+    + ':';
+  if (req.notes && String(req.notes).trim()) add += '\n' + String(req.notes).trim();
+  if (!req.dryrun) {
+    var desc = String(ev.getDescription() || '').replace(/Time allotted: \d+ minutes/, 'Time allotted: ' + total + ' minutes');
+    var k = desc.indexOf('\n\nPiano Log:');
+    desc = k >= 0 ? desc.slice(0, k) + add + desc.slice(k) : desc + add;
+    ev.setDescription(desc);
+    if (how) ev.setTime(ns, ne);
+  }
+  return {ok: true, scheduled: true, combined: true, extended: how, dryrun: !!req.dryrun, tech: techName,
+          minutes: total, added: minutes, had: had,
+          date: Utilities.formatDate(ns, tz, 'EEE, MMM d'),
+          time: Utilities.formatDate(ns, tz, 'h:mm a'),
+          summary: found.summary, title: ev.getTitle()};
+}
+
 /**
  * Showroom service/repair request. Availability comes from the assigned
  * technician's calendar (Jake Pulver default); the event is created on the
@@ -3409,6 +3483,9 @@ function scheduleService_(req) {
     .replace(/^\d+\s*-\s*/, '').trim();
   var title = 'Service: ' + (found.summary || 'piano') + ' SN ' + req.serial
     + (found.location ? ' @ spot ' + found.location : '') + ' — ' + techName;
+  // one appointment per piano (Walter 10/16): same tech → add to it
+  var hit = existingService_(master, req.serial, techId, techName);
+  if (hit && hit.sameTech) return combineService_(master, techCal, hit, req, minutes, found, techName, tz, false);
   var slot = openGap_(searchCal, tz, techName, minutes);
   if (!slot) return {error: 'no open ' + minutes + '-minute slot found on ' + techName + "'s calendar in the next 6 weeks"};
   var desc = 'Requested via BLP Store Map ('
@@ -3427,7 +3504,8 @@ function scheduleService_(req) {
           minutes: minutes,
           date: Utilities.formatDate(slot.start, tz, 'EEE, MMM d'),
           time: Utilities.formatDate(slot.start, tz, 'h:mm a'),
-          summary: found.summary, title: title};
+          summary: found.summary, title: title,
+          otherAppointment: hit ? serviceWhen_(hit.ev, tz) + ' (' + String(hit.ev.getTitle() || '').split(' — ').pop() + ')' : ''};
 }
 
 /**
@@ -3457,6 +3535,12 @@ function scheduleServiceAsap_(req) {
   if (dow === 6) day = new Date(day.getTime() + 2 * 86400000);
   else if (dow === 7) day = new Date(day.getTime() + 1 * 86400000);
   var y = Utilities.formatDate(day, tz, 'yyyy-MM-dd');
+  // one appointment per piano (Walter 10/16): an appointment with the same
+  // tech that is already on or before the ASAP day takes the request
+  var hit = existingService_(master, req.serial, techId, techName);
+  if (hit && hit.sameTech && Utilities.formatDate(hit.ev.getStartTime(), tz, 'yyyy-MM-dd') <= y) {
+    return combineService_(master, techCal, hit, req, minutes, found, techName, tz, true);
+  }
 
   var start = new Date(y + 'T08:00:00');
   if (techCal) {
@@ -3485,7 +3569,8 @@ function scheduleServiceAsap_(req) {
           minutes: minutes,
           date: Utilities.formatDate(start, tz, 'EEE, MMM d'),
           time: Utilities.formatDate(start, tz, 'h:mm a'),
-          summary: found.summary, title: title};
+          summary: found.summary, title: title,
+          otherAppointment: hit ? serviceWhen_(hit.ev, tz) + ' (' + String(hit.ev.getTitle() || '').split(' — ').pop() + ')' : ''};
 }
 
 /* 🧹 Cleaning request (Walter 9/28): a piano-card action that books
