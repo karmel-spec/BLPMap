@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-16.7';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-16.9';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -1067,6 +1067,14 @@ function doPost(e) {
         sv.summary || req.serial,
         (sv.tech || '') + ' · ' + (sv.date || '') + ' ' + (sv.time || '') + ' · ' + (req.minutes || 60) + ' min');
       return json_(sv);
+    }
+    if (req.action === 'moveevent') {
+      // move ONE calendar event (Walter 10/16): cal + serial + date + time pin
+      // it down; newDate/newTime (duration kept) and/or newTitle. For hand-made
+      // events the Planner must match, e.g. the Kimball 85614 QC moved to Thursday
+      var mve = moveEvent_(req);
+      if (mve.ok && !mve.dryrun) logAct_(who, 'Calendar event moved', req.serial, mve.before + ' → ' + mve.after);
+      return json_(mve);
     }
     if (req.action === 'delservice') {
       // remove ONE service appointment from the QC calendar (Walter 10/16):
@@ -3466,6 +3474,33 @@ function combineService_(master, techCal, hit, req, minutes, found, techName, tz
           date: Utilities.formatDate(ns, tz, 'EEE, MMM d'),
           time: Utilities.formatDate(ns, tz, 'h:mm a'),
           summary: found.summary, title: ev.getTitle()};
+}
+
+function moveEvent_(req) {
+  var tz = 'America/Denver';
+  var cal = calById_(String(req.cal || '').trim());
+  if (!cal) return {error: 'calendar not found or not shared with the bridge account'};
+  var serial = String(req.serial || '').trim(), date = String(req.date || '').trim(), time = String(req.time || '').trim();
+  if (!serial || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(time)) return {error: 'serial, date (yyyy-MM-dd) and time (HH:mm) required'};
+  var hits = cal.getEvents(new Date(date + 'T00:00:00'), new Date(date + 'T23:59:59')).filter(function (ev) {
+    return !ev.isAllDayEvent() && String(ev.getTitle() || '').indexOf(serial) >= 0
+      && Utilities.formatDate(ev.getStartTime(), tz, 'HH:mm') === time;
+  });
+  if (hits.length !== 1) return {error: hits.length ? 'more than one event matches' : 'no event with ' + serial + ' on ' + date + ' at ' + time, matches: hits.length};
+  var ev = hits[0];
+  var fmt = function (e) { return Utilities.formatDate(e.getStartTime(), tz, 'EEE, MMM d h:mm a') + '–' + Utilities.formatDate(e.getEndTime(), tz, 'h:mm a') + ' "' + e.getTitle() + '"'; };
+  var before = fmt(ev);
+  var nd = String(req.newDate || date), nt = String(req.newTime || time);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(nd) || !/^\d{2}:\d{2}$/.test(nt)) return {error: 'newDate / newTime malformed'};
+  var dur = ev.getEndTime() - ev.getStartTime();
+  var ns = new Date(nd + 'T' + nt + ':00'), ne = new Date(ns.getTime() + dur);
+  var newTitle = String(req.newTitle || '').trim();
+  var after = Utilities.formatDate(ns, tz, 'EEE, MMM d h:mm a') + '–' + Utilities.formatDate(ne, tz, 'h:mm a') + ' "' + (newTitle || ev.getTitle()) + '"';
+  if (!req.dryrun) {
+    if (nd !== date || nt !== time) ev.setTime(ns, ne);
+    if (newTitle) ev.setTitle(newTitle);
+  }
+  return {ok: true, dryrun: !!req.dryrun, before: before, after: after, guests: (function () { try { return ev.getGuestList().map(function (g) { return g.getEmail(); }); } catch (e) { return []; } })()};
 }
 
 /* Delete one Service appointment on the QC & Showroom repairs calendar.
@@ -6199,7 +6234,20 @@ var CHATTER_RE = [
   /\bONE block per day\b|\bmoved (off|to|from|onto)\b|\bto accommodate\b|\bnow (Mon|Tue|Wed|Thu|Fri)\b/i,
   // a wrap target is the tech's own estimate from their report, used to size the
   // week — not a commitment to put on their calendar (Walter 9/28)
-  /\bwrap (target|day|up|pushed|moved|bumped)\b|\bfinish (by|target)\b|\bdays? to finish\b|\bpushed to (Mon|Tue|Wed|Thu|Fri)/i
+  /\bwrap (target|day|up|pushed|moved|bumped)\b|\bfinish (by|target)\b|\bdays? to finish\b|\bpushed to (Mon|Tue|Wed|Thu|Fri)/i,
+  // Planner reasoning that was still reaching the calendars (Walter 10/16):
+  // report echoes ("Rebuilt from HIS OWN 10/15 report", "Jake's 10/15 report
+  // closes…", "report-over-card pick"), lane/sequence justifications ("is the
+  // correct next phase", "Intern rotation", "correctly sequenced"), revision
+  // trail ("replacing the prior … plan", "push to next week"), card-state
+  // commentary ("card still reads", "per card"), the uppercase PROPOSED
+  // status and "slot was open", week-shape math ("has 4 working days"), and
+  // the assistant-manager project note ("never scheduled on any other")
+  /\bfrom (his|her|their) own\b|\b(his|her|their) own (estimate|report|plan)\b|\b\w+'s \d+\/\d+ report\b|\breport-over-card\b|\bcard (still|now|already) reads\b|\bper (the )?card\b/i,
+  /\b(is|are|remains|was) the (correct|right|logical|next)\b|\bcorrect (next|first|first-rotation) phase\b|\bintern rotation\b|\bcorrectly sequenced\b|\bnext phase on the \w+ track\b/i,
+  /\breplac(es|ed|ing) the (prior|previous|earlier|old)\b|\bprior plan\b|\bpush(es|ed)? to (next|the following) week\b|\bboth push\b/i,
+  /\bPROPOSED\b|\bslot was open\b|\bhas (exactly )?\d+ working days\b|\bnever scheduled on\b|\bdedicated special project\b|\bclosed (its|the|his|her) .{0,40}\bDONE\b/,
+  /\bgave no (day )?estimate\b|\bno day estimate\b|\bsee changes\b|\bre-?confirmation\b|\bbumped to\b|\boverflow\b|^FLAG:|^spot\s+[\w<>]+\.?$/i
 ];
 function calDescription_(note) {
   var s = String(note || '').replace(/\s+/g, ' ').trim();
@@ -6218,27 +6266,63 @@ function calDescription_(note) {
   // whole Today's list vanished because "queue #27" read as chatter)
   s = s.replace(/\s*\((?:queue|lane|est\.?|estimated)[^)]*\)/gi, '');
   s = s.replace(/^spot\s+[^·]*·\s*/i, '');           // live spot rides in Location
+  // same spot prefix in the other shapes the Planner writes it (Walter 10/16):
+  // "spot 88. …", "spot 78 - PROPOSED…", and a phase/title echo in front of it
+  // ("Restringing - spot TBD - P.S. Wick 29908. …") — the spot is in Location
+  // and the title is the event, so neither belongs in the description
+  s = s.replace(/^[A-Za-z&' ]{2,30} - spot [^.-]{1,16} - [A-Z][\w.&' ]*?\d+[A-Za-z]*(?: \([^)]*\))?[.,]?\s*/, '');
+  s = s.replace(/^spot\s+[^.·-]{1,16}(?:\.\s*|\s*-\s*|\s*$)/i, '');
+  // "- target completion today" / "- target wrap Tuesday" is the Planner's
+  // pacing, not a commitment (rule 9/28): strip the fragment, keep "Day 2 of 2"
+  s = s.replace(/\s*[-–—]\s*target (wrap|completion)[^.;]*/gi, '');
   s = s.replace(/·\s*HOLD \(Walter[^)]*\)[^.]*\.?/g, '');
   // split into sentences / clauses; keep the ones that read as instructions
   // sentence split — "8:00 a.m. to 4:00 p.m." and "e.g." are not sentence ends
   var guarded = s.replace(/\b([ap])\.m\./gi, '$1\u0002m\u0002').replace(/\be\.g\./gi, 'e\u0002g\u0002').replace(/\bvs\./gi, 'vs\u0002');
+  // a semicolon separates clauses too (Walter 10/16): "The client comes in for
+  // a final look; Avery closed the refurb checklist DONE this week" keeps the
+  // instruction and drops the reasoning instead of losing both
+  // a numbered job list ("Jobs in this block, with deadlines: (1) …", "Open
+  // items this week: (1) …") is the tech's actual list: it goes through WHOLE
+  // (Walter 10/16 — Korban's buffing list lost two of three jobs because one
+  // said "carried from his report" and another "moved to next week")
+  var list = '';
+  var lm = /\b(Jobs in this block[^:]*:|Open items this week:|Today's list:)/i.exec(guarded);
+  if (lm) { list = guarded.slice(lm.index).replace(/\u0002/g, '.').trim().slice(0, 1500); guarded = guarded.slice(0, lm.index); }
   var parts = guarded.replace(/([.!?])\s+/g, '$1\u0001').replace(/\s+·\s+/g, '\u0001').split('\u0001')
     .map(function (x) { return x.replace(/\u0002/g, '.'); })
     .map(function (x) { return x.trim(); }).filter(Boolean);
+  function isChatter(t) {
+    for (var k = 0; k < CHATTER_RE.length; k++) if (CHATTER_RE[k].test(t)) return true;
+    return false;
+  }
   var keep = [];
   for (var i = 0; i < parts.length; i++) {
     var t = parts[i];
-    var chatter = false;
-    for (var k = 0; k < CHATTER_RE.length; k++) if (CHATTER_RE[k].test(t)) { chatter = true; break; }
-    if (chatter) {
-      // an instruction hiding inside a chatter sentence: keep the DEADLINE / list part only
-      var m = /((?:DEADLINE|Today's list|Deadline)[^.]*\.?)/.exec(t);
+    // semicolon clauses (Walter 10/16): judged one by one, so "The client
+    // comes in for a final look; Avery closed the checklist DONE" keeps the
+    // instruction — but when the FIRST clause is chatter the rest are its
+    // continuation ("His 10/15 report: cracks shimmed; templates made; …")
+    // and the whole sentence goes
+    var clauses = t.split(/;\s+/);
+    if (clauses.length > 1) {
+      if (isChatter(clauses[0])) continue;
+      var kc = clauses.filter(function (c) { return !isChatter(c); });
+      keep.push(kc.join('; '));
+      continue;
+    }
+    if (isChatter(t)) {
+      // an instruction hiding inside a chatter sentence: keep the DEADLINE part only
+      var m = /((?:DEADLINE|Deadline)[^.]*\.?)/.exec(t);
       if (m) keep.push(m[1].trim());
       continue;
     }
     keep.push(t);
   }
-  var out = keep.join(' ').trim().slice(0, 400);
+  // a stripped fragment or dropped clause leaves "Day 2" without its period
+  keep = keep.map(function (t) { return /[.!?)]$/.test(t) ? t : t + '.'; });
+  var out = keep.join(' ').trim().slice(0, 600);
+  if (list) out = out ? out + '\n' + list : list;
   return calTxt && out ? calTxt + '\n' + out : (calTxt || out);
 }
 
