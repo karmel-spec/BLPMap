@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-16.6';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-16.7';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -1067,6 +1067,13 @@ function doPost(e) {
         sv.summary || req.serial,
         (sv.tech || '') + ' · ' + (sv.date || '') + ' ' + (sv.time || '') + ' · ' + (req.minutes || 60) + ' min');
       return json_(sv);
+    }
+    if (req.action === 'delservice') {
+      // remove ONE service appointment from the QC calendar (Walter 10/16):
+      // serial + date + time pin it down, so a duplicate can be merged away
+      var dsv = deleteService_(req);
+      if (dsv.removed && !dsv.dryrun) logAct_(who, 'Service appointment removed', req.serial, dsv.title + ' · ' + dsv.when);
+      return json_(dsv);
     }
     if (req.action === 'cleaning') {
       // 🧹 cleaning request (Walter 9/28): Myrrhanda, two hours, next working day
@@ -3459,6 +3466,30 @@ function combineService_(master, techCal, hit, req, minutes, found, techName, tz
           date: Utilities.formatDate(ns, tz, 'EEE, MMM d'),
           time: Utilities.formatDate(ns, tz, 'h:mm a'),
           summary: found.summary, title: ev.getTitle()};
+}
+
+/* Delete one Service appointment on the QC & Showroom repairs calendar.
+ * req: {serial, date: 'yyyy-MM-dd', time: 'HH:mm' (Denver), dryrun?} — all
+ * three must match exactly one event, or nothing is touched. */
+function deleteService_(req) {
+  var tz = 'America/Denver';
+  var serial = String(req.serial || '').trim(), date = String(req.date || '').trim(), time = String(req.time || '').trim();
+  if (!serial || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(time)) return {error: 'serial, date (yyyy-MM-dd) and time (HH:mm) required'};
+  var master = calById_(SERVICE_CAL);
+  if (!master) return {error: 'the QC & Showroom repairs calendar is not shared with the bridge account'};
+  var re = new RegExp(' SN ' + serial.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(\\s|$)');
+  var hits = master.getEvents(new Date(date + 'T00:00:00'), new Date(date + 'T23:59:59')).filter(function (ev) {
+    var t = ev.getTitle() || '';
+    return /^(ASAP )?Service: /.test(t) && re.test(t) && !ev.isAllDayEvent()
+      && Utilities.formatDate(ev.getStartTime(), tz, 'HH:mm') === time;
+  });
+  if (hits.length !== 1) return {error: hits.length ? 'more than one service appointment matches' : 'no service appointment for ' + serial + ' on ' + date + ' at ' + time, matches: hits.length};
+  var ev = hits[0];
+  var out = {ok: true, removed: true, dryrun: !!req.dryrun, title: ev.getTitle(),
+             when: Utilities.formatDate(ev.getStartTime(), tz, 'EEE, MMM d h:mm a') + '–' + Utilities.formatDate(ev.getEndTime(), tz, 'h:mm a'),
+             description: String(ev.getDescription() || '')};
+  if (!req.dryrun) ev.deleteEvent();
+  return out;
 }
 
 /**
