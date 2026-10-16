@@ -428,12 +428,29 @@ def build_payload():
     }
 
 
+# Dev fallback: when Google is unreachable from this machine (sandboxes,
+# locked-down networks), set BLP_DATA_UPSTREAM=https://blpstoremap.netlify.app
+# and /api/data is served from the deployed app's own feed instead.
+DATA_UPSTREAM = (os.environ.get('BLP_DATA_UPSTREAM') or _CFG.get('data_upstream') or '').rstrip('/')
+
+def fetch_upstream_payload():
+    with urllib.request.urlopen(DATA_UPSTREAM + '/api/data', timeout=60) as r:
+        payload = json.loads(r.read())
+    payload['upstream'] = DATA_UPSTREAM
+    return payload
+
 def get_data():
     with _lock:
         if _cache['payload'] and time.time() - _cache['at'] < CACHE_SECS:
             return _cache['payload']
     try:
-        payload = build_payload()
+        try:
+            payload = build_payload()
+        except Exception as exc:
+            if not DATA_UPSTREAM:
+                raise
+            print('live sources unavailable (%s) — reading %s/api/data' % (exc, DATA_UPSTREAM))
+            payload = fetch_upstream_payload()
         with _lock:
             _cache.update(at=time.time(), payload=payload)
         return payload

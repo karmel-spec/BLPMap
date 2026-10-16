@@ -18,6 +18,11 @@ python3 server.py
 `config.json` is gitignored — the moving calendar's secret iCal address must
 never be committed. Without it the app still runs (map + pianos, no moves).
 
+On a machine that can't reach Google (sandboxes, locked-down networks) run
+`BLP_DATA_UPSTREAM=https://blpstoremap.netlify.app python3 server.py` (or set
+`data_upstream` in config.json): when the live sources fail, `/api/data` is
+served from the deployed app's own feed so the map still fills with real pianos.
+
 (Registered as `blp-storemap` in `~/.claude/launch.json`.)
 
 ## How it works
