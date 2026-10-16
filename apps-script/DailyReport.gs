@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-16.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-16.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -9176,6 +9176,14 @@ function phaseNote_(req, who) {
  * unstamped so they sync automatically once the piano reaches the log.
  * Payment/banking columns (46-56) are never read. */
 function contractSync_(refresh) {
+  // one at a time (Walter 10/16): the sales-app cron retried on every slow
+  // answer, so three 25 s runs stacked up inside a minute at 8 AM
+  var cc = CacheService.getScriptCache();
+  if (cc.get('csyncBusy')) return {ok: true, skipped: 'another contract sync is already running', synced: [], alreadyDone: 0};
+  cc.put('csyncBusy', '1', 90);
+  try { return contractSyncLocked_(refresh); } finally { try { cc.remove('csyncBusy'); } catch (eC) {} }
+}
+function contractSyncLocked_(refresh) {
   var ss = SpreadsheetApp.openById(PIANO_LOG_ID);
   var cs = ss.getSheetByName('Restoration Contracts');
   if (!cs) return {error: 'no Restoration Contracts tab'};
@@ -9198,14 +9206,29 @@ function contractSync_(refresh) {
   if (scopeCol < 0) { scopeCol = sh.getLastColumn() + 1; sh.getRange(2, scopeCol).setValue('SCOPE NOTES'); }
   if (colorCol < 0) { colorCol = sh.getLastColumn() + 1; sh.getRange(2, colorCol).setValue('COLOR FIRST PICK'); }
   var stamp = Utilities.formatDate(new Date(), 'America/Denver', 'M/d/yy');
+  // the Piano Log's serials ONCE (Walter 10/16) — this used to call
+  // findPiano_ (two full-column reads) for every unmatched contract row on
+  // every run, 23–26 s of bridge time every 10 min with ~10 rows waiting
+  var byDigits = {};
+  try {
+    var lastP = sh.getLastRow();
+    var cols = sh.getRange(1, 2, lastP, 3).getValues();   // B owner · C serial · D summary
+    var soldAt = lastP + 1;
+    for (var q = 0; q < lastP; q++) {
+      if (String(cols[q][0] || '').trim().toUpperCase() === 'SOLD' && !String(cols[q][1] || '').trim()) { soldAt = q + 1; break; }
+    }
+    for (var q2 = 1; q2 < soldAt - 1; q2++) {
+      var sv = String(cols[q2][1] || '').trim().toLowerCase();
+      if (sv && !byDigits[sv]) byDigits[sv] = {row: q2 + 1, summary: String(cols[q2][2] || '')};
+    }
+  } catch (eB) { return {error: 'Piano Log read failed: ' + String(eB).slice(0, 100)}; }
   var synced = [], skipped = 0;
   for (var r = 1; r < v.length; r++) {
     if (!refresh && String(v[r][mCol - 1] || '').trim()) { skipped++; continue; }
     var digits = String(v[r][18] || '').replace(/\D/g, '');
     if (digits.length < 3) { continue; }              // no usable serial — retry forever, harmless
-    var f;
-    try { f = findPiano_(sh, digits, null); } catch (eF) { f = {error: 'x'}; }
-    if (!f || f.error) continue;                      // piano not in log yet — retry next run
+    var f = byDigits[digits] || null;
+    if (!f) continue;                                 // piano not in log yet — retry next run
     var S9 = function (i) { return String(v[r][i] == null ? '' : v[r][i]).trim(); };
     var refin = S9(25), color = S9(27), hardware = S9(40), interior = S9(32) || S9(26);
     var bench = S9(21), benchD = S9(22), senti = S9(23), tune = S9(33);
