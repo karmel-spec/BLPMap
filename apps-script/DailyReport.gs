@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-16.9';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-19.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -6373,7 +6373,11 @@ function applyScheduleLocked_(req) {
       var wk0 = new Date((plan.weekStart || got.meta.weekStart) + 'T00:00:00');
       var wk1 = new Date(wk0); wk1.setDate(wk1.getDate() + 7);
       tuneMaster.getEvents(wk0, wk1).forEach(function (ev) {
-        bookedTunes.push({key: tuneKey_(ev.getTitle()), when: Utilities.formatDate(ev.getStartTime(), 'America/Denver', 'EEE h:mm a')});
+        if (ev.isAllDayEvent()) return;
+        var gl = [];
+        try { gl = ev.getGuestList().map(function (g) { return String(g.getEmail() || '').toLowerCase(); }); } catch (eGl) {}
+        bookedTunes.push({key: tuneKey_(ev.getTitle()), when: Utilities.formatDate(ev.getStartTime(), 'America/Denver', 'EEE h:mm a'),
+          ev: ev, title: String(ev.getTitle() || ''), start: ev.getStartTime(), end: ev.getEndTime(), guests: gl});
       });
     }
   } catch (eB) { bookedTunes = []; }
@@ -6425,7 +6429,7 @@ function applyScheduleLocked_(req) {
     var cal;
     try { cal = calById_(calId); } catch (e) { cal = null; }   // subscribes if only shared
     if (!cal) { results.push({tech: tch.name, error: 'no access to ' + calId}); return; }
-    var made = 0, failed = 0, offDays = [], tuned = 0, tuneFellBack = 0, fieldHeld = 0, qcRouted = 0, qcFellBack = 0, alreadyBooked = [];
+    var made = 0, failed = 0, offDays = [], tuned = 0, tuneFellBack = 0, fieldHeld = 0, qcRouted = 0, qcFellBack = 0, alreadyBooked = [], movedTunes = [], slotTaken = [];
     // Already-on-the-calendar guard (Walter 10/7): Korban's 3–4 "Vacuum/sweep/mop"
     // came out twice a day for weeks — a standing event on his calendar plus
     // the copy Approve made from the Scheduling Rules. Any block whose title
@@ -6443,6 +6447,37 @@ function applyScheduleLocked_(req) {
       var gw1 = new Date(gw0); gw1.setDate(gw1.getDate() + 7);
       cal.getEvents(gw0, gw1).forEach(function (ev) { onCal[calKey_(ev.getTitle(), ev.getStartTime())] = 1; });
     } catch (eG) { onCal = {}; }
+    /* Pre-booked tunings follow the plan (Mark 10/19): a manager's priority
+     * list in the Planner outranks what was already on the In Store Tuning
+     * calendar, so the plan may place a pre-booked piano in a different slot.
+     * Approve used to skip that piano ("already booked") and leave its event
+     * where it was — on 10/16 the Lester and the Mason & Hamlin stayed in the
+     * slots the plan had given to Steinway 38930 and Kranich & Bach 60534,
+     * and Monday/Tuesday 8:00 went out double-booked. Now the existing event
+     * is MOVED to the plan's slot first (this tech's own tunings only), and a
+     * block whose slot still holds another piano's tuning is skipped and
+     * reported as slotTaken instead of being created on top of it. */
+    var isMine_ = function (x) { return !x.guests.length || x.guests.indexOf(String(calId).toLowerCase()) >= 0; };
+    if (tuneMaster) (tch.days || []).forEach(function (blocks, di) {
+      if (onlyDays && onlyDays.indexOf(di) < 0) return;
+      (blocks || []).forEach(function (b) {
+        if (!b || b[2] !== 'tune' || !planBlockOnCal_(b)) return;
+        var t1 = shopClock_(b[0]), t2 = shopClock_(b[1]);
+        if (!t1 || !t2) return;
+        var d1 = new Date(start); d1.setDate(d1.getDate() + di); d1.setHours(t1.h, t1.min, 0, 0);
+        var d2 = new Date(start); d2.setDate(d2.getDate() + di); d2.setHours(t2.h, t2.min, 0, 0);
+        var tk = tuneKey_(String(b[3] || ''));
+        if (!tk.serial) return;
+        var hit = bookedTunes.filter(function (x) { return x.key.serial === tk.serial && x.key.kind === tk.kind && isMine_(x); })[0];
+        if (!hit || hit.start.getTime() === d1.getTime()) return;
+        try {
+          var from = hit.when;
+          hit.ev.setTime(d1, d2);
+          hit.start = d1; hit.end = d2; hit.when = Utilities.formatDate(d1, 'America/Denver', 'EEE h:mm a');
+          movedTunes.push(tk.serial + ' — moved from ' + from + ' to ' + hit.when + ' to match the plan');
+        } catch (eMv) { failed++; }
+      });
+    });
     (tch.days || []).forEach(function (blocks, di) {
       // Melissa 9/7 (request 090726terry22): the draft put Curtis on
       // Wednesday + Friday although his calendar says "Curtis off Wednesdays
@@ -6510,6 +6545,12 @@ function applyScheduleLocked_(req) {
             var tk = tuneKey_(evTitle);
             var hit = tk.serial ? bookedTunes.filter(function (x) { return x.key.serial === tk.serial && x.key.kind === tk.kind; })[0] : null;
             if (hit) { alreadyBooked.push(tk.serial + ' — already on the tuning calendar ' + hit.when); return; }
+            // the slot still holds ANOTHER piano's tuning for this tech — never stack
+            var clash = bookedTunes.filter(function (x) { return x.start < d2 && x.end > d1 && isMine_(x); })[0];
+            if (clash) {
+              slotTaken.push(Utilities.formatDate(d1, 'America/Denver', 'EEE h:mm a') + ' ' + evTitle.slice(0, 40) + ' — slot holds ' + clash.title.slice(0, 50));
+              return;
+            }
           }
           var placed = false;
           if (orgCal) {
@@ -6520,8 +6561,10 @@ function applyScheduleLocked_(req) {
               // Adding the guest still puts the event on their own calendar;
               // it just arrives quietly. Same for QCs.
               opts.sendInvites = false;
-              orgCal.createEvent(evTitle, d1, d2, opts);
+              var mk = orgCal.createEvent(evTitle, d1, d2, opts);
               placed = true;
+              if (orgCal === tuneMaster) bookedTunes.push({key: tuneKey_(evTitle), when: Utilities.formatDate(d1, 'America/Denver', 'EEE h:mm a'),
+                ev: mk, title: evTitle, start: d1, end: d2, guests: [String(calId).toLowerCase()]});
               if (b[2] === 'qc') qcRouted++; else tuned++;
             } catch (eT) { delete opts.guests; delete opts.sendInvites; }
           }
@@ -6537,6 +6580,8 @@ function applyScheduleLocked_(req) {
     });
     var res = {tech: tch.name, events: made, failed: failed};
     if (alreadyBooked.length) res.alreadyBooked = alreadyBooked;
+    if (movedTunes.length) res.movedOnTuningCal = movedTunes;
+    if (slotTaken.length) res.slotTaken = slotTaken;
     if (alreadyOn.length) res.alreadyOnCalendar = alreadyOn;
     if (plateHeld.length) res.plateNotReady = plateHeld;
     if (tuned) res.onTuningCal = tuned;

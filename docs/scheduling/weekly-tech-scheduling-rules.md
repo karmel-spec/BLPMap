@@ -23,8 +23,20 @@ re-raised on 10/16 as "bottom board not located, let-off buttons not ordered"
 after being answered Resolved on 10/2 and twice on 10/13, and the card's scope
 note said "Bottom board located; let-off button issue resolved by Garrett".)
 
+**A manager's tuning priority list outranks pre-booked tunings (Mark 2026-10-19,
+also on the Scheduling Rules tab):** when Planner notes name pianos as Korban's top
+tuning priority (with or without days/slots), schedule those first exactly as given —
+Brigham's priorities trump everything, pre-booked tunings included. Then re-place
+EVERY pre-booked piano the list displaced into the slots that remain this week, in
+their original order, then overflow to next week. Never drop a pre-booked piano and
+never leave a slot empty while a pre-booked piano is unplaced. Say in changes which
+pre-booked tunings moved where; Approve moves the calendar events to the plan's slots
+and refuses to stack a tuning on a slot another piano still holds. (On 10/16 the list
+was written literally over the calendar: Monday and Tuesday 8:00 went out double-booked
+and Wednesday went out empty.)
+
 **Korban's tuning slots (Walter 2026-10-14, also on the Scheduling Rules tab):**
-pre-booked tunings on the 03-In Store Tuning calendar stay exactly as they are.
+without a manager list, pre-booked tunings on the 03-In Store Tuning calendar stay exactly as they are.
 Open slots are filled in this order: (1) chip tunings, (2) tunings a piano's
 card phase calls for (1st / 2nd tuning), (3) the **Tuning Queue** —
 `tuningQueue` in Store Map /api/data: pianos marked "Needs tuning" on the
