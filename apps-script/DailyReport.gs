@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-19.14';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-19.15';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -5864,8 +5864,9 @@ var SM_PHASE_DAYS = {
   'Refinishing': 30, 'QC & Assembly': 10, '2nd Tuning': 5,
   'Exit Prep - Admin': 7, 'Assessment': 7, 'New Arrival - Admin': 5
 };
-var SM_ADMIN_STEPS = ['$1000 Queue Payment', 'Selections Made (Google Form)',
-  'Welcome Email', 'Before Photos', 'Plan Entered to Shop Tag & Printed',
+// same order as the app's ADMIN_STEPS — Welcome Email before Selections Made (Melissa 10/7, 100726terry84)
+var SM_ADMIN_STEPS = ['$1000 Queue Payment', 'Welcome Email',
+  'Selections Made (Google Form)', 'Before Photos', 'Plan Entered to Shop Tag & Printed',
   'Upsell Offers — Brigham Call (after 50%)',
   '100% Payment Collected Prior to Delivery', 'Delivery Scheduled'];
 

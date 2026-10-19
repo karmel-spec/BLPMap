@@ -59,7 +59,8 @@ function refinishOnly(p) {
 }
 const payAutoDone = new Set();
 const PAY_MILESTONES = [25, 50, 75, 100];
-const ADMIN_STEPS = ['$1000 Queue Payment', 'Selections Made (Google Form)', 'Welcome Email',
+// Welcome Email before Selections Made — the order Melissa works in (10/7, 100726terry84)
+const ADMIN_STEPS = ['$1000 Queue Payment', 'Welcome Email', 'Selections Made (Google Form)',
   'Before Photos', 'Plan Entered to Shop Tag & Printed',
   'Upsell Offers — Brigham Call (after 50%)',
   '100% Payment Collected Prior to Delivery', 'Delivery Scheduled'];
