@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-19.5';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-19.6';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -1067,6 +1067,14 @@ function doPost(e) {
         sv.summary || req.serial,
         (sv.tech || '') + ' · ' + (sv.date || '') + ' ' + (sv.time || '') + ' · ' + (req.minutes || 60) + ' min');
       return json_(sv);
+    }
+    if (req.action === 'refreshbuffing') {
+      // rewrite this week's Hardware Buffing Queue events from the live
+      // buffing list (Mark 10/19: the applied text carried a serial typo,
+      // 21135 for 211935, straight from the Planner)
+      var rb = refreshBuffing_(req);
+      if (rb.ok && !rb.dryrun && rb.updated) logAct_(who, 'Buffing block text refreshed', 'Korban', rb.updated + ' event(s), week of ' + rb.weekStart);
+      return json_(rb);
     }
     if (req.action === 'moveevent') {
       // move ONE calendar event (Walter 10/16): cal + serial + date + time pin
@@ -3474,6 +3482,31 @@ function combineService_(master, techCal, hit, req, minutes, found, techName, tz
           date: Utilities.formatDate(ns, tz, 'EEE, MMM d'),
           time: Utilities.formatDate(ns, tz, 'h:mm a'),
           summary: found.summary, title: ev.getTitle()};
+}
+
+function refreshBuffing_(req) {
+  var tz = 'America/Denver';
+  var cal = calById_(String(req.cal || 'korbangreenhalgh.blp@gmail.com').trim());
+  if (!cal) return {error: 'calendar not found or not shared with the bridge account'};
+  var ws = String(req.weekStart || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(ws)) {   // default: this week's Monday
+    var now = new Date(), dow = Number(Utilities.formatDate(now, tz, 'u'));
+    var mon = new Date(now.getTime() - (dow - 1) * 86400000);
+    ws = Utilities.formatDate(mon, tz, 'yyyy-MM-dd');
+  }
+  var w0 = new Date(ws + 'T00:00:00'), w1 = new Date(w0.getTime() + 7 * 86400000);
+  var text = buffingDesc_();
+  if (!text) return {error: 'the buffing list is unreachable — nothing changed'};
+  var evs = cal.getEvents(w0, w1).filter(function (ev) { return /hardware buffing queue/i.test(ev.getTitle() || ''); });
+  var out = [];
+  evs.forEach(function (ev) {
+    var old = String(ev.getDescription() || '');
+    var tag = (old.match(/^Applied from the Shop Manager schedule proposal.*$/m) || [''])[0];
+    var desc = text + (tag ? '\n' + tag : '');
+    out.push({when: Utilities.formatDate(ev.getStartTime(), tz, 'EEE h:mm a'), before: old.slice(0, 80), after: desc});
+    if (!req.dryrun) ev.setDescription(desc);
+  });
+  return {ok: true, dryrun: !!req.dryrun, weekStart: ws, updated: out.length, events: out, text: text};
 }
 
 function moveEvent_(req) {
