@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-19.6';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-19.7';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -6260,16 +6260,20 @@ function buffingDesc_() {
     var d = JSON.parse(r.getContentText());
     var open = function (xs) { return (xs || []).filter(function (x) { return !x.done; }); };
     var plates = open(d.plates).slice(0, 2), hw = open(d.hardware).slice(0, 2);
+    // two separate lists, bulleted, a blank line between (Mark 10/19 — the
+    // numbered form read as one list of four)
     var L = [];
     if (plates.length) {
-      L.push('Plate screws (Curtis\'s order):');
-      plates.forEach(function (p, i) { L.push((i + 1) + '. ' + (p.pianoText || p.serial)); });
+      L.push('PLATE SCREWS (Curtis\'s order)');
+      plates.forEach(function (p) { L.push('\u2022 ' + (p.pianoText || p.serial)); });
     }
     if (hw.length) {
-      L.push('Visible hardware to prep:');
-      hw.forEach(function (h, i) { L.push((i + 1) + '. ' + (h.label || h.serial) + (h.finish ? ' — ' + h.finish : '')); });
+      if (L.length) L.push('');
+      L.push('VISIBLE HARDWARE TO PREP');
+      hw.forEach(function (h) { L.push('\u2022 ' + (h.label || h.serial) + (h.finish ? ' \u2014 ' + h.finish : '')); });
     }
     if (!L.length) return '';
+    L.push('');
     L.push('Full list / tap when done: https://blpstoremap.netlify.app/#report=buffing');
     buffingDescCache_ = L.join('\n');
   } catch (e) { buffingDescCache_ = ''; }
