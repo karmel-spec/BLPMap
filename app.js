@@ -17698,6 +17698,8 @@ const LEGEND_LISTS = {
   larson:   {t: '🩵 Larson Family',  f: p => /conference room|larson home/i.test(p.location || '') && !isPrivateFinancing(p)},
   soldpend: {t: '🏅 Sold / completed — awaiting delivery', f: p => soldPending(p)},
   preq:     {t: '🚫 Pre-Queue — deposit pending, do NOT start', f: p => preQueue(p)},
+  // the gold plate icon in Out for Service (Melissa 10/19, 101926terry93)
+  plateout: {t: '🥇 Plate out at Curtis Harper\'s', f: p => p.active && !!p.serial && /curtis harper/i.test(p.plateStatus || '')},
   // ownership + every shop phase/state (Brigham 9/3): the whole legend taps
   blp:      {t: '⚪ BLP owned',          f: p => ownerClass(p) === 'blp'},
   client:   {t: '⚫ Client / consigned', f: p => ownerClass(p) !== 'blp'},
