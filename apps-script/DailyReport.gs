@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-19.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-19.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -6286,16 +6286,23 @@ function calDescription_(note) {
   // items this week: (1) …") is the tech's actual list: it goes through WHOLE
   // (Walter 10/16 — Korban's buffing list lost two of three jobs because one
   // said "carried from his report" and another "moved to next week")
-  var list = '';
-  var lm = /\b(Jobs in this block[^:]*:|Open items this week:|Today's list:)/i.exec(guarded);
-  if (lm) { list = guarded.slice(lm.index).replace(/\u0002/g, '.').trim().slice(0, 1500); guarded = guarded.slice(0, lm.index); }
-  var parts = guarded.replace(/([.!?])\s+/g, '$1\u0001').replace(/\s+·\s+/g, '\u0001').split('\u0001')
-    .map(function (x) { return x.replace(/\u0002/g, '.'); })
-    .map(function (x) { return x.trim(); }).filter(Boolean);
   function isChatter(t) {
     for (var k = 0; k < CHATTER_RE.length; k++) if (CHATTER_RE[k].test(t)) return true;
     return false;
   }
+  // an aside in parentheses that reads as Planner reasoning — "(carried from
+  // his 10/15 report)", "(Shifted to 11:45 … rule 9/11 …)" — is dropped on its
+  // own, inside a job list or a kept sentence alike (Walter 10/19)
+  function dropAsides(t) {
+    return String(t).replace(/\s*\(([^()]*)\)/g, function (m, inner) { return isChatter(inner) ? '' : m; })
+      .replace(/\s+([.,;])/g, '$1').replace(/\s{2,}/g, ' ').trim();
+  }
+  var list = '';
+  var lm = /\b(Jobs in this block[^:]*:|Open items this week:|Today's list:)/i.exec(guarded);
+  if (lm) { list = dropAsides(guarded.slice(lm.index).replace(/\u0002/g, '.')).slice(0, 1500); guarded = guarded.slice(0, lm.index); }
+  var parts = guarded.replace(/([.!?])\s+/g, '$1\u0001').replace(/\s+·\s+/g, '\u0001').split('\u0001')
+    .map(function (x) { return x.replace(/\u0002/g, '.'); })
+    .map(function (x) { return x.trim(); }).filter(Boolean);
   var keep = [];
   for (var i = 0; i < parts.length; i++) {
     var t = parts[i];
@@ -6320,7 +6327,7 @@ function calDescription_(note) {
     keep.push(t);
   }
   // a stripped fragment or dropped clause leaves "Day 2" without its period
-  keep = keep.map(function (t) { return /[.!?)]$/.test(t) ? t : t + '.'; });
+  keep = keep.map(dropAsides).filter(Boolean).map(function (t) { return /[.!?)]$/.test(t) ? t : t + '.'; });
   var out = keep.join(' ').trim().slice(0, 600);
   if (list) out = out ? out + '\n' + list : list;
   return calTxt && out ? calTxt + '\n' + out : (calTxt || out);
