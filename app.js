@@ -5949,11 +5949,12 @@ const isMarcelo = () => /^marcelo\b/i.test(clockName()) || /^marcelo/i.test(user
 // 🧰 Outside project (Melissa 10/13, 101326terry90): the cracked lyre, an organ
 // restorer's keys — work on something that isn't one of our pianos. Pseudo-
 // serial OUTSIDE; the tech names the job and picks the kind of work. Alex,
-// Curtis, Jake, McKinly, Matthew, Mark and Jacob for now (Walter 10/14).
-const OUTSIDE_PEOPLE = ['alexmartin.blp@gmail.com', 'jakepulver.blp@gmail.com', 'matthewwessman.blp@gmail.com', 'markhales.blp@gmail.com', 'jacobmower.blp@gmail.com'];
-const OUTSIDE_KINDS = ['Repair', 'Keytops', 'Refinishing', 'Other'];
+// Curtis, Jake, McKinly, Matthew, Mark and Jacob for now (Walter 10/14);
+// Korban added 10/19 (Mark), with the Piano bench construction kind.
+const OUTSIDE_PEOPLE = ['alexmartin.blp@gmail.com', 'jakepulver.blp@gmail.com', 'matthewwessman.blp@gmail.com', 'markhales.blp@gmail.com', 'jacobmower.blp@gmail.com', 'korbangreenhalgh.blp@gmail.com'];
+const OUTSIDE_KINDS = ['Repair', 'Keytops', 'Refinishing', 'Piano bench construction', 'Other'];
 const outsideOk = () => OUTSIDE_PEOPLE.includes(userEmail())
-  || /^(alex|curtis|jake|mckinly|matthew|mark|jacob)\b/i.test(clockName());
+  || /^(alex|curtis|jake|mckinly|matthew|mark|jacob|korban)\b/i.test(clockName());
 const clockLabel = (clock, serial) => {
   const p = CLOCK_PSEUDO[String(serial || '').toUpperCase()];
   return p || (String(clock || '') + (serial ? ' #' + serial : ''));
