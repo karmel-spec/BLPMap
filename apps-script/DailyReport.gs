@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-19.12';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-19.13';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -1607,6 +1607,7 @@ function doPost(e) {
       if (spp.ok) logAct_(who, 'Payment plan', spp.summary || req.serial, spp.plan || '(cleared)');
       return json_(spp);
     }
+    if (req.action === 'dpstepsync') return json_(dpStepSync_(!!req.dryrun));
     if (req.action === 'setadminsteps') {
       var sas = setAdminSteps_(req);
       if (sas.ok) logAct_(who, 'Admin steps', sas.summary || req.serial, sas.steps || '(cleared)');
@@ -5718,6 +5719,55 @@ function setPayPlan_(req) {
   return {ok: true, row: found.row, summary: found.summary, plan: val};
 }
 
+/* Down-payment date → "$1000 Queue Payment" step (Melissa 10/7, 100726terry85):
+ * the Piano Log's "Date of Down Payment (Customer Shopwork)" column is where
+ * admins record the deposit. A row above the SOLD divider with a date there
+ * and the step neither done nor skipped gets the step ticked in ADMIN STEPS,
+ * so the card's Admin section and the Admin Brief stop asking for a deposit
+ * that is already dated. "n/a" and other non-dates are left alone; a skipped
+ * step ("~…") is the admin's call and stays skipped. Runs each weekday in
+ * morningBriefs (before the briefs build) and on demand: action
+ * 'dpstepsync' {dryrun}. */
+var DP_DATE_HEADER = 'Date of Down Payment (Customer Shopwork)';
+function dpStepSync_(dry) {
+  var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+  var hdr = sh.getRange(2, 1, 1, sh.getLastColumn()).getValues()[0].map(function (h) { return String(h || '').trim(); });
+  var dpC = hdr.indexOf(DP_DATE_HEADER) + 1, stC = hdr.indexOf('ADMIN STEPS') + 1;
+  if (dpC < 1 || stC < 1) return {error: 'column missing: ' + (dpC < 1 ? DP_DATE_HEADER : 'ADMIN STEPS')};
+  var last = sh.getLastRow();
+  var owners = sh.getRange(1, 2, last, 2).getValues();   // B (owner / SOLD divider), C (serial)
+  var soldRow = last + 1;
+  for (var i = 0; i < last; i++) {
+    if (String(owners[i][0] || '').trim().toUpperCase() === 'SOLD' && !String(owners[i][1] || '').trim()) { soldRow = i + 1; break; }
+  }
+  var n = soldRow - 3;
+  if (n < 1) return {ok: true, changed: []};
+  var dps = sh.getRange(3, dpC, n, 1).getDisplayValues();
+  var steps = sh.getRange(3, stC, n, 1).getValues();
+  var STEP = '$1000 Queue Payment';
+  var changed = [];
+  for (var r = 0; r < n; r++) {
+    var serial = String(owners[r + 2][1] || '').trim();
+    var dp = String(dps[r][0] || '').trim();
+    if (!serial || !/\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/.test(dp)) continue;
+    var cur = String(steps[r][0] || '').split('|').map(function (t) { return t.trim(); }).filter(Boolean);
+    if (cur.indexOf(STEP) >= 0 || cur.indexOf('~' + STEP) >= 0) continue;
+    // same canonical order the app writes (adminStepsSerialize)
+    var done = cur.filter(function (t) { return t[0] !== '~'; }).concat([STEP]);
+    var skipped = cur.filter(function (t) { return t[0] === '~'; }).map(function (t) { return t.slice(1).trim(); });
+    var val = SM_ADMIN_STEPS.filter(function (x) { return done.indexOf(x) >= 0 || skipped.indexOf(x) >= 0; })
+      .map(function (x) { return done.indexOf(x) >= 0 ? x : '~' + x; }).join(' | ');
+    changed.push({row: r + 3, serial: serial, date: dp, steps: val});
+  }
+  if (!dry) changed.forEach(function (c) {
+    // re-check the row still holds that serial right before writing
+    if (String(sh.getRange(c.row, 3).getValue() || '').trim() !== c.serial) { c.skipped = 'row moved'; return; }
+    sh.getRange(c.row, stC).setValue(c.steps);
+    logAct_('Store Map (down-payment date)', 'Admin step auto-checked', c.serial, STEP + ' — Piano Log down payment ' + c.date);
+  });
+  return {ok: true, dryrun: !!dry, changed: changed};
+}
+
 function setAdminSteps_(req) {
   var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
   var found = findPiano_(sh, req.serial, req.row);
@@ -8530,6 +8580,10 @@ function morningBriefs() {
     try { var rbm = refreshBuffing_({}); reqlogAdd_('TRIGGER morningBriefs: buffing refresh ' + (rbm.updated || 0), Date.now() - mb0); }
     catch (eRb) { /* the calendar keeps Friday's text */ }
   }
+  // a dated down payment ticks the "$1000 Queue Payment" step before the
+  // Admin Brief reads the steps (Melissa 10/7, 100726terry85)
+  try { var dps = dpStepSync_(false); reqlogAdd_('TRIGGER morningBriefs: dp steps ' + ((dps.changed || []).length), Date.now() - mb0); }
+  catch (eDp) { /* tomorrow's run catches up */ }
   var sendShop = dow <= 5;
   var sendAdmin = dow <= 6;
   var r = sendShopManagerReportTo_(SHOPMGR_TO, null, 0, {sendShop: sendShop, sendAdmin: sendAdmin});
