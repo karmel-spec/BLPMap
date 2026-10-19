@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-19.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-19.5';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -6212,6 +6212,37 @@ function planBlockOnCal_(b) {
   return !/^\s*field\b|\bfield\s*:/i.test(String(b[3] || ''));
 }
 
+/* Korban's buffing block text (Walter 10/19): the top two plate-screw jobs
+ * (Curtis's priority order) and the top two visible-hardware jobs from the
+ * live buffing list (salesapp2 buffing-list — the same list behind the
+ * Monday text and the Shop Report), plus the tap link. Fetched once per
+ * Approve; '' when the list is unreachable, and the plan note is used then. */
+var buffingDescCache_ = null;
+function buffingDesc_() {
+  if (buffingDescCache_ !== null) return buffingDescCache_;
+  buffingDescCache_ = '';
+  try {
+    var r = UrlFetchApp.fetch('https://blpsalesapp.netlify.app/.netlify/functions/buffing-list?key=pianoman', {muteHttpExceptions: true});
+    if (r.getResponseCode() !== 200) return '';
+    var d = JSON.parse(r.getContentText());
+    var open = function (xs) { return (xs || []).filter(function (x) { return !x.done; }); };
+    var plates = open(d.plates).slice(0, 2), hw = open(d.hardware).slice(0, 2);
+    var L = [];
+    if (plates.length) {
+      L.push('Plate screws (Curtis\'s order):');
+      plates.forEach(function (p, i) { L.push((i + 1) + '. ' + (p.pianoText || p.serial)); });
+    }
+    if (hw.length) {
+      L.push('Visible hardware to prep:');
+      hw.forEach(function (h, i) { L.push((i + 1) + '. ' + (h.label || h.serial) + (h.finish ? ' — ' + h.finish : '')); });
+    }
+    if (!L.length) return '';
+    L.push('Full list / tap when done: https://blpstoremap.netlify.app/#report=buffing');
+    buffingDescCache_ = L.join('\n');
+  } catch (e) { buffingDescCache_ = ''; }
+  return buffingDescCache_;
+}
+
 /* Calendar event description on Approve (Walter 9/25): the plan note is the
  * Planner's reasoning for Mark and Brigham ("MOVED per Brigham's note this
  * week", lane math, report echoes) and was landing on every tech's calendar
@@ -6515,7 +6546,18 @@ function applyScheduleLocked_(req) {
             plateHeld.push(Utilities.formatDate(d1, 'America/Denver', 'EEE h:mm a') + ' ' + evTitle.slice(0, 40) + ' (plate: ' + plateSt + ')');
             return;
           }
+          // Korban's Hardware Buffing Queue (Walter 10/19): the calendar text is
+          // the live buffing list — top two plate screws, top two visible
+          // hardware — not the Planner's guess at his jobs
           var cleanNote = calDescription_(b[4]);
+          if (/hardware buffing queue/i.test(evTitle)) {
+            var bd = buffingDesc_();
+            if (bd) {
+              // rule 10: a restring waiting on hardware keeps its deadline on the block
+              var dl = (cleanNote.match(/[^.\n]*\b(DEADLINE|READY BY)\b[^.\n]*\.?/gi) || []).map(function (x) { return x.trim(); });
+              cleanNote = bd + (dl.length ? '\n' + dl.join('\n') : '');
+            }
+          }
           var opts = {description: (cleanNote ? cleanNote + '\n' : '')
             + 'Applied from the Shop Manager schedule proposal (' + plan.week + ')'};
           var spot = spotFor_(evTitle);
