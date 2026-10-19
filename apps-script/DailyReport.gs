@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-19.11';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-19.12';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -1067,6 +1067,14 @@ function doPost(e) {
         sv.summary || req.serial,
         (sv.tech || '') + ' · ' + (sv.date || '') + ' ' + (sv.time || '') + ' · ' + (req.minutes || 60) + ' min');
       return json_(sv);
+    }
+    if (req.action === 'delseries') {
+      // remove ONE recurring series from a tech's calendar: tech + title + the
+      // date/time of one occurrence must match exactly one event (Mark 10/19:
+      // the old Monday 7 AM exterior check, replaced by the Tuesday 2:30 one)
+      var dls = delSeries_(req);
+      if (dls.ok && !dls.dryrun) logAct_(who, 'Recurring event removed', dls.tech, dls.title + ' · series from ' + dls.when);
+      return json_(dls);
     }
     if (req.action === 'addrecurring') {
       // standing weekly event straight on a tech's own calendar (Mark 10/19:
@@ -3490,6 +3498,28 @@ function combineService_(master, techCal, hit, req, minutes, found, techName, tz
           date: Utilities.formatDate(ns, tz, 'EEE, MMM d'),
           time: Utilities.formatDate(ns, tz, 'h:mm a'),
           summary: found.summary, title: ev.getTitle()};
+}
+
+function delSeries_(req) {
+  var tz = 'America/Denver';
+  var map = techCalMap_();
+  var tech = String(req.tech || '').trim().toLowerCase();
+  var calId = map[tech] || map[tech.split(/\s+/)[0]] || '';
+  if (!calId) return {error: 'no calendar mapped for ' + (req.tech || '?')};
+  var cal = calById_(calId);
+  if (!cal) return {error: 'no access to ' + calId};
+  var date = String(req.date || ''), time = String(req.time || ''), title = String(req.title || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(time) || !title) return {error: 'title, date (yyyy-MM-dd) and time (HH:mm) required'};
+  var hits = cal.getEvents(new Date(date + 'T00:00:00'), new Date(date + 'T23:59:59')).filter(function (ev) {
+    return String(ev.getTitle() || '').trim() === title && Utilities.formatDate(ev.getStartTime(), tz, 'HH:mm') === time;
+  });
+  if (hits.length !== 1) return {error: hits.length ? 'more than one event matches' : 'no "' + title + '" on ' + date + ' at ' + time, matches: hits.length};
+  var ev = hits[0];
+  if (!ev.isRecurringEvent()) return {error: 'that event is not part of a recurring series — nothing removed'};
+  var series = ev.getEventSeries();
+  var out = {ok: true, dryrun: !!req.dryrun, tech: req.tech, title: title, when: Utilities.formatDate(ev.getStartTime(), tz, 'EEE MMM d h:mm a')};
+  if (!req.dryrun) series.deleteEventSeries();
+  return out;
 }
 
 /* {tech, title, days:['Mon',…], start:'14:30', end:'15:00', from?:'yyyy-MM-dd',
@@ -6619,11 +6649,16 @@ function applyScheduleLocked_(req) {
     var calKey_ = function (title, when) {
       return String(title || '').toLowerCase().replace(/[^a-z0-9]+/g, '') + '|' + Math.round(when.getTime() / 60000);
     };
+    var standing = [];   // the tech's own events that Approve did not make (standing / one-off)
     try {
       var gw0 = new Date((plan.weekStart || got.meta.weekStart) + 'T00:00:00');
       var gw1 = new Date(gw0); gw1.setDate(gw1.getDate() + 7);
-      cal.getEvents(gw0, gw1).forEach(function (ev) { onCal[calKey_(ev.getTitle(), ev.getStartTime())] = 1; });
-    } catch (eG) { onCal = {}; }
+      cal.getEvents(gw0, gw1).forEach(function (ev) {
+        onCal[calKey_(ev.getTitle(), ev.getStartTime())] = 1;
+        var dsc = ''; try { dsc = String(ev.getDescription() || ''); } catch (eD2) {}
+        if (!ev.isAllDayEvent() && dsc.indexOf(APPLIED_TAG) < 0) standing.push({s: ev.getStartTime(), e: ev.getEndTime(), t: String(ev.getTitle() || '')});
+      });
+    } catch (eG) { onCal = {}; standing = []; }
     /* Pre-booked tunings follow the plan (Mark 10/19): a manager's priority
      * list in the Planner outranks what was already on the In Store Tuning
      * calendar, so the plan may place a pre-booked piano in a different slot.
@@ -6673,12 +6708,15 @@ function applyScheduleLocked_(req) {
         if (!t1 || !t2) { failed++; return; }
         var d1 = new Date(start); d1.setDate(d1.getDate() + di); d1.setHours(t1.h, t1.min, 0, 0);
         var d2 = new Date(start); d2.setDate(d2.getDate() + di); d2.setHours(t2.h, t2.min, 0, 0);
-        // Monday's Hardware Buffing Queue ends at 2:30 (Mark 10/19): Korban's
-        // weekly "Vacuum maintenance: clean filters, empty buckets" is a
-        // standing 2:30–3:00 event on his own calendar
-        if (di === 0 && /hardware buffing queue/i.test(String(b[3] || ''))) {
-          var cut = new Date(d2); cut.setHours(14, 30, 0, 0);
-          if (d2 > cut && d1 < cut) d2 = cut;
+        // the Hardware Buffing Queue ends where a standing event on the tech's
+        // own calendar starts (Mark 10/19): Korban's Monday 2:30 "Vacuum
+        // maintenance" and every-other-Tuesday 2:30 "BLDG: Exterior check" —
+        // so the plan's 11:00–3:00 block never sits on top of them. Only an
+        // event starting in the block's last hour trims it: a noon appointment
+        // must not erase the afternoon's buffing
+        if (/hardware buffing queue/i.test(String(b[3] || ''))) {
+          var lastHour = new Date(d2.getTime() - 3600000);
+          standing.forEach(function (x) { if (x.s >= lastHour && x.s > d1 && x.s < d2) d2 = new Date(x.s); });
         }
         try {
           var evTitle = String(b[3] || 'Shop work');
