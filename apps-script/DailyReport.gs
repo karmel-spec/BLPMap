@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-19.7';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-19.8';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -8376,6 +8376,13 @@ function morningBriefs() {
   reqlogAdd_('TRIGGER morningBriefs: scorecard', Date.now() - mb0);
   var dow = Number(Utilities.formatDate(new Date(), 'America/Denver', 'u'));
   if (dow === 7) return {ok: true, skipped: 'Sunday — no shop/admin brief'};
+  // Korban's buffing blocks follow the queue every morning (Mark 10/19): the
+  // week's events are rewritten from the live buffing list, so what he taps
+  // done drops off and the next job moves up before he reaches 11:00
+  if (dow <= 5) {
+    try { var rbm = refreshBuffing_({}); reqlogAdd_('TRIGGER morningBriefs: buffing refresh ' + (rbm.updated || 0), Date.now() - mb0); }
+    catch (eRb) { /* the calendar keeps Friday's text */ }
+  }
   var sendShop = dow <= 5;
   var sendAdmin = dow <= 6;
   var r = sendShopManagerReportTo_(SHOPMGR_TO, null, 0, {sendShop: sendShop, sendAdmin: sendAdmin});
