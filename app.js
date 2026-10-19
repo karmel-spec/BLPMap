@@ -6204,6 +6204,7 @@ function popHTML(p) {
     <div class="popsticky">
     <span class="x">✕</span>
     <span class="shr" title="share this piano — text it to a teammate">↗</span>
+    ${cardPhotoSlot(p)}
     <span class="tag ${st}">${tags[st]}</span>
     <h3>${esc(makeModel)}</h3>
     <div class="row rowflex"><span>Serial # <b>${esc(p.serial || '—')}</b>
@@ -6833,6 +6834,7 @@ function wirePop(p) {
     ps.onclick = ev => ev.stopPropagation();
     ps.onchange = () => setPhase(p, ps.value, pop);
   }
+  wireCardPhoto(p, pop);
   pop.querySelectorAll('.mmark').forEach(b => b.onclick = ev => {
     ev.stopPropagation();
     setMedia(p, b.dataset.f, pop, !!b.dataset.skip);
@@ -7643,6 +7645,128 @@ function openBuyerModal(p, phase, pop) {
   const inp = ov.querySelector('.buyername');
   inp.onkeydown = ev => { if (ev.key === 'Enter') go(true); };
   setTimeout(() => inp.focus(), 100);
+}
+/* 🖼 Card photo (Melissa 10/16, 101626terry92; Mark 10/19): for-sale pianos
+ * only — it's for admins glancing at a piano while on the phone with a
+ * customer; shop-phase cards stay as they are.
+ *   1. the Shopify listing's FEATURED image — the main marketing shot the
+ *      admins already chose (≈0.3 s, CORS open). The card's Shopify URL is
+ *      tried before its HANDLE column, which goes stale when a listing is
+ *      renamed (4 of 8 such pianos, 10/19).
+ *   2. no published listing → the piano's Drive photos (Mark 10/19): a file
+ *      named Main, else the first Before photo — Melissa's arrival shot list
+ *      starts with the straight front (19 of 20 right in the 10/19 test).
+ *      After photos count only when named Main: their file names don't keep
+ *      shooting order. Drive images come through /api/cardphoto.
+ *   data/cardphotos.json holds hand-kept corrections to both (see below).
+ * The pick is remembered on this device for a week and the card never waits
+ * for it; the slot fills in when known. Tap → full size. */
+const CARD_PHOTO_PHASES = ['For Sale', 'Sale Pending'];
+const CARD_PHOTO_KEY = s => 'blpCardPhoto3|' + s;
+const cardPhotoMem = new Map();   // serial → {src:'shopify', url} | {src:'drive', id} | null (looked, none)
+function cardPhotoHandles(p) {
+  const x = p.logExtras || {};
+  const m = /\/products\/([^/?#]+)/.exec(String(x['Shopify URL'] || ''));
+  const out = [];
+  if (m) out.push(m[1]);
+  const h = String(x.HANDLE || '').trim();
+  if (h && !out.includes(h)) out.push(h);
+  return out;
+}
+const cardPhotoWanted = p => !!(p && p.serial && CARD_PHOTO_PHASES.includes(String(p.phase || '').trim()));
+function cardPhotoCached(serial) {
+  if (cardPhotoMem.has(serial)) return cardPhotoMem.get(serial);
+  try {
+    const c = JSON.parse(lsGet(CARD_PHOTO_KEY(serial)) || 'null');
+    if (c && Date.now() - c.at < 7 * 86400000) { cardPhotoMem.set(serial, c.pick || null); return c.pick || null; }
+  } catch (e) {}
+  return undefined;   // not looked up yet
+}
+function cardPhotoSrc(pick, w) {
+  if (!pick) return '';
+  if (pick.src === 'drive') return '/api/cardphoto?id=' + encodeURIComponent(pick.id) + '&w=' + w;
+  return pick.url + (pick.url.includes('?') ? '&' : '?') + 'width=' + w;
+}
+function cardPhotoSlot(p) {
+  if (!cardPhotoWanted(p)) return '';
+  const pick = cardPhotoCached(p.serial);
+  return `<span class="cardphoto${pick ? ' on' : ''}" data-serial="${esc(p.serial)}" title="tap to see it full size">${pick
+    ? `<img alt="" src="${esc(cardPhotoSrc(pick, 320))}">` : ''}</span>`;
+}
+// Drive backup pick: Main (either folder) → first Before photo in shooting order
+function pickDrivePhoto(rows) {
+  const ok = r => r.id && (r.folder === 'before' || r.folder === 'after');
+  // the photo walk-through's tagged "S01 Main image" (After first), then a file named Main
+  const s01 = kind => rows.find(r => ok(r) && (() => {
+    const ps = parseShotStage(r.stage || String(r.file || '').replace(/^[^_]+__/, ''));
+    return ps && ps.kind === kind && ps.idx === 0;
+  })());
+  const tagged = s01('after') || s01('before');
+  if (tagged) return tagged.id;
+  const main = rows.find(r => ok(r) && /^main\./i.test(r.file || ''));
+  if (main) return main.id;
+  const key = f => {
+    const n = String(f || '').toLowerCase();
+    const m = /__before__[\d-]+__(\d+)\./.exec(n);   // app uploads: numbered in upload order
+    return m ? [0, +m[1], ''] : [1, 0, n.replace(/\d+/g, d => d.padStart(12, '0'))];
+  };
+  const before = rows.filter(r => r.id && r.folder === 'before').sort((a, b) => {
+    const ka = key(a.file), kb = key(b.file);
+    return ka[0] - kb[0] || ka[1] - kb[1] || (ka[2] < kb[2] ? -1 : ka[2] > kb[2] ? 1 : 0);
+  });
+  return before.length ? before[0].id : '';
+}
+// hand-kept corrections (data/cardphotos.json, Mark 10/19): listing handles for
+// pianos whose Piano Log link is stale (that column is the Shopify Sync key,
+// so it isn't edited in the sheet) and hand-picked Drive photos for for-sale
+// pianos with no published listing
+let cardPhotoFixes = null;
+const cardPhotoFixesP = () => cardPhotoFixes ? Promise.resolve(cardPhotoFixes)
+  : fetch('data/cardphotos.json', {cache: 'no-cache'}).then(r => r.ok ? r.json() : {}).catch(() => ({}))
+      .then(j => (cardPhotoFixes = {handles: (j && j.handles) || {}, drive: (j && j.drive) || {}}));
+const cardPhotoLooking = new Set();
+function wireCardPhoto(p, pop) {
+  const slot = pop.querySelector('.cardphoto');
+  if (!slot) return;
+  slot.onclick = ev => {
+    ev.stopPropagation();
+    const pick = cardPhotoCached(p.serial);
+    if (!pick) return;
+    const ov = document.createElement('div');
+    ov.className = 'cardphotoview';
+    ov.innerHTML = `<img alt="" src="${esc(cardPhotoSrc(pick, 1600))}"><span class="x">✕</span>`;
+    ov.onclick = () => ov.remove();
+    document.body.appendChild(ov);
+  };
+  if (cardPhotoCached(p.serial) !== undefined || cardPhotoLooking.has(p.serial)) return;
+  cardPhotoLooking.add(p.serial);
+  const SHOP = 'https://www.brighamlarsonpianos.com';
+  const byHandle = h => fetchT(SHOP + '/products/' + encodeURIComponent(h) + '.js', {}, 12000)
+    .then(r => r.ok ? r.json() : null).catch(() => null)
+    .then(j => { let u = (j && (j.featured_image || (j.images || [])[0])) || ''; if (u.startsWith('//')) u = 'https:' + u; return u; });
+  (async () => {
+    let pick = null;
+    const fx = await cardPhotoFixesP();
+    const handles = cardPhotoHandles(p);
+    if (fx.handles[p.serial]) handles.unshift(fx.handles[p.serial]);
+    for (const h of handles) {
+      const url = await byHandle(h);
+      if (url) { pick = {src: 'shopify', url}; break; }
+    }
+    if (!pick && fx.drive[p.serial]) pick = {src: 'drive', id: fx.drive[p.serial]};
+    if (!pick) {
+      const id = pickDrivePhoto(await fetchShots(p.serial) || []);
+      if (id) pick = {src: 'drive', id};
+    }
+    cardPhotoMem.set(p.serial, pick);
+    try { lsSet(CARD_PHOTO_KEY(p.serial), JSON.stringify({pick, at: Date.now()})); } catch (e) {}
+    cardPhotoLooking.delete(p.serial);
+    const live = document.querySelector(`#pop .cardphoto[data-serial="${CSS.escape(p.serial)}"]`);
+    if (live && pick) {
+      live.innerHTML = `<img alt="" src="${esc(cardPhotoSrc(pick, 320))}">`;
+      live.classList.add('on');
+    }
+  })();
 }
 async function setPhase(p, phase, pop, extra) {
   const msg = pop.querySelector('.phmsg');

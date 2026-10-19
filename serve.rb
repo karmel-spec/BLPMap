@@ -17,6 +17,31 @@ server = WEBrick::HTTPServer.new(
   Logger: WEBrick::Log.new($stderr, WEBrick::Log::WARN)
 )
 
+# local-only: /api/cardphoto fetches the Drive thumbnail here, so the card
+# photo works locally before netlify/functions/cardphoto.mjs is deployed
+server.mount_proc '/api/cardphoto' do |req, res|
+  id = req.query['id'].to_s
+  w = req.query['w'].to_s.empty? ? 320 : [[req.query['w'].to_i, 80].max, 1600].min
+  if id !~ /\A[A-Za-z0-9_-]{20,80}\z/
+    res.status = 400; res.body = 'bad id'; next
+  end
+  uri = URI("https://lh3.googleusercontent.com/d/#{id}=w#{w}")
+  begin
+    r = nil
+    4.times do
+      r = Net::HTTP.get_response(uri)
+      break unless r.is_a?(Net::HTTPRedirection)
+      uri = URI(r['location'])
+    end
+    res.status = r.code.to_i
+    res['Content-Type'] = r['Content-Type'] || 'image/jpeg'
+    res['Cache-Control'] = 'public, max-age=604800'
+    res.body = r.body
+  rescue StandardError => e
+    res.status = 502; res.body = e.message
+  end
+end
+
 server.mount_proc '/api' do |req, res|
   uri = URI(LIVE + req.request_uri.path +
             (req.request_uri.query ? '?' + req.request_uri.query : ''))

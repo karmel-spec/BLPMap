@@ -2369,3 +2369,23 @@ table.tchktbl td.chk .tcasap input{width:15px;height:15px}
 /* team board: feeds still loading (Mark 10/16, 101626hales56) */
 .teamload{margin:0 0 10px;padding:7px 11px;border-radius:8px;background:#f4f1ec;color:#6f6a63;font-size:13px}
 .tmload{color:#9a948a;font-style:italic}
+
+/* 🖼 card photo — PROTOTYPE (Melissa 10/16, 101626terry92) */
+.popsticky{position:relative}
+.cardphoto{display:none;position:absolute;top:34px;right:12px;width:96px;height:96px;border-radius:9px;overflow:hidden;
+  background:#f4f1ec;border:1px solid #dfe3e8;cursor:zoom-in;animation:cardphotoin .25s ease}
+.cardphoto.on{display:block}
+/* the title, serial and type buttons wrap in the column beside the photo */
+.popsticky:has(.cardphoto.on) > h3,
+.popsticky:has(.cardphoto.on) > .rowflex{margin-right:112px}
+.popsticky:has(.cardphoto.on) > .rowflex{flex-wrap:wrap;row-gap:6px}
+.cardphoto img{width:100%;height:100%;object-fit:cover;display:block}
+@keyframes cardphotoin{from{opacity:0}to{opacity:1}}
+@media (max-width:600px){
+  .cardphoto{top:32px;right:10px;width:64px;height:64px;border-radius:7px}
+  .popsticky:has(.cardphoto.on) > h3,
+  .popsticky:has(.cardphoto.on) > .rowflex{margin-right:78px}
+}
+.cardphotoview{position:fixed;inset:0;z-index:9999;background:rgba(20,20,20,.86);display:flex;align-items:center;justify-content:center;cursor:zoom-out}
+.cardphotoview img{max-width:94vw;max-height:88vh;border-radius:8px;box-shadow:0 8px 40px rgba(0,0,0,.5)}
+.cardphotoview .x{position:absolute;top:14px;right:20px;color:#fff;font-size:26px;cursor:pointer}

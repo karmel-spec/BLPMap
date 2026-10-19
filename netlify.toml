@@ -15,6 +15,11 @@
   status = 200
 
 [[redirects]]
+  from = "/api/cardphoto"
+  to = "/.netlify/functions/cardphoto"
+  status = 200
+
+[[redirects]]
   from = "/api/slots"
   to = "/.netlify/functions/slots"
   status = 200

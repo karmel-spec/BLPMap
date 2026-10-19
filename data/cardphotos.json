@@ -1,0 +1,19 @@
+{
+ "_note": "Card photos for for-sale pianos (Melissa 10/16, 101626terry92; Mark 10/19). 'handles': the Shopify listing to use when the Piano Log's HANDLE and Shopify URL are both stale (the HANDLE column is the Shopify Sync connector's key, so it is NOT edited in the sheet). 'drive': hand-picked Drive photo for for-sale pianos with no published listing. The app tries handles \u2192 Piano Log URL/HANDLE \u2192 drive \u2192 the automatic Drive rule.",
+ "handles": {
+  "1324742": "1982-kawai-kg-3d-1324742",
+  "84727": "1905-kingsbury-upright-piano-84727",
+  "13685": "1977-kimball-grand-piano-13685",
+  "118412": "1963-kawai-grand-118412-qrs-player-piano"
+ },
+ "drive": {
+  "158577": "1e-0mrTTEvdkhcLEEtZi5WXvQNqqdckHJ",
+  "19407": "1R5gOjk_zAyGuom6hIws1f7NUKDoO4xLz",
+  "583056": "1eVi8bqK-xCdyoctSVHko-X5oBaq9bX_z",
+  "838603": "1pFwAiOcDMeWXeZeB1X5yLJbB7zvJ00xo",
+  "A19182": "1wZtv_R41KyCgoAj9FFMYVI7gy2aRBQOX",
+  "192132": "1ERUd8ZvO6HdDzxTLimG4GRRmKiqNzhM_",
+  "133830": "1bAVZ2S1550WxMzIazsgXGTO2RPuRt886",
+  "66830": "17b9ojEn0t7-BVhpaL3zb0fzQ9kxk0elH"
+ }
+}
