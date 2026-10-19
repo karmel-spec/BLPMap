@@ -35,6 +35,13 @@ and refuses to stack a tuning on a slot another piano still holds. (On 10/16 the
 was written literally over the calendar: Monday and Tuesday 8:00 went out double-booked
 and Wednesday went out empty.)
 
+**Korban's Hardware Buffing Queue (Mark 2026-10-19, Scheduling Rules row 90):** one
+block per day, 11:00-15:00 — **Monday 11:00-14:30**, because his weekly "Vacuum
+maintenance: clean filters, empty buckets" is a standing 2:30-3:00 event on his own
+calendar (Approve also cuts Monday's block at 2:30). Do NOT write job lists in the
+block's note: Approve fills the event from the live buffing list. Only a rule-10
+`DEADLINE:` line may go in the note.
+
 **Korban's tuning slots (Walter 2026-10-14, also on the Scheduling Rules tab):**
 without a manager list, pre-booked tunings on the 03-In Store Tuning calendar stay exactly as they are.
 Open slots are filled in this order: (1) chip tunings, (2) tunings a piano's

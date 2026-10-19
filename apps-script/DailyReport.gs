@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-19.10';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-19.11';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -3493,7 +3493,7 @@ function combineService_(master, techCal, hit, req, minutes, found, techName, tz
 }
 
 /* {tech, title, days:['Mon',…], start:'14:30', end:'15:00', from?:'yyyy-MM-dd',
- *  description?, dryrun?} → a weekly event series on that tech's own calendar
+ *  everyWeeks?: 2 (every other week), description?, dryrun?} → a weekly event series on that tech's own calendar
  * (Tech Calendars tab). Starts on the first matching day on/after `from`
  * (default today; today counts only if the start time hasn't passed). Refuses
  * when the same title already starts at that time on the calendar in the
@@ -3533,12 +3533,15 @@ function addRecurring_(req) {
   var dup = cal.getEvents(new Date(), new Date(Date.now() + 15 * 86400000)).filter(function (ev) {
     return norm(ev.getTitle()) === norm(title) && Utilities.formatDate(ev.getStartTime(), tz, 'HH:mm') === pad(t1.h) + ':' + pad(t1.m);
   })[0];
+  var every = Math.max(1, Math.min(4, Number(req.everyWeeks) || 1));   // 2 = every other week
   var when = days.map(function (d) { return d.charAt(0).toUpperCase() + d.slice(1); }).join('/') + ' ' + pad(t1.h) + ':' + pad(t1.m) + '–' + pad(t2.h) + ':' + pad(t2.m)
-    + ', weekly from ' + Utilities.formatDate(first.st, tz, 'EEE MMM d');
+    + (every > 1 ? ', every ' + every + ' weeks' : ', weekly') + ' from ' + Utilities.formatDate(first.st, tz, 'EEE MMM d');
   if (dup) return {error: 'already on the calendar: "' + dup.getTitle() + '" ' + Utilities.formatDate(dup.getStartTime(), tz, 'EEE MMM d h:mm a'), exists: true};
   var out = {ok: true, dryrun: !!req.dryrun, tech: req.tech, calendar: calId, title: title, when: when};
   if (req.dryrun) return out;
-  var rec = CalendarApp.newRecurrence().addWeeklyRule().onlyOnWeekdays(days.map(function (d) { return DAY[d]; }));
+  var rule = CalendarApp.newRecurrence().addWeeklyRule();
+  if (every > 1) rule = rule.interval(every);
+  var rec = rule.onlyOnWeekdays(days.map(function (d) { return DAY[d]; }));
   var series = cal.createEventSeries(title, first.st, first.en, rec, {description: String(req.description || '').slice(0, 1000)});
   out.seriesId = series.getId();
   return out;
@@ -6670,6 +6673,13 @@ function applyScheduleLocked_(req) {
         if (!t1 || !t2) { failed++; return; }
         var d1 = new Date(start); d1.setDate(d1.getDate() + di); d1.setHours(t1.h, t1.min, 0, 0);
         var d2 = new Date(start); d2.setDate(d2.getDate() + di); d2.setHours(t2.h, t2.min, 0, 0);
+        // Monday's Hardware Buffing Queue ends at 2:30 (Mark 10/19): Korban's
+        // weekly "Vacuum maintenance: clean filters, empty buckets" is a
+        // standing 2:30–3:00 event on his own calendar
+        if (di === 0 && /hardware buffing queue/i.test(String(b[3] || ''))) {
+          var cut = new Date(d2); cut.setHours(14, 30, 0, 0);
+          if (d2 > cut && d1 < cut) d2 = cut;
+        }
         try {
           var evTitle = String(b[3] || 'Shop work');
           var ck = calKey_(evTitle, d1);
