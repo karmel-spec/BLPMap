@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-19.9';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-19.10';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -1067,6 +1067,14 @@ function doPost(e) {
         sv.summary || req.serial,
         (sv.tech || '') + ' · ' + (sv.date || '') + ' ' + (sv.time || '') + ' · ' + (req.minutes || 60) + ' min');
       return json_(sv);
+    }
+    if (req.action === 'addrecurring') {
+      // standing weekly event straight on a tech's own calendar (Mark 10/19:
+      // Korban's Monday vacuum maintenance) — not through the tuning calendar
+      // or the weekly plan
+      var arc = addRecurring_(req);
+      if (arc.ok && !arc.dryrun) logAct_(who, 'Recurring event added', arc.tech, arc.title + ' · ' + arc.when);
+      return json_(arc);
     }
     if (req.action === 'refreshbuffing') {
       // rewrite this week's Hardware Buffing Queue events from the live
@@ -3482,6 +3490,58 @@ function combineService_(master, techCal, hit, req, minutes, found, techName, tz
           date: Utilities.formatDate(ns, tz, 'EEE, MMM d'),
           time: Utilities.formatDate(ns, tz, 'h:mm a'),
           summary: found.summary, title: ev.getTitle()};
+}
+
+/* {tech, title, days:['Mon',…], start:'14:30', end:'15:00', from?:'yyyy-MM-dd',
+ *  description?, dryrun?} → a weekly event series on that tech's own calendar
+ * (Tech Calendars tab). Starts on the first matching day on/after `from`
+ * (default today; today counts only if the start time hasn't passed). Refuses
+ * when the same title already starts at that time on the calendar in the
+ * next two weeks, so a second tap can't double it. */
+function addRecurring_(req) {
+  var tz = 'America/Denver';
+  var map = techCalMap_();
+  var tech = String(req.tech || '').trim().toLowerCase();
+  var calId = map[tech] || map[tech.split(/\s+/)[0]] || '';
+  if (!calId) return {error: 'no calendar mapped for ' + (req.tech || '?') + ' on the Tech Calendars tab'};
+  var cal = calById_(calId);
+  if (!cal) return {error: 'no access to ' + calId};
+  var title = String(req.title || '').trim().slice(0, 120);
+  if (!title) return {error: 'title required'};
+  var hm = function (t) { var m = /^(\d{1,2}):(\d{2})$/.exec(String(t || '').trim()); return m ? {h: +m[1], m: +m[2]} : null; };
+  var t1 = hm(req.start), t2 = hm(req.end);
+  if (!t1 || !t2 || t2.h * 60 + t2.m <= t1.h * 60 + t1.m) return {error: 'start / end as HH:mm, end after start'};
+  var DAY = {mon: CalendarApp.Weekday.MONDAY, tue: CalendarApp.Weekday.TUESDAY, wed: CalendarApp.Weekday.WEDNESDAY,
+             thu: CalendarApp.Weekday.THURSDAY, fri: CalendarApp.Weekday.FRIDAY, sat: CalendarApp.Weekday.SATURDAY, sun: CalendarApp.Weekday.SUNDAY};
+  var NUM = {mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6, sun: 7};
+  var days = (req.days || []).map(function (d) { return String(d).trim().toLowerCase().slice(0, 3); }).filter(function (d) { return DAY[d]; });
+  if (!days.length) return {error: 'days required, e.g. ["Mon"]'};
+  var pad = function (n) { return ('0' + n).slice(-2); };
+  var from = /^\d{4}-\d{2}-\d{2}$/.test(String(req.from || '')) ? String(req.from) : Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
+  var first = null;
+  for (var k = 0; k < 14 && !first; k++) {
+    var dd = new Date(new Date(from + 'T12:00:00').getTime() + k * 86400000);
+    var ymd = Utilities.formatDate(dd, tz, 'yyyy-MM-dd');
+    var dow = Number(Utilities.formatDate(dd, tz, 'u'));
+    if (!days.some(function (d) { return NUM[d] === dow; })) continue;
+    var st = new Date(ymd + 'T' + pad(t1.h) + ':' + pad(t1.m) + ':00');
+    if (st <= new Date()) continue;
+    first = {st: st, en: new Date(ymd + 'T' + pad(t2.h) + ':' + pad(t2.m) + ':00')};
+  }
+  if (!first) return {error: 'no matching day in the next two weeks'};
+  var norm = function (x) { return String(x || '').toLowerCase().replace(/[^a-z0-9]+/g, ''); };
+  var dup = cal.getEvents(new Date(), new Date(Date.now() + 15 * 86400000)).filter(function (ev) {
+    return norm(ev.getTitle()) === norm(title) && Utilities.formatDate(ev.getStartTime(), tz, 'HH:mm') === pad(t1.h) + ':' + pad(t1.m);
+  })[0];
+  var when = days.map(function (d) { return d.charAt(0).toUpperCase() + d.slice(1); }).join('/') + ' ' + pad(t1.h) + ':' + pad(t1.m) + '–' + pad(t2.h) + ':' + pad(t2.m)
+    + ', weekly from ' + Utilities.formatDate(first.st, tz, 'EEE MMM d');
+  if (dup) return {error: 'already on the calendar: "' + dup.getTitle() + '" ' + Utilities.formatDate(dup.getStartTime(), tz, 'EEE MMM d h:mm a'), exists: true};
+  var out = {ok: true, dryrun: !!req.dryrun, tech: req.tech, calendar: calId, title: title, when: when};
+  if (req.dryrun) return out;
+  var rec = CalendarApp.newRecurrence().addWeeklyRule().onlyOnWeekdays(days.map(function (d) { return DAY[d]; }));
+  var series = cal.createEventSeries(title, first.st, first.en, rec, {description: String(req.description || '').slice(0, 1000)});
+  out.seriesId = series.getId();
+  return out;
 }
 
 function refreshBuffing_(req) {
