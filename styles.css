@@ -2365,3 +2365,7 @@ table.tchktbl td.chk .tcasap input{width:15px;height:15px}
 .outfields{display:flex;gap:6px;margin:6px 0 8px}
 .outfields select{flex:0 0 auto;font-size:13px;padding:6px 8px;border:1px solid #cfd6dc;border-radius:7px;background:#fff}
 .outfields input{flex:1;min-width:0;font-size:13px;padding:6px 8px;border:1px solid #cfd6dc;border-radius:7px}
+
+/* team board: feeds still loading (Mark 10/16, 101626hales56) */
+.teamload{margin:0 0 10px;padding:7px 11px;border-radius:8px;background:#f4f1ec;color:#6f6a63;font-size:13px}
+.tmload{color:#9a948a;font-style:italic}

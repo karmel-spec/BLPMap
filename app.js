@@ -14743,26 +14743,41 @@ async function teamFetchAll() {
     return null;
   };
   const key = '?key=' + encodeURIComponent('pianoman');
-  const [ros, sch, clk, pay, whr] = await Promise.all([
-    j(fetch(TEAM_ROSTER_API + key)),
-    j(fetch(TEAM_SCHEDULE_API + key)),
-    bridgeJson('timeclock', 'open'),
-    bridgeJson('payroll', 'open'),
-    bridgeJson('whereis', 'who'),
-  ]);
-  TEAM.roster = ros && ros.tabs ? ros.tabs : null;
-  TEAM.sched = sch && sch.tabs ? sch.tabs['Team Schedule'] : null;
+  // each feed paints as soon as it lands (Mark 10/16, 101626hales56): the
+  // board used to wait for all five, so one slow bridge read (3 × 20 s
+  // retries) held every status for a minute or more
+  const paint = () => { if (S.view === 'team') { try { renderTeam(); } catch (e) {} } };
+  const roster = j(fetch(TEAM_ROSTER_API + key)).then(ros => {
+    if (ros && ros.tabs) TEAM.roster = ros.tabs;
+    paint();
+  });
+  const sched = j(fetch(TEAM_SCHEDULE_API + key)).then(sch => {
+    if (sch && sch.tabs) TEAM.sched = sch.tabs['Team Schedule'];
+    paint();
+  });
+  // piano clock: the shared 25 s Netlify copy the map polls (answers in well
+  // under a second), then the bridge, else the map's own copy so the board
+  // never shows a wall of "—" for a bridge hiccup
+  const clock = (async () => {
+    let clk = await j(fetchT('/api/timeclock', {cache: 'no-store'}, 15000));
+    if (!(clk && clk.open)) clk = await bridgeJson('timeclock', 'open');
+    if (clk && clk.open) { TEAM.clock = clk; TEAM.clockStale = false; }
+    else { TEAM.clock = {open: CLOCK.all || [], todayMinutes: CLOCK.today || {}}; TEAM.clockStale = CLOCK.allAt ? 'map' : 'none'; }
+    paint();
+  })();
+  const payroll = bridgeJson('payroll', 'open').then(pay => {
+    if (pay && pay.open) { TEAM.pay = pay; TEAM.payStale = false; }
+    else { TEAM.pay = (TEAM.pay && TEAM.pay.open && TEAM.pay.open.length) ? TEAM.pay : {open: [], today: (pay && pay.today) || []}; TEAM.payStale = true; }
+    paint();
+  });
+  const where = bridgeJson('whereis', 'who').then(whr => {
+    TEAM.where = (whr && whr.who) || TEAM.where || {};
+    paint();
+  });
+  await Promise.all([roster, sched, clock, payroll, where]);
   try { lsSet('blpTeam1', JSON.stringify({roster: TEAM.roster, sched: TEAM.sched, at: Date.now()})); } catch (e) {}
-  // piano clock: the live feed, else the map's own copy (fetchClock, every
-  // 60 s) so the board never shows a wall of "—" for a bridge hiccup
-  TEAM.clockStale = TEAM.payStale = false;
-  if (clk && clk.open) TEAM.clock = clk;
-  else { TEAM.clock = {open: CLOCK.all || [], todayMinutes: CLOCK.today || {}}; TEAM.clockStale = CLOCK.allAt ? 'map' : 'none'; }
-  if (pay && pay.open) TEAM.pay = pay;
-  else { TEAM.pay = (TEAM.pay && TEAM.pay.open && TEAM.pay.open.length) ? TEAM.pay : {open: [], today: (pay && pay.today) || []}; TEAM.payStale = true; }
-  TEAM.where = (whr && whr.who) || TEAM.where || {};
   TEAM.loading = false;
-  renderTeam();
+  paint();
 }
 function teamClockFmt(iso) {
   const d = new Date(iso);
@@ -14797,9 +14812,12 @@ function teamBoardHTML() {
   // Canonicalize first names on BOTH sides of every match.
   const ALIAS = {guadalupe: 'lupita'};
   const firstOf = s => { const f = norm(s).split(/\s+/)[0]; return ALIAS[f] || f; };
-  const openFor = full => (TEAM.clock.open || []).find(o =>
+  const clockOpen = (TEAM.clock && TEAM.clock.open) || [];
+  const payIn = !!TEAM.pay;   // false until the day-clock feed answers
+  const openFor = full => clockOpen.find(o =>
     norm(o.tech) === norm(full) || firstOf(o.tech) === firstOf(full));
   const payFor = full => {
+    if (!payIn) return {on: false, mins: 0, loading: true};
     const openP = (TEAM.pay.open || []).find(o => norm(o.tech) === norm(full) || firstOf(o.tech) === firstOf(full));
     if (openP) return {on: true, start: openP.start};
     const done = (TEAM.pay.today || []).filter(t => (norm(t.tech) === norm(full) || firstOf(t.tech) === firstOf(full)) && t.end);
@@ -14811,20 +14829,21 @@ function teamBoardHTML() {
   // away → and only then a genuine "not clocked in" (Brigham's V71 notes)
   const whereFor = full => {
     const f = firstOf(full);
-    const w = TEAM.where[f] || TEAM.where[full.toLowerCase()] || null;
+    const W = TEAM.where || {};
+    const w = W[f] || W[full.toLowerCase()] || null;
     return w && typeof w === 'object' ? w : (w ? {st: 'off', why: String(w)} : null);
   };
   const tile = m => {
     const o = openFor(m.full), pw = payFor(m.full);
-    const w = (!o && !pw.on) ? whereFor(m.full) : null;
+    const w = (!o && !pw.on && !pw.loading) ? whereFor(m.full) : null;
     const away = w ? (w.st === 'off' ? '🏖 ' + esc(w.why || 'day off')
       : w.st === 'field' ? '🚗 field — ' + esc(w.why || 'appointment') + (w.until ? ' · until ' + esc(w.until) : '')
       : '🌗 ' + esc(w.why || 'partial day')) : '';
     const mins = o ? Math.max(0, Math.round((Date.now() - new Date(o.start)) / 60000)) : 0;
-    const flag = o && !pw.on ? '<div class="tmflag">⚠ on a piano, no day punch</div>' : '';
+    const flag = o && !pw.on && !pw.loading ? '<div class="tmflag">⚠ on a piano, no day punch</div>' : '';
     // more than one open session on the same piano: fine for training or
     // two-person jobs, but surfaced so a missed switch is easy to catch
-    const mates = o ? (TEAM.clock.open || []).filter(x => x.serial === o.serial
+    const mates = o ? clockOpen.filter(x => x.serial === o.serial
       && norm(x.tech) !== norm(o.tech)) : [];
     const shared = mates.length ? `<div class="tmshared">👥 with ${esc(mates.map(x =>
       String(x.tech || '').split(/\s+/)[0]).join(', '))} — together or a missed switch?</div>` : '';
@@ -14833,18 +14852,20 @@ function teamBoardHTML() {
       ${w ? `<div class="tmaway">${away}</div>` : `
       <div>🎹 ${o ? esc((o.piano || o.serial || '').slice(0, 26)) + ' · ' + esc(o.phase || '') +
         ' · ' + Math.floor(mins / 60) + ':' + String(mins % 60).padStart(2, '0') : '—'}</div>
-      <div>🕔 ${pw.on ? 'in since ' + teamClockFmt(pw.start)
+      <div>🕔 ${pw.loading ? '<span class="tmload">loading…</span>' : pw.on ? 'in since ' + teamClockFmt(pw.start)
         : pw.mins ? 'done · ' + (pw.mins / 60).toFixed(1) + 'h today' : 'not clocked in'}</div>`}
       ${shared}${flag}
     </div>`;
   };
   const stale = [];
-  if (TEAM.clockStale === 'map') stale.push('the piano clock feed did not load — showing the map\u2019s copy from ' + teamClockFmt(new Date(CLOCK.allAt).toISOString()));
+  const loadingNote = (!payIn || !TEAM.clock)
+    ? '<div class="teamload">⏳ Loading live clock-ins… statuses fill in as each feed answers.</div>' : '';
+  if (TEAM.clockStale === 'map' && TEAM.clock && payIn) stale.push('the piano clock feed did not load — showing the map\u2019s copy from ' + teamClockFmt(new Date(CLOCK.allAt).toISOString()));
   if (TEAM.clockStale === 'none') stale.push('the piano clock feed did not load — piano lines may be blank');
   if (TEAM.payStale) stale.push('the day clock feed did not load');
   const banner = stale.length
     ? `<div class="teamwarn">⚠ ${esc(stale.join('; '))}. The Google bridge is slow — tap 🔄 Refresh in a moment.</div>` : '';
-  return banner + Object.entries(groups).filter(([, l]) => l.length).map(([g, l]) =>
+  return loadingNote + banner + Object.entries(groups).filter(([, l]) => l.length).map(([g, l]) =>
     `<h4 class="tmsec">${g} <span class="pc">${l.length}</span></h4>
      <div class="tmgrid">${l.map(tile).join('')}</div>`).join('')
     || '<div class="empty">Roster unavailable.</div>';
@@ -14909,8 +14930,10 @@ function renderTeam() {
       const c = JSON.parse(lsGet('blpTeam1') || 'null');
       if (c && c.roster) {
         TEAM.roster = c.roster; TEAM.sched = TEAM.sched || c.sched;
-        TEAM.clock = TEAM.clock || {open: [], todayMinutes: {}};
-        TEAM.pay = TEAM.pay || {open: [], today: []};
+        // no fake empty clocks while the feeds load (Mark 10/16, 101626hales56:
+        // the instant paint said "not clocked in" for everyone) — the piano
+        // line starts from the map's own copy, the day line says loading
+        if (!TEAM.clock && CLOCK.all) { TEAM.clock = {open: CLOCK.all, todayMinutes: CLOCK.today || {}}; TEAM.clockStale = 'map'; }
         TEAM.where = TEAM.where || {};
       }
     } catch (e) {}
