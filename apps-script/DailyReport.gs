@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-19.8';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-19.9';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -4385,8 +4385,7 @@ function sweepForgottenClocks_() {
   todo.forEach(function (t) {
     if (movers[finishKey_(t.v[0]).split(' ')[0]]) return;   // movers: no auto clock-out (see sweepForgottenPay_)
     var start = t.start;
-    var hour = flatFinishHour_(t.v[0], crew);
-    var flat = new Date(Utilities.formatDate(start, 'America/Denver', "yyyy-MM-dd'T'" + hour + ':00:00XXX'));
+    var flat = flatStamp_(start, flatFinishFor_(t.v[0], crew, start));
     var end = flat > start ? flat : new Date(start.getTime() + 3600000);
     if (end - start > 36000000) end = new Date(start.getTime() + 36000000);   // 10 h cap
     closeSession_(sh, {row: t.row, v: t.v}, 'auto: forgot to clock out', end.toISOString());
@@ -4543,6 +4542,45 @@ function flatFinishHour_(name, crew) {
   var first = finishKey_(name).split(' ')[0];
   return crew[first] ? 20 : 18;
 }
+/* Personal flat finish time (Mark 10/19, Lisa): an App Settings row
+ * `flat_finish_<first name>` — e.g. "Mon-Fri 2:05 PM, Sat 6:05 PM" —
+ * overrides the 6 PM / 8 PM flat for that person, by the weekday of the
+ * punch. Entries are comma-separated "<days> <time>"; days are Mon-Fri,
+ * Mon,Wed, Sat, daily; time is h:mm AM/PM or 24h. The five-minute cushion
+ * is Mark's: a 2:01 clock-out must never read as past the cut-off.
+ * Returns {h, m}; no row or no matching entry → the flat rule as before. */
+function flatFinishFor_(name, crew, when) {
+  var first = finishKey_(name).split(' ')[0];
+  var spec = first ? appSetting_('flat_finish_' + first, '') : '';
+  if (spec) {
+    var dow = Number(Utilities.formatDate(when, 'America/Denver', 'u'));   // 1 = Mon … 7 = Sun
+    var DN = {mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6, sun: 7};
+    var entries = String(spec).split(/\s*,\s*(?![^()]*\))/);
+    for (var i = 0; i < entries.length; i++) {
+      var e = entries[i].trim();
+      var tm = /(\d{1,2})(?::(\d{2}))?\s*([ap]\.?m\.?)?\s*$/i.exec(e);
+      if (!tm) continue;
+      var h = Number(tm[1]), m = Number(tm[2] || 0);
+      if (tm[3]) { var pm = /p/i.test(tm[3]); if (pm && h < 12) h += 12; if (!pm && h === 12) h = 0; }
+      var days = e.slice(0, tm.index).trim().toLowerCase();
+      var ok = false;
+      if (!days || /^(daily|every ?day|all)$/.test(days)) ok = true;
+      else days.split(/\s*[,&\/]\s*|\s+and\s+/).forEach(function (d) {
+        var rg = /^(\w{3})\w*\s*[-–]\s*(\w{3})\w*$/.exec(d);
+        if (rg && DN[rg[1]] && DN[rg[2]]) { if (dow >= DN[rg[1]] && dow <= DN[rg[2]]) ok = true; }
+        else if (/^weekdays?$/.test(d)) { if (dow <= 5) ok = true; }
+        else if (DN[d.slice(0, 3)] === dow) ok = true;
+      });
+      if (ok) return {h: h, m: m};
+    }
+  }
+  return {h: flatFinishHour_(name, crew), m: 0};
+}
+function flatStamp_(start, fm) {
+  return new Date(Utilities.formatDate(start, 'America/Denver', "yyyy-MM-dd'T'")
+    + ('0' + fm.h).slice(-2) + ':' + ('0' + fm.m).slice(-2) + ':00'
+    + Utilities.formatDate(start, 'America/Denver', 'XXX'));
+}
 /* One key per person however their name was stamped: punches carry
  * "Alex Martin", "Alex Martin (session expired — unverified)" and
  * "Mark Hales <mark@…>". Same normalising evidenceKey_ used. */
@@ -4573,13 +4611,14 @@ function sweepForgottenPay_(sh) {
     // (moverMorningNudge) asks them to clock out and send a fix
     if (movers[finishKey_(t.v[0]).split(' ')[0]]) return;
     var start = t.start;
-    var hour = flatFinishHour_(t.v[0], crew);
-    var flat = new Date(Utilities.formatDate(start, 'America/Denver', "yyyy-MM-dd'T'" + hour + ':00:00XXX'));
+    var fm = flatFinishFor_(t.v[0], crew, start);
+    var flat = flatStamp_(start, fm);
     var end = flat > start ? flat : new Date(start.getTime() + 3600000);   // clocked in after the flat time: +1 h
     if (end - start > 43200000) end = new Date(start.getTime() + 43200000);   // 12 h cap
     var when = Utilities.formatDate(end, 'America/Denver', 'h:mm a');
+    var personal = !!appSetting_('flat_finish_' + finishKey_(t.v[0]).split(' ')[0], '');
     closePayRow_(sh, {row: t.row, v: t.v}, end.toISOString(),
-      'auto: forgot to clock out — stamped ' + when + (hour === 20 ? ' (late crew)' : '')
+      'auto: forgot to clock out — stamped ' + when + (personal ? ' (personal cut-off)' : fm.h === 20 ? ' (late crew)' : '')
       + ' — nobody clocked out; check the real finish time before payroll');
   });
 }
