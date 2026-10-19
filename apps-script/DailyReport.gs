@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-19.13';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-19.14';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -5725,7 +5725,9 @@ function setPayPlan_(req) {
  * and the step neither done nor skipped gets the step ticked in ADMIN STEPS,
  * so the card's Admin section and the Admin Brief stop asking for a deposit
  * that is already dated. "n/a" and other non-dates are left alone; a skipped
- * step ("~…") is the admin's call and stays skipped. Runs each weekday in
+ * step ("~…") is the admin's call and stays skipped. A Pre-Queue piano with a
+ * dated deposit is also approved for the queue (Mark 10/19): the status gets
+ * "Queue Approved <date>", exactly what the ✅ Approve for queue button writes. Runs each weekday in
  * morningBriefs (before the briefs build) and on demand: action
  * 'dpstepsync' {dryrun}. */
 var DP_DATE_HEADER = 'Date of Down Payment (Customer Shopwork)';
@@ -5744,12 +5746,30 @@ function dpStepSync_(dry) {
   if (n < 1) return {ok: true, changed: []};
   var dps = sh.getRange(3, dpC, n, 1).getDisplayValues();
   var steps = sh.getRange(3, stC, n, 1).getValues();
+  var bs = sh.getRange(3, 2, n, 18).getValues();   // B..S: section labels + STATUS (col S)
   var STEP = '$1000 Queue Payment';
-  var changed = [];
+  var changed = [], approved = [];
+  var section = '';
   for (var r = 0; r < n; r++) {
     var serial = String(owners[r + 2][1] || '').trim();
+    // section labels, as the map's parser reads them (pianolog-parse.cjs)
+    var head = String(bs[r][0] || '').trim(), summary = String(bs[r][2] || '').trim();
+    var caps = !String(bs[r][3] || '').trim() && !String(bs[r][4] || '').trim() && !String(bs[r][5] || '').trim()
+      && head && head.indexOf('\n') < 0 && head.length < 60 && /[A-Z]/.test(head) && !/[a-z]/.test(head);
+    var custRow = head.indexOf('\n') >= 0 || /@|\(?\d{3}\)?[\s.-]*\d{3}[\s.-]*\d{4}/.test(head);
+    if (!serial && (!summary || caps)) { if (head && !custRow) section = head; continue; }
     var dp = String(dps[r][0] || '').trim();
     if (!serial || !/\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/.test(dp)) continue;
+    // Pre-Queue + a dated deposit → approved for the queue, same write as the
+    // ✅ Approve for queue button (preQueueApprove_) (Mark 10/19)
+    var status = String(bs[r][17] || '');
+    var preQ = !/queue approved/i.test(status)
+      && (/pre[\s-]?queue/i.test(status) || /^pending shopwork$/i.test(section.trim()));
+    if (preQ) {
+      var nextSt = status.replace(/,?\s*pre[\s-]?queue/i, '').replace(/^\s*,\s*/, '').trim();
+      nextSt = (nextSt ? nextSt + ', ' : '') + 'Queue Approved ' + Utilities.formatDate(new Date(), 'America/Denver', 'M/d/yy');
+      approved.push({row: r + 3, serial: serial, date: dp, status: nextSt});
+    }
     var cur = String(steps[r][0] || '').split('|').map(function (t) { return t.trim(); }).filter(Boolean);
     if (cur.indexOf(STEP) >= 0 || cur.indexOf('~' + STEP) >= 0) continue;
     // same canonical order the app writes (adminStepsSerialize)
@@ -5765,7 +5785,12 @@ function dpStepSync_(dry) {
     sh.getRange(c.row, stC).setValue(c.steps);
     logAct_('Store Map (down-payment date)', 'Admin step auto-checked', c.serial, STEP + ' — Piano Log down payment ' + c.date);
   });
-  return {ok: true, dryrun: !!dry, changed: changed};
+  if (!dry) approved.forEach(function (a) {
+    if (String(sh.getRange(a.row, 3).getValue() || '').trim() !== a.serial) { a.skipped = 'row moved'; return; }
+    sh.getRange(a.row, 19).setValue(a.status);
+    logAct_('Store Map (down-payment date)', 'Queue APPROVED (deposit in)', a.serial, a.status + ' — Piano Log down payment ' + a.date);
+  });
+  return {ok: true, dryrun: !!dry, changed: changed, approved: approved};
 }
 
 function setAdminSteps_(req) {
