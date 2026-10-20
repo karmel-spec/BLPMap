@@ -6053,14 +6053,14 @@ function clockFixModal(prefill) {
     const slowTimer = setInterval(() => {
       const secs = Math.round((Date.now() - t0) / 1000);
       msg.textContent = secs < 25 ? tr('still sending — Google is slow, keep this open…', 'todavía enviando — Google está lento, no cierres esto…')
-        : tr(`still working (${secs}s) — if this closes, check 🛠 Time Clock Adjustments; it's usually already on the list`, `todavía trabajando (${secs}s) — si se cierra, revisa 🛠 Ajustes del reloj; normalmente ya está en la lista`);
+        : tr(`still working (${secs}s) — if this closes, check 🛠 Time Clock; it's usually already on the list`, `todavía trabajando (${secs}s) — si se cierra, revisa 🛠 Reloj; normalmente ya está en la lista`);
     }, 8000);
     // file it in the language the app is set to, so the "your clock is fixed"
     // text comes back in that language without anyone maintaining a list
     const j = await clockFixPost({action: 'clockfix', clock, serial, note,
       date: ymd, inAt: inT, outAt: outT, lang: es() ? 'es' : 'en'});
     clearInterval(slowTimer);
-    if (!j || j.error) { msg.textContent = (j && j.error) || 'no reply from the bridge — check 🛠 Time Clock Adjustments before sending again'; sendBtn.disabled = false; sendBtn.textContent = sendWas; return; }
+    if (!j || j.error) { msg.textContent = (j && j.error) || 'no reply from the bridge — check 🛠 Time Clock before sending again'; sendBtn.disabled = false; sendBtn.textContent = sendWas; return; }
     if (false) { msg.textContent = j.error; sendBtn.disabled = false; sendBtn.textContent = sendWas; return; }
     ov.querySelector('.dsheet').innerHTML = j.duplicate
       ? '<h3>✅ Already on the list</h3><div class="dssub">You had already sent this one — it hasn’t been filed twice. The fix will show on your dashboard once it’s made.</div>'
@@ -11948,7 +11948,7 @@ function payTimeTable(scopeIn) {
   // plus a category filter for those sessions.
   /* scope 'adj' (Mark 10/20, the payroll-report merge, 092126terry47): the
    * same totals, groupings, category / piano hours and CSVs render at the
-   * foot of 🛠 Time Clock Adjustments, driven by THAT page's person / date
+   * foot of 🛠 Time Clock (was Time Clock Adjustments), driven by THAT page's person / date
    * filters (S.adjF). There the editable punch tables already show the daily
    * punches and every session, so the daily table and the session list are
    * left out and the grouping starts at weekly. */
@@ -13328,7 +13328,7 @@ const REPORT_DEFS = () => [
    icon: '⏰', title: 'TIME CLOCK — PAYROLL', count: null,
    desc: 'Team clock-in / clock-out for payroll: every arrival-and-exit punch from the dashboard Payroll Clock, filterable by team member and date, with daily punches or weekly/monthly totals, plus that member\u2019s hours by piano and by category of work from the piano Work Clock. Red rows were auto-closed (forgot to clock out) — review before running payroll. The CSV buttons export spreadsheets.',
    html: payTimeTable},
-  {id: 'clockadjust', sec: 'admin', show: () => isPayrollAdmin() || isTimelogAdmin(), icon: '🛠', title: 'TIME CLOCK ADJUSTMENTS', count: (() => {
+  {id: 'clockadjust', sec: 'admin', show: () => isPayrollAdmin() || isTimelogAdmin(), icon: '🛠', title: 'TIME CLOCK', count: (() => {
      try { return S.fixRows ? S.fixRows.filter(r => cfxSinceLaunch(r) && r.status === 'open').length : null; } catch (e) { return null; } })(),
    desc: 'Fix mistakes and forgotten punches. Team fix requests land here; payroll day punches are editable by owners & Melissa, piano Work Clock sessions by owners & the shop managers (Mark, Matthew, Jacob). Every adjustment is stamped with who changed it.',
    html: clockAdjustTable},

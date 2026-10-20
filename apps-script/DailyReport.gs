@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-20.4';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-20.5';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -5356,7 +5356,7 @@ function adjustClock_(req) {
   });
 }
 /* Team-member "please fix my clock" requests — one tab, worked from the
- * 🛠 Time Clock Adjustments report. Any signed-in team member may file. */
+ * 🛠 Time Clock report. Any signed-in team member may file. */
 var CLOCK_FIX_TAB = 'Clock Fix Requests';
 function clockFixSheet_() {
   var ss = SpreadsheetApp.openById('11RoeVRETag5rZYX6_tEH-rf6x8JL0JeZU0P5AT0WI-I');
@@ -5430,7 +5430,7 @@ function clockFixRequest_(req, who) {
     var whoName = String(who || '').replace(/\s*[(<].*$/, '').trim();
     notifyTeam_([roleSide_(whoName) === 'admin' ? 'Melissa' : 'Mark Hales'],
       '🛠 Clock fix request — ' + whoName + ': ' + note.slice(0, 120)
-      + ' (approve in Store Map → Reports → 🛠 Time Clock Adjustments)');
+      + ' (approve in Store Map → Reports → 🛠 Time Clock)');
   } catch (eN) { /* text best-effort */ }
   return {ok: true};
 }
@@ -7826,14 +7826,14 @@ function shopManagerHtml_(R) {
     var openFix = clockFixRows_().rows.filter(function (r) { return r.status === 'open'; });
     if (nudges.length || openFix.length) {
       sec('⏰', 'Clock follow-ups', nudges.length + openFix.length,
-        'Last evening\'s 6pm sweep texted anyone still clocked in (movers excepted); their correction requests land under Time Clock Adjustments.');
+        'Last evening\'s 6pm sweep texted anyone still clocked in (movers excepted); their correction requests land under 🛠 Time Clock.');
       var cf = [];
       nudges.forEach(function (n) {
         cf.push('📱 texted <b>' + n.who + '</b> — still on ' + withSer(n.detail));
       });
       if (openFix.length) cf.push('<b style="color:#9e2020">' + openFix.length
         + ' time-clock fix' + (openFix.length === 1 ? '' : 'es')
-        + ' waiting for approval</b> — Store Map → Reports → 🛠 Time Clock Adjustments');
+        + ' waiting for approval</b> — Store Map → Reports → 🛠 Time Clock');
       ul(cf);
     }
   } catch (eN) { /* best-effort */ }
@@ -8348,7 +8348,7 @@ function adminBriefHtml_(R) {
     var cfx = clockFixRows_().rows.filter(function (r) { return r.status === 'open'; });
     if (cfx.length) {
       sec('🛠', 'Time-clock fixes waiting', cfx.length,
-        'Fix the punch on Store Map → Reports → 🛠 Time Clock Adjustments, then mark it Resolved to clear it from this brief.');
+        'Fix the punch on Store Map → Reports → 🛠 Time Clock, then mark it Resolved to clear it from this brief.');
       ul(cfx.slice(0, 12).map(function (r) {
         return '<b>' + String(r.who || '').replace(/<[^>]*>/g, '') + '</b> · ' + r.clock
           + (r.serial ? ' #' + r.serial : '') + ' — ' + String(r.note || '').slice(0, 140)
