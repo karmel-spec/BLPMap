@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-20.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-20.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -5797,15 +5797,19 @@ function setPayPlan_(req) {
  * that is already dated. "n/a" and other non-dates are left alone; a skipped
  * step ("~…") is the admin's call and stays skipped. A Pre-Queue piano with a
  * dated deposit is also approved for the queue (Mark 10/19): the status gets
- * "Queue Approved <date>", exactly what the ✅ Approve for queue button writes. Runs each weekday in
+ * "Queue Approved <date>", exactly what the ✅ Approve for queue button writes.
+ * A date in "WELCOME EMAIL (Melissa)" ticks the "Welcome Email" step the same
+ * way (Mark 10/20). Runs each weekday in
  * morningBriefs (before the briefs build) and on demand: action
  * 'dpstepsync' {dryrun}. */
 var DP_DATE_HEADER = 'Date of Down Payment (Customer Shopwork)';
+var WE_DATE_HEADER = 'WELCOME EMAIL (Melissa)', WE_STEP = 'Welcome Email';   // Mark 10/20
 function dpStepSync_(dry) {
   var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
   var hdr = sh.getRange(2, 1, 1, sh.getLastColumn()).getValues()[0].map(function (h) { return String(h || '').trim(); });
   var dpC = hdr.indexOf(DP_DATE_HEADER) + 1, stC = hdr.indexOf('ADMIN STEPS') + 1;
   if (dpC < 1 || stC < 1) return {error: 'column missing: ' + (dpC < 1 ? DP_DATE_HEADER : 'ADMIN STEPS')};
+  var weC = hdr.indexOf(WE_DATE_HEADER) + 1;   // 0 = no Welcome Email column — the down-payment part still runs
   var last = sh.getLastRow();
   var owners = sh.getRange(1, 2, last, 2).getValues();   // B (owner / SOLD divider), C (serial)
   var soldRow = last + 1;
@@ -5815,6 +5819,7 @@ function dpStepSync_(dry) {
   var n = soldRow - 3;
   if (n < 1) return {ok: true, changed: []};
   var dps = sh.getRange(3, dpC, n, 1).getDisplayValues();
+  var wes = weC ? sh.getRange(3, weC, n, 1).getDisplayValues() : [];
   var steps = sh.getRange(3, stC, n, 1).getValues();
   var bs = sh.getRange(3, 2, n, 18).getValues();   // B..S: section labels + STATUS (col S)
   var STEP = '$1000 Queue Payment';
@@ -5828,12 +5833,14 @@ function dpStepSync_(dry) {
       && head && head.indexOf('\n') < 0 && head.length < 60 && /[A-Z]/.test(head) && !/[a-z]/.test(head);
     var custRow = head.indexOf('\n') >= 0 || /@|\(?\d{3}\)?[\s.-]*\d{3}[\s.-]*\d{4}/.test(head);
     if (!serial && (!summary || caps)) { if (head && !custRow) section = head; continue; }
-    var dp = String(dps[r][0] || '').trim();
-    if (!serial || !/\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/.test(dp)) continue;
+    var DATE_RE = /\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/;
+    var dp = String(dps[r][0] || '').trim(), we = weC ? String((wes[r] || [])[0] || '').trim() : '';
+    var dpDated = DATE_RE.test(dp), weDated = DATE_RE.test(we);
+    if (!serial || (!dpDated && !weDated)) continue;
     // Pre-Queue + a dated deposit → approved for the queue, same write as the
     // ✅ Approve for queue button (preQueueApprove_) (Mark 10/19)
     var status = String(bs[r][17] || '');
-    var preQ = !/queue approved/i.test(status)
+    var preQ = dpDated && !/queue approved/i.test(status)
       && (/pre[\s-]?queue/i.test(status) || /^pending shopwork$/i.test(section.trim()));
     if (preQ) {
       var nextSt = status.replace(/,?\s*pre[\s-]?queue/i, '').replace(/^\s*,\s*/, '').trim();
@@ -5841,19 +5848,25 @@ function dpStepSync_(dry) {
       approved.push({row: r + 3, serial: serial, date: dp, status: nextSt});
     }
     var cur = String(steps[r][0] || '').split('|').map(function (t) { return t.trim(); }).filter(Boolean);
-    if (cur.indexOf(STEP) >= 0 || cur.indexOf('~' + STEP) >= 0) continue;
+    var has = function (x) { return cur.indexOf(x) >= 0 || cur.indexOf('~' + x) >= 0; };   // done or skipped
+    // a dated down payment ticks the queue-payment step; a dated welcome
+    // email (Melissa's column) ticks the Welcome Email step (Mark 10/20)
+    var adds = [], why = [];
+    if (dpDated && !has(STEP)) { adds.push(STEP); why.push(STEP + ' — down payment ' + dp); }
+    if (weDated && !has(WE_STEP)) { adds.push(WE_STEP); why.push(WE_STEP + ' — welcome email ' + we); }
+    if (!adds.length) continue;
     // same canonical order the app writes (adminStepsSerialize)
-    var done = cur.filter(function (t) { return t[0] !== '~'; }).concat([STEP]);
+    var done = cur.filter(function (t) { return t[0] !== '~'; }).concat(adds);
     var skipped = cur.filter(function (t) { return t[0] === '~'; }).map(function (t) { return t.slice(1).trim(); });
     var val = SM_ADMIN_STEPS.filter(function (x) { return done.indexOf(x) >= 0 || skipped.indexOf(x) >= 0; })
       .map(function (x) { return done.indexOf(x) >= 0 ? x : '~' + x; }).join(' | ');
-    changed.push({row: r + 3, serial: serial, date: dp, steps: val});
+    changed.push({row: r + 3, serial: serial, added: adds, why: why.join('; '), steps: val});
   }
   if (!dry) changed.forEach(function (c) {
     // re-check the row still holds that serial right before writing
     if (String(sh.getRange(c.row, 3).getValue() || '').trim() !== c.serial) { c.skipped = 'row moved'; return; }
     sh.getRange(c.row, stC).setValue(c.steps);
-    logAct_('Store Map (down-payment date)', 'Admin step auto-checked', c.serial, STEP + ' — Piano Log down payment ' + c.date);
+    logAct_('Store Map (Piano Log dates)', 'Admin step auto-checked', c.serial, c.why);
   });
   if (!dry) approved.forEach(function (a) {
     if (String(sh.getRange(a.row, 3).getValue() || '').trim() !== a.serial) { a.skipped = 'row moved'; return; }
