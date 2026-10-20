@@ -5957,9 +5957,10 @@ const isMarcelo = () => /^marcelo\b/i.test(clockName()) || /^marcelo/i.test(user
 // restorer's keys — work on something that isn't one of our pianos. Pseudo-
 // serial OUTSIDE; the tech names the job and picks the kind of work. Alex,
 // Curtis, Jake, McKinly, Matthew, Mark and Jacob for now (Walter 10/14);
-// Korban added 10/19 (Mark), with the Piano bench construction kind.
+// Korban added 10/19 (Mark), with the Piano bench construction kind;
+// Field work added 10/20 (Mark).
 const OUTSIDE_PEOPLE = ['alexmartin.blp@gmail.com', 'jakepulver.blp@gmail.com', 'matthewwessman.blp@gmail.com', 'markhales.blp@gmail.com', 'jacobmower.blp@gmail.com', 'korbangreenhalgh.blp@gmail.com'];
-const OUTSIDE_KINDS = ['Repair', 'Keytops', 'Refinishing', 'Piano bench construction', 'Other'];
+const OUTSIDE_KINDS = ['Repair', 'Keytops', 'Refinishing', 'Piano bench construction', 'Field work', 'Other'];
 const outsideOk = () => OUTSIDE_PEOPLE.includes(userEmail())
   || /^(alex|curtis|jake|mckinly|matthew|mark|jacob|korban)\b/i.test(clockName());
 const clockLabel = (clock, serial) => {
