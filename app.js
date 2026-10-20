@@ -1630,7 +1630,7 @@ function preloadReport(id) {
   if ((id === 'briefs' || id === 'adminbriefs') && !S.briefRows) loadBriefs();
   if (id === 'paytime' && !S.payRows) loadPayroll();
   if (id === 'jobcost' && !S.tlRows) loadTimeLog();
-  if (id === 'queue' && !S.tlRows) loadTimeLog();   // ASSIGNED TO column
+  if ((id === 'queue' || id === 'stalled') && !S.tlRows) loadTimeLog();   // ASSIGNED TO / RECENT WORK columns
   if (id === 'appupdates' && !S.auRows) loadAppUpdates();
   if (id === 'spotlight' && !S.spotData) loadSpotlight();
   if (id === 'tuningcheck') tchkLoad().then(() => { if (S.openReport === 'tuningcheck') renderReport(); });
@@ -11555,17 +11555,33 @@ function stalledPianos() {
     .filter(x => x.age > x.lim * 2)
     .sort((a, b) => b.age - a.age);
 }
+// who has the piano: a live Work Clock session first, else the most recent
+// tech in the Time Log for that serial (the Time Log loads lazily when the
+// report opens — "…" until then). Shared by the Shop Queue's ASSIGNED TO and
+// Sitting Too Long's RECENT WORK (Mark 10/20), which also shows the last date.
+function recentWorkCell(p, withDate) {
+  const live = (CLOCK.all || []).find(o => o.serial === p.serial);
+  if (live) return `<td><span class="qulive">● ${esc((live.tech || '').split(/\s+/)[0] || live.tech)} now</span></td>`;
+  if (!S.tlRows) return '<td>…</td>';
+  let last = null;
+  unvoided(S.tlRows).forEach(r => {
+    if (r.serial === p.serial && r.tech && (!last || new Date(r.start) > new Date(last.start))) last = r;
+  });
+  if (!last) return '<td>—</td>';
+  const when = withDate ? ' · ' + new Date(last.start).toLocaleDateString('en-US', {month: 'short', day: 'numeric'}) : '';
+  return `<td><span class="qurecent">${withDate ? '' : 'recent: '}${esc(last.tech)}${esc(when)}</span></td>`;
+}
 function stalledTable() {
   const rows = stalledPianos();
-  return `<table><tr><th>PIANO</th><th>SPOT</th><th>PHASE</th><th>DAYS IN BUILDING</th><th>PHASE STANDARD</th></tr>
+  return `<table><tr><th>PIANO</th><th>SPOT</th><th>PHASE</th><th>DAYS IN BUILDING</th><th>PHASE STANDARD</th><th>RECENT WORK</th></tr>
     ${rows.map(({p, age, lim}) => `<tr class="mrow" data-row="${p.row}">
       <td>${esc(((p.year ? p.year + ' ' : '') + ([p.make, p.model].filter(Boolean).join(' ') || p.summary)).slice(0, 36))}<br>
           <span class="lite" style="color:#8a929a;font-size:11px">${esc(p.serial)}</span></td>
       <td>${esc(String(p.location || '—').slice(0, 14))}</td>
       <td>${esc(p.phase)}</td>
       <td><b style="color:#9e2020">${age} days</b></td>
-      <td>~${lim} days</td></tr>`).join('')
-    || '<tr><td colspan="5" class="empty">Nothing is sitting past its standard — great pace. 🎉</td></tr>'}
+      <td>~${lim} days</td>${recentWorkCell(p, true)}</tr>`).join('')
+    || '<tr><td colspan="6" class="empty">Nothing is sitting past its standard — great pace. 🎉</td></tr>'}
     </table>`;
 }
 
@@ -11583,16 +11599,7 @@ function queueTable() {
   const pending = S.data.pianos.filter(p => p.active && preQueue(p) && !p.queuePos);
   // ASSIGNED TO: live open work-clock session first, else the most recent
   // tech in the Time Log for that serial (loaded lazily when this report opens)
-  const assignedCell = p => {
-    const live = (CLOCK.all || []).find(o => o.serial === p.serial);
-    if (live) return `<td><span class="qulive">● ${esc((live.tech || '').split(/\s+/)[0] || live.tech)} now</span></td>`;
-    if (!S.tlRows) return '<td>…</td>';
-    let last = null;
-    unvoided(S.tlRows).forEach(r => {
-      if (r.serial === p.serial && r.tech && (!last || new Date(r.start) > new Date(last.start))) last = r;
-    });
-    return last ? `<td><span class="qurecent">recent: ${esc(last.tech)}</span></td>` : '<td>—</td>';
-  };
+  const assignedCell = p => recentWorkCell(p, false);
   const row = p => `<tr class="mrow" data-row="${p.row}" ${p.queuePos === 1
       ? 'style="background:#eaf5ec"' : ''}>
       <td style="font-weight:800;white-space:nowrap">#${p.queuePos}${p.queuePos === 1 ? ' · next up' : ''}</td>
