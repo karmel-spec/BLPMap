@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-19.15';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-20.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -1754,7 +1754,7 @@ function doPost(e) {
     if (req.action === 'photo') {
       var pt = savePhoto_(req, who);
       if (pt.saved) logAct_(who,
-        req.kind === 'before' ? 'Before photo' : req.kind === 'after' ? 'After photo' : 'Progress photo',
+        req.kind === 'before' ? 'Before photo' : req.kind === 'after' ? 'After photo' : req.kind === 'social' ? 'Social photo' : 'Progress photo',
         pt.summary || req.serial, (req.stage || '(no phase)') + ' → ' + pt.name);
       return json_(pt);
     }
@@ -1883,6 +1883,8 @@ function savePhoto_(req, who) {
     tech = mediaFolderFor_(sh, found.row, serial, kind);
   } else if (kind === 'paperwork') {
     tech = paperworkFolderFor_(sh, found.row, serial);
+  } else if (kind === 'social') {
+    tech = socialPhotoFolderFor_(sh, found.row, serial);
   } else {
     tech = techFolderFor_(sh, found.row, serial);
   }
@@ -1899,6 +1901,8 @@ function savePhoto_(req, who) {
   var blob = Utilities.newBlob(Utilities.base64Decode(String(req.data)),
                                String(req.mime || 'image/jpeg'), name);
   var file = tech.createFile(blob);
+  var note = String(req.note || '').trim().slice(0, 400);
+  if (note) { try { file.setDescription(note); } catch (eD) {} }
 
   var log = ss.getSheetByName(PHOTO_LOG_TAB);
   if (!log) {
@@ -1907,14 +1911,15 @@ function savePhoto_(req, who) {
     log.setFrozenRows(1);
   }
   log.appendRow([new Date(), serial, found.summary || '', String(req.stage || ''),
-                 who, name, file.getUrl()]);
+                 who, name, file.getUrl(), note]);
   // wizard shots ask to be link-readable so the app can show the Before
   // thumbnail as a ghost while shooting the matching After
   if (req.share) { try { shareAnyoneWithLink_(file.getId()); } catch (e2) {} }
   if (kind === 'before' || kind === 'after') notifyBaPhoto_(kind, serial, found, tech, who, req.stage);
+  if (kind === 'social') notifySocial_('photo', serial, found, tech, who, note, file.getUrl());
   if (kind === 'before-edited' || kind === 'after-edited') { try { shareAnyoneWithLink_(file.getId()); } catch (e3) {} }
   var resultUp = {ok: true, saved: true, name: name, link: file.getUrl(),
-          id: file.getId(), folder: tech.getName(), summary: found.summary};
+          id: file.getId(), folder: tech.getName(), folderUrl: tech.getUrl(), summary: found.summary};
   if (upCache) { try { upCache.put('up_' + upId, JSON.stringify(resultUp), 21600); } catch (eU2) {} }
   return resultUp;
 }
@@ -2253,8 +2258,8 @@ function mediaFolderFor_(sh, row, serial, kind) {
  * so the file is owned by karmel@ like every photo and never touches Apps Script's
  * payload limits. The Origin header on the session request is what lets the browser's
  * PUTs pass CORS. `videodone` logs the finished file to the ACTIVITY LOG. */
-var VIDEO_FOLDER_NAMES = {before: 'Before Video', after: 'After Video', progress: 'Progress Video'};
-function videoKind_(k) { return k === 'after' ? 'after' : k === 'progress' ? 'progress' : 'before'; }
+var VIDEO_FOLDER_NAMES = {before: 'Before Video', after: 'After Video', progress: 'Progress Video', social: 'Social Video'};
+function videoKind_(k) { return k === 'after' ? 'after' : k === 'progress' ? 'progress' : k === 'social' ? 'social' : 'before'; }
 /* ===== HANDBOOK PATCH (10/14) — replace the tail of the Restoration Handbook Doc =====
  * `gog docs write` can only append raw text (and inherits the last paragraph's
  * style — our 10/14 append landed as Heading 2 lines, which the Shop app's
@@ -2302,7 +2307,8 @@ function videoFolderFor_(sh, row, serial, kind) {
   // before/after live in the BEFORE/AFTER VIDEO media columns; progress videos
   // (Brigham 9/18) get their own PROGRESS VIDEO column, created on first use
   var field = kind === 'before' ? 'bvideo' : kind === 'after' ? 'avideo' : '';
-  var col = field ? mediaCol_(sh, field) : pianoCol_(sh, 'PROGRESS VIDEO');
+  // social clips (Brigham 10/20) get a SOCIAL VIDEO column the same way
+  var col = field ? mediaCol_(sh, field) : pianoCol_(sh, kind === 'social' ? 'SOCIAL VIDEO' : 'PROGRESS VIDEO');
   var cell = col ? String(sh.getRange(row, col).getValue() || '') : '';
   var m = /folders\/([A-Za-z0-9_-]+)/.exec(cell);
   if (m) { try { return DriveApp.getFolderById(m[1]); } catch (e) {} }
@@ -2310,7 +2316,7 @@ function videoFolderFor_(sh, row, serial, kind) {
   if (!tech) return null;
   var parentIt = tech.getParents();
   var parent = parentIt.hasNext() ? parentIt.next() : tech;
-  var re = kind === 'before' ? /before/i : kind === 'after' ? /after/i : /progress/i;
+  var re = kind === 'before' ? /before/i : kind === 'after' ? /after/i : kind === 'social' ? /social/i : /progress/i;
   var folder = null;
   var it = parent.getFolders();
   while (it.hasNext()) {
@@ -2337,7 +2343,7 @@ function videoSession_(req, who) {
   var stamp = Utilities.formatDate(new Date(), 'America/Denver', 'yyyy-MM-dd HH.mm');
   var stage = kind === 'progress' && req.stage ? ' (' + String(req.stage).slice(0, 40) + ')' : '';
   var name = ((found.summary || 'Piano') + ' ' + String(req.serial) + ' — '
-    + (kind === 'before' ? 'Before' : kind === 'after' ? 'After' : 'Progress') + ' video' + stage + ' ' + stamp)
+    + (kind === 'before' ? 'Before' : kind === 'after' ? 'After' : kind === 'social' ? 'Social' : 'Progress') + ' video' + stage + ' ' + stamp)
     .replace(/[\/\\:*?"<>|]/g, '-').slice(0, 120) + ext.toLowerCase();
   var resp = UrlFetchApp.fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&supportsAllDrives=true&fields=id,name,webViewLink,size', {
     method: 'post', contentType: 'application/json; charset=UTF-8', muteHttpExceptions: true,
@@ -2358,9 +2364,73 @@ function videoDone_(req, who) {
   var file;
   try { file = DriveApp.getFileById(String(req.fileId || '')); } catch (e) { return {error: 'uploaded file not found in Drive'}; }
   var mb = Math.round(file.getSize() / 1048576 * 10) / 10;
-  logAct_(who, kind === 'before' ? 'Before video' : kind === 'after' ? 'After video' : 'Progress video',
-          String(req.summary || req.serial || ''), file.getName() + ' (' + mb + ' MB) → ' + file.getUrl());
+  var note = String(req.note || '').trim().slice(0, 400);
+  if (note) { try { file.setDescription(note); } catch (eD) {} }
+  logAct_(who, kind === 'before' ? 'Before video' : kind === 'after' ? 'After video' : kind === 'social' ? 'Social video' : 'Progress video',
+          String(req.summary || req.serial || ''), file.getName() + ' (' + mb + ' MB) → ' + file.getUrl() + (note ? ' — "' + note + '"' : ''));
+  if (kind === 'social') {
+    try {
+      var sh2 = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+      var found2 = findPiano_(sh2, req.serial, req.row);
+      var parents = file.getParents(); var fold = parents.hasNext() ? parents.next() : null;
+      if (!found2.error && fold) notifySocial_('video', String(req.serial || ''), found2, fold, who, note, file.getUrl());
+    } catch (eS) {}
+  }
   return {ok: true, link: file.getUrl(), name: file.getName(), mb: mb};
+}
+/* 📱 Social photo folder (Brigham 10/20): "Social Photos" beside Before /
+ * After Photos under the piano's main folder; link kept in a SOCIAL PHOTOS
+ * column of the Piano Log, created on first use. Reuses any folder whose
+ * name says social + photo. */
+function socialPhotoFolderFor_(sh, row, serial) {
+  var col = pianoCol_(sh, 'SOCIAL PHOTOS');
+  var cell = String(sh.getRange(row, col).getValue() || '');
+  var m = /folders\/([A-Za-z0-9_-]+)/.exec(cell);
+  if (m) { try { return DriveApp.getFolderById(m[1]); } catch (e) {} }
+  var tech = techFolderFor_(sh, row, serial);
+  if (!tech) return null;
+  var parentIt = tech.getParents();
+  var parent = parentIt.hasNext() ? parentIt.next() : tech;
+  var folder = null, it = parent.getFolders();
+  while (it.hasNext()) { var f = it.next(); if (/social/i.test(f.getName()) && !isVideoFolderName_(f.getName())) { folder = f; break; } }
+  if (!folder) folder = parent.createFolder('Social Photos');
+  try { if (!cell.trim()) sh.getRange(row, col).setValue(folder.getUrl()); } catch (e2) {}
+  return folder;
+}
+/* Email the marketing team about a social submission right away, with the
+ * tech's note. One email per piano + kind per 45 minutes (a camera-roll
+ * batch of 8 is one message). The Marketing app's media watch also sees the
+ * files within 15 minutes and lists them in its own email. */
+var SOCIAL_TO = 'alisa@brighamlarsonpianos.com,marcus@brighamlarsonpianos.com,karmel@brighamlarsonpianos.com';
+function notifySocial_(kind, serial, found, folder, who, note, link) {
+  try {
+    var cache = CacheService.getScriptCache();
+    var ck = 'socmail_' + kind + '_' + serial;
+    if (cache.get(ck)) return;
+    cache.put(ck, '1', 2700);
+    var label = kind === 'video' ? 'Social video' : 'Social photo';
+    var piano = found.summary || ('SN ' + serial);
+    var when = Utilities.formatDate(new Date(), 'America/Denver', 'EEE MMM d, h:mm a');
+    var folderUrl = folder.getUrl();
+    var byLine = (who || 'the team') + ' · ' + when;
+    MailApp.sendEmail({
+      to: SOCIAL_TO,
+      subject: '📱 ' + label + ' submission — ' + piano + ' — SN ' + serial + ' — from ' + String(who || 'the team').replace(/\s*<.*$/, ''),
+      htmlBody: '<div style="font-family:Helvetica,Arial,sans-serif;max-width:560px">'
+        + '<h2 style="margin:0 0 8px">' + label + ' for the weekly pick</h2>'
+        + '<p style="font-size:15px;margin:6px 0"><b>' + esc_(piano) + '</b><br>Serial ' + esc_(serial)
+        + (found.location ? ' · Spot ' + esc_(found.location) : '') + '</p>'
+        + '<p style="font-size:14px;margin:6px 0">Submitted by ' + esc_(byLine) + '</p>'
+        + (note ? '<p style="font-size:14px;margin:8px 0;padding:8px 12px;background:#fdf6e3;border-left:4px solid #c9a227">“' + esc_(note) + '”</p>' : '<p style="font-size:13px;color:#555">No note from the tech.</p>')
+        + '<p style="font-size:14px"><a href="' + folderUrl + '" style="color:#9e2020;font-weight:bold">Open the ' + esc_(folder.getName()) + ' folder ↗</a>'
+        + (link ? ' · <a href="' + link + '" style="color:#9e2020">this file ↗</a>' : '') + '</p>'
+        + '<p style="font-size:12.5px;color:#555">More ' + label.toLowerCase() + 's of this piano over the next 45 minutes land in the same folder — this is the only email for that batch. Pick the week\'s winner on Friday.</p>'
+        + '<p style="font-size:13px"><a href="' + APP_URL + '" style="color:#9e2020">Store Map</a></p></div>',
+      body: label + ' submission for ' + piano + ' (SN ' + serial + ')\nSubmitted by ' + byLine
+        + (note ? '\n\nNote: ' + note : '') + '\n\nFolder: ' + folderUrl + (link ? '\nFile: ' + link : ''),
+      name: 'BLP Store Map'
+    });
+  } catch (e) {}
 }
 /* YouTube-size thumbnail (1280×720 JPEG) for a video that was just filed —
  * saved next to the video in the same folder (Brigham 9/18: five per video,

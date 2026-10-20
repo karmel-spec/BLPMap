@@ -2020,6 +2020,8 @@ function mediaCard(p) {
     ['\ud83d\udcf7 After photos', p.aphotoUrl],
     ['\ud83c\udfa5 After video', p.avideoUrl],
     ['\ud83c\udfac Progress video', p.pvideoUrl],
+    ['\ud83d\udcf1 Social photos', p.sphotoUrl],
+    ['\ud83d\udcf1 Social video', p.svideoUrl],
     ['\ud83d\udcc1 Main folder', p.mainFolder],
   ].filter(x => x[1]);
   const folderRow = (links.length || p.serial)
@@ -2041,13 +2043,17 @@ function mediaCard(p) {
       <button class="tagbtn vidbtn" data-kind="after">🎥 After video</button>
       <button class="tagbtn photobtn">📸 Tech photo <small>shop progress</small></button>
       <button class="tagbtn vidbtn" data-kind="progress">🎬 Progress video</button>
+      <button class="tagbtn socbtn" data-kind="photo">📱 Social photo <small>for marketing · weekly prize</small></button>
+      <button class="tagbtn socbtn" data-kind="video">📱 Social video <small>for marketing · weekly prize</small></button>
       <input type="file" class="vidin" accept="video/*" capture="environment" hidden>
       <input type="file" class="vidpick" accept="video/*" hidden>
       <input type="file" class="maddin" accept="image/*" multiple hidden>
+      <input type="file" class="soccam" accept="image/*" capture="environment" hidden>
+      <input type="file" class="socroll" accept="image/*" multiple hidden>
     </div>
     <div class="phchoose" hidden></div>
-    <div class="lite" style="font-size:11px;margin-top:2px">Videos open the camera and file the clip in this piano’s Before / After / Progress Video folder, then ask for 5 YouTube-size thumbnails. Saved clip instead:
-      <a href="#" class="vidpicklink" data-kind="before">before</a> · <a href="#" class="vidpicklink" data-kind="after">after</a> · <a href="#" class="vidpicklink" data-kind="progress">progress</a>.</div>` : ''}
+    <div class="lite" style="font-size:11px;margin-top:2px">Videos open the camera and file the clip in this piano’s Before / After / Progress / Social Video folder (before / after / progress then ask for 5 YouTube-size thumbnails). Saved clip instead:
+      <a href="#" class="vidpicklink" data-kind="before">before</a> · <a href="#" class="vidpicklink" data-kind="after">after</a> · <a href="#" class="vidpicklink" data-kind="progress">progress</a> · <a href="#" class="vidpicklink" data-kind="social">social</a>.</div>` : ''}
     <div class="mdmsg"></div>
   </div>`;
 }
@@ -7252,10 +7258,24 @@ function wirePop(p) {
       ev.stopPropagation(); popPinned = true; vkind = b.dataset.kind; cam.value = ''; cam.click();
     });
     pop.querySelectorAll('.vidpicklink').forEach(a => a.onclick = ev => {
-      ev.preventDefault(); ev.stopPropagation(); popPinned = true; vkind = a.dataset.kind; pick.value = ''; pick.click();
+      ev.preventDefault(); ev.stopPropagation(); popPinned = true; vkind = a.dataset.kind; pick.value = '';
+      if (vkind === 'social') { openSocialChooser(p, pop, 'video', {pick: true}); return; }
+      pick.click();
     });
-    cam.onchange = () => uploadVideo(p, vkind, cam.files && cam.files[0], pop);
-    pick.onchange = () => uploadVideo(p, vkind, pick.files && pick.files[0], pop);
+    cam.onchange = () => uploadVideo(p, vkind, cam.files && cam.files[0], pop, vkind === 'social' ? socialNoteOf(pop) : '');
+    pick.onchange = () => uploadVideo(p, vkind, pick.files && pick.files[0], pop, vkind === 'social' ? socialNoteOf(pop) : '');
+    // 📱 Social photo / video (Brigham 10/20): a note box first (optional
+    // sentence or two for marketing), then camera or camera roll. Photos
+    // file into the piano's Social Photos folder, clips into Social Video —
+    // the same Drive plan and marketing pipeline as before / after media.
+    pop.querySelectorAll('.socbtn').forEach(b => b.onclick = ev => {
+      ev.stopPropagation(); popPinned = true;
+      if (b.dataset.kind === 'video') vkind = 'social';
+      openSocialChooser(p, pop, b.dataset.kind);
+    });
+    const scam = pop.querySelector('.soccam'), sroll = pop.querySelector('.socroll');
+    if (scam) { scam.onclick = e2 => e2.stopPropagation(); scam.onchange = () => uploadSocialPhotos(p, [...(scam.files || [])], socialNoteOf(pop), pop); }
+    if (sroll) { sroll.onclick = e2 => e2.stopPropagation(); sroll.onchange = () => uploadSocialPhotos(p, [...(sroll.files || [])], socialNoteOf(pop), pop); }
   })();
   (() => {
     const fin = pop.querySelector('.maddin');
@@ -9805,13 +9825,77 @@ async function photoPost(body) {
  * Google directly, 8 MB at a time, with progress and per-chunk retries. The
  * file ends up owned by karmel@ like every photo. */
 const VID_CHUNK = 8 * 1024 * 1024;
-async function uploadVideo(p, kind, f, pop) {
+/* 📱 Social photo / video chooser (Brigham 10/20): one box for the optional
+ * note ("found this 1912 ticket stub under the keys", "slow-mo of the
+ * hammers") and the two ways in. The note rides along as the Drive file's
+ * description and in the email to marketing. */
+function socialNoteOf(pop) { const t = pop.querySelector('.socnote'); return t ? t.value.trim().slice(0, 400) : ''; }
+function openSocialChooser(p, pop, kind, opts) {
+  const box = pop.querySelector('.phchoose');
+  if (!box) return;
+  if (!box.hidden && box.dataset.kind === 'social-' + kind) { box.hidden = true; return; }
+  box.dataset.kind = 'social-' + kind;
+  const isV = kind === 'video';
+  box.innerHTML = `<div class="phchead">📱 Social ${isV ? 'video' : 'photo'} — for the marketing team</div>
+    <textarea class="socnote" rows="2" maxlength="400" placeholder="Optional: a sentence or two for marketing — what is it, why it's worth sharing (e.g. 'found this 1920s ticket stub under the keys', 'slow-mo of the hammers after regulation')"></textarea>
+    ${isV
+      ? `<button class="maddbtn socgo" data-go="cam">🎥 Record now<small>under a minute: shoot vertical · longer: shoot horizontal</small></button>
+         <button class="maddbtn socgo" data-go="pick">📁 Saved clip<small>a video already on this phone</small></button>`
+      : `<button class="maddbtn socgo" data-go="cam">📷 Camera<small>one shot, vertical for most photos</small></button>
+         <button class="maddbtn socgo" data-go="roll">🖼 Camera roll<small>photos you already took (up to 8)</small></button>`}
+    <div class="lite" style="font-size:10.5px;margin-top:4px">Files into this piano's Social ${isV ? 'Video' : 'Photos'} folder. Marketing picks a weekly winner.</div>
+    <button class="phclose" title="close">✕</button>`;
+  box.hidden = false;
+  box.onclick = e2 => e2.stopPropagation();
+  box.querySelector('.phclose').onclick = e2 => { e2.stopPropagation(); box.hidden = true; };
+  const ta = box.querySelector('.socnote');
+  ta.onkeydown = e2 => e2.stopPropagation();
+  box.querySelectorAll('.socgo').forEach(b => b.onclick = e2 => {
+    e2.stopPropagation();
+    const go = b.dataset.go;
+    const el = go === 'cam' && isV ? pop.querySelector('.vidin') : go === 'pick' ? pop.querySelector('.vidpick')
+      : go === 'cam' ? pop.querySelector('.soccam') : pop.querySelector('.socroll');
+    if (!el) return;
+    el.value = ''; el.click();
+  });
+  if (opts && opts.pick) { const pk = pop.querySelector('.vidpick'); if (pk) { pk.value = ''; pk.click(); } }
+  place(pop, S.popAnchor);   // card grew
+}
+async function uploadSocialPhotos(p, files, note, pop) {
+  files = (files || []).slice(0, 8);
+  if (!files.length) return;
+  const msg = pop.querySelector('.mdmsg');
+  const say = (cls, t) => { if (msg) { msg.className = 'mdmsg ' + cls; msg.textContent = t; } };
+  popPinned = true;
+  const wa = writeAuth();
+  if (!wa.ok) { say('err', wa.renewing ? 'Sign-in expired — renewing, retry in a moment.' : 'Sign in first.'); return; }
+  let done = 0, link = '';
+  for (const f of files) {
+    say('', `Uploading social photo ${done + 1}/${files.length}…`);
+    try {
+      const dataUrl = await downscalePhoto(f, 2048, 0.85);
+      const j = await photoPost({pin: wa.pin, action: 'photo', kind: 'social', serial: p.serial, row: p.row,
+          stage: 'Social', note, mime: 'image/jpeg', uploadId: 'soc' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
+          data: dataUrl.split(',')[1], ...authFields()});
+      if (!j.saved) throw new Error(j.error || 'upload failed');
+      if (j.folderUrl) { link = j.folderUrl; p.sphotoUrl = j.folderUrl; }
+      done++;
+    } catch (e) {
+      say('err', '✗ ' + e.message + (done ? ` (${done} uploaded)` : ''));
+      return;
+    }
+  }
+  const box = pop.querySelector('.phchoose'); if (box) box.hidden = true;
+  if (msg) { msg.className = 'mdmsg ok'; msg.innerHTML = `✓ ${done} social photo${done > 1 ? 's' : ''} filed — marketing has been told${link ? ` — <a href="${esc(link)}" target="_blank" rel="noopener">open in Drive ↗</a>` : ''}`; }
+}
+async function uploadVideo(p, kind, f, pop, note) {
   if (!f) return;
   const say = (cls, t) => { const m = pop.querySelector('.mdmsg'); if (m) { m.className = 'mdmsg ' + cls; m.textContent = t; } };
   popPinned = true;
   const {pin, ok} = writeAuth();
   if (!ok) { say('err', 'Sign in with Google (☰ menu) first — uploads are logged under your name.'); return; }
-  const label = kind === 'after' ? 'after' : kind === 'progress' ? 'progress' : 'before';
+  const label = kind === 'after' ? 'after' : kind === 'progress' ? 'progress' : kind === 'social' ? 'social' : 'before';
+  note = String(note || '').trim().slice(0, 400);
   const mb = Math.round(f.size / 1048576 * 10) / 10;
   const btns = [...pop.querySelectorAll('.vidbtn')];
   btns.forEach(b => b.disabled = true);
@@ -9820,7 +9904,7 @@ async function uploadVideo(p, kind, f, pop) {
     const r0 = await fetchT(BRIDGE_URL, {method: 'POST', redirect: 'follow',
       headers: {'content-type': 'text/plain;charset=utf-8'},
       body: JSON.stringify({pin, action: 'videosession', serial: p.serial, row: p.row, kind: label,
-        stage: label === 'progress' ? (effectivePhase(p) || '') : '',
+        stage: label === 'progress' ? (effectivePhase(p) || '') : '', note,
         mime: f.type || 'video/mp4', size: f.size, name: f.name || '', ...authFields()})}, 45000);
     const s = await r0.json();
     if (!s.ok || !s.sessionUrl) throw new Error(s.error || 'could not open a Drive upload');
@@ -9856,11 +9940,13 @@ async function uploadVideo(p, kind, f, pop) {
       const r2 = await fetchT(BRIDGE_URL, {method: 'POST', redirect: 'follow',
         headers: {'content-type': 'text/plain;charset=utf-8'},
         body: JSON.stringify({pin, action: 'videodone', serial: p.serial, row: p.row, kind: label,
-          fileId: file.id, summary: s.summary || p.summary || '', ...authFields()})}, 30000);
+          fileId: file.id, summary: s.summary || p.summary || '', note, ...authFields()})}, 30000);
       done = await r2.json();
     } catch (e3) { done = {}; }
     if (label === 'progress') {
       p.pvideoUrl = s.folderUrl;
+    } else if (label === 'social') {
+      p.svideoUrl = s.folderUrl;
     } else {
       const field = label === 'before' ? 'bvideo' : 'avideo';
       p[field] = true; p[field + 'Url'] = s.folderUrl;
@@ -9868,11 +9954,12 @@ async function uploadVideo(p, kind, f, pop) {
     }
     renderMap(); renderKpis();
     openPop(p.row, S.popAnchor, true);
-    const nice = label === 'before' ? 'Before' : label === 'after' ? 'After' : 'Progress';
+    const nice = label === 'before' ? 'Before' : label === 'after' ? 'After' : label === 'social' ? 'Social' : 'Progress';
     const m3 = pop.querySelector('.mdmsg');
-    if (m3) { m3.className = 'mdmsg ok'; m3.innerHTML = `✓ ${nice} video saved (${mb} MB) — <a href="${esc(done.link || s.folderUrl)}" target="_blank" rel="noopener">open in Drive ↗</a>`; }
+    if (m3) { m3.className = 'mdmsg ok'; m3.innerHTML = `✓ ${nice} video saved (${mb} MB)${label === 'social' ? ' — marketing has been told' : ''} — <a href="${esc(done.link || s.folderUrl)}" target="_blank" rel="noopener">open in Drive ↗</a>`; }
     // Brigham 9/18: every filed video gets 5 YouTube-size thumbnails, taken right now
-    openThumbWizard(p, label, {folderId: s.folderId, folderUrl: s.folderUrl, videoName: file.name || s.name, summary: s.summary || p.summary || ''}, pop);
+    // (not social clips — those are short, usually vertical, and judged as-is)
+    if (label !== 'social') openThumbWizard(p, label, {folderId: s.folderId, folderUrl: s.folderUrl, videoName: file.name || s.name, summary: s.summary || p.summary || ''}, pop);
   } catch (e) {
     say('err', '✗ ' + (e && e.message || e));
     btns.forEach(b => b.disabled = false);
