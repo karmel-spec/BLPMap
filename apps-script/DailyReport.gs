@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-20.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-20.4';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -5306,13 +5306,18 @@ function adjustClock_(req) {
         return {ok: true, tech: String(req.tech), duplicate: true, row: seenTl,
                 piano: String(tsh.getRange(seenTl, 3).getValue() || req.serial)};
       }
-      var psh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
-      var f = findPiano_(psh, req.serial, null);
-      tsh.appendRow([String(req.tech), String(req.serial), (f && f.summary) || '',
+      // a pseudo-serial session (OUTSIDE / MGMT / TIDY …) has no Piano Log row:
+      // the label comes from pianoName (an Outside project's job name) or the
+      // pseudo's own label — Alex's back-filled field tunings (Mark 10/20)
+      var pseudoAdd = {MGMT: 'Management', TIDY: 'Shop tidying', MAINT: 'Building maintenance', KEYS: 'Miscellaneous keytops', OUTSIDE: 'Outside project'}[String(req.serial).toUpperCase()] || '';
+      var label = '';
+      if (pseudoAdd) label = String(req.pianoName || '').trim().slice(0, 80) || pseudoAdd;
+      else { var psh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID)); var f = findPiano_(psh, req.serial, null); label = (f && f.summary) || ''; }
+      tsh.appendRow([String(req.tech), String(req.serial).toUpperCase() === String(req.serial).toUpperCase() && pseudoAdd ? String(req.serial).toUpperCase() : String(req.serial), label,
         String(req.phase || ''), start.toISOString(), end ? end.toISOString() : '', mins,
         'adjust', 'added: ' + stamp.slice(9)]);
       addPunchRemember_(req.reqId, tsh.getLastRow());
-      return {ok: true, tech: String(req.tech), piano: (f && f.summary) || String(req.serial)};
+      return {ok: true, tech: String(req.tech), piano: label || String(req.serial)};
     }
     var trow = Number(req.row);
     if (!(trow >= 2) || trow > tsh.getLastRow()) return {error: 'bad row'};
