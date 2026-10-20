@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-20.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-20.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -5833,7 +5833,9 @@ function dpStepSync_(dry) {
       && head && head.indexOf('\n') < 0 && head.length < 60 && /[A-Z]/.test(head) && !/[a-z]/.test(head);
     var custRow = head.indexOf('\n') >= 0 || /@|\(?\d{3}\)?[\s.-]*\d{3}[\s.-]*\d{4}/.test(head);
     if (!serial && (!summary || caps)) { if (head && !custRow) section = head; continue; }
-    var DATE_RE = /\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/;
+    // the cell must START with a date: "5/2/25 (Reached $1k)" counts, a note
+    // like "Sent contract to sign 10/6/26" does not (Mark 10/20, 126050)
+    var DATE_RE = /^\s*\d{1,2}\/\d{1,2}\/\d{2,4}\b/;
     var dp = String(dps[r][0] || '').trim(), we = weC ? String((wes[r] || [])[0] || '').trim() : '';
     var dpDated = DATE_RE.test(dp), weDated = DATE_RE.test(we);
     if (!serial || (!dpDated && !weDated)) continue;
