@@ -5960,8 +5960,8 @@ const isMarcelo = () => /^marcelo\b/i.test(clockName()) || /^marcelo/i.test(user
 // Korban added 10/19 (Mark), with the Piano bench construction kind;
 // Field work added 10/20 (Mark).
 const OUTSIDE_PEOPLE = ['alexmartin.blp@gmail.com', 'jakepulver.blp@gmail.com', 'matthewwessman.blp@gmail.com', 'markhales.blp@gmail.com', 'jacobmower.blp@gmail.com', 'korbangreenhalgh.blp@gmail.com'];
-// Building maintenance moved in from its own dashboard box 10/20 (Mark)
-const OUTSIDE_KINDS = ['Repair', 'Keytops', 'Refinishing', 'Piano bench construction', 'Field work', 'Building maintenance', 'Other'];
+// Building maintenance and Shop tidying moved in from their own dashboard boxes 10/20 (Mark)
+const OUTSIDE_KINDS = ['Repair', 'Keytops', 'Refinishing', 'Piano bench construction', 'Field work', 'Building maintenance', 'Shop tidying', 'Other'];
 // everyone gets the card since 10/20 (Mark) — the people list above is history
 const outsideOk = () => true;
 const clockLabel = (clock, serial) => {
@@ -12019,15 +12019,29 @@ function payTimeTable() {
   rows.forEach(r => { tot[r.tech] = (tot[r.tech] || 0) + (r.minutes || 0); });
   const totals = Object.entries(tot).sort((a, b) => b[1] - a[1]);
   const byPhase = {}, byPiano = {};
+  // outside-project kinds are labelled "Outside: …" so they never merge with a
+  // piano phase of the same name (Refinishing), and the old Building
+  // Maintenance code (MAINT) joins the new Outside kind (Mark 10/20)
+  const catOf = r => {
+    const ser = String(r.serial || '').toUpperCase();
+    if (ser === 'MAINT') return 'Outside: Building maintenance';
+    if (ser === 'TIDY') return 'Outside: Shop tidying';
+    if (ser === 'OUTSIDE') return 'Outside: ' + (r.phase || 'Other');
+    return r.phase || '(no phase)';
+  };
   tl.forEach(r => {
-    byPhase[r.phase || '(no phase)'] = (byPhase[r.phase || '(no phase)'] || 0) + r.minutes;
-    const pk = (r.piano || r.phase || '?') + (r.serial && !/^(MGMT|TIDY|MAINT|KEYS|OUTSIDE)$/i.test(r.serial) ? ' #' + r.serial : '');
+    const cat = catOf(r);
+    byPhase[cat] = (byPhase[cat] || 0) + r.minutes;
+    const pk = (r.piano || r.phase || '?') + (r.serial && !/^(MGMT|TIDY|MAINT|KEYS|OUTSIDE)$/i.test(r.serial) ? ' #' + r.serial
+      : /^OUTSIDE$/i.test(r.serial || '') ? ' (outside)' : '');
     byPiano[pk] = (byPiano[pk] || 0) + r.minutes;
   });
   const phaseRows = Object.entries(byPhase).sort((a, b) => b[1] - a[1]);
   const pianoRows = Object.entries(byPiano).sort((a, b) => b[1] - a[1]).slice(0, 40);
   const sessions = showTl ? [...tl].sort((a, b) => new Date(b.start) - new Date(a.start)).slice(0, 600) : [];
-  const pianoLabel = r => /^(MGMT|TIDY|MAINT|KEYS|OUTSIDE)$/i.test(r.serial || '') ? '—' : `${esc(r.piano || '?')} <small>#${esc(r.serial)}</small>`;
+  // an outside project's job name rides in the piano field — show it (Mark 10/20)
+  const pianoLabel = r => /^OUTSIDE$/i.test(r.serial || '') ? `${esc(r.piano || 'Outside project')} <small>outside</small>`
+    : /^(MGMT|TIDY|MAINT|KEYS)$/i.test(r.serial || '') ? '—' : `${esc(r.piano || '?')} <small>#${esc(r.serial)}</small>`;
   CSV_EXPORTS.paydays = () => ['payroll-punches.csv',
     [['Date', 'Team member', 'Clock in', 'Clock out', 'Minutes', 'Hours (decimal)', 'Note'],
      ...rows.map(r => [r.date, r.tech, fmtT(r.start), r.end ? fmtT(r.end) : 'OPEN', r.minutes, hDec(r.minutes), r.note])]];
@@ -12041,7 +12055,7 @@ function payTimeTable() {
     <h4 class="bfhd">Piano Work Clock sessions — every individual clock-in (piano, management, cleaning…), same filters${f.cat ? ' · ' + esc(f.cat) : ''}</h4>
     <table><tr><th>DATE</th><th>TEAM MEMBER</th><th>PIANO</th><th>PHASE / CATEGORY</th><th>IN</th><th>OUT</th><th>HOURS</th></tr>
     ${sessions.map(r => `<tr><td>${esc(denverDay(r.start))}</td><td>${esc(r.tech)}</td><td>${pianoLabel(r)}</td>
-        <td>${esc(r.phase || '—')}</td><td>${fmtT(r.start)}</td>
+        <td>${esc(catOf(r))}</td><td>${fmtT(r.start)}</td>
         <td>${r.end ? fmtT(r.end) : '<b style="color:#2e7d4f">open</b>'}</td><td>${r.minutes ? fmtHM(r.minutes) : '—'}</td></tr>`).join('')
      || '<tr><td colspan="7" class="empty">No piano work-clock sessions in this range.</td></tr>'}</table>
     ${tl.length > sessions.length ? `<div class="lite" style="font-size:11.5px;margin:4px 0 10px">Showing the latest ${sessions.length} of ${tl.length} sessions — narrow the dates or use the CSV for all of them.</div>` : ''}`;
@@ -14335,6 +14349,9 @@ function renderDash() {
       // everyone's Friday organization time — clock time that isn't tied to
       // one piano. Same pseudo-serial pattern as management time (TIDY).
       const onTidy = o && o.serial === 'TIDY';
+      // retired 10/20 (Mark): Shop tidying is a kind of work on the Outside
+      // project card now; this box only shows to someone still on the old TIDY code
+      if (!onTidy) return '';
       return `<div class="dbench db-tidy">
         <h4>🧹 Shop tidying / organization</h4>
         ${onTidy ? `<div class="dline now"><b>On tidying time</b> since ${fmtT(o.start)} —
