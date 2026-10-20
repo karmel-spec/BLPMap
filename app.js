@@ -12094,19 +12094,27 @@ function jobCostTable() {
     `<button class="csvbtn" data-csv="jcsummary">⬇ CSV — summary</button>`,
     `<button class="csvbtn" data-csv="jcsessions">⬇ CSV — raw sessions</button>`,
   ]);
-  // group by piano, then tech × phase inside
+  // group by piano, then tech × phase inside. Outside-project work is one line
+  // PER KIND ("Outside: Field work"…), tech × job name inside; the old
+  // MAINT / TIDY codes fold into their Outside kinds (Brigham/Karmel via Mark 10/20)
+  const outsideKind = r => {
+    const ser = String(r.serial || '').toUpperCase();
+    return ser === 'OUTSIDE' ? (r.phase || 'Other') : ser === 'MAINT' ? 'Building maintenance' : ser === 'TIDY' ? 'Shop tidying' : '';
+  };
   const pianos = {};
   rows.forEach(r => {
-    const k = r.serial;
-    const g = pianos[k] = pianos[k] || {serial: r.serial, piano: r.piano, mins: 0, n: 0, parts: {}};
+    const ok = outsideKind(r);
+    const k = ok ? 'OUTSIDE|' + ok : r.serial;
+    const g = pianos[k] = pianos[k] || (ok ? {serial: 'OUTSIDE', piano: 'Outside: ' + ok, outside: true, mins: 0, n: 0, parts: {}}
+      : {serial: r.serial, piano: r.piano, mins: 0, n: 0, parts: {}});
     g.mins += r.minutes; g.n++;
-    const pk = r.tech + '|' + (r.phase || '(no phase)');
+    const pk = r.tech + '|' + (ok ? (String(r.serial).toUpperCase() === 'OUTSIDE' ? (r.piano || 'job not named') : ok) : (r.phase || '(no phase)'));
     g.parts[pk] = (g.parts[pk] || 0) + r.minutes;
   });
   const list = Object.values(pianos).sort((a, b) => b.mins - a.mins);
   const totalM = rows.reduce((a, r) => a + r.minutes, 0);
   CSV_EXPORTS.jcsummary = () => ['job-costing-summary.csv',
-    [['Serial', 'Piano', 'Technician', 'Phase', 'Minutes', 'Hours (decimal)'],
+    [['Serial', 'Piano / outside kind', 'Technician', 'Phase / job', 'Minutes', 'Hours (decimal)'],
      ...list.flatMap(g => Object.entries(g.parts).map(([pk, m]) => {
        const [tech, phase] = pk.split('|');
        return [g.serial, g.piano, tech, phase, m, hDec(m)];
@@ -12115,12 +12123,12 @@ function jobCostTable() {
     [['Serial', 'Piano', 'Technician', 'Phase', 'Start', 'End', 'Minutes', 'Hours (decimal)', 'Source'],
      ...rows.map(r => [r.serial, r.piano, r.tech, r.phase, r.start, r.end, r.minutes, hDec(r.minutes), r.source])]];
   return bar + `
-    <p class="pd">${list.length} piano${list.length === 1 ? '' : 's'} · ${fmtHM(totalM)} total ·
+    <p class="pd">${list.filter(g => !g.outside).length} piano lines · ${list.filter(g => g.outside).length} outside-work kinds · ${fmtHM(totalM)} total ·
       ${rows.length} session${rows.length === 1 ? '' : 's'} ·
       <a target="_blank" rel="noopener" href="https://docs.google.com/spreadsheets/d/11RoeVRETag5rZYX6_tEH-rf6x8JL0JeZU0P5AT0WI-I/edit">open the Time Log sheet ↗</a></p>
     <table><tr><th>PIANO</th><th>TECHNICIAN × PHASE</th><th>HOURS</th></tr>
     ${list.map(g => `
-      <tr class="jcp"><td><b>${esc(g.piano || '—')}</b><br><small>#${esc(g.serial)} · ${g.n} session${g.n === 1 ? '' : 's'}</small></td>
+      <tr class="jcp"><td><b>${esc(g.piano || '—')}</b><br><small>${g.outside ? 'outside project' : '#' + esc(g.serial)} · ${g.n} session${g.n === 1 ? '' : 's'}</small></td>
         <td></td><td><b>${fmtHM(g.mins)}</b> <small>(${hDec(g.mins)})</small></td></tr>
       ${Object.entries(g.parts).sort((a, b) => b[1] - a[1]).map(([pk, m]) => {
         const [tech, phase] = pk.split('|');
