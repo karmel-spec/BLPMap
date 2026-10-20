@@ -11836,12 +11836,13 @@ async function loadTimeLog() {
 function denverDay(iso) {   // yyyy-mm-dd in Denver for a session start
   return new Date(iso).toLocaleDateString('en-CA', {timeZone: 'America/Denver'});
 }
-function weekKey(day) {   // Monday of that week
-  const d = new Date(day + 'T12:00');
+function weekKey(day) {   // Monday of that week; '' for a row whose date won't parse (Mark 10/20)
+  const d = new Date(String(day || '') + 'T12:00');
+  if (isNaN(d)) return '';
   d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
   return d.toISOString().slice(0, 10);
 }
-function monthKey(day) { return day.slice(0, 7); }
+function monthKey(day) { return /^\d{4}-\d{2}/.test(String(day || '')) ? String(day).slice(0, 7) : ''; }
 /* Payroll weeks — regular vs overtime (Melissa 10/1, 100126terry75).
  * Utah has no state overtime law; the federal FLSA applies: overtime is
  * every hour over 40 in a FIXED, recurring 7-day workweek (here Sunday–
@@ -11939,14 +11940,23 @@ function fDate(scope, f, cur, title) {
   return `<label class="rfd">${title} <input type="date" class="rptf" data-scope="${scope}" data-f="${f}" value="${esc(cur || '')}"></label>`;
 }
 
-function payTimeTable() {
+function payTimeTable(scopeIn) {
   if (!S.payRows || !S.tlRows) return '<div class="empty">Loading payroll punches…</div>';
   // Brigham 9/8: Melissa runs payroll off the DAY clock; Mark + the owners
   // also want every individual piano / management / cleaning session from
   // the Work Clock — so the report has a detail switch (default by role)
   // plus a category filter for those sessions.
+  /* scope 'adj' (Mark 10/20, the payroll-report merge, 092126terry47): the
+   * same totals, groupings, category / piano hours and CSVs render at the
+   * foot of 🛠 Time Clock Adjustments, driven by THAT page's person / date
+   * filters (S.adjF). There the editable punch tables already show the daily
+   * punches and every session, so the daily table and the session list are
+   * left out and the grouping starts at weekly. */
+  const scope = scopeIn === 'adj' ? 'adj' : 'pay', adj = scope === 'adj';
   const seesDetail = isOwner() || userEmail() === 'markhales.blp@gmail.com';
-  const f = S.payF || (S.payF = {who: '', from: '', to: '', group: 'day', detail: seesDetail ? 'all' : 'day', cat: ''});
+  const f = adj ? (S.adjF || (S.adjF = {who: '', from: '', to: ''}))
+    : (S.payF || (S.payF = {who: '', from: '', to: '', group: 'day', detail: seesDetail ? 'all' : 'day', cat: ''}));
+  if (f.group === undefined || (adj && f.group === 'day')) f.group = adj ? 'week' : 'day';
   if (f.detail === undefined) f.detail = seesDetail ? 'all' : 'day';
   if (f.cat === undefined) f.cat = '';
   const techs = [...new Set([...unvoided(S.payRows).map(r => techName(r.tech)), ...unvoided(S.tlRows).map(r => techName(r.tech))].filter(Boolean))].sort();
@@ -11961,23 +11971,23 @@ function payTimeTable() {
   const cats = [...new Set(tlAll.map(r => r.phase || '(no phase)'))].sort();
   const tl = f.cat ? tlAll.filter(r => (r.phase || '(no phase)') === f.cat) : tlAll;
   const showTl = f.detail === 'all';
-  const bar = filterBar('pay', [
-    fSel('pay', 'who', f.who, techs, 'All team members'),
-    fDate('pay', 'from', f.from, 'from'), fDate('pay', 'to', f.to, 'to'),
-    `<select class="rptf" data-scope="pay" data-f="group">
-       <option value="day" ${f.group === 'day' ? 'selected' : ''}>Daily punches</option>
+  const bar = filterBar(scope, [
+    adj ? '' : fSel('pay', 'who', f.who, techs, 'All team members'),
+    adj ? '' : fDate('pay', 'from', f.from, 'from'), adj ? '' : fDate('pay', 'to', f.to, 'to'),
+    `<select class="rptf" data-scope="${scope}" data-f="group">
+       ${adj ? '' : `<option value="day" ${f.group === 'day' ? 'selected' : ''}>Daily punches</option>`}
        <option value="week" ${f.group === 'week' ? 'selected' : ''}>Weekly totals</option>
        <option value="month" ${f.group === 'month' ? 'selected' : ''}>Monthly totals</option>
        <option value="ot" ${f.group === 'ot' ? 'selected' : ''}>Payroll weeks — regular / overtime</option></select>`,
-    `<select class="rptf" data-scope="pay" data-f="detail" title="Melissa: day clock is all payroll needs · Mark & owners: every piano / management / cleaning session too">
+    `<select class="rptf" data-scope="${scope}" data-f="detail" title="Melissa: day clock is all payroll needs · Mark & owners: every piano / management / cleaning session too">
        <option value="day" ${!showTl ? 'selected' : ''}>Day clock only (payroll)</option>
-       <option value="all" ${showTl ? 'selected' : ''}>+ piano & category sessions</option></select>`,
-    showTl ? fSel('pay', 'cat', f.cat, cats, 'All categories / phases') : '',
+       <option value="all" ${showTl ? 'selected' : ''}>+ piano & category hours</option></select>`,
+    showTl ? fSel(scope, 'cat', f.cat, cats, 'All categories / phases') : '',
     // Walter 10/1: the regular/overtime view sat only inside the grouping
     // dropdown and nobody found it — a plain button switches to it and back
     f.group === 'ot'
-      ? `<button class="csvbtn paymode" data-group="day" style="background:#4b5563" title="back to the daily punches">← Daily punches</button>`
-      : `<button class="csvbtn paymode" data-group="ot" style="background:#1d4ed8" title="Sunday–Saturday weeks with regular and overtime hours for the pay period you set above">💵 Regular / overtime weeks</button>`,
+      ? `<button class="csvbtn paymode" data-scope="${scope}" data-group="${adj ? 'week' : 'day'}" style="background:#4b5563" title="back to the ${adj ? 'weekly totals' : 'daily punches'}">← ${adj ? 'Weekly totals' : 'Daily punches'}</button>`
+      : `<button class="csvbtn paymode" data-scope="${scope}" data-group="ot" style="background:#1d4ed8" title="Sunday–Saturday weeks with regular and overtime hours for the pay period you set above">💵 Regular / overtime weeks</button>`,
     `<button class="csvbtn" data-csv="paydays">⬇ CSV — punches</button>`,
     `<button class="csvbtn" data-csv="paytotals">⬇ CSV — totals</button>`,
     f.group === 'ot' ? `<button class="csvbtn" data-csv="payot">⬇ CSV — regular / overtime</button>` : '',
@@ -12028,16 +12038,24 @@ function payTimeTable() {
   } else {
     const key = f.group === 'week' ? r => weekKey(r.date) : r => monthKey(r.date);
     const agg = {};
+    // one bucket per PERSON, however the punch spelled them — "Mark Hales",
+    // "Mark Hales <mark@…>", "… (session expired — unverified)" (Mark 10/20:
+    // the day-clock and piano-clock minutes were landing on separate lines)
     rows.forEach(r => {
-      const k = key(r.date) + '|' + r.tech;
-      (agg[k] = agg[k] || {period: key(r.date), tech: r.tech, mins: 0, days: new Set(), tlMins: 0});
+      // key() takes the ROW — key(r.date) handed it a string and the weekly /
+      // monthly views threw "Invalid time value" (found 10/20 while merging)
+      const per = key(r), who = techName(r.tech) || r.tech;
+      if (!per) return;   // a punch with no usable date can't be bucketed
+      const k = per + '|' + who;
+      (agg[k] = agg[k] || {period: per, tech: who, mins: 0, days: new Set(), tlMins: 0});
       agg[k].mins += r.minutes || 0;
       agg[k].days.add(r.date);
     });
     if (showTl) tl.forEach(r => {   // piano-clock minutes alongside, same period buckets
-      const day = denverDay(r.start), per = f.group === 'week' ? weekKey(day) : monthKey(day);
-      const k = per + '|' + r.tech;
-      (agg[k] = agg[k] || {period: per, tech: r.tech, mins: 0, days: new Set(), tlMins: 0});
+      const day = denverDay(r.start), per = f.group === 'week' ? weekKey(day) : monthKey(day), who = techName(r.tech) || r.tech;
+      if (!per) return;
+      const k = per + '|' + who;
+      (agg[k] = agg[k] || {period: per, tech: who, mins: 0, days: new Set(), tlMins: 0});
       agg[k].tlMins += r.minutes || 0;
     });
     const list = Object.values(agg).sort((a, b) =>
@@ -12050,7 +12068,7 @@ function payTimeTable() {
   }
   // per-member range totals
   const tot = {};
-  rows.forEach(r => { tot[r.tech] = (tot[r.tech] || 0) + (r.minutes || 0); });
+  rows.forEach(r => { const who = techName(r.tech) || r.tech; tot[who] = (tot[who] || 0) + (r.minutes || 0); });
   const totals = Object.entries(tot).sort((a, b) => b[1] - a[1]);
   const byPhase = {}, byPiano = {};
   // outside-project kinds are labelled "Outside: …" so they never merge with a
@@ -12085,7 +12103,7 @@ function payTimeTable() {
   CSV_EXPORTS.paysessions = () => ['piano-clock-sessions.csv',
     [['Date', 'Team member', 'Piano', 'Serial', 'Phase / category', 'Clock in', 'Clock out', 'Minutes', 'Hours (decimal)', 'Source'],
      ...tl.map(r => [denverDay(r.start), r.tech, r.piano, r.serial, r.phase, fmtT(r.start), r.end ? fmtT(r.end) : 'OPEN', r.minutes, hDec(r.minutes), r.source])]];
-  const sessionsHtml = !showTl ? '' : `
+  const sessionsHtml = (!showTl || adj) ? '' : `
     <h4 class="bfhd">Piano Work Clock sessions — every individual clock-in (piano, management, cleaning…), same filters${f.cat ? ' · ' + esc(f.cat) : ''}</h4>
     <table><tr><th>DATE</th><th>TEAM MEMBER</th><th>PIANO</th><th>PHASE / CATEGORY</th><th>IN</th><th>OUT</th><th>HOURS</th></tr>
     ${sessions.map(r => `<tr><td>${esc(denverDay(r.start))}</td><td>${esc(r.tech)}</td><td>${pianoLabel(r)}</td>
@@ -12913,7 +12931,12 @@ function clockAdjustTable() {
         <button class="csvbtn adjaddbtn">Add</button><span class="adjmsg phmsg"></span></div>`;
   }
   const techList = (payAdd || tlAdd) ? `<datalist id="adjtechs">${adjKnownNames().map(w => `<option value="${esc(w)}">`).join('')}</datalist>` : '';
-  return techList + payAdd + tlAdd + fixes + pay + tl;
+  // 📊 the payroll report's totals, groupings, category / piano hours and CSV
+  // exports live here too now (Mark 10/20, merge step 2) — same person and
+  // date filters as the punch tables above
+  const totals = canPay ? `<h4 class="bfhd" style="margin-top:22px">📊 Totals &amp; exports — weekly / monthly / regular-overtime, hours by category and by piano, CSVs · ${adjFiltered ? 'same person and dates as above' : 'everything loaded (190 days of day clock, 365 of piano clock) — set a person or dates above to narrow it'}</h4>
+    <div class="adjtotals">${payTimeTable('adj')}</div>` : '';
+  return techList + payAdd + tlAdd + fixes + pay + tl + totals;
 }
 
 /* 📦 Delivered-archive report — same rows as the old sidebar view (click a
@@ -13877,7 +13900,8 @@ function renderReport() {
   });
   body.querySelectorAll('.paymode').forEach(b => b.onclick = ev => {
     ev.stopPropagation();
-    (S.payF || (S.payF = {})).group = b.dataset.group;
+    const sc = b.dataset.scope === 'adj' ? (S.adjF || (S.adjF = {})) : (S.payF || (S.payF = {}));
+    sc.group = b.dataset.group;
     renderReport();
   });
   body.querySelectorAll('.actf').forEach(el => {
