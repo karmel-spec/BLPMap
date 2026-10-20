@@ -6233,6 +6233,7 @@ function popHTML(p) {
         <b style="color:${waiting ? '#9a5b13' : '#2b2f33'}">${waiting ? '⏳ ' : '🔧 '}${esc(effPh || (p.queuePos ? 'In Queue' : 'no phase'))}</b>
         ${waiting && (p.waitNote || '').trim() ? ' — ' + esc(p.waitNote) : ''}
         ${waiting && (p.checkBack || '').trim() ? ` · <b>check back ${esc(p.checkBack)}</b>` : ''}
+        ${waiting && /^waiting/i.test(p.phase || '') ? `<button class="wnedit" title="edit the waiting note and check-back date">✎</button>` : ''}
         ${!waiting && lastNote ? `<span style="color:#6f6a63"> — 📝 ${esc(lastNote.slice(0, 140))}</span>` : ''}
       </div>`;
     })() : ''}
@@ -6764,6 +6765,9 @@ function wirePop(p) {
   const tno = pop.querySelector('.tempno');
   if (tno) tno.onclick = ev => { ev.stopPropagation(); popPinned = true; tempResolve(false); };
   // ❗ IMPORTANT note in the sticky card header
+  // ✎ waiting note (Mark 10/20): edit the note / check-back without a phase change
+  const wnBtn = pop.querySelector('.wnedit');
+  if (wnBtn) wnBtn.onclick = ev => { ev.stopPropagation(); popPinned = true; openWaitNoteModal(p, p.phase, pop, {edit: true}); };
   const impBtn = pop.querySelector('.impedit');
   if (impBtn) impBtn.onclick = async ev => {
     ev.stopPropagation(); popPinned = true;
@@ -7773,7 +7777,7 @@ async function setPhase(p, phase, pop, extra) {
   const msg = pop.querySelector('.phmsg');
   const sel = pop.querySelector('.phsel');
   const was = p.phase || '';
-  if (phase === was) return;
+  if (phase === was && !(extra && extra.edit)) return;   // ✎ edit re-saves the same Waiting phase with a new note
   if (phase.startsWith('Waiting') && extra == null) {
     openWaitNoteModal(p, phase, pop);   // ask for details + check-back first
     return;
@@ -9430,30 +9434,36 @@ async function submitGeneric(p, kind, ov) {
 }
 
 /* ---------- Waiting-on-OTHER note popup ---------- */
-function openWaitNoteModal(p, phase, pop) {
+function openWaitNoteModal(p, phase, pop, opt) {
+  // opt.edit (Mark 10/20): the ✎ on the card's status strip — same box, filled
+  // in with the current note and check-back, saving them without a phase change
+  const edit = !!(opt && opt.edit);
   const who = phase.replace('Waiting on ', '');
   const other = who === 'OTHER';
+  const curCb = String(p.checkBack || '').trim();
   const ov = modalShell('waitmodal', `
     <span class="x">✕</span>
-    <h3>⏳ ${esc(phase)} — details</h3>
+    <h3>⏳ ${esc(phase)} — ${edit ? 'edit details' : 'details'}</h3>
     ${pianoHeader(p)}
     <label>${other ? 'What is being waited on?' : `Notes <small>(optional — what are we waiting on ${esc(who)} for?)</small>`}</label>
     <textarea class="wnotes" rows="3" placeholder="${other ? 'parts from supplier, customer decision, insurance…' : 'decision, approval, parts…'}"></textarea>
     <label>Check back on this piano in…</label>
     <select class="wsnooze">
+      ${edit && curCb ? `<option value="keep" selected>keep ${esc(curCb)}</option>` : ''}
       <option value="3">3 days</option>
-      <option value="7" selected>1 week</option>
+      <option value="7" ${edit && curCb ? '' : 'selected'}>1 week</option>
       <option value="14">2 weeks</option>
       <option value="30">1 month</option>
-      <option value="">no reminder date</option>
+      ${edit ? '' : '<option value="">no reminder date</option>'}
     </select>
-    <button class="tmgo wgo">Set phase to ${esc(phase)}</button>
+    <button class="tmgo wgo">${edit ? 'Save' : 'Set phase to ' + esc(phase)}</button>
     <div class="tmmsg"></div>`);
+  if (edit) ov.querySelector('.wnotes').value = p.waitNote || '';
   const sel = pop.querySelector('.phsel');
   ov.onclick = ev => {
     if (ev.target === ov || ev.target.closest('.x')) {
       ov.hidden = true;
-      if (sel) sel.value = p.phase || '';   // cancelled — revert the dropdown
+      if (sel && !edit) sel.value = p.phase || '';   // cancelled — revert the dropdown
     }
   };
   ov.querySelector('.wgo').onclick = () => {
@@ -9465,12 +9475,13 @@ function openWaitNoteModal(p, phase, pop) {
     }
     const days = ov.querySelector('.wsnooze').value;
     let checkBack = '';
-    if (days) {
+    if (days === 'keep') checkBack = curCb;
+    else if (days) {
       const d = new Date(Date.now() + (+days) * 86400000);
       checkBack = `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`;
     }
     ov.hidden = true;
-    setPhase(p, phase, pop, {note, checkBack});
+    setPhase(p, phase, pop, {note, checkBack, edit});
   };
   ov.querySelector('.wnotes').focus();
 }
