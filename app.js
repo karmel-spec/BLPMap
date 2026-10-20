@@ -13166,7 +13166,7 @@ const REPORT_DEFS = () => [
    desc: 'Custom Shopwork pianos in the building more than twice the typical span for their current phase — the 🐢 list that used to live inside the daily brief. Click a row to jump to the piano.',
    html: stalledTable},
   {id: 'tuningcheck', sec: 'shop', icon: '🎵', title: 'SHOWROOM TUNING CHECK', count: (() => {
-     try { return tchkRows().length; } catch (e) { return null; } })(),
+     try { return tchkSplit(tchkRows()).shown.length; } catch (e) { return null; } })(),   // Good ones are hidden (Mark 10/20)
    desc: 'Korban’s walk-order worksheet: every piano for sale on the public floor (vestibule, showroom, bottom of the stairs, balcony) with a tag price and no tuning in the last 30 days — front door first, then down the ramp, the spots by the admin desk, then up to the balcony. Mark each one Good or Needs tuning and jot service notes; marks save for everyone. 🖨 Print now for the paper sheet.',
    html: tuningCheckTable, print: tuningCheckPrintHTML},
   {id: 'unplaced', sec: 'shop', icon: '⚠️', title: 'UNPLACED PIANOS', count: unplaced().length,
@@ -16380,7 +16380,18 @@ addEventListener('message', ev => {
  * (supabase/tuning_check.sql, written by /api/tuningcheck) so a phone on the
  * floor and the desk see the same sheet. Opens from the 📅 Scheduling tabs
  * and from Reports; 🖨 Print now gives the paper version. */
-const TCHK = {data: null, at: 0, loading: false};
+const TCHK = {data: null, at: 0, loading: false,
+  // Good pianos are hidden for the life of their mark (30 days) — whoever
+  // walks next sees only pianos with issues or not checked yet (Mark 10/20).
+  // One marked Good in THIS visit stays put until the page is reloaded, so a
+  // tap never makes a row jump away mid-walk; showGood brings them all back.
+  keep: new Set(), showGood: false};
+// rows the sheet shows vs. Good ones it hides
+function tchkSplit(rows) {
+  const shown = [], hidden = [];
+  rows.forEach(r => (tchkState(r.p.serial).mark === 'good' && !TCHK.keep.has(r.p.serial) && !TCHK.showGood ? hidden : shown).push(r));
+  return {shown, hidden};
+}
 const TCHK_DAYS = 30;             // "tuned in the past month" = skip it
 const TCHK_STOPS = [
   ['vestibule', 'Vestibule', 'start at the front door'],
@@ -16514,7 +16525,9 @@ const tchkYear = p => /^new$/i.test((p.year || '').trim()) ? 'New' : (p.year || 
 // the worksheet (screen version): header with logo, who & when, the route,
 // then the rows with Good / Needs tuning boxes and a notes line
 function tuningCheckTable() {
-  const rows = tchkRows();
+  const all = tchkRows();
+  const {shown: rows, hidden} = tchkSplit(all);
+  const goodAll = all.filter(r => tchkState(r.p.serial).mark === 'good').length;
   const who = lsGet('tchkWho') || clockName();
   const marks = rows.map(r => tchkState(r.p.serial));
   const good = marks.filter(m => m.mark === 'good').length, tune = marks.filter(m => m.mark === 'tune').length,
@@ -16570,6 +16583,8 @@ function tuningCheckTable() {
     </div>
     <div class="tcroute">${stops}</div>
     <div class="tctally"><b>${rows.length}</b> pianos to check · <b class="tcgood">${good}</b> good · <b class="tctune">${tune}</b> need tuning (<b class="tcasap-n">${asap}</b> ⚡ ASAP) · <b class="tcskipn">${skip}</b> skipped · <b class="tcleft">${rows.length - good - tune - skip}</b> left
+      ${hidden.length ? `<button type="button" class="tcgoodtoggle" title="pianos marked Good drop off the sheet for ${TCHK_DAYS} days, then come back to be checked again">✓ ${hidden.length} marked Good — hidden for ${TCHK_DAYS} days · show</button>`
+        : TCHK.showGood && goodAll ? `<button type="button" class="tcgoodtoggle">hide the ${goodAll} marked Good</button>` : ''}
       <span>· ${noRec} with no tuning on the calendar · ${booked} already booked for a tuning (see Notes) · skipped pianos go to Chris for review${TCHK.data ? '' : ' · loading saved marks…'}</span></div>
     <div class="tscroll"><table class="tchktbl">
       <thead><tr><th></th><th>Map #</th><th>Serial</th><th>Last tuned</th><th>Year</th><th>Make</th><th>Model</th><th>Price</th><th>Good</th><th>Tuning · ⚡ ASAP</th><th>Skip</th><th>Notes — sticky key, squeaky pedal, clicks, other service</th></tr></thead>
@@ -16579,7 +16594,7 @@ function tuningCheckTable() {
 // the paper version (🖨 Print now / the report's Print button): logo, name
 // and date lines, empty boxes, a writing line per piano
 function tuningCheckPrintHTML() {
-  const rows = tchkRows();
+  const rows = tchkSplit(tchkRows()).shown;   // the paper sheet skips Good pianos too
   const who = lsGet('tchkWho') || clockName();
   let body = '', n = 0;
   TCHK_STOPS.forEach(([k, label, hint], i) => {
@@ -16667,8 +16682,11 @@ function wireTuningCheck(root, rerender) {
     const p = S.data.pianos.find(x => x.row === +tr.dataset.row);
     if (p) focusPiano(p);
   });
+  const gt = box.querySelector('.tcgoodtoggle');
+  if (gt) gt.onclick = ev => { ev.stopPropagation(); TCHK.showGood = !TCHK.showGood; if (rerender) rerender(); };
   box.querySelectorAll('.tcmark').forEach(cb => cb.onchange = async () => {
     const tr = cb.closest('.tcrow'), serial = tr.dataset.serial, m = cb.dataset.m;
+    TCHK.keep.add(serial);   // marked in this visit: stays on screen until a reload
     const other = tr.querySelector(`.tcmark[data-m="${m === 'good' ? 'tune' : 'good'}"]`);
     const mark = cb.checked ? m : '';
     if (cb.checked && other) other.checked = false;
@@ -16793,7 +16811,7 @@ function renderSched() {
   // 🎵 Tuning Check gets its own button up top (Brigham 10/9) — the walk-order
   // worksheet is a tool, not a dashboard tab, and it should be one click
   let tcCount = null;
-  try { tcCount = tchkRows().length; } catch (e) { /* map not ready yet */ }
+  try { tcCount = tchkSplit(tchkRows()).shown.length; } catch (e) { /* map not ready yet */ }
   el.innerHTML = `<div class="schedtools">
       <button class="tcopenbtn" data-st="tuningcheck" title="Korban's showroom walk-order worksheet: for-sale pianos not tuned in the last 30 days">
         <span class="ic">🎵</span><span class="tcl"><b>Tuning Check</b><small>showroom walk-order worksheet · mark Good / Needs tuning / Skip · print</small></span>
