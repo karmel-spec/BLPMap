@@ -5961,8 +5961,8 @@ const isMarcelo = () => /^marcelo\b/i.test(clockName()) || /^marcelo/i.test(user
 // Field work added 10/20 (Mark).
 const OUTSIDE_PEOPLE = ['alexmartin.blp@gmail.com', 'jakepulver.blp@gmail.com', 'matthewwessman.blp@gmail.com', 'markhales.blp@gmail.com', 'jacobmower.blp@gmail.com', 'korbangreenhalgh.blp@gmail.com'];
 const OUTSIDE_KINDS = ['Repair', 'Keytops', 'Refinishing', 'Piano bench construction', 'Field work', 'Other'];
-const outsideOk = () => OUTSIDE_PEOPLE.includes(userEmail())
-  || /^(alex|curtis|jake|mckinly|matthew|mark|jacob|korban)\b/i.test(clockName());
+// everyone gets the card since 10/20 (Mark) — the people list above is history
+const outsideOk = () => true;
 const clockLabel = (clock, serial) => {
   const p = CLOCK_PSEUDO[String(serial || '').toUpperCase()];
   return p || (String(clock || '') + (serial ? ' #' + serial : ''));
@@ -14307,10 +14307,8 @@ function renderDash() {
     </div>
     ${payCard}
     <div class="dlockers">
-      <div class="dlocker" data-h="#myweek"><span class="ic">📋</span><b>My Week</b><span>work items · carries into your report</span></div>
+      <!-- My Week, Piano Card Audit and My Calendar removed from the dashboard (Mark 10/20: not used) -->
       <div class="dlocker" data-h="#report"><span class="ic">📝</span><b>Weekly Report</b><span>due Thursday 6pm</span></div>
-      <div class="dlocker" data-audit="1"><span class="ic">🧪</span><b>Piano Card Audit</b><span>report vs. card discrepancies</span></div>
-      <div class="dlocker" data-h="#calendars"><span class="ic">📅</span><b>My Calendar</b><span>assigned vs. reported</span></div>
       <div class="dlocker" data-pay="1"><span class="ic">💵</span><b>Paylogics ↗</b><span>paystubs · time off</span></div>
     </div>
     ${isTimelogAdmin() ? (() => {
@@ -14418,7 +14416,6 @@ function renderDash() {
       ${o ? `<div class="dline now"><b>${esc(o.phase || 'Working')} — ${esc(o.piano || '')} #${esc(o.serial)}</b>
                · <span class="cctime" data-start="${esc(o.start)}">${clockElapsed(o.start)}</span> and counting</div>`
           : `<div class="dline">Not clocked in — open a piano's card and hit ▶ Clock in.</div>`}
-      <div class="dline dim">Your queue for the week lives in <a class="dlink2" data-h="#myweek">📋 My Week ›</a></div>
     </div>
     ${myClockHistory()}
     ${prs ? `<div class="dbench db-recs">
