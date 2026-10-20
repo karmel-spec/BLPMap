@@ -830,25 +830,52 @@ function needRefQ() {
     }).catch(() => {}).then(() => { REFQ.loading = false; });
   return false;
 }
-/* ⚙️ Plate Queue popup (Karmel 9/18): every piano whose PLATE is out of the
- * piano and not yet back — same shape as the Keytop Q. Order: at Curtis
- * Harper's (in progress) on top, then waiting to go (Removed / storage
- * BEFORE), then refinished and waiting to go back in (storage AFTER) — by
- * shop queue position within each group. Tap a row to jump to its card. */
-function plateOpen(p) {
-  const st = String(p.plateStatus || '').trim();
-  return !!st && !/^in piano$/i.test(st) && !/^back in piano$/i.test(st);
-}
-function plateRank(p) {
-  const st = String(p.plateStatus || '').trim();
-  if (/curtis/i.test(st)) return 0;
-  if (/before/i.test(st)) return 1000;
-  if (/^removed/i.test(st)) return 1500;
-  if (/after/i.test(st)) return 3000;
-  return 4000;
-}
-function plateOrder(a, b) {
-  return plateRank(a) - plateRank(b) || ((a.queuePos || 999) - (b.queuePos || 999)) || (a.row - b.row);
+/* ⚙️ Plate Queue (Karmel 10/20): the Plates section of Curtis Harper's sheet,
+ * in his row order — that list is the accurate queue, not each piano's
+ * plateStatus. Same fetch as the Refinish Q (5-min cache, renderMap on load,
+ * map box says "loading…" until it arrives). Rows run from the col-A marker
+ * '------------Plates------------' to the next blank row or '------' section
+ * (never the in-store small projects below). Serial is the trailing digits of
+ * the piano cell; a match to an active piano still jumps to its card. */
+const PLATEQ = {rows: null, at: 0, loading: false};
+function needPlateQ() {
+  if (PLATEQ.loading || (PLATEQ.rows && Date.now() - PLATEQ.at < 300000)) return !!PLATEQ.rows;
+  PLATEQ.loading = true;
+  fetch('https://docs.google.com/spreadsheets/d/1DxvDQ9WlhxXfiZaKGpdJLOOPNMBfVA9PsHGuLe55pmc/gviz/tq?tqx=out:csv&headers=0&gid=0',
+    {signal: AbortSignal.timeout(20000)})
+    .then(r => r.text()).then(txt => {
+      const out = [];
+      let inPlates = false, done = false;
+      txt.split(/\r?\n/).forEach(ln => {
+        if (done) return;
+        const cells = []; let cur = '', inQ = false;
+        for (let i = 0; i < ln.length; i++) {
+          const ch = ln[i];
+          if (inQ) { if (ch === '"') { if (ln[i + 1] === '"') { cur += '"'; i++; } else inQ = false; } else cur += ch; }
+          else if (ch === '"') inQ = true;
+          else if (ch === ',') { cells.push(cur); cur = ''; }
+          else cur += ch;
+        }
+        cells.push(cur);
+        const a = (cells[0] || '').trim();
+        if (!inPlates) {
+          if (a.includes('------------Plates------------')) inPlates = true;
+          return;
+        }
+        // blank row (the checkbox column may still read FALSE) or the next section
+        let body = false;
+        for (let i = 0; i < 13 && i < cells.length; i++) if ((cells[i] || '').trim()) { body = true; break; }
+        if (!body || a.includes('------')) { done = true; return; }
+        const piano = (cells[4] || '').trim();
+        const m = /^(.*?)(\d+)\s*$/.exec(piano);
+        out.push({own: a, loc: (cells[3] || '').trim(),
+          brand: (m ? m[1] : piano).trim(), serial: m ? m[2] : '',
+          issue: (cells[5] || '').trim(), pic: (cells[6] || '').trim()});
+      });
+      PLATEQ.rows = out; PLATEQ.at = Date.now();
+      renderMap();
+    }).catch(() => {}).then(() => { PLATEQ.loading = false; });
+  return false;
 }
 /* ---------- queue sheets — Keytop Q · Refinish Q · Plate Q share one renderer
  * (Karmel 9/18). Owners, managers & admins can drag ⠿ to reorder and ＋ add a
@@ -881,10 +908,17 @@ const QDEFS = {
     natural: () => S.data.pianos.filter(x => x.active && (x.keytopStatus || '').trim() && !/^done/i.test(x.keytopStatus))
       .sort(keytopOrder).map(p => qItem(p, `<b style="min-width:88px;color:#9e2020">${esc(p.keytopStatus)}</b>`))},
   plates: {title: '⚙️ Plate Queue', noun: 'plate queue', unit: 'plate',
-    sub: 'plates out of the piano · at Curtis first, then waiting to go, then back from refinishing', empty: 'No plates out — nothing in the plate queue 🎉',
-    natural: () => S.data.pianos.filter(x => x.active && plateOpen(x)).sort(plateOrder).map(p => {
-      const slat = cabTokens(p).find(t => /^\d+p$/.test(t));
-      return qItem(p, plateBadge(p.plateStatus), p.plateTemp ? 'plate: ' + p.plateTemp : slat ? 'plate at ' + slat.toUpperCase() : '');
+    sub: 'from Curtis Harper\'s sheet (its row order = priority)', empty: 'Curtis Harper\'s plate list is empty — nothing in the plate queue.',
+    natural: () => (PLATEQ.rows || []).map(x => {
+      const p = x.serial ? S.data.pianos.find(pp => pp.active && qn(pp.serial) === qn(x.serial)) : null;
+      const slat = p ? cabTokens(p).find(t => /^\d+p$/.test(t)) : '';
+      const spot = p && p.plateTemp ? 'plate: ' + p.plateTemp : slat ? 'plate at ' + slat.toUpperCase() : '';
+      const sub = [x.issue, x.own, spot].filter(Boolean).join(' · ');
+      const badge = (x.pic ? `<b style="min-width:72px;color:#2c5d96">${esc(x.pic)}</b>` : '')
+        + (p && String(p.plateStatus || '').trim() ? plateBadge(p.plateStatus) : '');
+      return {serial: x.serial || x.brand, p, badge, sub,
+        main: x.serial ? `${esc(x.brand)} <span class="lite">#${esc(x.serial)}</span>` : esc(x.brand),
+        right: `<span class="lite">${esc(x.loc || '')}</span>`};
     })},
   // 🎵 Tuning Queue (Brigham 10/9): the pianos marked Needs tuning on the
   // Showroom Tuning Check, in walk order, plus anything added with ＋ —
@@ -3697,15 +3731,15 @@ function renderMap() {
       <text x="${rx9 + rw9 / 2}" y="${ry9 + 58}" text-anchor="middle" class="kqtxt kqcount" font-size="13">${rqReady ? queueItems('refin').length + ' in queue ›' : 'loading…'}</text>
     </g>`;
     // ⚙️ Plate Queue box just below the plate rack (under slat 18P, past the
-    // rack's bottom wall) — tap for every plate that is out of its piano
-    const pq = queueItems('plates').length;
+    // rack's bottom wall) — tap for Curtis Harper's plate list (row order)
+    const pqReady = needPlateQ();
     const p18 = f.slots.find(z => /^18p$/i.test(z.id));
     const pw = 160, ph = 78;
     const pxq = p18 ? p18.x + p18.w / 2 - pw / 2 : 1092, pyq = p18 ? p18.y + p18.h + 33 : 1061;
     s += `<g class="pqbtn" style="cursor:pointer">
       <rect x="${pxq}" y="${pyq}" width="${pw}" height="${ph}" rx="8" class="kqrect"/>
       <text x="${pxq + pw / 2}" y="${pyq + 31}" text-anchor="middle" class="kqtxt" font-size="20">⚙️ <tspan font-weight="800" font-size="15">Plate Q</tspan></text>
-      <text x="${pxq + pw / 2}" y="${pyq + 58}" text-anchor="middle" class="kqtxt kqcount" font-size="13">${pq} in queue ›</text>
+      <text x="${pxq + pw / 2}" y="${pyq + 58}" text-anchor="middle" class="kqtxt kqcount" font-size="13">${pqReady ? queueItems('plates').length + ' in queue ›' : 'loading…'}</text>
     </g>`;
     // 🎵 Tuning Queue box by the admin front desk (Brigham 10/9): the open
     // floor between "Stairs going up" and "Stairs down to showroom" — tap
