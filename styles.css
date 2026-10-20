@@ -2096,6 +2096,8 @@ tr.daynone td{color:#9aa2ab}
 /* 📷 Before/After photos chooser: camera roll vs 13-shot list (Melissa 9/25) */
 .phchoose{position:relative;margin-top:6px;padding:9px 30px 9px 10px;border:1.5px solid #9e2020;border-radius:10px;background:#fdf6f6}
 .phchoose .phchead{font-size:11px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:#9e2020;margin-bottom:6px}
+.phchoose .socnote{display:block;width:100%;font:inherit;font-size:13px;padding:7px 9px;border:1px solid #cfc9bf;border-radius:8px;background:#fff;margin:2px 0 4px;resize:vertical}
+.mediagrid .socbtn{border-color:#c9a227;background:#fdf6e3}
 .phchoose button.maddbtn,.phchoose button.phwiz{display:flex;flex-direction:column;align-items:flex-start;gap:1px;width:100%;text-align:left;font:700 13px/1.25 inherit;padding:8px 10px;margin:4px 0;border:1px solid #cfc9bf;border-radius:8px;background:#fff;color:#2b2f33;cursor:pointer}
 .phchoose button.maddbtn small,.phchoose button.phwiz small{font-weight:500;font-size:10.5px;color:#6f6a63}
 .phchoose .phclose{position:absolute;top:6px;right:6px;border:0;background:none;font-size:14px;color:#8a847b;cursor:pointer;padding:2px 5px}
@@ -2389,3 +2391,12 @@ table.tchktbl td.chk .tcasap input{width:15px;height:15px}
 .cardphotoview{position:fixed;inset:0;z-index:9999;background:rgba(20,20,20,.86);display:flex;align-items:center;justify-content:center;cursor:zoom-out}
 .cardphotoview img{max-width:94vw;max-height:88vh;border-radius:8px;box-shadow:0 8px 40px rgba(0,0,0,.5)}
 .cardphotoview .x{position:absolute;top:14px;right:20px;color:#fff;font-size:26px;cursor:pointer}
+
+/* Tuning Check: Good pianos hidden for 30 days (Mark 10/20) */
+.tcgoodtoggle{margin-left:8px;border:1px solid #b9d7c2;background:#eef7f0;color:#2f7d4f;border-radius:999px;padding:2px 10px;font:600 12px inherit;cursor:pointer}
+
+/* ✎ edit the waiting note on the card's status strip (Mark 10/20) */
+.wnedit{margin-left:6px;border:1px solid #e0c3a2;background:#fff;color:#9a5b13;border-radius:6px;padding:0 6px;font-size:12px;cursor:pointer;line-height:18px}
+
+/* job costing inside the Manager console (Brigham 10/20) */
+.jcwrap{margin-top:22px;border-top:2px solid #eadfdf;padding-top:10px}.jcwrap summary{cursor:pointer;list-style:none}.jcwrap summary::-webkit-details-marker{display:none}.jcwrap summary h2.ph::before{content:'▸ ';color:#9e2020}.jcwrap[open] summary h2.ph::before{content:'▾ '}

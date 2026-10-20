@@ -1664,7 +1664,7 @@ function preloadReport(id) {
   if ((id === 'briefs' || id === 'adminbriefs') && !S.briefRows) loadBriefs();
   if (id === 'paytime' && !S.payRows) loadPayroll();
   if (id === 'jobcost' && !S.tlRows) loadTimeLog();
-  if (id === 'queue' && !S.tlRows) loadTimeLog();   // ASSIGNED TO column
+  if ((id === 'queue' || id === 'stalled') && !S.tlRows) loadTimeLog();   // ASSIGNED TO / RECENT WORK columns
   if (id === 'appupdates' && !S.auRows) loadAppUpdates();
   if (id === 'spotlight' && !S.spotData) loadSpotlight();
   if (id === 'tuningcheck') tchkLoad().then(() => { if (S.openReport === 'tuningcheck') renderReport(); });
@@ -2054,6 +2054,8 @@ function mediaCard(p) {
     ['\ud83d\udcf7 After photos', p.aphotoUrl],
     ['\ud83c\udfa5 After video', p.avideoUrl],
     ['\ud83c\udfac Progress video', p.pvideoUrl],
+    ['\ud83d\udcf1 Social photos', p.sphotoUrl],
+    ['\ud83d\udcf1 Social video', p.svideoUrl],
     ['\ud83d\udcc1 Main folder', p.mainFolder],
   ].filter(x => x[1]);
   const folderRow = (links.length || p.serial)
@@ -2075,13 +2077,17 @@ function mediaCard(p) {
       <button class="tagbtn vidbtn" data-kind="after">🎥 After video</button>
       <button class="tagbtn photobtn">📸 Tech photo <small>shop progress</small></button>
       <button class="tagbtn vidbtn" data-kind="progress">🎬 Progress video</button>
+      <button class="tagbtn socbtn" data-kind="photo">📱 Social photo <small>for marketing · weekly prize</small></button>
+      <button class="tagbtn socbtn" data-kind="video">📱 Social video <small>for marketing · weekly prize</small></button>
       <input type="file" class="vidin" accept="video/*" capture="environment" hidden>
       <input type="file" class="vidpick" accept="video/*" hidden>
       <input type="file" class="maddin" accept="image/*" multiple hidden>
+      <input type="file" class="soccam" accept="image/*" capture="environment" hidden>
+      <input type="file" class="socroll" accept="image/*" multiple hidden>
     </div>
     <div class="phchoose" hidden></div>
-    <div class="lite" style="font-size:11px;margin-top:2px">Videos open the camera and file the clip in this piano’s Before / After / Progress Video folder, then ask for 5 YouTube-size thumbnails. Saved clip instead:
-      <a href="#" class="vidpicklink" data-kind="before">before</a> · <a href="#" class="vidpicklink" data-kind="after">after</a> · <a href="#" class="vidpicklink" data-kind="progress">progress</a>.</div>` : ''}
+    <div class="lite" style="font-size:11px;margin-top:2px">Videos open the camera and file the clip in this piano’s Before / After / Progress / Social Video folder (before / after / progress then ask for 5 YouTube-size thumbnails). Saved clip instead:
+      <a href="#" class="vidpicklink" data-kind="before">before</a> · <a href="#" class="vidpicklink" data-kind="after">after</a> · <a href="#" class="vidpicklink" data-kind="progress">progress</a> · <a href="#" class="vidpicklink" data-kind="social">social</a>.</div>` : ''}
     <div class="mdmsg"></div>
   </div>`;
 }
@@ -5985,11 +5991,13 @@ const isMarcelo = () => /^marcelo\b/i.test(clockName()) || /^marcelo/i.test(user
 // restorer's keys — work on something that isn't one of our pianos. Pseudo-
 // serial OUTSIDE; the tech names the job and picks the kind of work. Alex,
 // Curtis, Jake, McKinly, Matthew, Mark and Jacob for now (Walter 10/14);
-// Korban added 10/19 (Mark), with the Piano bench construction kind.
+// Korban added 10/19 (Mark), with the Piano bench construction kind;
+// Field work added 10/20 (Mark).
 const OUTSIDE_PEOPLE = ['alexmartin.blp@gmail.com', 'jakepulver.blp@gmail.com', 'matthewwessman.blp@gmail.com', 'markhales.blp@gmail.com', 'jacobmower.blp@gmail.com', 'korbangreenhalgh.blp@gmail.com'];
-const OUTSIDE_KINDS = ['Repair', 'Keytops', 'Refinishing', 'Piano bench construction', 'Other'];
-const outsideOk = () => OUTSIDE_PEOPLE.includes(userEmail())
-  || /^(alex|curtis|jake|mckinly|matthew|mark|jacob|korban)\b/i.test(clockName());
+// Building maintenance and Shop tidying moved in from their own dashboard boxes 10/20 (Mark)
+const OUTSIDE_KINDS = ['Repair', 'Keytops', 'Refinishing', 'Piano bench construction', 'Field work', 'Building maintenance', 'Shop tidying', 'Other'];
+// everyone gets the card since 10/20 (Mark) — the people list above is history
+const outsideOk = () => true;
 const clockLabel = (clock, serial) => {
   const p = CLOCK_PSEUDO[String(serial || '').toUpperCase()];
   return p || (String(clock || '') + (serial ? ' #' + serial : ''));
@@ -6267,6 +6275,7 @@ function popHTML(p) {
         <b style="color:${waiting ? '#9a5b13' : '#2b2f33'}">${waiting ? '⏳ ' : '🔧 '}${esc(effPh || (p.queuePos ? 'In Queue' : 'no phase'))}</b>
         ${waiting && (p.waitNote || '').trim() ? ' — ' + esc(p.waitNote) : ''}
         ${waiting && (p.checkBack || '').trim() ? ` · <b>check back ${esc(p.checkBack)}</b>` : ''}
+        ${waiting && /^waiting/i.test(p.phase || '') ? `<button class="wnedit" title="edit the waiting note and check-back date">✎</button>` : ''}
         ${!waiting && lastNote ? `<span style="color:#6f6a63"> — 📝 ${esc(lastNote.slice(0, 140))}</span>` : ''}
       </div>`;
     })() : ''}
@@ -6798,6 +6807,9 @@ function wirePop(p) {
   const tno = pop.querySelector('.tempno');
   if (tno) tno.onclick = ev => { ev.stopPropagation(); popPinned = true; tempResolve(false); };
   // ❗ IMPORTANT note in the sticky card header
+  // ✎ waiting note (Mark 10/20): edit the note / check-back without a phase change
+  const wnBtn = pop.querySelector('.wnedit');
+  if (wnBtn) wnBtn.onclick = ev => { ev.stopPropagation(); popPinned = true; openWaitNoteModal(p, p.phase, pop, {edit: true}); };
   const impBtn = pop.querySelector('.impedit');
   if (impBtn) impBtn.onclick = async ev => {
     ev.stopPropagation(); popPinned = true;
@@ -7282,10 +7294,24 @@ function wirePop(p) {
       ev.stopPropagation(); popPinned = true; vkind = b.dataset.kind; cam.value = ''; cam.click();
     });
     pop.querySelectorAll('.vidpicklink').forEach(a => a.onclick = ev => {
-      ev.preventDefault(); ev.stopPropagation(); popPinned = true; vkind = a.dataset.kind; pick.value = ''; pick.click();
+      ev.preventDefault(); ev.stopPropagation(); popPinned = true; vkind = a.dataset.kind; pick.value = '';
+      if (vkind === 'social') { openSocialChooser(p, pop, 'video', {pick: true}); return; }
+      pick.click();
     });
-    cam.onchange = () => uploadVideo(p, vkind, cam.files && cam.files[0], pop);
-    pick.onchange = () => uploadVideo(p, vkind, pick.files && pick.files[0], pop);
+    cam.onchange = () => uploadVideo(p, vkind, cam.files && cam.files[0], pop, vkind === 'social' ? socialNoteOf(pop) : '');
+    pick.onchange = () => uploadVideo(p, vkind, pick.files && pick.files[0], pop, vkind === 'social' ? socialNoteOf(pop) : '');
+    // 📱 Social photo / video (Brigham 10/20): a note box first (optional
+    // sentence or two for marketing), then camera or camera roll. Photos
+    // file into the piano's Social Photos folder, clips into Social Video —
+    // the same Drive plan and marketing pipeline as before / after media.
+    pop.querySelectorAll('.socbtn').forEach(b => b.onclick = ev => {
+      ev.stopPropagation(); popPinned = true;
+      if (b.dataset.kind === 'video') vkind = 'social';
+      openSocialChooser(p, pop, b.dataset.kind);
+    });
+    const scam = pop.querySelector('.soccam'), sroll = pop.querySelector('.socroll');
+    if (scam) { scam.onclick = e2 => e2.stopPropagation(); scam.onchange = () => uploadSocialPhotos(p, [...(scam.files || [])], socialNoteOf(pop), pop); }
+    if (sroll) { sroll.onclick = e2 => e2.stopPropagation(); sroll.onchange = () => uploadSocialPhotos(p, [...(sroll.files || [])], socialNoteOf(pop), pop); }
   })();
   (() => {
     const fin = pop.querySelector('.maddin');
@@ -7807,7 +7833,7 @@ async function setPhase(p, phase, pop, extra) {
   const msg = pop.querySelector('.phmsg');
   const sel = pop.querySelector('.phsel');
   const was = p.phase || '';
-  if (phase === was) return;
+  if (phase === was && !(extra && extra.edit)) return;   // ✎ edit re-saves the same Waiting phase with a new note
   if (phase.startsWith('Waiting') && extra == null) {
     openWaitNoteModal(p, phase, pop);   // ask for details + check-back first
     return;
@@ -9464,30 +9490,36 @@ async function submitGeneric(p, kind, ov) {
 }
 
 /* ---------- Waiting-on-OTHER note popup ---------- */
-function openWaitNoteModal(p, phase, pop) {
+function openWaitNoteModal(p, phase, pop, opt) {
+  // opt.edit (Mark 10/20): the ✎ on the card's status strip — same box, filled
+  // in with the current note and check-back, saving them without a phase change
+  const edit = !!(opt && opt.edit);
   const who = phase.replace('Waiting on ', '');
   const other = who === 'OTHER';
+  const curCb = String(p.checkBack || '').trim();
   const ov = modalShell('waitmodal', `
     <span class="x">✕</span>
-    <h3>⏳ ${esc(phase)} — details</h3>
+    <h3>⏳ ${esc(phase)} — ${edit ? 'edit details' : 'details'}</h3>
     ${pianoHeader(p)}
     <label>${other ? 'What is being waited on?' : `Notes <small>(optional — what are we waiting on ${esc(who)} for?)</small>`}</label>
     <textarea class="wnotes" rows="3" placeholder="${other ? 'parts from supplier, customer decision, insurance…' : 'decision, approval, parts…'}"></textarea>
     <label>Check back on this piano in…</label>
     <select class="wsnooze">
+      ${edit && curCb ? `<option value="keep" selected>keep ${esc(curCb)}</option>` : ''}
       <option value="3">3 days</option>
-      <option value="7" selected>1 week</option>
+      <option value="7" ${edit && curCb ? '' : 'selected'}>1 week</option>
       <option value="14">2 weeks</option>
       <option value="30">1 month</option>
-      <option value="">no reminder date</option>
+      ${edit ? '' : '<option value="">no reminder date</option>'}
     </select>
-    <button class="tmgo wgo">Set phase to ${esc(phase)}</button>
+    <button class="tmgo wgo">${edit ? 'Save' : 'Set phase to ' + esc(phase)}</button>
     <div class="tmmsg"></div>`);
+  if (edit) ov.querySelector('.wnotes').value = p.waitNote || '';
   const sel = pop.querySelector('.phsel');
   ov.onclick = ev => {
     if (ev.target === ov || ev.target.closest('.x')) {
       ov.hidden = true;
-      if (sel) sel.value = p.phase || '';   // cancelled — revert the dropdown
+      if (sel && !edit) sel.value = p.phase || '';   // cancelled — revert the dropdown
     }
   };
   ov.querySelector('.wgo').onclick = () => {
@@ -9499,12 +9531,13 @@ function openWaitNoteModal(p, phase, pop) {
     }
     const days = ov.querySelector('.wsnooze').value;
     let checkBack = '';
-    if (days) {
+    if (days === 'keep') checkBack = curCb;
+    else if (days) {
       const d = new Date(Date.now() + (+days) * 86400000);
       checkBack = `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`;
     }
     ov.hidden = true;
-    setPhase(p, phase, pop, {note, checkBack});
+    setPhase(p, phase, pop, {note, checkBack, edit});
   };
   ov.querySelector('.wnotes').focus();
 }
@@ -9828,13 +9861,77 @@ async function photoPost(body) {
  * Google directly, 8 MB at a time, with progress and per-chunk retries. The
  * file ends up owned by karmel@ like every photo. */
 const VID_CHUNK = 8 * 1024 * 1024;
-async function uploadVideo(p, kind, f, pop) {
+/* 📱 Social photo / video chooser (Brigham 10/20): one box for the optional
+ * note ("found this 1912 ticket stub under the keys", "slow-mo of the
+ * hammers") and the two ways in. The note rides along as the Drive file's
+ * description and in the email to marketing. */
+function socialNoteOf(pop) { const t = pop.querySelector('.socnote'); return t ? t.value.trim().slice(0, 400) : ''; }
+function openSocialChooser(p, pop, kind, opts) {
+  const box = pop.querySelector('.phchoose');
+  if (!box) return;
+  if (!box.hidden && box.dataset.kind === 'social-' + kind) { box.hidden = true; return; }
+  box.dataset.kind = 'social-' + kind;
+  const isV = kind === 'video';
+  box.innerHTML = `<div class="phchead">📱 Social ${isV ? 'video' : 'photo'} — for the marketing team</div>
+    <textarea class="socnote" rows="2" maxlength="400" placeholder="Optional: a sentence or two for marketing — what is it, why it's worth sharing (e.g. 'found this 1920s ticket stub under the keys', 'slow-mo of the hammers after regulation')"></textarea>
+    ${isV
+      ? `<button class="maddbtn socgo" data-go="cam">🎥 Record now<small>under a minute: shoot vertical · longer: shoot horizontal</small></button>
+         <button class="maddbtn socgo" data-go="pick">📁 Saved clip<small>a video already on this phone</small></button>`
+      : `<button class="maddbtn socgo" data-go="cam">📷 Camera<small>one shot, vertical for most photos</small></button>
+         <button class="maddbtn socgo" data-go="roll">🖼 Camera roll<small>photos you already took (up to 8)</small></button>`}
+    <div class="lite" style="font-size:10.5px;margin-top:4px">Files into this piano's Social ${isV ? 'Video' : 'Photos'} folder. Marketing picks a weekly winner.</div>
+    <button class="phclose" title="close">✕</button>`;
+  box.hidden = false;
+  box.onclick = e2 => e2.stopPropagation();
+  box.querySelector('.phclose').onclick = e2 => { e2.stopPropagation(); box.hidden = true; };
+  const ta = box.querySelector('.socnote');
+  ta.onkeydown = e2 => e2.stopPropagation();
+  box.querySelectorAll('.socgo').forEach(b => b.onclick = e2 => {
+    e2.stopPropagation();
+    const go = b.dataset.go;
+    const el = go === 'cam' && isV ? pop.querySelector('.vidin') : go === 'pick' ? pop.querySelector('.vidpick')
+      : go === 'cam' ? pop.querySelector('.soccam') : pop.querySelector('.socroll');
+    if (!el) return;
+    el.value = ''; el.click();
+  });
+  if (opts && opts.pick) { const pk = pop.querySelector('.vidpick'); if (pk) { pk.value = ''; pk.click(); } }
+  place(pop, S.popAnchor);   // card grew
+}
+async function uploadSocialPhotos(p, files, note, pop) {
+  files = (files || []).slice(0, 8);
+  if (!files.length) return;
+  const msg = pop.querySelector('.mdmsg');
+  const say = (cls, t) => { if (msg) { msg.className = 'mdmsg ' + cls; msg.textContent = t; } };
+  popPinned = true;
+  const wa = writeAuth();
+  if (!wa.ok) { say('err', wa.renewing ? 'Sign-in expired — renewing, retry in a moment.' : 'Sign in first.'); return; }
+  let done = 0, link = '';
+  for (const f of files) {
+    say('', `Uploading social photo ${done + 1}/${files.length}…`);
+    try {
+      const dataUrl = await downscalePhoto(f, 2048, 0.85);
+      const j = await photoPost({pin: wa.pin, action: 'photo', kind: 'social', serial: p.serial, row: p.row,
+          stage: 'Social', note, mime: 'image/jpeg', uploadId: 'soc' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
+          data: dataUrl.split(',')[1], ...authFields()});
+      if (!j.saved) throw new Error(j.error || 'upload failed');
+      if (j.folderUrl) { link = j.folderUrl; p.sphotoUrl = j.folderUrl; }
+      done++;
+    } catch (e) {
+      say('err', '✗ ' + e.message + (done ? ` (${done} uploaded)` : ''));
+      return;
+    }
+  }
+  const box = pop.querySelector('.phchoose'); if (box) box.hidden = true;
+  if (msg) { msg.className = 'mdmsg ok'; msg.innerHTML = `✓ ${done} social photo${done > 1 ? 's' : ''} filed — marketing has been told${link ? ` — <a href="${esc(link)}" target="_blank" rel="noopener">open in Drive ↗</a>` : ''}`; }
+}
+async function uploadVideo(p, kind, f, pop, note) {
   if (!f) return;
   const say = (cls, t) => { const m = pop.querySelector('.mdmsg'); if (m) { m.className = 'mdmsg ' + cls; m.textContent = t; } };
   popPinned = true;
   const {pin, ok} = writeAuth();
   if (!ok) { say('err', 'Sign in with Google (☰ menu) first — uploads are logged under your name.'); return; }
-  const label = kind === 'after' ? 'after' : kind === 'progress' ? 'progress' : 'before';
+  const label = kind === 'after' ? 'after' : kind === 'progress' ? 'progress' : kind === 'social' ? 'social' : 'before';
+  note = String(note || '').trim().slice(0, 400);
   const mb = Math.round(f.size / 1048576 * 10) / 10;
   const btns = [...pop.querySelectorAll('.vidbtn')];
   btns.forEach(b => b.disabled = true);
@@ -9843,7 +9940,7 @@ async function uploadVideo(p, kind, f, pop) {
     const r0 = await fetchT(BRIDGE_URL, {method: 'POST', redirect: 'follow',
       headers: {'content-type': 'text/plain;charset=utf-8'},
       body: JSON.stringify({pin, action: 'videosession', serial: p.serial, row: p.row, kind: label,
-        stage: label === 'progress' ? (effectivePhase(p) || '') : '',
+        stage: label === 'progress' ? (effectivePhase(p) || '') : '', note,
         mime: f.type || 'video/mp4', size: f.size, name: f.name || '', ...authFields()})}, 45000);
     const s = await r0.json();
     if (!s.ok || !s.sessionUrl) throw new Error(s.error || 'could not open a Drive upload');
@@ -9879,11 +9976,13 @@ async function uploadVideo(p, kind, f, pop) {
       const r2 = await fetchT(BRIDGE_URL, {method: 'POST', redirect: 'follow',
         headers: {'content-type': 'text/plain;charset=utf-8'},
         body: JSON.stringify({pin, action: 'videodone', serial: p.serial, row: p.row, kind: label,
-          fileId: file.id, summary: s.summary || p.summary || '', ...authFields()})}, 30000);
+          fileId: file.id, summary: s.summary || p.summary || '', note, ...authFields()})}, 30000);
       done = await r2.json();
     } catch (e3) { done = {}; }
     if (label === 'progress') {
       p.pvideoUrl = s.folderUrl;
+    } else if (label === 'social') {
+      p.svideoUrl = s.folderUrl;
     } else {
       const field = label === 'before' ? 'bvideo' : 'avideo';
       p[field] = true; p[field + 'Url'] = s.folderUrl;
@@ -9891,11 +9990,12 @@ async function uploadVideo(p, kind, f, pop) {
     }
     renderMap(); renderKpis();
     openPop(p.row, S.popAnchor, true);
-    const nice = label === 'before' ? 'Before' : label === 'after' ? 'After' : 'Progress';
+    const nice = label === 'before' ? 'Before' : label === 'after' ? 'After' : label === 'social' ? 'Social' : 'Progress';
     const m3 = pop.querySelector('.mdmsg');
-    if (m3) { m3.className = 'mdmsg ok'; m3.innerHTML = `✓ ${nice} video saved (${mb} MB) — <a href="${esc(done.link || s.folderUrl)}" target="_blank" rel="noopener">open in Drive ↗</a>`; }
+    if (m3) { m3.className = 'mdmsg ok'; m3.innerHTML = `✓ ${nice} video saved (${mb} MB)${label === 'social' ? ' — marketing has been told' : ''} — <a href="${esc(done.link || s.folderUrl)}" target="_blank" rel="noopener">open in Drive ↗</a>`; }
     // Brigham 9/18: every filed video gets 5 YouTube-size thumbnails, taken right now
-    openThumbWizard(p, label, {folderId: s.folderId, folderUrl: s.folderUrl, videoName: file.name || s.name, summary: s.summary || p.summary || ''}, pop);
+    // (not social clips — those are short, usually vertical, and judged as-is)
+    if (label !== 'social') openThumbWizard(p, label, {folderId: s.folderId, folderUrl: s.folderUrl, videoName: file.name || s.name, summary: s.summary || p.summary || ''}, pop);
   } catch (e) {
     say('err', '✗ ' + (e && e.message || e));
     btns.forEach(b => b.disabled = false);
@@ -11578,17 +11678,33 @@ function stalledPianos() {
     .filter(x => x.age > x.lim * 2)
     .sort((a, b) => b.age - a.age);
 }
+// who has the piano: a live Work Clock session first, else the most recent
+// tech in the Time Log for that serial (the Time Log loads lazily when the
+// report opens — "…" until then). Shared by the Shop Queue's ASSIGNED TO and
+// Sitting Too Long's RECENT WORK (Mark 10/20), which also shows the last date.
+function recentWorkCell(p, withDate) {
+  const live = (CLOCK.all || []).find(o => o.serial === p.serial);
+  if (live) return `<td><span class="qulive">● ${esc((live.tech || '').split(/\s+/)[0] || live.tech)} now</span></td>`;
+  if (!S.tlRows) return '<td>…</td>';
+  let last = null;
+  unvoided(S.tlRows).forEach(r => {
+    if (r.serial === p.serial && r.tech && (!last || new Date(r.start) > new Date(last.start))) last = r;
+  });
+  if (!last) return '<td>—</td>';
+  const when = withDate ? ' · ' + new Date(last.start).toLocaleDateString('en-US', {month: 'short', day: 'numeric'}) : '';
+  return `<td><span class="qurecent">${withDate ? '' : 'recent: '}${esc(last.tech)}${esc(when)}</span></td>`;
+}
 function stalledTable() {
   const rows = stalledPianos();
-  return `<table><tr><th>PIANO</th><th>SPOT</th><th>PHASE</th><th>DAYS IN BUILDING</th><th>PHASE STANDARD</th></tr>
+  return `<table><tr><th>PIANO</th><th>SPOT</th><th>PHASE</th><th>DAYS IN BUILDING</th><th>PHASE STANDARD</th><th>RECENT WORK</th></tr>
     ${rows.map(({p, age, lim}) => `<tr class="mrow" data-row="${p.row}">
       <td>${esc(((p.year ? p.year + ' ' : '') + ([p.make, p.model].filter(Boolean).join(' ') || p.summary)).slice(0, 36))}<br>
           <span class="lite" style="color:#8a929a;font-size:11px">${esc(p.serial)}</span></td>
       <td>${esc(String(p.location || '—').slice(0, 14))}</td>
       <td>${esc(p.phase)}</td>
       <td><b style="color:#9e2020">${age} days</b></td>
-      <td>~${lim} days</td></tr>`).join('')
-    || '<tr><td colspan="5" class="empty">Nothing is sitting past its standard — great pace. 🎉</td></tr>'}
+      <td>~${lim} days</td>${recentWorkCell(p, true)}</tr>`).join('')
+    || '<tr><td colspan="6" class="empty">Nothing is sitting past its standard — great pace. 🎉</td></tr>'}
     </table>`;
 }
 
@@ -11606,16 +11722,7 @@ function queueTable() {
   const pending = S.data.pianos.filter(p => p.active && preQueue(p) && !p.queuePos);
   // ASSIGNED TO: live open work-clock session first, else the most recent
   // tech in the Time Log for that serial (loaded lazily when this report opens)
-  const assignedCell = p => {
-    const live = (CLOCK.all || []).find(o => o.serial === p.serial);
-    if (live) return `<td><span class="qulive">● ${esc((live.tech || '').split(/\s+/)[0] || live.tech)} now</span></td>`;
-    if (!S.tlRows) return '<td>…</td>';
-    let last = null;
-    unvoided(S.tlRows).forEach(r => {
-      if (r.serial === p.serial && r.tech && (!last || new Date(r.start) > new Date(last.start))) last = r;
-    });
-    return last ? `<td><span class="qurecent">recent: ${esc(last.tech)}</span></td>` : '<td>—</td>';
-  };
+  const assignedCell = p => recentWorkCell(p, false);
   const row = p => `<tr class="mrow" data-row="${p.row}" ${p.queuePos === 1
       ? 'style="background:#eaf5ec"' : ''}>
       <td style="font-weight:800;white-space:nowrap">#${p.queuePos}${p.queuePos === 1 ? ' · next up' : ''}</td>
@@ -11946,15 +12053,29 @@ function payTimeTable() {
   rows.forEach(r => { tot[r.tech] = (tot[r.tech] || 0) + (r.minutes || 0); });
   const totals = Object.entries(tot).sort((a, b) => b[1] - a[1]);
   const byPhase = {}, byPiano = {};
+  // outside-project kinds are labelled "Outside: …" so they never merge with a
+  // piano phase of the same name (Refinishing), and the old Building
+  // Maintenance code (MAINT) joins the new Outside kind (Mark 10/20)
+  const catOf = r => {
+    const ser = String(r.serial || '').toUpperCase();
+    if (ser === 'MAINT') return 'Outside: Building maintenance';
+    if (ser === 'TIDY') return 'Outside: Shop tidying';
+    if (ser === 'OUTSIDE') return 'Outside: ' + (r.phase || 'Other');
+    return r.phase || '(no phase)';
+  };
   tl.forEach(r => {
-    byPhase[r.phase || '(no phase)'] = (byPhase[r.phase || '(no phase)'] || 0) + r.minutes;
-    const pk = (r.piano || r.phase || '?') + (r.serial && !/^(MGMT|TIDY|MAINT|KEYS|OUTSIDE)$/i.test(r.serial) ? ' #' + r.serial : '');
+    const cat = catOf(r);
+    byPhase[cat] = (byPhase[cat] || 0) + r.minutes;
+    const pk = (r.piano || r.phase || '?') + (r.serial && !/^(MGMT|TIDY|MAINT|KEYS|OUTSIDE)$/i.test(r.serial) ? ' #' + r.serial
+      : /^OUTSIDE$/i.test(r.serial || '') ? ' (outside)' : '');
     byPiano[pk] = (byPiano[pk] || 0) + r.minutes;
   });
   const phaseRows = Object.entries(byPhase).sort((a, b) => b[1] - a[1]);
   const pianoRows = Object.entries(byPiano).sort((a, b) => b[1] - a[1]).slice(0, 40);
   const sessions = showTl ? [...tl].sort((a, b) => new Date(b.start) - new Date(a.start)).slice(0, 600) : [];
-  const pianoLabel = r => /^(MGMT|TIDY|MAINT|KEYS|OUTSIDE)$/i.test(r.serial || '') ? '—' : `${esc(r.piano || '?')} <small>#${esc(r.serial)}</small>`;
+  // an outside project's job name rides in the piano field — show it (Mark 10/20)
+  const pianoLabel = r => /^OUTSIDE$/i.test(r.serial || '') ? `${esc(r.piano || 'Outside project')} <small>outside</small>`
+    : /^(MGMT|TIDY|MAINT|KEYS)$/i.test(r.serial || '') ? '—' : `${esc(r.piano || '?')} <small>#${esc(r.serial)}</small>`;
   CSV_EXPORTS.paydays = () => ['payroll-punches.csv',
     [['Date', 'Team member', 'Clock in', 'Clock out', 'Minutes', 'Hours (decimal)', 'Note'],
      ...rows.map(r => [r.date, r.tech, fmtT(r.start), r.end ? fmtT(r.end) : 'OPEN', r.minutes, hDec(r.minutes), r.note])]];
@@ -11968,7 +12089,7 @@ function payTimeTable() {
     <h4 class="bfhd">Piano Work Clock sessions — every individual clock-in (piano, management, cleaning…), same filters${f.cat ? ' · ' + esc(f.cat) : ''}</h4>
     <table><tr><th>DATE</th><th>TEAM MEMBER</th><th>PIANO</th><th>PHASE / CATEGORY</th><th>IN</th><th>OUT</th><th>HOURS</th></tr>
     ${sessions.map(r => `<tr><td>${esc(denverDay(r.start))}</td><td>${esc(r.tech)}</td><td>${pianoLabel(r)}</td>
-        <td>${esc(r.phase || '—')}</td><td>${fmtT(r.start)}</td>
+        <td>${esc(catOf(r))}</td><td>${fmtT(r.start)}</td>
         <td>${r.end ? fmtT(r.end) : '<b style="color:#2e7d4f">open</b>'}</td><td>${r.minutes ? fmtHM(r.minutes) : '—'}</td></tr>`).join('')
      || '<tr><td colspan="7" class="empty">No piano work-clock sessions in this range.</td></tr>'}</table>
     ${tl.length > sessions.length ? `<div class="lite" style="font-size:11.5px;margin:4px 0 10px">Showing the latest ${sessions.length} of ${tl.length} sessions — narrow the dates or use the CSV for all of them.</div>` : ''}`;
@@ -12007,19 +12128,27 @@ function jobCostTable() {
     `<button class="csvbtn" data-csv="jcsummary">⬇ CSV — summary</button>`,
     `<button class="csvbtn" data-csv="jcsessions">⬇ CSV — raw sessions</button>`,
   ]);
-  // group by piano, then tech × phase inside
+  // group by piano, then tech × phase inside. Outside-project work is one line
+  // PER KIND ("Outside: Field work"…), tech × job name inside; the old
+  // MAINT / TIDY codes fold into their Outside kinds (Brigham/Karmel via Mark 10/20)
+  const outsideKind = r => {
+    const ser = String(r.serial || '').toUpperCase();
+    return ser === 'OUTSIDE' ? (r.phase || 'Other') : ser === 'MAINT' ? 'Building maintenance' : ser === 'TIDY' ? 'Shop tidying' : '';
+  };
   const pianos = {};
   rows.forEach(r => {
-    const k = r.serial;
-    const g = pianos[k] = pianos[k] || {serial: r.serial, piano: r.piano, mins: 0, n: 0, parts: {}};
+    const ok = outsideKind(r);
+    const k = ok ? 'OUTSIDE|' + ok : r.serial;
+    const g = pianos[k] = pianos[k] || (ok ? {serial: 'OUTSIDE', piano: 'Outside: ' + ok, outside: true, mins: 0, n: 0, parts: {}}
+      : {serial: r.serial, piano: r.piano, mins: 0, n: 0, parts: {}});
     g.mins += r.minutes; g.n++;
-    const pk = r.tech + '|' + (r.phase || '(no phase)');
+    const pk = r.tech + '|' + (ok ? (String(r.serial).toUpperCase() === 'OUTSIDE' ? (r.piano || 'job not named') : ok) : (r.phase || '(no phase)'));
     g.parts[pk] = (g.parts[pk] || 0) + r.minutes;
   });
   const list = Object.values(pianos).sort((a, b) => b.mins - a.mins);
   const totalM = rows.reduce((a, r) => a + r.minutes, 0);
   CSV_EXPORTS.jcsummary = () => ['job-costing-summary.csv',
-    [['Serial', 'Piano', 'Technician', 'Phase', 'Minutes', 'Hours (decimal)'],
+    [['Serial', 'Piano / outside kind', 'Technician', 'Phase / job', 'Minutes', 'Hours (decimal)'],
      ...list.flatMap(g => Object.entries(g.parts).map(([pk, m]) => {
        const [tech, phase] = pk.split('|');
        return [g.serial, g.piano, tech, phase, m, hDec(m)];
@@ -12028,12 +12157,12 @@ function jobCostTable() {
     [['Serial', 'Piano', 'Technician', 'Phase', 'Start', 'End', 'Minutes', 'Hours (decimal)', 'Source'],
      ...rows.map(r => [r.serial, r.piano, r.tech, r.phase, r.start, r.end, r.minutes, hDec(r.minutes), r.source])]];
   return bar + `
-    <p class="pd">${list.length} piano${list.length === 1 ? '' : 's'} · ${fmtHM(totalM)} total ·
+    <p class="pd">${list.filter(g => !g.outside).length} piano lines · ${list.filter(g => g.outside).length} outside-work kinds · ${fmtHM(totalM)} total ·
       ${rows.length} session${rows.length === 1 ? '' : 's'} ·
       <a target="_blank" rel="noopener" href="https://docs.google.com/spreadsheets/d/11RoeVRETag5rZYX6_tEH-rf6x8JL0JeZU0P5AT0WI-I/edit">open the Time Log sheet ↗</a></p>
     <table><tr><th>PIANO</th><th>TECHNICIAN × PHASE</th><th>HOURS</th></tr>
     ${list.map(g => `
-      <tr class="jcp"><td><b>${esc(g.piano || '—')}</b><br><small>#${esc(g.serial)} · ${g.n} session${g.n === 1 ? '' : 's'}</small></td>
+      <tr class="jcp"><td><b>${esc(g.piano || '—')}</b><br><small>${g.outside ? 'outside project' : '#' + esc(g.serial)} · ${g.n} session${g.n === 1 ? '' : 's'}</small></td>
         <td></td><td><b>${fmtHM(g.mins)}</b> <small>(${hDec(g.mins)})</small></td></tr>
       ${Object.entries(g.parts).sort((a, b) => b[1] - a[1]).map(([pk, m]) => {
         const [tech, phase] = pk.split('|');
@@ -12997,8 +13126,30 @@ function scorecardTable() {
   const trainRows = tl.filter(r => /^Training/.test(r.phase));
   const reworkRows = tl.filter(r => /^Rework|re-?do|fix(ing)? (earlier|previous)/i.test(r.phase));
   const workH = mins(pianoRows) / 60, trainH = mins(trainRows) / 60, reworkH = mins(reworkRows) / 60;
-  const payMin = unvoided(S.payRows).filter(r => inWin(r.date || r.start)).reduce((a, r) => a + (r.minutes || 0), 0);
-  const coverage = payMin ? Math.min(100, Math.round(100 * mins(tl) / payMin)) : null;
+  // CLOCK COVERAGE (Brigham 10/20): shop staff only, and admin / management
+  // clock time does not count as covered. Before this the ratio was every
+  // work-clock minute in the shop over EVERY payroll minute — movers and the
+  // office (Melissa, Lisa, Alisa…) sat in the denominator with no work clock,
+  // and 120 h/month of MGMT punches sat in the numerator. Who is "shop
+  // staff" comes from the Current Team roster's Position column (never
+  // guessed): Rebuilder / Tuner / Technician / Refinisher / Intern / Shop
+  // Manager, minus anyone whose Position says Mover or Admin. Unknown names
+  // are left out and listed under the tile.
+  const adminMgmt = r => r.serial === 'MGMT' || /^(Management|Admin)/i.test(r.phase || '');
+  const roster = S.scRoster;   // undefined = loading, null = unreadable
+  const posOf = name => roster ? (roster[techName(name).split(/\s+/)[0].toLowerCase()] || '') : '';
+  const shopStaff = name => { const p = posOf(name); return !!p && !/mover|admin/i.test(p)
+    && /rebuilder|tuner|technician|refinish|intern|shop manager/i.test(p); };
+  const payRowsWin = unvoided(S.payRows).filter(r => inWin(r.date || r.start));
+  const unknownNames = roster ? [...new Set(payRowsWin.map(r => techName(r.tech)).filter(n => n && !posOf(n)))].sort() : [];
+  const payMin = roster ? payRowsWin.filter(r => shopStaff(r.tech)).reduce((a, r) => a + (r.minutes || 0), 0) : 0;
+  const covRows = roster ? tl.filter(r => shopStaff(r.tech) && !adminMgmt(r)) : [];
+  const excludedH = roster ? mins(tl.filter(r => shopStaff(r.tech) && adminMgmt(r))) / 60 : 0;
+  const coverage = payMin ? Math.min(100, Math.round(100 * mins(covRows) / payMin)) : null;
+  const coverageSub = roster === undefined ? 'loading the team roster…'
+    : roster === null ? 'team roster unreadable — not computed'
+    : 'shop staff work-clock ÷ payroll · gate ≥85% · ' + excludedH.toFixed(0) + 'h admin/mgmt + movers + office left out'
+      + (unknownNames.length ? ' · not on roster: ' + unknownNames.join(', ') : '');
   // mini-QC first pass
   const qc = (S.qcRows || []).filter(r => inWin(r.when));
   const qcPass = qc.filter(r => r.result === 'pass').length;
@@ -13125,7 +13276,7 @@ function scorecardTable() {
         'draft — not yet shown to Mark')}` : ''}
     </div></div>`;
   return hero + money + ladder + `<div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:14px">
-    ${kpi('Clock coverage', pct(coverage), 'work-clock ÷ payroll · gate ≥85%', coverage != null && coverage < 85 ? '#9e2020' : '#2f7d4f')}
+    ${kpi('Clock coverage', pct(coverage), coverageSub, coverage != null && coverage < 85 ? '#9e2020' : '#2f7d4f')}
     ${kpi('Mini-QC first pass', pct(firstPass), qc.length + ' phase advances · 30d', firstPass != null && firstPass >= 95 ? '#2f7d4f' : undefined)}
     ${kpi('Rework', reworkH.toFixed(1) + 'h', workH ? (100 * reworkH / workH).toFixed(1) + '% of ' + workH.toFixed(0) + 'h piano work' : '', reworkH / Math.max(workH, 1) > .05 ? '#9e2020' : '#2f7d4f')}
     ${kpi('Training invested', trainH.toFixed(1) + 'h', 'trainer+trainee punches · neutral in index')}
@@ -13154,9 +13305,6 @@ const REPORT_DEFS = () => [
    icon: '⏰', title: 'TIME CLOCK — PAYROLL', count: null,
    desc: 'Team clock-in / clock-out for payroll: every arrival-and-exit punch from the dashboard Payroll Clock, filterable by team member and date, with daily punches or weekly/monthly totals, plus that member\u2019s hours by piano and by category of work from the piano Work Clock. Red rows were auto-closed (forgot to clock out) — review before running payroll. The CSV buttons export spreadsheets.',
    html: payTimeTable},
-  {id: 'jobcost', sec: 'admin', show: isOwner, icon: '💰', title: 'JOB COSTING — PER PIANO', count: null,
-   desc: 'Shop hours per piano from the Work Clock ledger, broken down by technician and phase — filter by piano, technician, phase, or date range, then export CSV spreadsheets (summary or raw sessions) for job costing.',
-   html: jobCostTable},
   {id: 'clockadjust', sec: 'admin', show: () => isPayrollAdmin() || isTimelogAdmin(), icon: '🛠', title: 'TIME CLOCK ADJUSTMENTS', count: (() => {
      try { return S.fixRows ? S.fixRows.filter(r => cfxSinceLaunch(r) && r.status === 'open').length : null; } catch (e) { return null; } })(),
    desc: 'Fix mistakes and forgotten punches. Team fix requests land here; payroll day punches are editable by owners & Melissa, piano Work Clock sessions by owners & the shop managers (Mark, Matthew, Jacob). Every adjustment is stamped with who changed it.',
@@ -13200,7 +13348,7 @@ const REPORT_DEFS = () => [
    desc: 'Custom Shopwork pianos in the building more than twice the typical span for their current phase — the 🐢 list that used to live inside the daily brief. Click a row to jump to the piano.',
    html: stalledTable},
   {id: 'tuningcheck', sec: 'shop', icon: '🎵', title: 'SHOWROOM TUNING CHECK', count: (() => {
-     try { return tchkRows().length; } catch (e) { return null; } })(),
+     try { return tchkSplit(tchkRows()).shown.length; } catch (e) { return null; } })(),   // Good ones are hidden (Mark 10/20)
    desc: 'Korban’s walk-order worksheet: every piano for sale on the public floor (vestibule, showroom, bottom of the stairs, balcony) with a tag price and no tuning in the last 30 days — front door first, then down the ramp, the spots by the admin desk, then up to the balcony. Mark each one Good or Needs tuning and jot service notes; marks save for everyone. 🖨 Print now for the paper sheet.',
    html: tuningCheckTable, print: tuningCheckPrintHTML},
   {id: 'unplaced', sec: 'shop', icon: '⚠️', title: 'UNPLACED PIANOS', count: unplaced().length,
@@ -14213,10 +14361,8 @@ function renderDash() {
     </div>
     ${payCard}
     <div class="dlockers">
-      <div class="dlocker" data-h="#myweek"><span class="ic">📋</span><b>My Week</b><span>work items · carries into your report</span></div>
+      <!-- My Week, Piano Card Audit and My Calendar removed from the dashboard (Mark 10/20: not used) -->
       <div class="dlocker" data-h="#report"><span class="ic">📝</span><b>Weekly Report</b><span>due Thursday 6pm</span></div>
-      <div class="dlocker" data-audit="1"><span class="ic">🧪</span><b>Piano Card Audit</b><span>report vs. card discrepancies</span></div>
-      <div class="dlocker" data-h="#calendars"><span class="ic">📅</span><b>My Calendar</b><span>assigned vs. reported</span></div>
       <div class="dlocker" data-pay="1"><span class="ic">💵</span><b>Paylogics ↗</b><span>paystubs · time off</span></div>
     </div>
     ${isTimelogAdmin() ? (() => {
@@ -14242,6 +14388,9 @@ function renderDash() {
       // everyone's Friday organization time — clock time that isn't tied to
       // one piano. Same pseudo-serial pattern as management time (TIDY).
       const onTidy = o && o.serial === 'TIDY';
+      // retired 10/20 (Mark): Shop tidying is a kind of work on the Outside
+      // project card now; this box only shows to someone still on the old TIDY code
+      if (!onTidy) return '';
       return `<div class="dbench db-tidy">
         <h4>🧹 Shop tidying / organization</h4>
         ${onTidy ? `<div class="dline now"><b>On tidying time</b> since ${fmtT(o.start)} —
@@ -14259,9 +14408,10 @@ function renderDash() {
       // 🔧 building maintenance (Korban via Melissa 9/16, request 091626terry43):
       // lightbulbs, sheetrock, painting — not tidying, not a piano. Pseudo-serial MAINT.
       const onMaint = o && o.serial === 'MAINT';
-      // Korban, Matthew, Jacob and Mark only (Walter 10/13); anyone already on
-      // maintenance time still sees the card so they can end it
-      if (!onMaint && !maintOk()) return '';
+      // retired 10/20 (Mark): building maintenance is now a kind of work on the
+      // Outside project card. The box only shows to someone still clocked in
+      // on the old MAINT code, so they can end that session
+      if (!onMaint) return '';
       return `<div class="dbench db-maint">
         <h4>🔧 Building maintenance</h4>
         ${onMaint ? `<div class="dline now"><b>On building maintenance</b> since ${fmtT(o.start)} —
@@ -14324,7 +14474,6 @@ function renderDash() {
       ${o ? `<div class="dline now"><b>${esc(o.phase || 'Working')} — ${esc(o.piano || '')} #${esc(o.serial)}</b>
                · <span class="cctime" data-start="${esc(o.start)}">${clockElapsed(o.start)}</span> and counting</div>`
           : `<div class="dline">Not clocked in — open a piano's card and hit ▶ Clock in.</div>`}
-      <div class="dline dim">Your queue for the week lives in <a class="dlink2" data-h="#myweek">📋 My Week ›</a></div>
     </div>
     ${myClockHistory()}
     ${prs ? `<div class="dbench db-recs">
@@ -16414,7 +16563,18 @@ addEventListener('message', ev => {
  * (supabase/tuning_check.sql, written by /api/tuningcheck) so a phone on the
  * floor and the desk see the same sheet. Opens from the 📅 Scheduling tabs
  * and from Reports; 🖨 Print now gives the paper version. */
-const TCHK = {data: null, at: 0, loading: false};
+const TCHK = {data: null, at: 0, loading: false,
+  // Good pianos are hidden for the life of their mark (30 days) — whoever
+  // walks next sees only pianos with issues or not checked yet (Mark 10/20).
+  // One marked Good in THIS visit stays put until the page is reloaded, so a
+  // tap never makes a row jump away mid-walk; showGood brings them all back.
+  keep: new Set(), showGood: false};
+// rows the sheet shows vs. Good ones it hides
+function tchkSplit(rows) {
+  const shown = [], hidden = [];
+  rows.forEach(r => (tchkState(r.p.serial).mark === 'good' && !TCHK.keep.has(r.p.serial) && !TCHK.showGood ? hidden : shown).push(r));
+  return {shown, hidden};
+}
 const TCHK_DAYS = 30;             // "tuned in the past month" = skip it
 const TCHK_STOPS = [
   ['vestibule', 'Vestibule', 'start at the front door'],
@@ -16548,7 +16708,9 @@ const tchkYear = p => /^new$/i.test((p.year || '').trim()) ? 'New' : (p.year || 
 // the worksheet (screen version): header with logo, who & when, the route,
 // then the rows with Good / Needs tuning boxes and a notes line
 function tuningCheckTable() {
-  const rows = tchkRows();
+  const all = tchkRows();
+  const {shown: rows, hidden} = tchkSplit(all);
+  const goodAll = all.filter(r => tchkState(r.p.serial).mark === 'good').length;
   const who = lsGet('tchkWho') || clockName();
   const marks = rows.map(r => tchkState(r.p.serial));
   const good = marks.filter(m => m.mark === 'good').length, tune = marks.filter(m => m.mark === 'tune').length,
@@ -16604,6 +16766,8 @@ function tuningCheckTable() {
     </div>
     <div class="tcroute">${stops}</div>
     <div class="tctally"><b>${rows.length}</b> pianos to check · <b class="tcgood">${good}</b> good · <b class="tctune">${tune}</b> need tuning (<b class="tcasap-n">${asap}</b> ⚡ ASAP) · <b class="tcskipn">${skip}</b> skipped · <b class="tcleft">${rows.length - good - tune - skip}</b> left
+      ${hidden.length ? `<button type="button" class="tcgoodtoggle" title="pianos marked Good drop off the sheet for ${TCHK_DAYS} days, then come back to be checked again">✓ ${hidden.length} marked Good — hidden for ${TCHK_DAYS} days · show</button>`
+        : TCHK.showGood && goodAll ? `<button type="button" class="tcgoodtoggle">hide the ${goodAll} marked Good</button>` : ''}
       <span>· ${noRec} with no tuning on the calendar · ${booked} already booked for a tuning (see Notes) · skipped pianos go to Chris for review${TCHK.data ? '' : ' · loading saved marks…'}</span></div>
     <div class="tscroll"><table class="tchktbl">
       <thead><tr><th></th><th>Map #</th><th>Serial</th><th>Last tuned</th><th>Year</th><th>Make</th><th>Model</th><th>Price</th><th>Good</th><th>Tuning · ⚡ ASAP</th><th>Skip</th><th>Notes — sticky key, squeaky pedal, clicks, other service</th></tr></thead>
@@ -16613,7 +16777,7 @@ function tuningCheckTable() {
 // the paper version (🖨 Print now / the report's Print button): logo, name
 // and date lines, empty boxes, a writing line per piano
 function tuningCheckPrintHTML() {
-  const rows = tchkRows();
+  const rows = tchkSplit(tchkRows()).shown;   // the paper sheet skips Good pianos too
   const who = lsGet('tchkWho') || clockName();
   let body = '', n = 0;
   TCHK_STOPS.forEach(([k, label, hint], i) => {
@@ -16701,8 +16865,11 @@ function wireTuningCheck(root, rerender) {
     const p = S.data.pianos.find(x => x.row === +tr.dataset.row);
     if (p) focusPiano(p);
   });
+  const gt = box.querySelector('.tcgoodtoggle');
+  if (gt) gt.onclick = ev => { ev.stopPropagation(); TCHK.showGood = !TCHK.showGood; if (rerender) rerender(); };
   box.querySelectorAll('.tcmark').forEach(cb => cb.onchange = async () => {
     const tr = cb.closest('.tcrow'), serial = tr.dataset.serial, m = cb.dataset.m;
+    TCHK.keep.add(serial);   // marked in this visit: stays on screen until a reload
     const other = tr.querySelector(`.tcmark[data-m="${m === 'good' ? 'tune' : 'good'}"]`);
     const mark = cb.checked ? m : '';
     if (cb.checked && other) other.checked = false;
@@ -16827,7 +16994,7 @@ function renderSched() {
   // 🎵 Tuning Check gets its own button up top (Brigham 10/9) — the walk-order
   // worksheet is a tool, not a dashboard tab, and it should be one click
   let tcCount = null;
-  try { tcCount = tchkRows().length; } catch (e) { /* map not ready yet */ }
+  try { tcCount = tchkSplit(tchkRows()).shown.length; } catch (e) { /* map not ready yet */ }
   el.innerHTML = `<div class="schedtools">
       <button class="tcopenbtn" data-st="tuningcheck" title="Korban's showroom walk-order worksheet: for-sale pianos not tuned in the last 30 days">
         <span class="ic">🎵</span><span class="tcl"><b>Tuning Check</b><small>showroom walk-order worksheet · mark Good / Needs tuning / Skip · print</small></span>
@@ -17208,7 +17375,47 @@ function renderManager() {
   if (!S.payRows) loadPayroll();
   if (!S.qcRows) loadQcLog();
   if (!S.slRows) loadScoreLog();
-  el.innerHTML = scorecardTable();
+  if (S.scRoster === undefined) loadScRoster();
+  // 💰 Job costing lives here now (Brigham 10/20): owners + managers only,
+  // not in the team-wide Reports list
+  const jcOpen = S.jcOpen !== false;
+  el.innerHTML = scorecardTable() + `
+    <details class="jcwrap" ${jcOpen ? 'open' : ''}>
+      <summary><h2 class="ph" style="display:inline">💰 JOB COSTING — PER PIANO</h2></summary>
+      <p class="pd">Shop hours per piano from the Work Clock ledger, by technician and phase. Filter by piano, technician, phase or date range, then export CSV (summary or raw sessions). Hours only — pay rates are not in the app.</p>
+      ${jobCostTable()}
+    </details>`;
+  const jw = el.querySelector('.jcwrap');
+  if (jw) jw.ontoggle = () => { S.jcOpen = jw.open; };
+  el.querySelectorAll('.rptf[data-scope="jc"]').forEach(f => {
+    const apply = () => {
+      (S.jcF || (S.jcF = {}))[f.dataset.f] = f.value;
+      renderManager();
+      const again = el.querySelector(`.rptf[data-scope="jc"][data-f="${f.dataset.f}"]`);
+      if (again && again.tagName === 'INPUT' && again.type === 'text') { again.focus(); again.setSelectionRange(again.value.length, again.value.length); }
+    };
+    if (f.tagName === 'SELECT' || f.type === 'date') f.onchange = apply;
+    else f.oninput = () => { clearTimeout(f._t); f._t = setTimeout(apply, 350); };
+  });
+  el.querySelectorAll('.csvbtn[data-csv]').forEach(b => b.onclick = ev => {
+    ev.stopPropagation();
+    const mk = CSV_EXPORTS[b.dataset.csv];
+    if (mk) { const [name, rows] = mk(); downloadCsv(name, rows); }
+  });
+}
+/* Current Team roster → {firstname: Position} for the coverage population.
+ * A failed read is null (coverage shows "not computed"), never an empty
+ * roster that would silently count nobody or everybody. */
+async function loadScRoster() {
+  S.scRoster = undefined;
+  try {
+    const r = await fetchT(TEAM_ROSTER_API + '?key=pianoman', {}, 20000);
+    const rows = ((await r.json()).tabs || {})['Current Team'] || [];
+    const out = {};
+    rows.slice(1).forEach(row => { const f = String(row[0] || '').trim().toLowerCase(); if (f) out[f] = String(row[2] || '').trim() || '(no position)'; });
+    S.scRoster = rows.length > 1 ? out : null;
+  } catch (e) { S.scRoster = null; }
+  if (S.view === 'manager') renderManager();
 }
 /* ---------- ⚙️ SETTINGS — Design C: Roles Ladder (Brigham 9/4) ---------- */
 const PERM_KEYS = [
