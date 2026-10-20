@@ -13271,9 +13271,6 @@ const REPORT_DEFS = () => [
    icon: '⏰', title: 'TIME CLOCK — PAYROLL', count: null,
    desc: 'Team clock-in / clock-out for payroll: every arrival-and-exit punch from the dashboard Payroll Clock, filterable by team member and date, with daily punches or weekly/monthly totals, plus that member\u2019s hours by piano and by category of work from the piano Work Clock. Red rows were auto-closed (forgot to clock out) — review before running payroll. The CSV buttons export spreadsheets.',
    html: payTimeTable},
-  {id: 'jobcost', sec: 'admin', show: isOwner, icon: '💰', title: 'JOB COSTING — PER PIANO', count: null,
-   desc: 'Shop hours per piano from the Work Clock ledger, broken down by technician and phase — filter by piano, technician, phase, or date range, then export CSV spreadsheets (summary or raw sessions) for job costing.',
-   html: jobCostTable},
   {id: 'clockadjust', sec: 'admin', show: () => isPayrollAdmin() || isTimelogAdmin(), icon: '🛠', title: 'TIME CLOCK ADJUSTMENTS', count: (() => {
      try { return S.fixRows ? S.fixRows.filter(r => cfxSinceLaunch(r) && r.status === 'open').length : null; } catch (e) { return null; } })(),
    desc: 'Fix mistakes and forgotten punches. Team fix requests land here; payroll day punches are editable by owners & Melissa, piano Work Clock sessions by owners & the shop managers (Mark, Matthew, Jacob). Every adjustment is stamped with who changed it.',
@@ -17345,7 +17342,32 @@ function renderManager() {
   if (!S.qcRows) loadQcLog();
   if (!S.slRows) loadScoreLog();
   if (S.scRoster === undefined) loadScRoster();
-  el.innerHTML = scorecardTable();
+  // 💰 Job costing lives here now (Brigham 10/20): owners + managers only,
+  // not in the team-wide Reports list
+  const jcOpen = S.jcOpen !== false;
+  el.innerHTML = scorecardTable() + `
+    <details class="jcwrap" ${jcOpen ? 'open' : ''}>
+      <summary><h2 class="ph" style="display:inline">💰 JOB COSTING — PER PIANO</h2></summary>
+      <p class="pd">Shop hours per piano from the Work Clock ledger, by technician and phase. Filter by piano, technician, phase or date range, then export CSV (summary or raw sessions). Hours only — pay rates are not in the app.</p>
+      ${jobCostTable()}
+    </details>`;
+  const jw = el.querySelector('.jcwrap');
+  if (jw) jw.ontoggle = () => { S.jcOpen = jw.open; };
+  el.querySelectorAll('.rptf[data-scope="jc"]').forEach(f => {
+    const apply = () => {
+      (S.jcF || (S.jcF = {}))[f.dataset.f] = f.value;
+      renderManager();
+      const again = el.querySelector(`.rptf[data-scope="jc"][data-f="${f.dataset.f}"]`);
+      if (again && again.tagName === 'INPUT' && again.type === 'text') { again.focus(); again.setSelectionRange(again.value.length, again.value.length); }
+    };
+    if (f.tagName === 'SELECT' || f.type === 'date') f.onchange = apply;
+    else f.oninput = () => { clearTimeout(f._t); f._t = setTimeout(apply, 350); };
+  });
+  el.querySelectorAll('.csvbtn[data-csv]').forEach(b => b.onclick = ev => {
+    ev.stopPropagation();
+    const mk = CSV_EXPORTS[b.dataset.csv];
+    if (mk) { const [name, rows] = mk(); downloadCsv(name, rows); }
+  });
 }
 /* Current Team roster → {firstname: Position} for the coverage population.
  * A failed read is null (coverage shows "not computed"), never an empty

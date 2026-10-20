@@ -2397,3 +2397,6 @@ table.tchktbl td.chk .tcasap input{width:15px;height:15px}
 
 /* ✎ edit the waiting note on the card's status strip (Mark 10/20) */
 .wnedit{margin-left:6px;border:1px solid #e0c3a2;background:#fff;color:#9a5b13;border-radius:6px;padding:0 6px;font-size:12px;cursor:pointer;line-height:18px}
+
+/* job costing inside the Manager console (Brigham 10/20) */
+.jcwrap{margin-top:22px;border-top:2px solid #eadfdf;padding-top:10px}.jcwrap summary{cursor:pointer;list-style:none}.jcwrap summary::-webkit-details-marker{display:none}.jcwrap summary h2.ph::before{content:'▸ ';color:#9e2020}.jcwrap[open] summary h2.ph::before{content:'▾ '}
