@@ -5960,7 +5960,8 @@ const isMarcelo = () => /^marcelo\b/i.test(clockName()) || /^marcelo/i.test(user
 // Korban added 10/19 (Mark), with the Piano bench construction kind;
 // Field work added 10/20 (Mark).
 const OUTSIDE_PEOPLE = ['alexmartin.blp@gmail.com', 'jakepulver.blp@gmail.com', 'matthewwessman.blp@gmail.com', 'markhales.blp@gmail.com', 'jacobmower.blp@gmail.com', 'korbangreenhalgh.blp@gmail.com'];
-const OUTSIDE_KINDS = ['Repair', 'Keytops', 'Refinishing', 'Piano bench construction', 'Field work', 'Other'];
+// Building maintenance moved in from its own dashboard box 10/20 (Mark)
+const OUTSIDE_KINDS = ['Repair', 'Keytops', 'Refinishing', 'Piano bench construction', 'Field work', 'Building maintenance', 'Other'];
 // everyone gets the card since 10/20 (Mark) — the people list above is history
 const outsideOk = () => true;
 const clockLabel = (clock, serial) => {
@@ -14351,9 +14352,10 @@ function renderDash() {
       // 🔧 building maintenance (Korban via Melissa 9/16, request 091626terry43):
       // lightbulbs, sheetrock, painting — not tidying, not a piano. Pseudo-serial MAINT.
       const onMaint = o && o.serial === 'MAINT';
-      // Korban, Matthew, Jacob and Mark only (Walter 10/13); anyone already on
-      // maintenance time still sees the card so they can end it
-      if (!onMaint && !maintOk()) return '';
+      // retired 10/20 (Mark): building maintenance is now a kind of work on the
+      // Outside project card. The box only shows to someone still clocked in
+      // on the old MAINT code, so they can end that session
+      if (!onMaint) return '';
       return `<div class="dbench db-maint">
         <h4>🔧 Building maintenance</h4>
         ${onMaint ? `<div class="dline now"><b>On building maintenance</b> since ${fmtT(o.start)} —
