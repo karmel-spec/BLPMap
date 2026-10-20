@@ -12981,8 +12981,30 @@ function scorecardTable() {
   const trainRows = tl.filter(r => /^Training/.test(r.phase));
   const reworkRows = tl.filter(r => /^Rework|re-?do|fix(ing)? (earlier|previous)/i.test(r.phase));
   const workH = mins(pianoRows) / 60, trainH = mins(trainRows) / 60, reworkH = mins(reworkRows) / 60;
-  const payMin = unvoided(S.payRows).filter(r => inWin(r.date || r.start)).reduce((a, r) => a + (r.minutes || 0), 0);
-  const coverage = payMin ? Math.min(100, Math.round(100 * mins(tl) / payMin)) : null;
+  // CLOCK COVERAGE (Brigham 10/20): shop staff only, and admin / management
+  // clock time does not count as covered. Before this the ratio was every
+  // work-clock minute in the shop over EVERY payroll minute — movers and the
+  // office (Melissa, Lisa, Alisa…) sat in the denominator with no work clock,
+  // and 120 h/month of MGMT punches sat in the numerator. Who is "shop
+  // staff" comes from the Current Team roster's Position column (never
+  // guessed): Rebuilder / Tuner / Technician / Refinisher / Intern / Shop
+  // Manager, minus anyone whose Position says Mover or Admin. Unknown names
+  // are left out and listed under the tile.
+  const adminMgmt = r => r.serial === 'MGMT' || /^(Management|Admin)/i.test(r.phase || '');
+  const roster = S.scRoster;   // undefined = loading, null = unreadable
+  const posOf = name => roster ? (roster[techName(name).split(/\s+/)[0].toLowerCase()] || '') : '';
+  const shopStaff = name => { const p = posOf(name); return !!p && !/mover|admin/i.test(p)
+    && /rebuilder|tuner|technician|refinish|intern|shop manager/i.test(p); };
+  const payRowsWin = unvoided(S.payRows).filter(r => inWin(r.date || r.start));
+  const unknownNames = roster ? [...new Set(payRowsWin.map(r => techName(r.tech)).filter(n => n && !posOf(n)))].sort() : [];
+  const payMin = roster ? payRowsWin.filter(r => shopStaff(r.tech)).reduce((a, r) => a + (r.minutes || 0), 0) : 0;
+  const covRows = roster ? tl.filter(r => shopStaff(r.tech) && !adminMgmt(r)) : [];
+  const excludedH = roster ? mins(tl.filter(r => shopStaff(r.tech) && adminMgmt(r))) / 60 : 0;
+  const coverage = payMin ? Math.min(100, Math.round(100 * mins(covRows) / payMin)) : null;
+  const coverageSub = roster === undefined ? 'loading the team roster…'
+    : roster === null ? 'team roster unreadable — not computed'
+    : 'shop staff work-clock ÷ payroll · gate ≥85% · ' + excludedH.toFixed(0) + 'h admin/mgmt + movers + office left out'
+      + (unknownNames.length ? ' · not on roster: ' + unknownNames.join(', ') : '');
   // mini-QC first pass
   const qc = (S.qcRows || []).filter(r => inWin(r.when));
   const qcPass = qc.filter(r => r.result === 'pass').length;
@@ -13109,7 +13131,7 @@ function scorecardTable() {
         'draft — not yet shown to Mark')}` : ''}
     </div></div>`;
   return hero + money + ladder + `<div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:14px">
-    ${kpi('Clock coverage', pct(coverage), 'work-clock ÷ payroll · gate ≥85%', coverage != null && coverage < 85 ? '#9e2020' : '#2f7d4f')}
+    ${kpi('Clock coverage', pct(coverage), coverageSub, coverage != null && coverage < 85 ? '#9e2020' : '#2f7d4f')}
     ${kpi('Mini-QC first pass', pct(firstPass), qc.length + ' phase advances · 30d', firstPass != null && firstPass >= 95 ? '#2f7d4f' : undefined)}
     ${kpi('Rework', reworkH.toFixed(1) + 'h', workH ? (100 * reworkH / workH).toFixed(1) + '% of ' + workH.toFixed(0) + 'h piano work' : '', reworkH / Math.max(workH, 1) > .05 ? '#9e2020' : '#2f7d4f')}
     ${kpi('Training invested', trainH.toFixed(1) + 'h', 'trainer+trainee punches · neutral in index')}
@@ -17210,7 +17232,22 @@ function renderManager() {
   if (!S.payRows) loadPayroll();
   if (!S.qcRows) loadQcLog();
   if (!S.slRows) loadScoreLog();
+  if (S.scRoster === undefined) loadScRoster();
   el.innerHTML = scorecardTable();
+}
+/* Current Team roster → {firstname: Position} for the coverage population.
+ * A failed read is null (coverage shows "not computed"), never an empty
+ * roster that would silently count nobody or everybody. */
+async function loadScRoster() {
+  S.scRoster = undefined;
+  try {
+    const r = await fetchT(TEAM_ROSTER_API + '?key=pianoman', {}, 20000);
+    const rows = ((await r.json()).tabs || {})['Current Team'] || [];
+    const out = {};
+    rows.slice(1).forEach(row => { const f = String(row[0] || '').trim().toLowerCase(); if (f) out[f] = String(row[2] || '').trim() || '(no position)'; });
+    S.scRoster = rows.length > 1 ? out : null;
+  } catch (e) { S.scRoster = null; }
+  if (S.view === 'manager') renderManager();
 }
 /* ---------- ⚙️ SETTINGS — Design C: Roles Ladder (Brigham 9/4) ---------- */
 const PERM_KEYS = [
