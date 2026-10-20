@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-20.5';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-20.6';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -6266,7 +6266,14 @@ function smDeliveryForecast_(pianos, events, refDate) {
     if (!h && p && p.serial) h = deps.filter(function (x) { return x.serial && String(x.serial) === String(p.serial); })[0] || null;
     var st = String((p && p.status) || ''), sec = String((p && p.section) || '').trim();
     var ready = null, why = '';
+    // a dated down payment in the Piano Log counts as the deposit (Mark 10/20,
+    // Janelle Peters: paid 6/4, already Current Shop Work, so never Queue
+    // Approved and older than the WON handoffs) — same "starts with a date"
+    // test as dpStepSync_
+    var dpCell = String(((p && p.logExtras) || {})[DP_DATE_HEADER] || '').trim();
+    var dpDated = /^\s*\d{1,2}\/\d{1,2}\/\d{2,4}\b/.test(dpCell);
     if (/queue approved/i.test(st)) { ready = true; why = 'Queue Approved on the card'; }
+    else if (dpDated) { ready = true; why = 'down payment ' + dpCell.match(/\d{1,2}\/\d{1,2}\/\d{2,4}/)[0] + ' on the Piano Log'; }
     else if (/pre[\s-]?queue/i.test(st) || /^pending shopwork$/i.test(sec)) { ready = false; why = 'Pre-Queue — deposit not received'; }
     else if (h && h.deposit === 'collected') { ready = true; why = 'deposit collected (handoff)'; }
     else if (h) { ready = false; why = h.deposit === 'admin' ? 'deposit assigned to Admin — not confirmed' : 'deposit not discussed at the close'; }
@@ -7905,7 +7912,7 @@ function shopManagerHtml_(R) {
     var FC = R.forecast.items || [];
     var fmtD = function (iso) { var dd = new Date(iso + 'T12:00:00'); return isNaN(dd) ? iso : Utilities.formatDate(dd, 'America/Denver', 'EEE M/d'); };
     sec('🚚', 'Delivery Forecasting', FC.length,
-      'Pianos arriving at BLP ' + fmtD(R.forecast.from) + ' – ' + fmtD(R.forecast.to) + ' (moving calendar). YES only when the $1,000 queue deposit is confirmed — the card says Queue Approved, or the WON handoff recorded it collected.');
+      'Pianos arriving at BLP ' + fmtD(R.forecast.from) + ' – ' + fmtD(R.forecast.to) + ' (moving calendar). YES only when the $1,000 queue deposit is confirmed — the card says Queue Approved, the Piano Log has a down-payment date, or the WON handoff recorded it collected.');
     if (FC.length) {
       ul(FC.map(function (x) {
         var what = x.p ? ref(x.p) : '<b>' + esc_(x.pianoLabel || 'piano') + '</b>' + (x.lead ? ' <span style="color:#8a847b">· ' + esc_(x.lead) + '</span>' : '');
