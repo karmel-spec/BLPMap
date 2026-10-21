@@ -612,7 +612,7 @@ function tasksBox(p) {
         <option value="" ${!(p.plateHwStatus || '').trim() ? 'selected' : ''}>— not tracked —</option>
         ${PLATE_HW_STAGES.map(v =>
           `<option value="${esc(v)}" ${p.plateHwStatus === v ? 'selected' : ''}>${esc(plateHwStageLabel(v))}</option>`).join('')}
-      </select></div><div class="ktplan">↳ <button class="tpill phwreq" title="the plating / buffing request to the plating shop (Category 3b) — was on the task checklist">✉ plating / buffing request form</button></div><div class="platehwmsg phmsg"></div>
+      </select></div><div class="platehwmsg phmsg"></div>
     <div class="row phrow keystatrow">Keytops
       <select class="keystatsel">
         <option value="" ${!kt.state ? 'selected' : ''}>— not tracked —</option>
@@ -626,8 +626,9 @@ function tasksBox(p) {
     ${decalsRow(p)}</div>`;
     // the per-track task checklist (key service, plate refinishing, pinblock…)
     // came off the card 10/21 (Mark): those are tracked by the rows above and
-    // elsewhere, and the list was clutter. loadTasks / markTask stay for the
-    // plating form's "Submitted" stamp.
+    // elsewhere, and the list was clutter. The ✉ plating / buffing request
+    // form came off too (Mark 10/21: the plating finish in Scope of Work
+    // covers it); openPlatingModal stays in the code, unreachable.
 }
 // Date marks live in the same Piano Log cells the Concurrent Work report
 // reads — "Ordered 8/27/26 · Received 9/3/26 · Installed 9/10/26 · note"
@@ -6656,8 +6657,6 @@ function wirePop(p) {
     ev.stopPropagation();
     saveCardField(b.dataset.f, b.classList.contains('on') ? '' : b.dataset.v);   // tap again = clear
   });
-  const phwReq = pop.querySelector('.phwreq');
-  if (phwReq) phwReq.onclick = ev => { ev.stopPropagation(); openPlatingModal(p, pop); };
   pop.querySelectorAll('.cfsuguse').forEach(b => b.onclick = ev => { ev.stopPropagation(); const box = b.closest('.cfsug'); saveCardField(box.dataset.f, box.dataset.v); });
   const phwsel = pop.querySelector('.platehwsel');
   if (phwsel) phwsel.onchange = async () => {
