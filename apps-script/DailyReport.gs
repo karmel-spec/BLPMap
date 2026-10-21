@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-21.5';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-21.6';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -7820,6 +7820,14 @@ function buildShopManagerReport_(dayOffset) {
   });
   R.missingArrivals = smMissingArrivals_(pianos, data.events || []);
   try { R.forecast = smDeliveryForecast_(pianos, data.events || [], refDate); } catch (eFc) { R.forecast = null; }
+  // 🏆 WON card notes waiting for Mark's review (Mark 10/21 — the first 10
+  // shop handoffs from 10/21, so he can teach what the techs need to see)
+  R.wonReview = [];
+  try {
+    var wr = JSON.parse(UrlFetchApp.fetch('https://blpsalesapp.netlify.app/api/won/scope-review?key=pianoman',
+      {muteHttpExceptions: true}).getContentText());
+    R.wonReview = wr.pending || [];
+  } catch (eWr) { R.wonReview = []; }
 
   R.soldPending = pianos.filter(function (p) {
     return /sold or completed but not delivered/i.test(p.section || '');
@@ -8042,6 +8050,16 @@ function shopManagerHtml_(R) {
                x.status === 'Tested' ? '#2f7d4f' : '#2c5d96');
     }), '', 'the Store Map \u2192 🛡 Admin Dashboard \u2192 💡 App Requests');
   }
+  if (R.wonReview && R.wonReview.length) {
+    sec('🏆', 'Card notes waiting for your review', R.wonReview.length,
+      'New shop projects from the sales handoff. These notes go on the piano card\u2019s Scope of Work only after Mark says which lines the techs should see (the first 10 from 10/21). Nothing is on the card yet.');
+    var fmtSold = function (iso) { var dd = new Date(iso); return isNaN(dd) ? '' : Utilities.formatDate(dd, 'America/Denver', 'M/d'); };
+    topUl(R.wonReview.map(function (w) {
+      return '<b>' + esc_(w.lead) + '</b> \u2014 ' + esc_(w.piano || 'piano') + (w.serial ? ' \u00b7 ' + esc_(w.serial) : '')
+        + ' <span style="color:#8a847b">(sold ' + fmtSold(w.sold) + (w.closer ? ' by ' + esc_(w.closer) : '') + ')</span>'
+        + '<br><span style="font-size:12px;color:#6f6a63">' + (w.lines || []).map(function (l) { return '\u2022 ' + esc_(l); }).join('<br>') + '</span>';
+    }));
+  }
   // print-ready batches — edit this list to add/remove links from the brief
   var PRINTABLES = [
     '<a href="https://blpsalesapp.netlify.app/.netlify/functions/request-shot?id=shoptagbatch-C9uY7E_uivhq">'
@@ -8206,7 +8224,7 @@ function shopManagerHtml_(R) {
 
   // section order (Walter 10/14). Sections not listed keep their old order
   // after these; the reports list and footer stay last.
-  var ORDER = ['Morning Standup', 'Clock follow-ups', 'Time off', 'Delivery Forecasting', 'Data gaps', 'Phase looks stale', 'Phase advances',
+  var ORDER = ['Morning Standup', 'Clock follow-ups', 'Time off', 'Delivery Forecasting', 'Card notes waiting', 'Data gaps', 'Phase looks stale', 'Phase advances',
                'Paused, waiting', 'Pianos with no phase', 'Housekeeping', 'Exit Prep', 'New in the apps'];
   var LAST = 'All Store Map reports';
   var rank = function (key) {
