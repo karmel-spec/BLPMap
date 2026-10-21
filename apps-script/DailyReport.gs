@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-21.9';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-21.10';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -9463,15 +9463,17 @@ function fridaySweepRun_(send, dayOffset) {
  *   row `piano_nudge_exempt` (comma-separated names).
  *   On the clock = a Work Clock session started from 15 min before the day
  *   punch on, or one still open.
- *   Texts go out only while App Settings `piano_nudge` = on; otherwise every
- *   run is a preview. ?date=YYYY-MM-DD replays a past day as a preview. */
+ *   Texts go out unless App Settings `piano_nudge` = off (then every run is a
+ *   preview). ?date=YYYY-MM-DD replays a past day as a preview. */
 function pianoNudge_(opt) {
   opt = opt || {};
   var tz = 'America/Denver', HOUR = 3600000;
   var live = !opt.date;
   var day = opt.date || Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
   var dow = Number(Utilities.formatDate(new Date(day + 'T12:00:00'), tz, 'u'));
-  var sendOn = String(appSetting_('piano_nudge', 'off') || '').toLowerCase() === 'on';
+  // ON since 10/21 (Mark approved the wording): a blank or missing App Settings
+  // `piano_nudge` means on; "off" (or no/false/0/pause) pauses the texts
+  var sendOn = !/^(off|no|false|0|pause)/i.test(String(appSetting_('piano_nudge', 'on') || 'on'));
   var dry = !live || !!opt.dry || !sendOn;
   if (dow === 7) return {ok: true, day: day, skipped: 'Sunday', dry: dry};
   var key = finishKey_;
