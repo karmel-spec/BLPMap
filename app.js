@@ -12153,40 +12153,63 @@ function jobCostTable() {
     const ser = String(r.serial || '').toUpperCase();
     return ser === 'OUTSIDE' ? (r.phase || 'Other') : ser === 'MAINT' ? 'Building maintenance' : ser === 'TIDY' ? 'Shop tidying' : '';
   };
+  // 💵 loaded cost per session (owners, Brigham 10/20): latest Pay Rates row for
+  // the person effective on or before the session day × (1 + burden)
+  const PR = S.payRates && S.payRates.ok ? S.payRates : null;
+  const burden = PR ? (Number(PR.burden) || 0) : 0;
+  const rateFor = (tech, day) => {
+    if (!PR) return null;
+    const n = techName(tech).toLowerCase();
+    const hits = PR.rates.filter(x => x.name.toLowerCase() === n && x.rate != null && (!x.effective || x.effective <= day));
+    if (!hits.length) return null;
+    hits.sort((a, b) => (b.effective || '').localeCompare(a.effective || ''));
+    return hits[0].rate;
+  };
+  const noRate = new Set();
   const pianos = {};
   rows.forEach(r => {
     const ok = outsideKind(r);
     const k = ok ? 'OUTSIDE|' + ok : r.serial;
-    const g = pianos[k] = pianos[k] || (ok ? {serial: 'OUTSIDE', piano: 'Outside: ' + ok, outside: true, mins: 0, n: 0, parts: {}}
-      : {serial: r.serial, piano: r.piano, mins: 0, n: 0, parts: {}});
+    const g = pianos[k] = pianos[k] || (ok ? {serial: 'OUTSIDE', piano: 'Outside: ' + ok, outside: true, mins: 0, n: 0, parts: {}, cost: 0, costs: {}, unrated: 0}
+      : {serial: r.serial, piano: r.piano, mins: 0, n: 0, parts: {}, cost: 0, costs: {}, unrated: 0});
     g.mins += r.minutes; g.n++;
     const pk = r.tech + '|' + (ok ? (String(r.serial).toUpperCase() === 'OUTSIDE' ? (r.piano || 'job not named') : ok) : (r.phase || '(no phase)'));
     g.parts[pk] = (g.parts[pk] || 0) + r.minutes;
+    if (PR) {
+      const rate = rateFor(r.tech, denverDay(r.start));
+      if (rate == null) { noRate.add(techName(r.tech)); g.unrated += r.minutes; }
+      else { const c = r.minutes / 60 * rate * (1 + burden); g.cost += c; g.costs[pk] = (g.costs[pk] || 0) + c; }
+    }
   });
   const list = Object.values(pianos).sort((a, b) => b.mins - a.mins);
   const totalM = rows.reduce((a, r) => a + r.minutes, 0);
+  const usd = v => '$' + Math.round(v).toLocaleString('en-US');
+  const totalCost = list.reduce((a, g) => a + (g.cost || 0), 0);
   CSV_EXPORTS.jcsummary = () => ['job-costing-summary.csv',
-    [['Serial', 'Piano / outside kind', 'Technician', 'Phase / job', 'Minutes', 'Hours (decimal)'],
+    [['Serial', 'Piano / outside kind', 'Technician', 'Phase / job', 'Minutes', 'Hours (decimal)', ...(PR ? ['Loaded cost ($, burden ' + Math.round(burden * 1000) / 10 + '%)'] : [])],
      ...list.flatMap(g => Object.entries(g.parts).map(([pk, m]) => {
        const [tech, phase] = pk.split('|');
-       return [g.serial, g.piano, tech, phase, m, hDec(m)];
+       return [g.serial, g.piano, tech, phase, m, hDec(m), ...(PR ? [g.costs[pk] != null ? g.costs[pk].toFixed(2) : 'no rate'] : [])];
      }))]];
   CSV_EXPORTS.jcsessions = () => ['job-costing-sessions.csv',
-    [['Serial', 'Piano', 'Technician', 'Phase', 'Start', 'End', 'Minutes', 'Hours (decimal)', 'Source'],
-     ...rows.map(r => [r.serial, r.piano, r.tech, r.phase, r.start, r.end, r.minutes, hDec(r.minutes), r.source])]];
+    [['Serial', 'Piano', 'Technician', 'Phase', 'Start', 'End', 'Minutes', 'Hours (decimal)', 'Source', ...(PR ? ['Hourly rate', 'Loaded cost ($)'] : [])],
+     ...rows.map(r => { const rate = PR ? rateFor(r.tech, denverDay(r.start)) : null;
+       return [r.serial, r.piano, r.tech, r.phase, r.start, r.end, r.minutes, hDec(r.minutes), r.source,
+         ...(PR ? [rate == null ? 'no rate' : rate, rate == null ? '' : (r.minutes / 60 * rate * (1 + burden)).toFixed(2)] : [])]; })]];
   return bar + `
     <p class="pd">${list.filter(g => !g.outside).length} piano lines · ${list.filter(g => g.outside).length} outside-work kinds · ${fmtHM(totalM)} total ·
       ${rows.length} session${rows.length === 1 ? '' : 's'} ·
+      ${PR ? `<b>${usd(totalCost)}</b> loaded cost <small>(wages × ${(1 + burden).toFixed(3)}${noRate.size ? ` · no rate on file: ${esc([...noRate].sort().join(', '))}` : ''})</small> · ` : ''}
       <a target="_blank" rel="noopener" href="https://docs.google.com/spreadsheets/d/11RoeVRETag5rZYX6_tEH-rf6x8JL0JeZU0P5AT0WI-I/edit">open the Time Log sheet ↗</a></p>
-    <table><tr><th>PIANO</th><th>TECHNICIAN × PHASE</th><th>HOURS</th></tr>
+    <table><tr><th>PIANO</th><th>TECHNICIAN × PHASE</th><th>HOURS</th>${PR ? '<th>LOADED COST</th>' : ''}</tr>
     ${list.map(g => `
       <tr class="jcp"><td><b>${esc(g.piano || '—')}</b><br><small>${g.outside ? 'outside project' : '#' + esc(g.serial)} · ${g.n} session${g.n === 1 ? '' : 's'}</small></td>
-        <td></td><td><b>${fmtHM(g.mins)}</b> <small>(${hDec(g.mins)})</small></td></tr>
+        <td></td><td><b>${fmtHM(g.mins)}</b> <small>(${hDec(g.mins)})</small></td>${PR ? `<td><b>${usd(g.cost)}</b>${g.unrated ? ` <small title="hours with no rate on file">+${fmtHM(g.unrated)} unrated</small>` : ''}</td>` : ''}</tr>
       ${Object.entries(g.parts).sort((a, b) => b[1] - a[1]).map(([pk, m]) => {
         const [tech, phase] = pk.split('|');
-        return `<tr><td></td><td>${esc(tech)} — ${esc(phase)}</td><td>${fmtHM(m)}</td></tr>`;
+        return `<tr><td></td><td>${esc(tech)} — ${esc(phase)}</td><td>${fmtHM(m)}</td>${PR ? `<td>${g.costs[pk] != null ? usd(g.costs[pk]) : '<small>no rate</small>'}</td>` : ''}</tr>`;
       }).join('')}`).join('')
-     || '<tr><td colspan="3" class="empty">No work-clock sessions match these filters.</td></tr>'}</table>`;
+     || `<tr><td colspan="${PR ? 4 : 3}" class="empty">No work-clock sessions match these filters.</td></tr>`}</table>`;
 }
 
 /* ---------- 🛠 time clock adjustments (permission-gated edit surface) ------ */
@@ -17400,13 +17423,19 @@ function renderManager() {
   if (!S.qcRows) loadQcLog();
   if (!S.slRows) loadScoreLog();
   if (S.scRoster === undefined) loadScRoster();
+  // 💵 pay rates (owners only, Brigham 10/20): the bridge refuses anyone else,
+  // so managers see hours and owners see loaded dollars on the same table
+  if (isOwner() && S.payRates === undefined) {
+    S.payRates = null;
+    adjustPost({action: 'payrates'}).then(j => { S.payRates = j && j.ok ? j : null; if (S.view === 'manager') renderManager(); }).catch(() => { S.payRates = null; });
+  }
   // 💰 Job costing lives here now (Brigham 10/20): owners + managers only,
   // not in the team-wide Reports list
   const jcOpen = S.jcOpen !== false;
   el.innerHTML = scorecardTable() + `
     <details class="jcwrap" ${jcOpen ? 'open' : ''}>
       <summary><h2 class="ph" style="display:inline">💰 JOB COSTING — PER PIANO</h2></summary>
-      <p class="pd">Shop hours per piano from the Work Clock ledger, by technician and phase. Filter by piano, technician, phase or date range, then export CSV (summary or raw sessions). Hours only — pay rates are not in the app.</p>
+      <p class="pd">Shop hours per piano from the Work Clock ledger, by technician and phase. Filter by piano, technician, phase or date range, then export CSV (summary or raw sessions).${isOwner() ? ' Loaded cost = hours × the person\'s hourly rate on that day × (1 + burden), from the payroll sheet\'s Pay Rates tab — owners only.' : ' Hours only; dollars show for owners.'}</p>
       ${jobCostTable()}
     </details>`;
   const jw = el.querySelector('.jcwrap');

@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-20.6';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-20.7';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -1618,6 +1618,11 @@ function doPost(e) {
       if (pms.ok && !pms.skipped) logAct_(who, 'Payment milestone email', req.summary || req.serial,
         pms.milestone + '% — emailed ' + (pms.emailed || ''));
       return json_(pms);
+    }
+    if (req.action === 'payrates') {   // owners only — hourly rates for the job-costing dollars (Brigham 10/20)
+      var pg = req._g;
+      if (!(pg && pg.email && OWNER_EMAILS.indexOf(String(pg.email).toLowerCase()) >= 0)) return json_({error: 'Pay rates are for owners only (Google sign-in required).'});
+      return json_(payRates_());
     }
     if (req.action === 'addupdate') {
       return json_(appUpdateAdd_(req, who));
@@ -8775,6 +8780,28 @@ function appUpdatesSheet_() {
   return sh;
 }
 function updateAdmin_(g) { return payrollAdmin_(g) || timelogAdmin_(g); }
+/* 💵 Pay Rates tab of the payroll spreadsheet (Brigham 10/20): Name as on
+ * the clock | Hourly rate | Effective (yyyy-mm-dd) | Source | Note. Several
+ * rows per person are allowed (a raise = a new row with its date; the app
+ * picks the latest effective row on or before each session). The row named
+ * BURDEN holds the employer-tax multiplier (0.079 = 7.9%). Served only to a
+ * signed-in owner — never through a GET. */
+function payRates_() {
+  var sh = SpreadsheetApp.openById('11RoeVRETag5rZYX6_tEH-rf6x8JL0JeZU0P5AT0WI-I').getSheetByName('Pay Rates');
+  if (!sh) return {ok: true, rates: [], burden: 0, note: 'no Pay Rates tab'};
+  var last = sh.getLastRow();
+  var vals = last >= 2 ? sh.getRange(2, 1, last - 1, 5).getValues() : [];
+  var rates = [], burden = 0;
+  vals.forEach(function (v) {
+    var name = String(v[0] || '').trim();
+    if (!name) return;
+    var rate = parseFloat(String(v[1] || '').replace(/[^0-9.]/g, ''));
+    var eff = v[2] instanceof Date ? Utilities.formatDate(v[2], 'America/Denver', 'yyyy-MM-dd') : String(v[2] || '').trim().slice(0, 10);
+    if (name.toUpperCase() === 'BURDEN') { if (!isNaN(rate)) burden = rate; return; }
+    rates.push({name: name, rate: isNaN(rate) ? null : rate, effective: eff, note: String(v[4] || '').trim()});
+  });
+  return {ok: true, rates: rates, burden: burden};
+}
 function appUpdateAdd_(req, who) {
   if (!updateAdmin_(req._g)) return {error: 'Only owners, Melissa, or the managers can log app updates (Google sign-in required).'};
   var text = String(req.text || '').trim().slice(0, 400);
