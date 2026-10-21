@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-21.10';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-21.11';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -9473,7 +9473,8 @@ function pianoNudge_(opt) {
   var dow = Number(Utilities.formatDate(new Date(day + 'T12:00:00'), tz, 'u'));
   // ON since 10/21 (Mark approved the wording): a blank or missing App Settings
   // `piano_nudge` means on; "off" (or no/false/0/pause) pauses the texts
-  var sendOn = !/^(off|no|false|0|pause)/i.test(String(appSetting_('piano_nudge', 'on') || 'on'));
+  var nudgeSetting = String(appSetting_('piano_nudge', 'on') || 'on');
+  var sendOn = !/^(off|no|false|0|pause)/i.test(nudgeSetting);
   var dry = !live || !!opt.dry || !sendOn;
   if (dow === 7) return {ok: true, day: day, skipped: 'Sunday', dry: dry};
   var key = finishKey_;
@@ -9547,7 +9548,7 @@ function pianoNudge_(opt) {
     var cut = Utilities.formatDate(new Date(Date.now() - 7 * 86400000), tz, 'yyyy-MM-dd');
     Object.keys(props.getProperties()).forEach(function (pk) { if (/^pnudge_\d{4}-\d{2}-\d{2}$/.test(pk) && pk.slice(7) < cut) props.deleteProperty(pk); });
   } catch (eT) {}
-  return {ok: true, day: day, dry: dry, sending: sendOn, texted: out.texted, wouldText: out.wouldText, fine: out.fine, notChecked: out.notChecked};
+  return {ok: true, day: day, dry: dry, sending: sendOn, setting: nudgeSetting, texted: out.texted, wouldText: out.wouldText, fine: out.fine, notChecked: out.notChecked};
 }
 
 function lateClockNudge(e) {
