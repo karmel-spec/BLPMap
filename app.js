@@ -611,7 +611,7 @@ function tasksBox(p) {
       <select class="platehwsel">
         <option value="" ${!(p.plateHwStatus || '').trim() ? 'selected' : ''}>— not tracked —</option>
         ${PLATE_HW_STAGES.map(v =>
-          `<option ${p.plateHwStatus === v ? 'selected' : ''}>${esc(v)}</option>`).join('')}
+          `<option value="${esc(v)}" ${p.plateHwStatus === v ? 'selected' : ''}>${esc(plateHwStageLabel(v))}</option>`).join('')}
       </select></div><div class="platehwmsg phmsg"></div>
     <div class="row phrow cfrow" title="the finish the plating shop should do — Korban orders by this">↳ Plating finish
       <select class="cfsel" data-f="plateFinish">
@@ -3780,7 +3780,7 @@ function renderMap() {
     const bn = BUF.data ? BUF.data.plates.filter(x => !x.done).length + BUF.data.hardware.filter(x => !x.done).length : null;
     s += `<g class="bqbtn" style="cursor:pointer">
       <rect x="${bx}" y="${by}" width="${bw}" height="${bh}" rx="8" class="kqrect"/>
-      <text x="${bx + bw / 2}" y="${by + 31}" text-anchor="middle" class="kqtxt" font-size="20">✨ <tspan font-weight="800" font-size="15">Buffing Queue</tspan></text>
+      <text x="${bx + bw / 2}" y="${by + 31}" text-anchor="middle" class="kqtxt" font-size="20">✨ <tspan font-weight="800" font-size="15">Hardware Queue</tspan></text>
       <text x="${bx + bw / 2}" y="${by + 58}" text-anchor="middle" class="kqtxt kqcount" font-size="13">${bn == null ? 'loading…' : bn + ' in queue ›'}</text>
     </g>`;
   }
@@ -11392,6 +11392,11 @@ const PLATE_STAGES = ['In piano', 'Removed', 'Plate storage — BEFORE',
 // plate bolts / screws / hardware buffing (Korban 9/11, request 091126greenhalgh06) —
 // mirrors the bridge's PLATE_HW_STATUSES; stored in PLATE HARDWARE STATUS
 const PLATE_HW_STAGES = ['Needs buffing', 'In buffing queue', 'Buffing', 'Buffed', 'Installed'];
+// Display only. The stored status stays "In buffing queue" so the Piano Log
+// column and the bridge's PLATE_HW_STATUSES keep matching.
+function plateHwStageLabel(v) {
+  return v === 'In buffing queue' ? 'In hardware queue' : (v || '');
+}
 // 🎨 finish choices (Melissa 9/16, request 091626terry44) — mirrors CARD_FIELDS in the bridge
 // keytops: two ivory choices (Melissa 9/25, 092526terry62) — what Marcelo does differs
 const CARD_FIELD_OPTS = {plateFinish: ['Brass', 'Nickel', 'Copper', 'No electroplating'], keytopMaterial: ['White Acrylic', 'Off-white Acrylic', 'Ivory - clean & leave as is', 'Ivory - replace damaged keys', 'No key service']};   // No key service: Melissa 10/13 (101326terry91) — refurbs, minor repairs, refinishing-only
@@ -11611,7 +11616,7 @@ const TQ_DEFS = [
   // driven by the card's Plate hardware status (request 091126greenhalgh06)
   {key: 'platehw', icon: '🪞', title: 'PLATE HARDWARE BUFFING — KORBAN',
    need: p => ['Needs buffing', 'In buffing queue', 'Buffing'].includes((p.plateHwStatus || '').trim()),
-   note: p => [p.plateFinish ? '🎨 ' + p.plateFinish : '', p.plateHwStatus].filter(Boolean).join(' · ')},
+   note: p => [p.plateFinish ? '🎨 ' + p.plateFinish : '', plateHwStageLabel(p.plateHwStatus)].filter(Boolean).join(' · ')},
   {key: 'decals', icon: '🏷', title: 'DECALS TO ORDER',
    need: p => !taskAutoDone(p, 'decals') && ['needed', 'noted'].includes(taskStatus(taskVal(p, 'decals'))),
    note: p => taskVal(p, 'decals')},
@@ -13418,7 +13423,7 @@ const REPORT_DEFS = () => [
      try { return taskQueueLists().reduce((s, q) => s + q.list.length, 0); } catch (e) { return null; } })(),
    desc: 'Eight ordered to-do queues — key service, plates to Curtis Harper, refinishing on deck, plating + buffing, plate hardware buffing (Korban), decals, bass strings, and the showroom tuning queue for Korban (most-overdue first, from the tuning calendars). Each shows who’s NEXT and everyone behind them. Click any row to jump to the piano.',
    html: taskQueuesTable},
-  {id: 'buffing', sec: 'shop', icon: '✨', title: 'BUFFING LIST', count: (() => {
+  {id: 'buffing', sec: 'shop', icon: '✨', title: 'HARDWARE QUEUE', count: (() => {
      try { return BUF.data ? BUF.data.plates.filter(p => !p.done).length + BUF.data.hardware.filter(h => !h.done).length : null; } catch (e) { return null; } })(),
    desc: 'Korban\u2019s hardware queue. Plate screws come from Curtis\u2019s sheet in his priority order; a piano\u2019s visible hardware joins the list when it moves past CAP, furthest along first. Anyone can mark a row done, and every tap can be undone the same day. Korban gets the top of both lists by text at 11 AM every Monday.',
    html: () => '<div id="buffingBody"><div class="empty">Building the list…</div></div>'},
