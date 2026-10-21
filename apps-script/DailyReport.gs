@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-21.12';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-21.13';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -9548,7 +9548,8 @@ function pianoNudge_(opt) {
     var cut = Utilities.formatDate(new Date(Date.now() - 7 * 86400000), tz, 'yyyy-MM-dd');
     Object.keys(props.getProperties()).forEach(function (pk) { if (/^pnudge_\d{4}-\d{2}-\d{2}$/.test(pk) && pk.slice(7) < cut) props.deleteProperty(pk); });
   } catch (eT) {}
-  return {ok: true, day: day, dry: dry, sending: sendOn, setting: nudgeSetting, texted: out.texted, wouldText: out.wouldText, fine: out.fine, notChecked: out.notChecked};
+  return {ok: true, day: day, dry: dry, sending: sendOn, setting: nudgeSetting,
+    spanishTeam: String(appSetting_('spanish_team', SPANISH_TEAM_DEFAULT) || ''), spanishFromSettings: appSetting_('spanish_team', '') !== '', texted: out.texted, wouldText: out.wouldText, fine: out.fine, notChecked: out.notChecked};
 }
 
 function lateClockNudge(e) {
