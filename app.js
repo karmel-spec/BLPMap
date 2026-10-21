@@ -1296,6 +1296,18 @@ function applyPending() {
       if ((p.plateStatus || '') === edit.plateStatus) delete edit.plateStatus;
       else { p.plateStatus = edit.plateStatus; stillPending = true; }
     }
+    // Refinishing? / Finish / Sheen (10/21) ride in logExtras — keep each
+    // saved cell until the feed shows the same value
+    if ('logExtras' in edit) {
+      const le = p.logExtras || (p.logExtras = {});
+      let keep = false;
+      for (const k of ['REFINISHING', 'FINISH', 'SHEEN']) {
+        if (!(k in edit.logExtras)) continue;
+        if ((le[k] || '') === (edit.logExtras[k] || '')) delete edit.logExtras[k];
+        else { le[k] = edit.logExtras[k]; keep = true; }
+      }
+      if (keep) stillPending = true; else delete edit.logExtras;
+    }
     if (!stillPending) pendingEdits.delete(row);
   }
   persistEdits();
@@ -6179,14 +6191,27 @@ function popHTML(p) {
        ${p.handoffId ? `<div class="phnhist" style="font-size:11px;background:#fbf1dc;border:1px solid #c89a3c;border-radius:6px;padding:6px 9px;margin:4px 0">🏆 Sold in the Sales App — not here yet. <a href="https://blpsalesapp.netlify.app/leads/${encodeURIComponent(p.leadId || '')}" target="_blank" rel="noreferrer">Lead ↗</a>${p.portalProjectId ? ` · <a href="https://blpclientportal.netlify.app/admin/projects/${esc(p.portalProjectId)}" target="_blank" rel="noreferrer">Client Portal project ↗</a>` : ''}</div>` : ''}
        ${(p.phaseNotes || '').trim() ? `<div class="phnhist" style="font-size:11px;color:#6f6a63;background:#faf8f4;border-radius:6px;padding:6px 9px;margin:4px 0;white-space:pre-wrap">📝 ${esc(String(p.phaseNotes).slice(0, 500))}</div>` : ''}`
     : '';
+  // Colors → "Refinishing?" Yes / No + instructions (Mark 10/21). The answer
+  // comes from the Piano Log's PROJECT CATEGORY (col X) until someone taps
+  // Yes or No on the card (header-created REFINISHING column); the
+  // instructions are the log's own FINISH (col K) and SHEEN (col L) cells.
+  // The first-pick / FINAL color inputs came off the card; their columns stay.
   const colors = p.serial
-    ? `<div class="row phrow colorow">Colors
-         <span style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:0">
-           <input class="colorpick" maxlength="80" placeholder="first pick — refinish/plating color + sheen"
-             value="${esc(p.colorPick || '')}">
-           <input class="colorfinal" maxlength="80" placeholder="FINAL color — after the client approves"
-             value="${esc(p.colorFinal || '')}">
-         </span></div><div class="colormsg phmsg"></div>`
+    ? (() => {
+        const rf = refinishState(p);
+        const le = p.logExtras || {};
+        return `<div class="row trkrow" title="from the Piano Log's project category — tap Yes or No to set it on the card">Refinishing?
+          <span class="trkchips">${['Yes', 'No'].map(v =>
+            `<button class="trk rfbtn ${rf.value === v ? 'on' : ''} ${rf.value === v && rf.derived ? 'derived' : ''}" data-v="${v}">${v}</button>`).join('')}
+          </span></div>
+        ${rf.value && rf.derived ? `<div class="ktplan">↳ from the project category: “${esc(rf.plan)}” — tap to confirm or change</div>` : ''}
+        <div class="rfmsg phmsg"></div>
+        ${rf.value === 'Yes' ? `<div class="rfbox">
+          <div class="rfhd">Refinishing instructions <small>— the Piano Log's Finish and Sheen</small></div>
+          <div class="row phrow">Finish <input class="rfin" data-k="finish" maxlength="200" placeholder="wood finish, color, match original…" value="${esc(le.FINISH || '')}"></div>
+          <div class="row phrow">Sheen <input class="rfin" data-k="sheen" maxlength="200" placeholder="satin, semi-gloss, high gloss…" value="${esc(le.SHEEN || '')}"></div>
+          <div class="rfinmsg phmsg"></div></div>` : ''}`;
+      })()
     : '';
   // Keys = the curated keytop list, one pick (Melissa 10/21, 102126terry97;
   // Mark 10/21: the Ivory / Plastic / Ebony chips go, Ebony is no longer an
@@ -6584,27 +6609,36 @@ function wirePop(p) {
 
   // color selections (Brigham 8/26): first pick + client-approved final —
   // admin-entered, mirrored into the Concurrent Work report categories
-  pop.querySelectorAll('.colorpick, .colorfinal').forEach(ci => {
-    ci.onclick = ev => ev.stopPropagation();
-    ci.onchange = async () => {
-      const msg = pop.querySelector('.colormsg');
-      const {pin, ok} = writeAuth();
-      if (!ok) { msg.textContent = 'Sign in first.'; return; }
-      msg.textContent = 'Saving…';
-      try {
-        const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
-          headers: {'content-type': 'text/plain;charset=utf-8'},
-          body: JSON.stringify({pin, action: 'setcolor', serial: p.serial, row: p.row,
-            which: ci.classList.contains('colorfinal') ? 'final' : 'pick',
-            value: ci.value.trim(), ...authFields()})});
-        const j = await r.json();
-        if (!j.ok) throw new Error(j.error || 'save failed');
-        if (ci.classList.contains('colorfinal')) p.colorFinal = ci.value.trim();
-        else p.colorPick = ci.value.trim();
-        msg.className = 'colormsg phmsg ok'; msg.textContent = '✓ saved';
-        setTimeout(() => { if (msg.isConnected) msg.textContent = ''; }, 1600);
-      } catch (e) { msg.className = 'colormsg phmsg err'; msg.textContent = '✗ ' + e.message; }
-    };
+  // 🎨 Refinishing? Yes / No + Finish / Sheen (Mark 10/21) — one bridge action
+  const saveRefinish = async (fields, msgSel) => {
+    const msg = pop.querySelector(msgSel);
+    const {pin, ok} = writeAuth();
+    if (!ok) { if (msg) msg.textContent = 'Sign in first.'; return false; }
+    if (msg) { msg.className = msgSel.slice(1) + ' phmsg'; msg.textContent = 'Saving…'; }
+    try {
+      const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+        headers: {'content-type': 'text/plain;charset=utf-8'},
+        body: JSON.stringify({pin, action: 'setrefinish', serial: p.serial, row: p.row, ...fields, ...authFields()})});
+      const j = await r.json();
+      if (!j.ok) throw new Error(j.error || 'save failed');
+      p.logExtras = p.logExtras || {};
+      if ('refinishing' in fields) p.logExtras.REFINISHING = fields.refinishing;
+      if ('finish' in fields) p.logExtras.FINISH = fields.finish;
+      if ('sheen' in fields) p.logExtras.SHEEN = fields.sheen;
+      const le = pendingEdits.get(p.row) || {}; le.logExtras = {...(le.logExtras || {}), ...Object.fromEntries(Object.entries(fields).map(([k, v]) => [k.toUpperCase(), v]))}; pendingEdits.set(p.row, le);
+      if (msg) { msg.className = msgSel.slice(1) + ' phmsg ok'; msg.textContent = '✓ saved'; setTimeout(() => { if (msg.isConnected) msg.textContent = ''; }, 1600); }
+      return true;
+    } catch (e) { if (msg) { msg.className = msgSel.slice(1) + ' phmsg err'; msg.textContent = '✗ ' + e.message; } return false; }
+  };
+  pop.querySelectorAll('.rfbtn').forEach(b => b.onclick = async ev => {
+    ev.stopPropagation();
+    const explicit = b.classList.contains('on') && !b.classList.contains('derived');
+    const ok = await saveRefinish({refinishing: explicit ? '' : b.dataset.v}, '.rfmsg');   // tap a set answer again = back to the project category
+    if (ok) openPop(p.row, S.popAnchor, true);
+  });
+  pop.querySelectorAll('.rfin').forEach(inp => {
+    inp.onclick = ev => ev.stopPropagation();
+    inp.onchange = () => saveRefinish({[inp.dataset.k]: inp.value.trim()}, '.rfinmsg');
   });
 
   const plsel = pop.querySelector('.platesel');
@@ -8183,6 +8217,17 @@ async function saveCabinetry(p, list, pop) {
     if (msg) { msg.className = 'cabmsg phmsg err'; msg.textContent = '\u2717 ' + e.message; }
     return false;
   }
+}
+// "Refinishing?" for the card (Mark 10/21): an explicit Yes / No from the
+// REFINISHING column wins; otherwise Yes when the PROJECT CATEGORY (col X)
+// lists "Refinish", "Full Refinish" or "Refinishing", else No. A tap on the
+// card overrides it (e.g. a "Cancelled Refinishing" plan).
+function refinishState(p) {
+  const ex = String(((p.logExtras || {}).REFINISHING) || '').trim();
+  const plan = String(p.plan || '').trim();
+  if (/^yes$/i.test(ex)) return {value: 'Yes', derived: false, plan};
+  if (/^no$/i.test(ex)) return {value: 'No', derived: false, plan};
+  return {value: /refinish/i.test(plan) ? 'Yes' : 'No', derived: true, plan};
 }
 function keyTokens(p) {
   return String(p.keyService || '').split(',').map(t => t.trim())
