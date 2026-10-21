@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-21.13';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-21.14';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -6093,6 +6093,21 @@ function smName_(p) {
   return (p.summary || [p.year, p.make, p.model].filter(String).join(' ') || 'piano');
 }
 function smSpot_(p) { return p.location ? String(p.location) : '—'; }
+/* "Steinway 160095" (Melissa 10/21, app request 102126terry95): the make plus
+ * the serial, no year, model or measurement — cleaner to read in a long list
+ * and no mix-ups between two pianos of the same make. A make cell that also
+ * carries the type and size ("Hallet Davis Upright / 58\"") is trimmed to the
+ * make; no serial yet → the map spot instead. */
+function smMakeSerial_(p) {
+  var trim = function (t) {
+    return String(t || '').split('/')[0]
+      .replace(/\b(baby grand|grand|upright|console|spinet|square|player|studio)\b.*$/i, '')
+      .replace(/\s*&\s*sons\b/i, '').replace(/\s+/g, ' ').trim();
+  };
+  var mk = trim(p.make) || trim(String(p.summary || '').replace(/^\s*(circa\s+|~)?\d{4}\s+/i, '')) || 'piano';
+  var ser = String(p.serial || '').trim();
+  return mk + (ser && ser !== '?' ? ' ' + ser : ' (no serial yet · map #' + smSpot_(p) + ')');
+}
 
 /* ---- yesterday's activity, grouped by person ---- */
 function smYesterdayActivity_() {
@@ -8516,7 +8531,7 @@ function adminBriefHtml_(R) {
     if (R.noPlan.length) a.push('<b style="color:#9e2020">' + R.noPlan.length
       + ' queue pianos with no payment plan set</b> (bold = past 25% complete — milestone emails stay off until one is chosen):<br>'
       + '<span style="font-size:12px">' + R.noPlan.slice(0, 15).map(function (x) {
-          var nm = smName_(x.p) + ' (#' + smSpot_(x.p) + ')';
+          var nm = esc_(smMakeSerial_(x.p));
           return x.urgent ? '<b>' + nm + '</b>' : nm; }).join('; ') + '</span>');
     R.adminDrift.slice(0, 10).forEach(function (d) {
       a.push(ref(d.p) + '<br><span style="font-size:12px;color:#8a6a00">admin steps not checked: '
