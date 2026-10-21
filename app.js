@@ -15268,7 +15268,10 @@ function teamBoardHTML() {
     return `<div class="tmtile ${o ? 'onpiano' : pw.on ? 'onday' : w ? 'away' : ''} ${mates.length ? 'shared' : ''}">
       <b>${esc(m.full)}</b><small>${esc(m.pos)}</small>
       ${w ? `<div class="tmaway">${away}</div>` : `
-      <div>🎹 ${o ? esc((o.piano || o.serial || '').slice(0, 26)) + ' · ' + esc(o.phase || '') +
+      <div>🎹 ${o ? esc((o.piano || o.serial || '').slice(0, 26))
+        // the piano's serial on the card (Mark 10/21, app request 102126hales59) — not for MGMT / OUTSIDE / TIDY…
+        + (o.serial && !/^(MGMT|TIDY|MAINT|KEYS|OUTSIDE)$/i.test(String(o.serial).trim()) ? ' · #' + esc(o.serial) : '')
+        + ' · ' + esc(o.phase || '') +
         ' · ' + Math.floor(mins / 60) + ':' + String(mins % 60).padStart(2, '0') : '—'}</div>
       <div>🕔 ${pw.loading ? '<span class="tmload">loading…</span>' : pw.on ? 'in since ' + teamClockFmt(pw.start)
         : pw.mins ? 'done · ' + (pw.mins / 60).toFixed(1) + 'h today' : 'not clocked in'}</div>`}
