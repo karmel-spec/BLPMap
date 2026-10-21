@@ -2729,6 +2729,18 @@ function tagSplitNotes(raw) {
   }
   return {routed, rest: rest.join(' \u00b7 '), restList: rest};
 }
+/* 🏆 Sales-handoff lines in SCOPE NOTES (Mark 10/21): a WON shop project's
+ * fix requests and piano notes, written by the Sales App instead of a task-
+ * board card. Pinned like the 📜 contract lines — shown in full, never in the
+ * editable box, and re-joined on save. */
+const scPinned = l => /^\s*(📜|🏆)/u.test(l);
+function wonScopeBox(p) {
+  const won = String(p.scopeNotes || '').split('\n').filter(l => l.trim().startsWith('🏆'))
+    .map(l => l.trim().replace(/^🏆\s*/u, ''));
+  if (!won.length) return '';
+  return `<div class="wonscope" style="background:#f3f8f1;border:1px solid #cfe0c8;border-left:4px solid #2f7d4f;border-radius:0 10px 10px 0;padding:8px 11px;margin:4px 0 8px;font-size:13px;line-height:1.55">${won.map(l => /^From .{1,40} sale \d/.test(l)
+    ? `<div style="font-weight:700;color:#2f7d4f">🏆 ${esc(l)}</div>` : `<div>• ${esc(l)}</div>`).join('')}</div>`;
+}
 function shopTagFields(p) {
   const blob = p.owner || '';
   const plan = (p.plan || '').trim();
@@ -6167,17 +6179,19 @@ function popHTML(p) {
       // textarea below only edits the shop's own added instructions
       const scLines = String(p.scopeNotes || '').split('\n');
       const ctr = scLines.filter(l => l.trim().startsWith('📜'));
-      return ctr.length ? `<div class="ctrfull" style="background:#fbf7ee;border:1px solid #e2d7bb;border-left:4px solid #9e2020;border-radius:0 10px 10px 0;padding:9px 11px;margin:4px 0 8px;font-size:13px;line-height:1.55;white-space:pre-wrap;word-break:break-word">${ctr.map(esc).join('\n')}</div>` : '';
+      return wonScopeBox(p) + (ctr.length ? `<div class="ctrfull" style="background:#fbf7ee;border:1px solid #e2d7bb;border-left:4px solid #9e2020;border-radius:0 10px 10px 0;padding:9px 11px;margin:4px 0 8px;font-size:13px;line-height:1.55;white-space:pre-wrap;word-break:break-word">${ctr.map(esc).join('\n')}</div>` : '');
     })()}
     <div class="row" style="align-items:flex-start">Special<br>instructions
       <span style="flex:1;min-width:0;margin-left:8px">
         <textarea class="scopenote" rows="2" maxlength="500"
-          placeholder="anything the whole job must honor — client requests, must-keeps, cautions">${esc(String(p.scopeNotes || '').split('\n').filter(l => !l.trim().startsWith('📜')).join('\n').trim())}</textarea>
+          placeholder="anything the whole job must honor — client requests, must-keeps, cautions">${esc(String(p.scopeNotes || '').split('\n').filter(l => !scPinned(l)).join('\n').trim())}</textarea>
         <div class="scopemsg phmsg"></div>
         <div class="lite" style="font-size:11px">saves here AND into 📝 Notes below${String(p.scopeNotes || '').includes('📜') ? ' · the 📜 contract text above stays put' : ''}</div>
       </span></div>
     ${isContractViewer() ? `<div class="row"><button class="ctrbtn">📜 Owner contract & selections</button></div>
-      <div class="ctrout"></div>` : ''}`) : '';
+      <div class="ctrout"></div>` : ''}`)
+    // no serial yet (a Coming Soon row): the 🏆 sales-handoff notes still show (Mark 10/21)
+    : (wonScopeBox(p) ? secWrap('scope', '🧾 Scope of Work', wonScopeBox(p)) : '');
   // Client email update reports: a clear ON / OFF switch (Brigham 9/18) —
   // always shown for a piano with a serial. Blank = "not set" (amber, off
   // position) until someone decides; Yes shows the history button above.
@@ -7430,10 +7444,10 @@ function wirePop(p) {
     if (scIn) {
       // the textarea edits only the NON-contract lines; 📜 lines are pinned
       // above and re-joined on save so the sheet cell keeps the contract
-      const scCtr = String(p.scopeNotes || '').split('\n').filter(l => l.trim().startsWith('📜'));
+      const scCtr = String(p.scopeNotes || '').split('\n').filter(scPinned);
       const scJoin = txt => scCtr.concat(txt ? [txt] : []).join('\n');
       let scTimer = null, scLast = scJoin(String(p.scopeNotes || '').split('\n')
-        .filter(l => !l.trim().startsWith('📜')).join('\n').trim());
+        .filter(l => !scPinned(l)).join('\n').trim());
       const scSave = async () => {
         const val = scJoin(scIn.value.trim());
         if (val === scLast) return;

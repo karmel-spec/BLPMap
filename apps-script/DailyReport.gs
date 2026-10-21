@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-21.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-21.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -1465,13 +1465,17 @@ function doPost(e) {
       } catch (eCt) {}
       return json_({ok: true, found: !!sel, selections: sel, files: files});
     }
+    if (req.action === 'wonscope') return json_(wonScope_(req));
     if (req.action === 'setscopenote') {
       // 🧾 Scope of Work special instructions (Brigham 9/4): saved to a
       // header-created SCOPE NOTES col AND copied into the general notes
       var snSh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
       var snF = findPiano_(snSh, req.serial, req.row);
       if (snF.error) return json_(snF);
-      var snVal = String(req.value == null ? '' : req.value).trim().slice(0, 500);
+      // 4000, not 500 (10/21): the 📜 contract block alone ran past 500, and
+      // the map read only the first 500 — a save then wrote the cut-down text
+      // back over the full cell
+      var snVal = String(req.value == null ? '' : req.value).trim().slice(0, 4000);
       var snLast = snSh.getLastColumn();
       var snHdr = snSh.getRange(2, 1, 1, snLast).getValues()[0];
       var snCol = -1;
@@ -1480,7 +1484,10 @@ function doPost(e) {
       }
       if (snCol < 0) { snSh.getRange(2, snLast + 1).setValue('SCOPE NOTES'); snCol = snLast + 1; }
       snSh.getRange(snF.row, snCol).setValue(snVal);
-      if (snVal) addPianoNote_(snSh, snF.row, who, '🧾 scope: ' + snVal);
+      // only the hand-typed part goes into 📝 Notes — the pinned 📜 contract
+      // and 🏆 sales-handoff lines ride along in the value on every save
+      var snTyped = snVal.split('\n').filter(function (l) { return !/^\s*(📜|🏆)/.test(l); }).join(' ').trim();
+      if (snTyped) addPianoNote_(snSh, snF.row, who, '🧾 scope: ' + snTyped);
       logAct_(who, 'Scope of Work note', snF.summary || req.serial, snVal || '(cleared)');
       return json_({ok: true, scopeNotes: snVal});
     }
@@ -5886,6 +5893,76 @@ function dpStepSync_(dry) {
     logAct_('Store Map (down-payment date)', 'Queue APPROVED (deposit in)', a.serial, a.status + ' — Piano Log down payment ' + a.date);
   });
   return {ok: true, dryrun: !!dry, changed: changed, approved: approved};
+}
+
+/* 🏆 WON handoff → Scope of Work (Mark 10/21). A shop project's fix requests
+ * and piano notes from the Sales App handoff land on the piano's card as
+ * pinned 🏆 lines in SCOPE NOTES (the card's 🧾 Scope of Work → Special
+ * instructions box shows them above the typed text, like the 📜 contract
+ * lines), instead of on a task-board card. The piano is found by serial,
+ * else by the client's name in the owner cell (above SOLD, one match only).
+ * Lines already on the card are skipped, so a retry never doubles them.
+ * {serial?, leadName, pianoLabel?, header, lines[], dryrun?} */
+function wonScope_(req) {
+  var lines = (req.lines || []).map(function (l) { return String(l || '').replace(/\s+/g, ' ').trim(); })
+    .filter(Boolean).slice(0, 12);
+  if (!lines.length) return {error: 'no lines'};
+  var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+  var row = 0, summary = '';
+  var ser = String(req.serial || '').trim();
+  if (ser && ser !== '?') {
+    var f = findPiano_(sh, ser, req.row);
+    if (!f.error) { row = f.row; summary = f.summary; }
+  }
+  if (!row) {
+    var name = String(req.leadName || '').toLowerCase().replace(/[^a-z0-9& ]+/g, ' ').replace(/\s+/g, ' ').trim();
+    if (name.length < 4) return {error: 'not found', why: 'no serial match and the client name is too short to match'};
+    var last = sh.getLastRow();
+    var vals = sh.getRange(1, 1, last, 6).getValues();   // A..F: owner B, serial C, summary D, make F
+    var soldRow = last + 1;
+    for (var i = 0; i < last; i++) {
+      if (String(vals[i][1] || '').trim().toUpperCase() === 'SOLD' && !String(vals[i][2] || '').trim()) { soldRow = i + 1; break; }
+    }
+    var norm = function (t) { return String(t || '').toLowerCase().replace(/[^a-z0-9& ]+/g, ' ').replace(/\s+/g, ' '); };
+    // "Michael & Elizabeth Goodman" → also try first + last ("michael", "goodman")
+    var toks = name.split(' ').filter(function (t) { return t.length >= 2 && t !== '&' && t !== 'and'; });
+    var firstLast = toks.length >= 2 ? [toks[0], toks[toks.length - 1]] : null;
+    var hits = [];
+    for (var r = 3; r < soldRow; r++) {
+      var own = norm(vals[r - 1][1]);
+      if (!own || !String(vals[r - 1][3] || '').trim()) continue;
+      var ok = own.indexOf(name) >= 0
+        || (firstLast && new RegExp('\\b' + firstLast[0] + '\\b').test(own) && new RegExp('\\b' + firstLast[1] + '\\b').test(own));
+      if (ok) hits.push(r);
+    }
+    if (hits.length > 1 && req.pianoLabel) {   // two pianos for one client — the make in the label decides
+      var make = norm(req.pianoLabel).split(' ').filter(function (t) { return t.length >= 4 && !/^\d+$/.test(t); });
+      var narrowed = hits.filter(function (r2) {
+        var txt = norm(vals[r2 - 1][3] + ' ' + vals[r2 - 1][5]);
+        return make.some(function (m) { return txt.indexOf(m) >= 0; });
+      });
+      if (narrowed.length) hits = narrowed;
+    }
+    if (!hits.length) return {error: 'not found', why: 'no Piano Log row for ' + req.leadName + ' yet'};
+    if (hits.length > 1) return {error: 'ambiguous', rows: hits};
+    row = hits[0]; summary = String(vals[row - 1][3] || '');
+  }
+  var lastC = sh.getLastColumn();
+  var hdr = sh.getRange(2, 1, 1, lastC).getValues()[0];
+  var col = -1;
+  for (var c = 0; c < hdr.length; c++) { if (String(hdr[c] || '').trim().toUpperCase() === 'SCOPE NOTES') { col = c + 1; break; } }
+  if (col < 0) { if (req.dryrun) return {ok: true, dryrun: true, row: row, summary: summary, adding: lines}; sh.getRange(2, lastC + 1).setValue('SCOPE NOTES'); col = lastC + 1; }
+  var prev = String(sh.getRange(row, col).getValue() || '');
+  var flat = prev.toLowerCase().replace(/\s+/g, ' ');
+  var fresh = lines.filter(function (l) { return flat.indexOf(l.toLowerCase()) < 0; });
+  if (!fresh.length) return {ok: true, row: row, summary: summary, added: 0, already: true};
+  var block = ['🏆 ' + String(req.header || 'From the sales handoff').trim()].concat(fresh.map(function (l) { return '🏆 ' + l; }));
+  if (req.dryrun) return {ok: true, dryrun: true, row: row, summary: summary, adding: block};
+  // re-check the row right before writing (rows shift when someone sorts the log)
+  if (String(sh.getRange(row, 4).getValue() || '') !== summary) return {error: 'row moved — try again'};
+  sh.getRange(row, col).setValue((prev.trim() ? prev.trim() + '\n' : '') + block.join('\n'));
+  logAct_('Sales App (WON handoff)', 'Scope of Work note', summary || ser, fresh.join(' · ').slice(0, 300));
+  return {ok: true, row: row, summary: summary, added: fresh.length, block: block};
 }
 
 function setAdminSteps_(req) {
