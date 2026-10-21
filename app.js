@@ -8227,7 +8227,10 @@ function refinishState(p) {
   const plan = String(p.plan || '').trim();
   if (/^yes$/i.test(ex)) return {value: 'Yes', derived: false, plan};
   if (/^no$/i.test(ex)) return {value: 'No', derived: false, plan};
-  return {value: /refinish/i.test(plan) ? 'Yes' : 'No', derived: true, plan};
+  // "Cancelled Refinishing" and "TBD Refinishing" are No (Mark 10/21) — the
+  // refinish word has to stand on its own, not right after cancelled / TBD
+  const yes = /refinish/i.test(plan) && !/(cancel\w*|\btbd)\s*[-–:]?\s*(full\s+)?refinish/i.test(plan);
+  return {value: yes ? 'Yes' : 'No', derived: true, plan};
 }
 function keyTokens(p) {
   return String(p.keyService || '').split(',').map(t => t.trim())
