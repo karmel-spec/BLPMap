@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-21.8';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-21.9';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -9530,7 +9530,7 @@ function pianoNudge_(opt) {
     var lang = row.lang;
     if (dry) { out.wouldText.push(row); return; }
     var msg = t_(lang,
-      '⏰ Clock in reminder: Hi ' + first + ' — you clocked in for the day at ' + at + ', but you’re not clocked in to a piano yet. Open the Store Map and clock in to the piano you’re working on (or MGMT / an Outside project): ' + APP_URL
+      '⏰ Clock in reminder: Hi ' + first + ', you clocked in for the day at ' + at + ', but you’re not clocked in to a piano yet. Open the Store Map and clock in to the piano you’re working on (or MGMT / an Outside project): ' + APP_URL
         + '\nIf you need to submit a piano clock correction, click here: ' + APP_URL + '/#fixclock=piano',
       '⏰ Clock in — recordatorio: Hola ' + first + ', marcaste tu entrada del día a las ' + at + ', pero todavía no estás registrado en un piano. Abre el Store Map y regístrate en el piano en que trabajas (o MGMT / un proyecto externo): ' + APP_URL
         + '\nSi necesitas enviar una corrección del reloj de piano, haz clic aquí: ' + APP_URL + '/#fixclock=piano');
