@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-21.14';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-21.15';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -1875,6 +1875,10 @@ function cardMedia_(req, who) {
   var day = Utilities.formatDate(new Date(), 'America/Denver', 'yyyy-MM-dd');
   var name = 'card-' + String(req.cardId || 'x').slice(0, 30) + '__' + day
     + '__' + Math.floor(Math.random() * 1e4) + ext;
+  // 📎 a file from the card's paperclip (Melissa 10/21): keep its own name and
+  // extension (a PDF saved as .mp4 would not open)
+  var orig = String(req.fileName || '').replace(/[\\\/:*?"<>|\u0000-\u001f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 100);
+  if (orig) name = 'card-' + String(req.cardId || 'x').slice(0, 30) + '__' + day + '__' + orig;
   var file = folder.createFile(Utilities.newBlob(
     Utilities.base64Decode(String(req.data)), mime, name));
   try { file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch (e) {}
