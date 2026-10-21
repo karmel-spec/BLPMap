@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-21.4';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-21.5';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -8793,8 +8793,8 @@ function setupShopManagerBriefing() {
  * never Sunday. Both use EMAIL plus a TEXT carrying the doc link. Shop brief
  * texts managers + owners; admin brief texts Melissa + owners (info@ is a
  * mailbox — email only). Replaces the evening send (Brigham 8/28). */
-var SHOP_TEXT_NAMES = ['Mark', 'Matthew', 'Jacob', 'Brigham', 'Karmel'];
-var ADMIN_TEXT_NAMES = ['Melissa', 'Brigham', 'Karmel'];
+var SHOP_TEXT_NAMES = ['Mark'];       // shop brief link: Mark only (Brigham 10/21)
+var ADMIN_TEXT_NAMES = ['Karmel'];    // admin brief link: Karmel only (Brigham 10/21)
 function morningBriefs() {
   var mb0 = Date.now();
   try { scorecardSnapshot_(); } catch (eSnap) { /* trends resume tomorrow */ }
@@ -9041,7 +9041,7 @@ function taskBoardRows_() {
 /* When someone touches a board that isn't their own, tell the owner:
  * Brigham & Karmel get a text, everyone else gets an email — each with a
  * link straight to the card (#card=<id>). Best-effort, never blocks the op. */
-var TB_TEXT_OWNERS = {'brigham larson': 'Brigham', 'karmel larson': 'Karmel'};
+var TB_TEXT_OWNERS = {'brigham larson': 'Karmel', 'karmel larson': 'Karmel'};   // task-board texts go to Karmel only, incl. Brigham's board (Brigham 10/21)
 function tbOwnerEmail_(firstName) {
   try {
     var ts = SpreadsheetApp.openById('1j1FP78rRj1jrl2z-_vIg95kN3GuG8TI4dpOheSnIoPc')
@@ -9355,7 +9355,7 @@ function moverFirsts_() {
  * disabled; this block remains so old trigger/function references fail safe
  * until the live Apps Script project is cleaned up. */
 var FRIDAY_EXCLUDE = ['courtney', 'victoria'];
-var FRIDAY_COPY = ['Brigham', 'Karmel'];
+var FRIDAY_COPY = ['Karmel'];   // Friday report chaser summaries: Karmel only (Brigham 10/21)
 function fridayReportStatus_(dayOffset) {
   var when = new Date(Date.now() + (dayOffset || 0) * 86400000);
   var ss = SpreadsheetApp.openById('11RoeVRETag5rZYX6_tEH-rf6x8JL0JeZU0P5AT0WI-I');
@@ -9516,7 +9516,7 @@ function lateClockNudge(e) {
       + (names.length ? ' \u2014 ' + names.map(function (n) {
           return n.split(/\s+/)[0] + ' (' + group[n].join(' + ') + ')'; }).join('; ') : '')
       + (booked ? ' \u00b7 ' + booked + ' mover(s) still in \u2014 8pm pass booked' : '');
-    notifyTeam_(['Brigham', 'Karmel'], sum.slice(0, 1100));
+    notifyTeam_(['Karmel'], sum.slice(0, 1100));   // late-clock summary: Karmel only (Brigham 10/21)
   }
   return {ok: true, texted: names, moverPass: moverPass, eightPmBooked: booked};
 }
@@ -9561,7 +9561,7 @@ function moverMorningNudge(e) {
     logAct_('Store Map (auto)', 'Mover morning nudge', n, open[n].join(' + ').slice(0, 140));
   });
   if (names.length) {   // standing rule (Brigham 8/28): every batch of team texts gets a summary to both
-    notifyTeam_(['Brigham', 'Karmel'], ('\u23f0 Mover morning nudge (10am): texted ' + names.length + ' \u2014 '
+    notifyTeam_(['Karmel'], ('\u23f0 Mover morning nudge (10am): texted ' + names.length + ' \u2014 '
       + names.map(function (n) { return n.split(/\s+/)[0] + ' (' + open[n].join(' + ') + ')'; }).join('; ')).slice(0, 1100));
   }
   return {ok: true, texted: names};
@@ -9653,7 +9653,23 @@ function cardText_(req, who) {
   logAct_(who, 'Card text sent', String(req.card || '').slice(0, 60), 'to ' + sent.join(', ') + (failed.length ? ' · not sent: ' + failed.join(', ') : ''));
   return {ok: sent.length > 0, sent: sent, failed: failed, error: sent.length ? undefined : 'not sent: ' + failed.join(', ')};
 }
+/* Brigham gets NO automated texts from the bridge (Brigham 2026-10-21): anything
+ * addressed to him goes to Karmel instead (never doubled when she is already on
+ * the list). The new-lead alert he still wants comes from the Sales App, not here. */
+var TEXT_REDIRECT = {'brigham': 'Karmel', 'brigham larson': 'Karmel'};
+function textRoute_(names) {
+  var out = [], seen = {};
+  (names || []).forEach(function (n) {
+    var k = String(n || '').trim().toLowerCase();
+    var to = TEXT_REDIRECT[k] || n;
+    var tk = String(to || '').trim().toLowerCase();
+    if (!tk || seen[tk]) return;
+    seen[tk] = 1; out.push(to);
+  });
+  return out;
+}
 function notifyTeam_(names, message) {
+  names = textRoute_(names);
   // -background: Netlify answers 202 at once and sends in the background, so a
   // user action that texts a manager (clock-fix request → Mark/Melissa) no
   // longer waits on the token + phone sheet + Twilio round trip (Avery 10/9,
