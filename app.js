@@ -13107,7 +13107,7 @@ function myTimeOffLines() {
   if (!TO.rows) { if (Date.now() - TO.at > 60000) loadTimeOff(); return '<div class="dline dim">loading…</div>'; }
   const me = clockName().toLowerCase();
   const mine = TO.rows.filter(r => r.who.toLowerCase() === me && !/^duplicate/i.test(r.status || ''));
-  if (!mine.length) return '<div class="dline dim">None on file — request some from the 📨 Request menu.</div>';
+  if (!mine.length) return '<div class="dline dim">None on file yet.</div>';
   const today = new Date().toLocaleDateString('en-CA');
   const up = mine.filter(r => r.end >= today);
   const yr = today.slice(0, 4);
@@ -14577,6 +14577,8 @@ function renderDash() {
     <div class="dbench db-timeoff">
       <h4>🏖 Time off</h4>
       ${myTimeOffLines()}
+      <!-- request it right here (Mark 10/21, app request 102126hales58) — the same form as Request ▸ Time off -->
+      <button class="paybtn" data-timeoff="1">🏖 Request time off</button>
     </div>
     <div class="dbench db-bench">
       <h4>⏱ On the bench right now</h4>
@@ -14767,6 +14769,8 @@ function renderDash() {
   });
   const pay = body.querySelector('[data-pay]');
   if (pay) pay.onclick = () => window.open('https://identity.myisolved.com', '_blank', 'noopener');
+  const toff = body.querySelector('[data-timeoff]');
+  if (toff) toff.onclick = () => timeOffModal();
   const aud = body.querySelector('[data-audit]');
   if (aud) aud.onclick = () => { SCHED.tab = 'audit'; switchView('sched'); };
   const pt = body.querySelector('#dashPianos');

@@ -1008,13 +1008,16 @@ body{top:0!important}
 tr.jcp td{border-top:2px solid #e3e6e9;padding-top:9px}
 
 /* dashboard payroll / management / tidying clock cards */
-.db-pay .paybtn,.db-mgmt .paybtn,.db-tidy .paybtn{display:block;width:100%;margin:9px 0 4px;padding:13px 14px;
+.db-pay .paybtn,.db-mgmt .paybtn,.db-tidy .paybtn,.db-timeoff .paybtn{display:block;width:100%;margin:9px 0 4px;padding:13px 14px;
   font:700 15px/1.2 inherit;font-family:inherit;border:0;border-radius:10px;cursor:pointer;color:#fff}
 .db-pay .payin{background:#2e7d4f}
 .db-pay .payin:hover{background:#256742}
 .db-pay .payout,.mgmtoff,.tidyoff{background:#9e2020}
 .db-pay .payout:hover,.mgmtoff:hover,.tidyoff:hover{background:#831a1a}
 .db-pay .paybtn:disabled,.db-mgmt .paybtn:disabled,.db-tidy .paybtn:disabled{opacity:.6;cursor:default}
+/* 🏖 Request time off on the dashboard (Mark 10/21) */
+.db-timeoff .paybtn{background:#2c5d96}
+.db-timeoff .paybtn:hover{background:#234a78}
 /* management time is blue and tidying amber, so each reads apart from the
    green payroll day clock at a glance */
 .mgmton{background:#5b7ea8}
