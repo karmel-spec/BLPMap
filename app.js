@@ -12777,6 +12777,13 @@ function cfxToast(msg) {
   el.textContent = msg; el.classList.add('on');
   clearTimeout(cfxToast._t); cfxToast._t = setTimeout(() => el.classList.remove('on'), 4500);
 }
+/* most recent DAY at the top, each day's punches in clock-in order (Mark 10/21,
+ * app request 102126hales61 — today's sessions sat at the bottom of a long list) */
+function adjNewestDayFirst(a, b) {
+  const da = new Date(a.start), db = new Date(b.start);
+  const ka = da.toLocaleDateString('en-CA'), kb = db.toLocaleDateString('en-CA');
+  return ka === kb ? da - db : (ka < kb ? 1 : -1);
+}
 function clockAdjustTable() {
   if (!S.payRows || !S.tlRows) return '<div class="empty">Loading clocks…</div>';
   // the punch tables don't wait for the fix-request list — it fills in when it lands
@@ -12892,7 +12899,7 @@ function clockAdjustTable() {
     // chronological, not sheet order (Melissa 9/8): added/adjusted punches
     // are appended to the sheet, so 9/4 could sit between 8/31 and 9/2.
     // The table scrolls in its own box so the column titles stay put.
-    const allPay = S.payRows.filter(keep).sort((a, b) => new Date(a.start) - new Date(b.start));
+    const allPay = S.payRows.filter(keep).sort(adjNewestDayFirst);
     const autoN = allPay.filter(adjAutoClosed).length;
     const rows = S.payAutoOnly ? allPay.filter(adjAutoClosed) : allPay;
     const autoEv = allPay.filter(r => adjAutoClosed(r) && /last activity/i.test(r.note || '')).length;
@@ -12970,7 +12977,7 @@ function clockAdjustTable() {
   let tl = '', tlAdd = '';
   if (canTl) {
     const keep = r => adjKeep(r, 'piano');
-    const rows = S.tlRows.filter(keep).sort((a, b) => new Date(a.start) - new Date(b.start));
+    const rows = S.tlRows.filter(keep).sort(adjNewestDayFirst);
     const tlMins = rows.reduce((a, r) => a + (String(r.voided || '') ? 0 : (r.minutes || 0)), 0);
     tl = `<h4 class="bfhd">Piano Work Clock sessions${adjFiltered ? '' : ' — last 14 days'} (owners & shop managers)</h4>
       ${rows.length ? `<div class="lite" style="font-size:12.5px;margin:-2px 0 8px"><b>${fmtHM(tlMins)}</b> (${hDec(tlMins)} h) across ${rows.length} session${rows.length === 1 ? '' : 's'}. Voided rows excluded.</div>` : ''}
