@@ -1739,14 +1739,19 @@ function tryBoardLink() {
  * time-fix form. Survives the sign-in redirect via the same 10-min stash. */
 let fixLinkDone = false;
 function tryFixClockLink() {
-  const hit = /[#&]fixclock\b/.test(location.hash || '');
-  if (hit) lsSet('blpFC', String(Date.now()));
-  const st = +(lsGet('blpFC') || 0);
-  if (!hit && (!st || Date.now() - st > 600000)) return;
+  // #fixclock=piano (the piano clock reminder text, Mark 10/21) opens the form
+  // with "A piano work clock" already picked; plain #fixclock = day clock
+  const m = /[#&]fixclock(?:=([a-z]+))?\b/i.exec(location.hash || '');
+  if (m) lsSet('blpFC', Date.now() + '|' + (m[1] || ''));
+  const st = String(lsGet('blpFC') || '').split('|');
+  if (!m && (!+st[0] || Date.now() - +st[0] > 600000)) return;
   if (fixLinkDone || !authUser()) return;
   fixLinkDone = true;
   lsDel('blpFC');
   clockFixModal();
+  const kind = String((m && m[1]) || st[1] || '').toLowerCase();
+  const sel = document.querySelector('.dsheetov .cf-clock');
+  if (sel && kind === 'piano') { sel.value = 'piano'; sel.onchange && sel.onchange(); }
 }
 // #view=top10 (from the daily brief's link) — any nav view by name, gated like the menu
 let viewLinkDone = '';
