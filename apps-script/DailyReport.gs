@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-21.6';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-21.7';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -386,6 +386,13 @@ function doGet(e) {
   // agent has no Google login, so it reads tech / tuning / QC / moving
   // calendars through here. Key-gated; read-only; 60-day window max.
   // 👀 the shop brief rendered, nothing sent (Walter 10/14) — key-gated like calevents
+  // ⏰ piano clock reminder (Mark 10/21) — the sales app's cron calls this every 15 min
+  if (e && e.parameter && e.parameter.fn === 'pianonudge') {
+    var pnk = String(e.parameter.key || '');
+    if (pnk !== TEAM_PIN && pnk.toLowerCase() !== 'pianoman') return json_({error: 'unauthorized'});
+    try { return json_(pianoNudge_({date: e.parameter.date || '', dry: e.parameter.dry === '1'})); }
+    catch (errPn) { return json_({error: String(errPn)}); }
+  }
   if (e && e.parameter && e.parameter.fn === 'shopbriefpreview') {
     var pkey = String(e.parameter.key || '');
     if (pkey !== TEAM_PIN && pkey.toLowerCase() !== 'pianoman') return json_({error: 'unauthorized'});
@@ -9447,6 +9454,98 @@ function fridaySweepRun_(send, dayOffset) {
   }
   return {ok: true, allIn: true, alreadyAnnounced: true};
 }
+/* ⏰ PIANO CLOCK REMINDER (Mark 10/21, app request 102126hales57): someone
+ * clocked in for the DAY an hour ago but is not on the Work Clock (a piano,
+ * MGMT, an Outside project…) gets one text per day punch. Checked every 15
+ * minutes by the sales app's piano-nudge-cron (GET fn=pianonudge).
+ *   Who: people who used the Work Clock in the last 30 days (so office-only
+ *   staff never get it), minus movers and anyone listed in the App Settings
+ *   row `piano_nudge_exempt` (comma-separated names).
+ *   On the clock = a Work Clock session started from 15 min before the day
+ *   punch on, or one still open.
+ *   Texts go out only while App Settings `piano_nudge` = on; otherwise every
+ *   run is a preview. ?date=YYYY-MM-DD replays a past day as a preview. */
+function pianoNudge_(opt) {
+  opt = opt || {};
+  var tz = 'America/Denver', HOUR = 3600000;
+  var live = !opt.date;
+  var day = opt.date || Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
+  var dow = Number(Utilities.formatDate(new Date(day + 'T12:00:00'), tz, 'u'));
+  var sendOn = String(appSetting_('piano_nudge', 'off') || '').toLowerCase() === 'on';
+  var dry = !live || !!opt.dry || !sendOn;
+  if (dow === 7) return {ok: true, day: day, skipped: 'Sunday', dry: dry};
+  var key = finishKey_;
+  // Work Clock sessions (last ~2,500 rows covers well over 30 days)
+  var tl = timeLogSheet_(), tlLast = tl.getLastRow(), sessions = {}, users = {};
+  var since30 = new Date(day + 'T00:00:00').getTime() - 30 * 86400000;
+  if (tlLast >= 2) {
+    var tf = Math.max(2, tlLast - 2500);
+    tl.getRange(tf, 1, tlLast - tf + 1, 10).getValues().forEach(function (v) {
+      if (!v[0] || !v[4] || v[9]) return;
+      var st = new Date(v[4]).getTime();
+      if (isNaN(st)) return;
+      var k = key(v[0]);
+      if (st >= since30) users[k] = 1;
+      (sessions[k] = sessions[k] || []).push({start: st, end: v[5] ? new Date(v[5]).getTime() : null,
+        what: String(v[2] || v[1] || '')});
+    });
+  }
+  var movers = moverFirsts_();
+  var exempt = {};
+  String(appSetting_('piano_nudge_exempt', '') || '').split(',').forEach(function (n) { if (key(n)) exempt[key(n)] = 1; });
+  // day punches on that date
+  var ps = payrollSheet_(), pLast = ps.getLastRow(), punches = [];
+  if (pLast >= 2) {
+    var pf = Math.max(2, pLast - 400);
+    ps.getRange(pf, 1, pLast - pf + 1, 8).getValues().forEach(function (v) {
+      if (!v[0] || !v[2] || v[7]) return;
+      var st = new Date(v[2]);
+      if (isNaN(st) || Utilities.formatDate(st, tz, 'yyyy-MM-dd') !== day) return;
+      punches.push({tech: String(v[0]), start: st.getTime(), end: v[3] ? new Date(v[3]).getTime() : null});
+    });
+  }
+  var props = PropertiesService.getScriptProperties();
+  var sentKey = 'pnudge_' + day, sent = {};
+  try { sent = JSON.parse(props.getProperty(sentKey) || '{}'); } catch (eS) { sent = {}; }
+  var now = Date.now(), out = {texted: [], wouldText: [], fine: [], notChecked: []};
+  punches.forEach(function (pu) {
+    var k = key(pu.tech), first = String(pu.tech).trim().split(/\s+/)[0];
+    var at = Utilities.formatDate(new Date(pu.start), tz, 'h:mm a');
+    var row = {tech: pu.tech, dayIn: at};
+    if (!users[k]) { row.why = 'not a Work Clock user (no piano clock in 30 days)'; out.notChecked.push(row); return; }
+    if (movers[first.toLowerCase()]) { row.why = 'mover'; out.notChecked.push(row); return; }
+    if (exempt[k]) { row.why = 'on the piano_nudge_exempt list'; out.notChecked.push(row); return; }
+    var check = pu.start + HOUR;
+    if (live && now < check) { row.why = 'not an hour in yet'; out.notChecked.push(row); return; }
+    if (live && now > check + 2.5 * HOUR) { row.why = 'past the reminder window'; out.notChecked.push(row); return; }
+    var C = live ? now : check;
+    if (pu.end && pu.end <= check) { row.why = 'clocked out of the day within the hour'; out.notChecked.push(row); return; }
+    var on = (sessions[k] || []).filter(function (se) {
+      return (se.start >= pu.start - 15 * 60000 && se.start <= C)
+        || (se.start < pu.start && (se.end === null || se.end > check));
+    })[0];
+    if (on) { row.piano = on.what; row.pianoAt = Utilities.formatDate(new Date(on.start), tz, 'h:mm a'); out.fine.push(row); return; }
+    var sk = k + '|' + pu.start;
+    if (sent[sk]) { row.why = 'already reminded'; out.notChecked.push(row); return; }
+    if (dry) { out.wouldText.push(row); return; }
+    var lang = teamLang_(pu.tech);
+    var msg = t_(lang,
+      '⏰ Clock in reminder: Hi ' + first + ' — you clocked in for the day at ' + at + ', but you’re not clocked in to a piano yet. Open the Store Map and clock in to the piano you’re working on (or MGMT / an Outside project): ' + APP_URL,
+      '⏰ Clock in — recordatorio: Hola ' + first + ', marcaste tu entrada del día a las ' + at + ', pero todavía no estás registrado en un piano. Abre el Store Map y regístrate en el piano en que trabajas (o MGMT / un proyecto externo): ' + APP_URL);
+    notifyTeam_([pu.tech], msg);
+    sent[sk] = new Date().toISOString();
+    out.texted.push(row);
+    logAct_('Store Map (piano clock reminder)', 'Reminder texted', pu.tech, 'day clock in ' + at + ', no piano clock after an hour');
+  });
+  if (out.texted.length) { try { props.setProperty(sentKey, JSON.stringify(sent)); } catch (eW) {} }
+  // tidy: drop reminder keys older than a week
+  try {
+    var cut = Utilities.formatDate(new Date(Date.now() - 7 * 86400000), tz, 'yyyy-MM-dd');
+    Object.keys(props.getProperties()).forEach(function (pk) { if (/^pnudge_\d{4}-\d{2}-\d{2}$/.test(pk) && pk.slice(7) < cut) props.deleteProperty(pk); });
+  } catch (eT) {}
+  return {ok: true, day: day, dry: dry, sending: sendOn, texted: out.texted, wouldText: out.wouldText, fine: out.fine, notChecked: out.notChecked};
+}
+
 function lateClockNudge(e) {
   var dry = e && e.dry;
   var now = new Date();
