@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-21.15';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-21.16';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -1673,6 +1673,7 @@ function doPost(e) {
       if (srs.ok) logAct_(who, 'Roster ' + srs.status, srs.tech, 'Shop Board roster override');
       return json_(srs);
     }
+    if (req.action === 'setrefinish') return json_(setRefinish_(req, who));
     if (req.action === 'setcolor') {
       var scl = setColor_(req);
       if (scl.ok) logAct_(who, 'Color ' + (req.which === 'final' ? 'FINAL approved' : 'first pick'),
@@ -5979,6 +5980,43 @@ function wonScope_(req) {
   sh.getRange(row, col).setValue((prev.trim() ? prev.trim() + '\n' : '') + block.join('\n'));
   logAct_('Sales App (WON handoff)', 'Scope of Work note', summary || ser, fresh.join(' · ').slice(0, 300));
   return {ok: true, row: row, summary: summary, added: fresh.length, block: block};
+}
+
+/* 🎨 Refinishing on the card (Mark 10/21): "Refinishing?" Yes / No lives in a
+ * header-created REFINISHING column (blank = go by PROJECT CATEGORY, col X);
+ * the instructions under it are the Piano Log's own FINISH (col K) and SHEEN
+ * (col L) cells, editable from the card. {serial, row, refinishing?, finish?, sheen?} */
+function setRefinish_(req, who) {
+  var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+  var found = findPiano_(sh, req.serial, req.row);
+  if (found.error) return found;
+  var last = sh.getLastColumn();
+  var hdr = sh.getRange(2, 1, 1, last).getValues()[0].map(function (h) { return String(h || '').trim().toUpperCase(); });
+  var colOf = function (name, create) {
+    var c = hdr.indexOf(name) + 1;
+    if (c < 1 && create) { sh.getRange(2, last + 1).setValue(name); c = last + 1; last++; hdr.push(name); }
+    return c;
+  };
+  var out = {ok: true, row: found.row, summary: found.summary}, did = [];
+  if (req.refinishing != null) {
+    var rv = String(req.refinishing).trim();
+    if (['', 'Yes', 'No'].indexOf(rv) < 0) return {error: 'refinishing must be Yes, No or blank'};
+    sh.getRange(found.row, colOf('REFINISHING', true)).setValue(rv);
+    out.refinishing = rv; did.push('Refinishing? ' + (rv || '(cleared — goes by the project category)'));
+  }
+  if (req.finish != null) {
+    var fc = colOf('FINISH', false); if (fc < 1) return {error: 'FINISH column missing'};
+    var fv = String(req.finish).trim().slice(0, 200);
+    sh.getRange(found.row, fc).setValue(fv); out.finish = fv; did.push('Finish: ' + (fv || '(cleared)'));
+  }
+  if (req.sheen != null) {
+    var sc = colOf('SHEEN', false); if (sc < 1) return {error: 'SHEEN column missing'};
+    var sv = String(req.sheen).trim().slice(0, 200);
+    sh.getRange(found.row, sc).setValue(sv); out.sheen = sv; did.push('Sheen: ' + (sv || '(cleared)'));
+  }
+  if (!did.length) return {error: 'nothing to save'};
+  logAct_(who, 'Refinishing', found.summary || req.serial, did.join(' · '));
+  return out;
 }
 
 function setAdminSteps_(req) {
