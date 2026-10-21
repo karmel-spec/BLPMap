@@ -16316,6 +16316,9 @@ function renderTaskBoard() {
 /* card detail popup: edit text/due/serial, notes with auto-links, photos
  * (stored via the salesapp2 request-shot blob store), snooze, delete */
 function tbLinkify(t) {
+  // 📎 attached file (Melissa 10/21): "📎 Estimate.pdf — https://drive…" shows as the file name, linked
+  const fm = /^📎\s+(.+?)\s+—\s+(https?:\/\/\S+)\s*$/u.exec(String(t || ''));
+  if (fm) return `📎 <a href="${esc(fm[2])}" target="_blank" rel="noopener">${esc(fm[1])}</a>`;
   return esc(t).replace(/(https?:\/\/[^\s<]+)/g,
     u => `<a href="${u}" target="_blank" rel="noopener">${u.length > 46 ? u.slice(0, 44) + '…' : u}</a>`);
 }
@@ -16499,7 +16502,9 @@ function openCardModal(c, canEdit) {
       <button class="mvgo cm-noteadd">Add</button>
       <button class="mvgo cm-photo" title="attach a photo">📸</button>
       <button class="mvgo cm-video" title="attach a video (up to ~30 seconds)">🎬</button>
+      <button class="mvgo cm-doc" title="attach a file — PDF, Word, Excel, anything (up to 20MB)">📎</button>
       <input type="file" class="cm-file" accept="image/*" hidden>
+      <input type="file" class="cm-dfile" hidden>
       <input type="file" class="cm-vfile" accept="video/*" hidden></div>` : ''}
     <div class="cm-notes">${(c.notes || '').split('\n').filter(Boolean).map(L => {
       const m = /^(\d{1,2}\/\d{1,2})\s+([^:]{1,40}):\s*([\s\S]*)$/.exec(L.trim());
@@ -16630,6 +16635,36 @@ function openCardModal(c, canEdit) {
         const j = await r.json();
         if (!j.url) throw new Error(j.error || 'upload failed');
         await addNote('🎬 ' + j.url);
+      } catch (e) { msg.textContent = '✗ ' + e.message; }
+    };
+    // 📎 any file → the same Drive "Task Board Media" folder as videos (Melissa 10/21,
+    // app request 102026terry94: PDFs on a sticky note); the note shows its name
+    const df = ov.querySelector('.cm-dfile');
+    ov.querySelector('.cm-doc').onclick = () => df.click();
+    df.onchange = async () => {
+      const f = df.files[0]; df.value = '';
+      if (!f) return;
+      if (f.size > 20 * 1024 * 1024) {
+        msg.textContent = '✗ file too big (' + Math.round(f.size / 1048576) + 'MB) — keep it under 20MB';
+        return;
+      }
+      const wa = writeAuth();
+      if (!wa.ok) { msg.textContent = 'Sign in first.'; return; }
+      msg.textContent = 'uploading ' + f.name + '…';
+      try {
+        const b64 = await new Promise((res, rej) => {
+          const rd = new FileReader();
+          rd.onload = () => res(String(rd.result).split(',')[1]);
+          rd.onerror = () => rej(new Error('could not read the file'));
+          rd.readAsDataURL(f);
+        });
+        const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+          headers: {'content-type': 'text/plain;charset=utf-8'},
+          body: JSON.stringify({pin: wa.pin, action: 'cardmedia', cardId: c.id,
+            mime: f.type || 'application/octet-stream', fileName: f.name, data: b64, ...authFields()})});
+        const j = await r.json();
+        if (!j.url) throw new Error(j.error || 'upload failed');
+        await addNote('📎 ' + String(f.name).replace(/\s+/g, ' ').slice(0, 80) + ' — ' + j.url);
       } catch (e) { msg.textContent = '✗ ' + e.message; }
     };
     ov.querySelector('.cm-sms').onclick = () => { ov.hidden = true; openCardTextModal(c); };
