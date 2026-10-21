@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-20.7';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-21.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -7790,6 +7790,20 @@ function shopManagerHtml_(R) {
     H.push('<ul style="margin:0 0 4px;padding-left:18px;font:13px/1.65 Helvetica,Arial;color:#2b2f33">'
       + items.map(function (t) { return '<li>' + t + '</li>'; }).join('') + '</ul>');
   }
+  // piano lists show the top 5 only (Mark 10/21 — "Pianos with no phase"
+  // ran to 36 and the long lists made the brief hard to use); the section
+  // header keeps the full count, and the last line says how many more and
+  // where to see them all
+  var TOP_N = 5;
+  function topUl(items, reportId, reportName) {
+    if (items.length <= TOP_N) return ul(items);
+    var more = items.length - TOP_N;
+    ul(items.slice(0, TOP_N).concat(['<span style="color:#8a847b">…and <b>' + more + '</b> more \u2014 '
+      + (reportId
+        ? '<a href="' + APP_URL + '/#report=' + reportId + '" style="color:#9e2020">see them all in ' + reportName + '</a>'
+        : '<a href="' + APP_URL + '" style="color:#9e2020">see them on the Store Map</a>')
+      + '</span>']));
+  }
   function pill(t, bg, fg) {
     return '<span style="background:' + bg + ';color:' + fg + ';border-radius:4px;'
       + 'padding:1px 6px;font-size:11px;font-weight:700">' + t + '</span>';
@@ -7919,7 +7933,7 @@ function shopManagerHtml_(R) {
     sec('🚚', 'Delivery Forecasting', FC.length,
       'Pianos arriving at BLP ' + fmtD(R.forecast.from) + ' – ' + fmtD(R.forecast.to) + ' (moving calendar). YES only when the $1,000 queue deposit is confirmed — the card says Queue Approved, the Piano Log has a down-payment date, or the WON handoff recorded it collected.');
     if (FC.length) {
-      ul(FC.map(function (x) {
+      topUl(FC.map(function (x) {
         var what = x.p ? ref(x.p) : '<b>' + esc_(x.pianoLabel || 'piano') + '</b>' + (x.lead ? ' <span style="color:#8a847b">· ' + esc_(x.lead) + '</span>' : '');
         var tag = x.ready ? pill('READY TO WORK ON: YES', '#eaf5ec', '#2f7d4f') : pill('READY TO WORK ON: NO', '#fbeaea', '#9e2020');
         return '<b>' + fmtD(x.date) + (x.time ? ' ' + esc_(x.time) : '') + '</b> — ' + what + ' ' + tag
@@ -7956,7 +7970,7 @@ function shopManagerHtml_(R) {
 
   if (R.advances.length) {
     sec('▶', 'Phase advances — is the next tech lined up?', R.advances.length);
-    ul(R.advances.map(function (a) {
+    topUl(R.advances.map(function (a) {
       return '<b>' + withSer(a.piano) + '</b>' + (a.spot ? ' <span style="color:#8a847b">· map #' + a.spot + '</span>' : '')
         + '<br><span style="font-size:12px;color:#6f6a63">' + a.detail + ' — moved by ' + a.who + '</span>'
         + (a.goTo ? '<br>' + pill('GO-TO: ' + a.goTo, '#eef4ff', '#2b5fa8') : '');
@@ -7966,7 +7980,7 @@ function shopManagerHtml_(R) {
   if (R.blocked.length) {
     sec('⛔', 'Blocked — concurrent work not finished', R.blocked.length,
       'These pianos are at or past the phase where the task below was due.');
-    ul(R.blocked.map(function (b) {
+    topUl(R.blocked.map(function (b) {
       return ref(b.p) + '<br>' + pill('IN ' + (b.p.phase || '—'), '#fdf3ec', '#8a6a00')
         + ' <span style="font-size:12px;color:#9e2020">outstanding: ' + b.tasks.join(', ') + '</span>';
     }));
@@ -7975,7 +7989,7 @@ function shopManagerHtml_(R) {
   if (R.waiting.length || R.held.length) {
     sec('⏸', 'Paused, waiting & on hold', R.waiting.length + R.held.length,
       'Waiting pianos with overdue or missing check-back dates first, then paused and on-hold pianos.');
-    ul(R.waiting.map(function (w) {
+    topUl(R.waiting.map(function (w) {
       var tag = w.state === 'overdue'
           ? pill('CHECK BACK ' + w.days + 'd OVERDUE', '#fbeaea', '#9e2020')
         : w.state === 'missing' ? pill('NO CHECK-BACK DATE', '#fdf3ec', '#8a6a00')
@@ -7992,7 +8006,7 @@ function shopManagerHtml_(R) {
   // 🏷 pianos on the map with no phase — its own list now, not a line in Data gaps (Walter 10/14)
   if (R.noPhase.length) {
     sec('🏷', 'Pianos with no phase', R.noPhase.length, 'On a map spot with no phase set — open the card and pick one.');
-    ul(R.noPhase.map(function (p) {
+    topUl(R.noPhase.map(function (p) {
       // the card's status (e.g. "Current Shop Work, Rebuilt"), not its parsed
       // section — some owner notes are being read as section headers
       return ref(p) + (p.status ? ' <span style="font-size:12px;color:#8a847b">· ' + esc_(String(p.status).slice(0, 50)) + '</span>' : '');
@@ -8007,7 +8021,7 @@ function shopManagerHtml_(R) {
   var gaps = [];
   // one piano per line, ALWAYS with the serial (Brigham 8/27)
   function gapList_(list) {
-    var cap = 20;
+    var cap = TOP_N;
     var lis = list.slice(0, cap).map(function (p) {
       var ser = String(p.serial || '').trim();
       return '<li style="margin:2px 0">' + smName_(p)
@@ -8029,7 +8043,7 @@ function shopManagerHtml_(R) {
   if (R.exitPrep && R.exitPrep.length) {
     sec('📋', 'Exit Prep — with admin now', R.exitPrep.length,
       'Shop work is finished on these. They are waiting on admin to close out and schedule delivery.');
-    ul(R.exitPrep.map(function (x) {
+    topUl(R.exitPrep.map(function (x) {
       return ref(x.p) + (x.left.length
         ? ' <span style="font-size:12px;color:#9e2020">still to do: ' + x.left.join(', ') + '</span>'
         : ' <span style="font-size:12px;color:#2f7d4f">all admin steps ticked</span>');
@@ -8039,13 +8053,13 @@ function shopManagerHtml_(R) {
   if (R.soldPending.length) {
     sec('✓', 'Sold / completed — awaiting delivery', R.soldPending.length,
       'Gold ring on the map. Do not re-sell or re-price these.');
-    ul(R.soldPending.map(function (p) { return ref(p); }));
+    topUl(R.soldPending.map(function (p) { return ref(p); }));
   }
 
   if (R.missingArrivals.length) {
     sec('\ud83d\ude9a', 'Arrivals with no Piano Log row', R.missingArrivals.length,
       'The moving calendar is picking these up, but no owner cell matches the client \u2014 add a Coming Soon row so they land on the map when they arrive.');
-    ul(R.missingArrivals.map(function (a) {
+    topUl(R.missingArrivals.map(function (a) {
       return '<b>' + a.name + '</b> \u2014 ' + a.date
         + ' <span style="font-size:12px;color:#6f6a63">\u201c' + a.summary + '\u201d</span>';
     }));
@@ -8054,7 +8068,7 @@ function shopManagerHtml_(R) {
   if (R.stalePhases.length) {
     sec('\ud83d\udd04', 'Phase looks stale vs Friday reports', R.stalePhases.length,
       'A recent report says this phase is finished, but the map still shows the piano in it \u2014 advance the phase so scheduling doesn\u2019t re-assign done work.');
-    ul(R.stalePhases.map(function (sp) {
+    topUl(R.stalePhases.map(function (sp) {
       return ref(sp.p) + '<br>' + pill('MAP SAYS: ' + sp.p.phase, '#fdf3ec', '#8a6a00')
         + ' <span style="font-size:12px;color:#6f6a63">report: \u201c' + sp.quote + '\u2026\u201d</span>';
     }));
@@ -8063,7 +8077,7 @@ function shopManagerHtml_(R) {
   if (R.activity.dups.length) {
     sec('🗑', 'Marked duplicate yesterday', R.activity.dups.length,
       'Review — restoring is one click in Reports → Marked Duplicates.');
-    ul(R.activity.dups.map(function (d) { return '<b>' + withSer(d.piano) + '</b> — by ' + d.who; }));
+    topUl(R.activity.dups.map(function (d) { return '<b>' + withSer(d.piano) + '</b> — by ' + d.who; }), 'duplicates', '🗑 Marked Duplicates');
   }
 
   if (R.unplaced.length || R.dupSpots.length) {
