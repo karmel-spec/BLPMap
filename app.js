@@ -612,12 +612,7 @@ function tasksBox(p) {
         <option value="" ${!(p.plateHwStatus || '').trim() ? 'selected' : ''}>— not tracked —</option>
         ${PLATE_HW_STAGES.map(v =>
           `<option value="${esc(v)}" ${p.plateHwStatus === v ? 'selected' : ''}>${esc(plateHwStageLabel(v))}</option>`).join('')}
-      </select></div><div class="platehwmsg phmsg"></div>
-    <div class="row phrow cfrow" title="the finish the plating shop should do — Korban orders by this">↳ Plating finish
-      <select class="cfsel" data-f="plateFinish">
-        <option value="" ${!(p.plateFinish || '').trim() ? 'selected' : ''}>— not set —</option>
-        ${CARD_FIELD_OPTS.plateFinish.map(v => `<option ${p.plateFinish === v ? 'selected' : ''}>${esc(v)}</option>`).join('')}
-      </select></div>${cfSuggest(p, 'plateFinish')}<div class="cfmsg-plateFinish phmsg"></div>
+      </select></div><div class="ktplan">↳ <button class="tpill phwreq" title="the plating / buffing request to the plating shop (Category 3b) — was on the task checklist">✉ plating / buffing request form</button></div><div class="platehwmsg phmsg"></div>
     <div class="row phrow keystatrow">Keytops
       <select class="keystatsel">
         <option value="" ${!kt.state ? 'selected' : ''}>— not tracked —</option>
@@ -626,16 +621,13 @@ function tasksBox(p) {
       </select>
       <input class="keyqnum" type="number" min="1" max="99" placeholder="#"
         title="place in the key queue" value="${esc(kt.num)}" ${kt.state === 'In Key Queue' ? '' : 'hidden'}>
-    </div><div class="keystatmsg phmsg"></div>
-    <div class="row phrow cfrow" title="what Marcelo should fit — from the scope of work or the client's choice">↳ Keytop material
-      <select class="cfsel" data-f="keytopMaterial">
-        <option value="" ${!(p.keytopMaterial || '').trim() ? 'selected' : ''}>— not set —</option>
-        ${CARD_FIELD_OPTS.keytopMaterial.map(v => `<option ${p.keytopMaterial === v ? 'selected' : ''}>${esc(v)}</option>`).join('')}
-        ${(p.keytopMaterial || '').trim() && !CARD_FIELD_OPTS.keytopMaterial.includes(p.keytopMaterial) ? `<option selected value="${esc(p.keytopMaterial)}">${esc(p.keytopMaterial)} (old — pick clean or replace)</option>` : ''}
-      </select></div>${cfSuggest(p, 'keytopMaterial')}<div class="cfmsg-keytopMaterial phmsg"></div>
+    </div>${(p.keytopMaterial || '').trim() ? `<div class="ktplan" title="set under 🧾 Scope of Work → Keys">↳ plan: ${esc(p.keytopMaterial)}</div>` : ''}<div class="keystatmsg phmsg"></div>
     ${orderChipsRow(p, 'bass', 'Bass strings')}
-    ${decalsRow(p)}
-    ${trackKeysFor(p).length ? '<div class="taskbody">loading…</div>' : ''}</div>`;
+    ${decalsRow(p)}</div>`;
+    // the per-track task checklist (key service, plate refinishing, pinblock…)
+    // came off the card 10/21 (Mark): those are tracked by the rows above and
+    // elsewhere, and the list was clutter. loadTasks / markTask stay for the
+    // plating form's "Submitted" stamp.
 }
 // Date marks live in the same Piano Log cells the Concurrent Work report
 // reads — "Ordered 8/27/26 · Received 9/3/26 · Installed 9/10/26 · note"
@@ -2777,6 +2769,7 @@ function shopTagFields(p) {
       + ((/qrs/i.test(blob + ' ' + plan + ' ' + notes)
           ? (/(upgrade|update)/i.test(blob + ' ' + plan) ? ' \u2014 QRS upgrade' : ' \u2014 QRS') : '')) + xtra('tech'),
     keys: (() => {
+      if ((p.keytopMaterial || '').trim()) return String(p.keytopMaterial).trim();   // the Scope of Work pick (10/21)
       if (kt.length) return KEY_SERVICE.map(k => k + ' ' + mark(k)).join(' \u00b7 ');
       const kw = (p.keywork || '').trim();
       if (kw && !/^(done|\u2713|x+|completed?)[.!\s]*$/i.test(kw)) return kw;   // requested work, verbatim
@@ -6194,11 +6187,22 @@ function popHTML(p) {
              value="${esc(p.colorFinal || '')}">
          </span></div><div class="colormsg phmsg"></div>`
     : '';
+  // Keys = the curated keytop list, one pick (Melissa 10/21, 102126terry97;
+  // Mark 10/21: the Ivory / Plastic / Ebony chips go, Ebony is no longer an
+  // option, and the Keytop material dropdown leaves Shop Progress). Plating
+  // finish moved up here from Shop Progress the same day — both are scope
+  // decisions. Same KEYTOP MATERIAL / PLATE HARDWARE FINISH cells as before.
+  const cfPills = (f, label, title) => {
+    const cur = String(p[f] || '').trim();
+    const opts = CARD_FIELD_OPTS[f].concat(cur && !CARD_FIELD_OPTS[f].includes(cur) ? [cur] : []);
+    return `<div class="row trkrow cfpillrow" title="${esc(title)}">${label}
+        <span class="trkchips">${opts.map(v =>
+          `<button class="trk cfpill ${cur === v ? 'on' : ''}" data-f="${f}" data-v="${esc(v)}">${esc(v)}${!CARD_FIELD_OPTS[f].includes(v) ? ' (old)' : ''}</button>`).join('')}
+        </span></div>${cfSuggest(p, f)}<div class="cfmsg-${f} phmsg"></div>`;
+  };
   const keysRow = p.serial
-    ? `<div class="row trkrow" title="key-top service — tap each that applies">Keys
-        <span class="trkchips">${KEY_SERVICE.map(t =>
-          `<button class="trk keybtn ${keyTokens(p).includes(t) ? 'on' : ''}" data-k="${t}">${esc(t)}</button>`).join('')}
-        </span></div><div class="keymsg phmsg"></div>`
+    ? cfPills('keytopMaterial', 'Keys', 'what Marcelo should fit — tap one; tap again to clear')
+      + cfPills('plateFinish', 'Plating<br>finish', 'the finish the plating shop should do — Korban orders by this')
     : '';
   const scopeSec = p.serial ? secWrap('scope', '🧾 Scope of Work', `
     ${tracker}
@@ -6648,6 +6652,12 @@ function wirePop(p) {
     }
   };
   pop.querySelectorAll('.cfsel').forEach(sel => sel.onchange = () => saveCardField(sel.dataset.f, sel.value));
+  pop.querySelectorAll('.cfpill').forEach(b => b.onclick = ev => {
+    ev.stopPropagation();
+    saveCardField(b.dataset.f, b.classList.contains('on') ? '' : b.dataset.v);   // tap again = clear
+  });
+  const phwReq = pop.querySelector('.phwreq');
+  if (phwReq) phwReq.onclick = ev => { ev.stopPropagation(); openPlatingModal(p, pop); };
   pop.querySelectorAll('.cfsuguse').forEach(b => b.onclick = ev => { ev.stopPropagation(); const box = b.closest('.cfsug'); saveCardField(box.dataset.f, box.dataset.v); });
   const phwsel = pop.querySelector('.platehwsel');
   if (phwsel) phwsel.onchange = async () => {
@@ -6939,12 +6949,6 @@ function wirePop(p) {
     ev.stopPropagation();
     setTypeOverride(p, b.dataset.type, pop);
   });
-  pop.querySelectorAll('.keybtn').forEach(b => b.onclick = ev => {
-    ev.stopPropagation();
-    const list = keyTokens(p);
-    const k = b.dataset.k;
-    setKeyService(p, list.includes(k) ? list.filter(x => x !== k) : list.concat(k), pop);
-  });
   const pay = pop.querySelector('.paysel');
   // refinishing-only + no plan → save "Pay upon completion" now (once per piano per session)
   if (pay && !p.payPlan && refinishOnly(p) && !payAutoDone.has(p.serial) && writeAuth().ok) {
@@ -7073,7 +7077,6 @@ function wirePop(p) {
     else if (kind === 'platetemp') openPlateTempModal(p);
     else if (kind === 'dup') openDuplicateModal(p);
   });
-  if (pop.querySelector('.taskbox')) loadTasks(p, pop);
   const pi = pop.querySelector('.photoin');
   pop.querySelectorAll('.photobtn').forEach(pb =>
     pb.onclick = ev => { ev.stopPropagation(); popPinned = true; pi.click(); });
