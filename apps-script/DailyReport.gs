@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-21.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-21.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -7534,10 +7534,12 @@ function buildShopManagerReport_(dayOffset) {
         && (new Date(x.date).getTime() >= wk
             || (x.statusAt && new Date(x.statusAt).getTime() >= wk));
     }).slice(0, 15);
+    // newest first, so the brief's top 5 are the freshest (Mark 10/21); the
+    // full count rides in the header
     R.appLive = reqs.filter(function (x) {
       return (x.status === 'Live' || x.status === 'Tested')
         && x.statusAt && new Date(x.statusAt).getTime() >= wk;
-    }).slice(0, 15);
+    }).sort(function (a, b) { return new Date(b.statusAt).getTime() - new Date(a.statusAt).getTime(); });
   } catch (e) {}
 
   // client reports ready to review/send: opt-IN pianos with shop activity
@@ -7799,7 +7801,9 @@ function shopManagerHtml_(R) {
     if (items.length <= TOP_N) return ul(items);
     var more = items.length - TOP_N;
     ul(items.slice(0, TOP_N).concat(['<span style="color:#8a847b">…and <b>' + more + '</b> more \u2014 '
-      + (reportId
+      + (reportId === '' && reportName
+        ? '<a href="' + APP_URL + '" style="color:#9e2020">see them all in ' + reportName + '</a>'
+        : reportId
         ? '<a href="' + APP_URL + '/#report=' + reportId + '" style="color:#9e2020">see them all in ' + reportName + '</a>'
         : '<a href="' + APP_URL + '" style="color:#9e2020">see them on the Store Map</a>')
       + '</span>']));
@@ -7948,13 +7952,13 @@ function shopManagerHtml_(R) {
     sec('🚀', 'New in the apps — announce these', R.appLive.length,
       'Fixes and features that went LIVE this week. Managers: mention these at the morning '
       + 'meeting and thank the requester by name; Tested means the requester confirmed it works.');
-    ul(R.appLive.map(function (x) {
+    topUl(R.appLive.map(function (x) {
       return (LICON[x.type] || '💡') + ' ' + String(x.text).slice(0, 130)
         + ' <span style="color:#8a847b">(asked by <b>' + x.who + '</b>'
         + (x.context ? ', ' + x.context : '') + ')</span> '
         + pill(x.status, x.status === 'Tested' ? '#eaf5ec' : '#eaf2fd',
                x.status === 'Tested' ? '#2f7d4f' : '#2c5d96');
-    }));
+    }), '', 'the Store Map \u2192 🛡 Admin Dashboard \u2192 💡 App Requests');
   }
   // print-ready batches — edit this list to add/remove links from the brief
   var PRINTABLES = [
