@@ -5959,8 +5959,21 @@ function trainReqModal() {
 const TO = {rows: null, at: 0};
 async function loadTimeOff() {
   try {
-    const r = await fetch(BRIDGE_URL + '?fn=timeoffrows', {redirect: 'follow'});
-    TO.rows = (await r.json()).rows || [];
+    // Same Google ID token other bridge calls send (authFields / verifyGoogle_).
+    // doGet has no headers, so it rides the query string. A token that makes
+    // the URL fail still loads the list; the note cells stay gated below.
+    const af = authFields();
+    const base = BRIDGE_URL + '?fn=timeoffrows';
+    const withId = af.idToken ? base + '&idToken=' + encodeURIComponent(af.idToken) : base;
+    let j;
+    try {
+      j = await (await fetch(withId, {redirect: 'follow', cache: 'no-store'})).json();
+    } catch (e1) {
+      if (withId === base) throw e1;
+      j = await (await fetch(base, {redirect: 'follow', cache: 'no-store'})).json();
+    }
+    const rows = (j && j.rows) || [];
+    TO.rows = rows.map(row => (timeOffSeesNote(row) ? row : Object.assign({}, row, {note: ''})));
     TO.at = Date.now();
   } catch (e) { TO.rows = TO.rows || []; }
   if (S.view === 'dash') renderDash();
@@ -13017,6 +13030,12 @@ function openArchived(p) {
 function canApproveTimeOff() {
   return isOwner() || ['markhales.blp@gmail.com', 'melissa@brighamlarsonpianos.com'].includes(userEmail());
 }
+// Notes are for approvers and the requester. Same who-match as myTimeOffLines().
+function timeOffSeesNote(r) {
+  if (canApproveTimeOff()) return true;
+  const me = clockName().toLowerCase();
+  return !!me && String(r && r.who || '').toLowerCase() === me;
+}
 function timeOffTable() {
   if (!TO.rows) { loadTimeOff(); return '<div class="empty">Loading time off…</div>'; }
   const f = S.toF || (S.toF = {who: '', from: '', to: ''});
@@ -13049,7 +13068,7 @@ function timeOffTable() {
       return `<tr${r.end >= today ? ' style="font-weight:600"' : ''}>
       <td>${esc(r.who)}</td>
       <td style="white-space:nowrap">${esc(r.start)}${r.end !== r.start ? ' → ' + esc(r.end) : ''}${r.end >= today ? ' <span style="color:#2e7d4f;font-size:10px">UPCOMING</span>' : ''}</td>
-      <td>${esc(r.times || 'all day')}</td><td>${esc(r.note || '')}</td>
+      <td>${esc(r.times || 'all day')}</td><td>${timeOffSeesNote(r) ? esc(r.note || '') : ''}</td>
       <td style="white-space:nowrap;color:#8a929a">${esc((r.at || '').slice(0, 10))}</td>
       <td style="white-space:nowrap">${chip}</td></tr>`;
     }).join('')
@@ -13427,7 +13446,7 @@ const REPORT_DEFS = () => [
   {id: 'timeoffrep', sec: 'admin', icon: '🏖', title: 'TIME OFF', count: (() => {
      try { const t = new Date().toLocaleDateString('en-CA');
        return TO.rows ? TO.rows.filter(r => r.end >= t && !/^duplicate/i.test(r.status || '')).length : null; } catch (e) { return null; } })(),
-   desc: 'Every time-off request from the Request menu — filter by team member and date range. Mark, Melissa and the owners approve or deny right here; the requester gets a text with the decision. Upcoming time off counts on the badge; each person also sees their own on their dashboard.',
+   desc: 'Every time-off request from the Request menu — filter by team member and date range. Mark, Melissa and the owners approve or deny right here; the requester gets a text with the decision. Notes show only to the requester and to those approvers. Upcoming time off counts on the badge; each person also sees their own on their dashboard.',
    html: timeOffTable},
   {id: 'shopwork', sec: 'admin', icon: '📍', title: 'SHOP WORK MAP — DELIVERY / ORIGIN', count: null,
    desc: 'Every piano in the Custom Shopwork queue, pinned by where it’s headed for delivery or where it came from. Click a pin (or a row) to open that piano.',

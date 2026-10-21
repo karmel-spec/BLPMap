@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-21.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-21.4';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -342,8 +342,13 @@ function doGet(e) {
     try { return json_(appUpdatesRows_()); }
     catch (err) { return json_({error: String(err), rows: []}); }
   }
+  // Notes are private. doGet has no headers, so the same Google ID token other
+  // calls put in the POST body arrives here as ?idToken= and is checked with
+  // verifyGoogle_. No token, or a token that fails, returns every row with
+  // the note blank. The shop briefing calls timeOffRows_() with no argument
+  // and still receives notes.
   if (e && e.parameter && e.parameter.fn === 'timeoffrows') {
-    try { return json_(timeOffRows_()); }
+    try { return json_(timeOffRows_(verifyGoogle_(e.parameter.idToken))); }
     catch (err) { return json_({error: String(err), rows: []}); }
   }
   // Shop Board roster overrides (Roster tab of the report sheet) — served
@@ -9825,7 +9830,28 @@ function timeOffStatus_(req, who) {
   }
   return {ok: true, tech: tech, span: span, status: stamp, texted: texted, archived: archived};
 }
-function timeOffRows_() {
+/* Same people as the map's canApproveTimeOff(): owners, Mark, Melissa. */
+function timeOffApprover_(g) {
+  if (!g || !g.email) return false;
+  var email = String(g.email).toLowerCase();
+  return OWNER_EMAILS.indexOf(email) >= 0
+    || email === 'markhales.blp@gmail.com'
+    || email === 'melissa@brighamlarsonpianos.com';
+}
+/* Requester match follows myTimeOffLines() / clockName(): the verified
+ * Google name (email only when the token has no name), trimmed and
+ * lowercased, equals the row's Who. */
+function timeOffNoteOk_(g, who) {
+  if (timeOffApprover_(g)) return true;
+  if (!g) return false;
+  var me = String(g.name || g.email || '').trim().toLowerCase();
+  return !!me && String(who || '').toLowerCase() === me;
+}
+/* Pass the verified Google user (or null) to hide notes the caller may not
+ * see. Called with no argument — the shop briefing — notes stay, so that
+ * email is unchanged. */
+function timeOffRows_(viewer) {
+  var gate = arguments.length > 0;
   var sh = timeOffSheet_();
   var out = [];
   var last = sh.getLastRow();
@@ -9836,8 +9862,10 @@ function timeOffRows_() {
     for (var i = 0; i < vals.length; i++) {
       var v = vals[i];
       if (!v[1]) continue;
+      var note = String(v[5] || '');
+      if (gate && !timeOffNoteOk_(viewer, String(v[1]))) note = '';
       out.push({row: i + 2, at: String(v[0] || ''), who: String(v[1]), start: d(v[2]), end: d(v[3]),
-                times: String(v[4] || ''), note: String(v[5] || ''), status: String(v[6] || 'requested')});
+                times: String(v[4] || ''), note: note, status: String(v[6] || 'requested')});
     }
   }
   out.reverse();
