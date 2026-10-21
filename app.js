@@ -5917,6 +5917,18 @@ function timeOffModal() {
   </div>`;
   document.body.appendChild(ov);
   ov.querySelector('.dsx').onclick = () => ov.remove();
+  // last day follows the first day (Mark 10/21, app request 102126hales60):
+  // picking a first day moves the last day to match, unless a LATER last day
+  // was already chosen on purpose; the last day can't be set before the first
+  const toS = ov.querySelector('.to-start'), toE = ov.querySelector('.to-end');
+  let toWas = toS.value;
+  const toFollow = () => {
+    if (!toS.value) return;
+    if (!toE.value || toE.value < toS.value || toE.value === toWas) toE.value = toS.value;
+    toE.min = toS.value; toWas = toS.value;
+  };
+  toS.addEventListener('input', toFollow); toS.addEventListener('change', toFollow);
+  toE.min = toS.value;
   const toBtn = ov.querySelector('.to-send');
   toBtn.onclick = oneShot(toBtn, 'Sending…', async () => {
     const v = c => ov.querySelector(c).value.trim();
