@@ -632,7 +632,7 @@ function tasksBox(p) {
 }
 // Date marks live in the same Piano Log cells the Concurrent Work report
 // reads — "Ordered 8/27/26 · Received 9/3/26 · Installed 9/10/26 · note"
-const DECAL_MARKS = ['Ordered', 'Received', 'In Stock', 'Installed'];
+const DECAL_MARKS = ['Ordered', 'Received', 'In Stock', 'Installed', 'Not needed'];   // Not needed: Mark 10/21 — no decal on this job
 function taskCellMarks(p, key, names) {
   const v = String((p.tasks || {})[key] || '');
   const out = {rest: v};
@@ -659,7 +659,7 @@ function decalsRow(p) {
   const have = DECAL_MARKS.filter(n => ms[n]);
   return `<div class="row phrow bassrow">Decals
       <span class="decalcur">${have.length
-        ? have.map(n => `${n === 'Installed' ? '✅' : n === 'In Stock' ? '📥' : n === 'Received' ? '📬' : '📦'} ${n}${ms[n] === '✓' ? '' : ' ' + esc(ms[n])}`).join(' · ')
+        ? have.map(n => `${n === 'Installed' ? '✅' : n === 'In Stock' ? '📥' : n === 'Received' ? '📬' : n === 'Not needed' ? '🚫' : '📦'} ${n}${ms[n] === '✓' ? '' : ' ' + esc(ms[n])}`).join(' · ')
         : '<i class="mna">— not tracked —</i>'}</span>
       <select class="decalsel">
         <option value="" selected>set…</option>
@@ -11583,7 +11583,7 @@ function taskAutoDone(p, cat) {
 }
 function taskStatus(v) {
   if (!v) return 'needed';
-  if (/^(x|n\/?a|no)[.!\s]*$/i.test(v)) return 'n/a';
+  if (/^(x|n\/?a|no)[.!\s]*$/i.test(v) || /\bnot needed\b/i.test(v)) return 'n/a';   // "Not needed 10/21/26" — the Decals mark (Mark 10/21)
   if (/receiv|done|complete|installed|finished|✓|arrived|back from/i.test(v)) return 'done';
   if (/order|sent|shipp|out to|out for|waiting|in progress|at plater/i.test(v)) return 'ordered';
   if (/^y(es)?[.!\s]*$/i.test(v)) return 'needed';
