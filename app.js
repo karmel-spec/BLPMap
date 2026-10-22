@@ -15233,17 +15233,18 @@ async function teamFetchAll() {
   const clock = (async () => {
     let clk = await j(fetchT('/api/timeclock', {cache: 'no-store'}, 15000));
     if (!(clk && clk.open)) clk = await bridgeJson('timeclock', 'open');
-    if (clk && clk.open) { TEAM.clock = clk; TEAM.clockStale = false; }
+    if (clk && clk.open) { TEAM.clock = clk; TEAM.clockStale = false; TEAM.clockAt = Date.now(); }
     else { TEAM.clock = {open: CLOCK.all || [], todayMinutes: CLOCK.today || {}}; TEAM.clockStale = CLOCK.allAt ? 'map' : 'none'; }
     paint();
   })();
   const payroll = bridgeJson('payroll', 'open').then(pay => {
-    if (pay && pay.open) { TEAM.pay = pay; TEAM.payStale = false; }
+    if (pay && pay.open) { TEAM.pay = pay; TEAM.payStale = false; TEAM.payAt = Date.now(); }
     else { TEAM.pay = (TEAM.pay && TEAM.pay.open && TEAM.pay.open.length) ? TEAM.pay : {open: [], today: (pay && pay.today) || []}; TEAM.payStale = true; }
     paint();
   });
   const where = bridgeJson('whereis', 'who').then(whr => {
     TEAM.where = (whr && whr.who) || TEAM.where || {};
+    if (whr && whr.who) TEAM.whereAt = Date.now();
     paint();
   });
   await Promise.all([roster, sched, clock, payroll, where]);
@@ -15251,6 +15252,47 @@ async function teamFetchAll() {
   TEAM.loading = false;
   paint();
 }
+/* 🔄 live refresh while the Team tab is open (Mark 10/22): the board loaded
+ * its clocks once and then showed that snapshot all session — Cameron read
+ * "not clocked in" and Korban sat on a piano he'd finished. Now, only while
+ * the Team view is in front: the piano clock every minute (the 25 s Netlify
+ * copy, no bridge call), the day clock and where-is every 5 minutes (bridge),
+ * and both again when you come back to the tab. The cards keep what they
+ * have and update in place — nothing blanks; the first load is unchanged. */
+const TEAM_CLOCK_MS = 60000, TEAM_PAY_MS = 300000;
+let teamLiveBusy = false;
+async function teamLiveRefresh(force) {
+  if (teamLiveBusy || TEAM.loading || !TEAM.roster || S.view !== 'team') return;
+  if (document.visibilityState === 'hidden') return;
+  const now = Date.now();
+  const wantClock = force || now - (TEAM.clockAt || 0) >= TEAM_CLOCK_MS - 5000;
+  const wantPay = force || now - Math.min(TEAM.payAt || 0, TEAM.whereAt || 0) >= TEAM_PAY_MS - 5000;
+  if (!wantClock && !wantPay) return;
+  if (!force && now - (TEAM.liveTriedAt || 0) < 30000) return;   // a failed read waits 30 s, no retry loop
+  TEAM.liveTriedAt = now;
+  teamLiveBusy = true;
+  const get = async (url, field, ms) => {
+    try { const r = await fetchT(url, {cache: 'no-store', redirect: 'follow'}, ms); const j = await r.json(); return j && j[field] != null ? j : null; }
+    catch (e) { return null; }
+  };
+  const jobs = [];
+  if (wantClock) jobs.push(get('/api/timeclock', 'open', 15000).then(clk => {
+    if (clk) { TEAM.clock = clk; TEAM.clockStale = false; TEAM.clockAt = Date.now(); }
+  }));
+  if (wantPay) {
+    jobs.push(get(BRIDGE_URL + '?fn=payroll&_=' + now, 'open', 20000).then(pay => {
+      if (pay) { TEAM.pay = pay; TEAM.payStale = false; TEAM.payAt = Date.now(); }
+    }));
+    jobs.push(get(BRIDGE_URL + '?fn=whereis&_=' + now, 'who', 20000).then(whr => {
+      if (whr) { TEAM.where = whr.who || {}; TEAM.whereAt = Date.now(); }
+    }));
+  }
+  await Promise.all(jobs);
+  teamLiveBusy = false;
+  if (S.view === 'team' && TEAM.tab === 'board') { try { renderTeam(); } catch (e) {} }
+}
+setInterval(() => teamLiveRefresh(false), 30000);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') teamLiveRefresh(false); });
 function teamClockFmt(iso) {
   const d = new Date(iso);
   return isNaN(d) ? '' : d.toLocaleTimeString('en-US', {hour: 'numeric', minute: '2-digit'});
@@ -15393,6 +15435,13 @@ function renderTeam() {
     };
     tt.appendChild(rb);
   }
+  // how fresh the cards are (Mark 10/22)
+  if (tt) {
+    let asof = tt.querySelector('.teamasof');
+    if (!asof) { asof = document.createElement('span'); asof.className = 'teamasof'; tt.appendChild(asof); }
+    asof.textContent = TEAM.clockAt ? 'as of ' + new Date(TEAM.clockAt).toLocaleTimeString('en-US', {hour: 'numeric', minute: '2-digit'}) : '';
+  }
+  if (TEAM.roster && !TEAM.loading && TEAM.clockAt && Date.now() - TEAM.clockAt >= TEAM_CLOCK_MS) setTimeout(() => teamLiveRefresh(false), 0);
   document.querySelectorAll('#teamTabs button[data-tt]').forEach(b => {
     b.classList.toggle('on', b.dataset.tt === TEAM.tab);
     if (!b.dataset.wired) { b.dataset.wired = '1'; b.onclick = () => { TEAM.tab = b.dataset.tt; renderTeam(); }; }
