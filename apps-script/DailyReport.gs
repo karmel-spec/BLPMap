@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-22.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-22.4';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -6800,6 +6800,23 @@ var CHATTER_RE = [
   /\bPROPOSED\b|\bslot was open\b|\bhas (exactly )?\d+ working days\b|\bnever scheduled on\b|\bdedicated special project\b|\bclosed (its|the|his|her) .{0,40}\bDONE\b/,
   /\bgave no (day )?estimate\b|\bno day estimate\b|\bsee changes\b|\bre-?confirmation\b|\bbumped to\b|\boverflow\b|^FLAG:|^spot\s+[\w<>]+\.?$/i
 ];
+/* The card's 🏆 sale lines, fit for a technician's calendar (Mark 10/22):
+ * the header and "Fix requests:" / "Piano note:" labels come off, and the
+ * standing rules hold even if a line slipped past review — a line that
+ * mentions money or payment, or carries a phone number, email or street
+ * address, is left off whole. */
+function saleNotesClean_(scope) {
+  var PERSONAL = /[\w.+-]+@[\w-]+\.[\w.]+|\(?\b\d{3}\)?[\s.-]*\d{3}[\s.-]*\d{4}\b|\b\d{2,6}\s+(?:[NSEW]\.?\s+)?[A-Za-z0-9.' ]{2,30}\s(?:st|street|rd|road|dr|drive|ave|avenue|ln|lane|ct|court|cir|circle|way|blvd|pl|place|trail|hwy)\b/i;
+  var MONEY = /\$\s?\d|\b\d[\d,]*\s?(?:dollars|usd)\b|\b(pay|paid|payment|deposit|invoice|price|priced|cost|financ|insurance|refund|balance|owe)/i;
+  return String(scope || '').split('\n').map(function (l) { return l.trim(); })
+    .filter(function (l) { return /^🏆/.test(l); })
+    .map(function (l) { return l.replace(/^🏆\s*/, '').trim(); })
+    .filter(function (l) { return l && !/^From .{1,40} sale \d/i.test(l); })
+    .map(function (l) { return l.replace(/^(Fix requests|Piano note|Service \/ fix requests[^:]*)\s*:\s*/i, '').trim(); })
+    .filter(function (l) { return l.length >= 3 && !MONEY.test(l) && !PERSONAL.test(l); })   // the line goes whole or not at all
+    .slice(0, 6);
+}
+
 function calDescription_(note) {
   var s = String(note || '').replace(/\s+/g, ' ').trim();
   s = s.replace(/[\u2019\u2018]/g, "'");               // curly apostrophes → straight, so "Today's list" is recognised
@@ -6941,14 +6958,27 @@ function applyScheduleLocked_(req) {
   } catch (eB) { bookedTunes = []; }
   // standing rule (Brigham 2026-08-17): every scheduled piano event carries the
   // piano's CURRENT map spot in the Google event's location field (bare value)
-  var spotBySerial = {}, plateBySerial = {};
+  var spotBySerial = {}, plateBySerial = {}, saleBySerial = {};
   try {
     var live = JSON.parse(UrlFetchApp.fetch(APP_URL + '/api/data').getContentText());
     (live.pianos || []).forEach(function (p) {
       if (p.serial && p.location) spotBySerial[String(p.serial)] = String(p.location);
       if (p.serial && p.plateStatus) plateBySerial[String(p.serial)] = String(p.plateStatus).trim();
+      var sale = saleNotesClean_(p.scopeNotes);
+      if (p.serial && sale.length) saleBySerial[String(p.serial)] = sale;
     });
   } catch (e) { /* no map data — events just go out without locations */ }
+  // 🏆 notes from Brigham's sale on the tech's event (Mark 10/22, app request
+  // 102126hales62) — the card's reviewed 🏆 Scope of Work lines, e.g. the
+  // Labrousse's "be extra careful with the cabinetry… mouse nest under the keys"
+  function saleNotesFor_(title) {
+    var runs = String(title || '').match(/[A-Za-z]*\d{3,}[A-Za-z0-9]*/g) || [];
+    for (var i = 0; i < runs.length; i++) {
+      var hit = saleBySerial[runs[i]] || saleBySerial[runs[i].replace(/\D/g, '')];
+      if (hit) return hit;
+    }
+    return [];
+  }
   function spotFor_(title) {
     var runs = String(title || '').match(/\d{3,}/g) || [];
     for (var i = 0; i < runs.length; i++) {
@@ -7093,7 +7123,11 @@ function applyScheduleLocked_(req) {
               cleanNote = bd + (dl.length ? '\n' + dl.join('\n') : '');
             }
           }
-          var opts = {description: (cleanNote ? cleanNote + '\n' : '')
+          var saleLines = /hardware buffing queue/i.test(evTitle) ? [] : saleNotesFor_(evTitle).filter(function (l) {
+            return cleanNote.toLowerCase().indexOf(l.toLowerCase().slice(0, 40)) < 0;   // not already in the plan note
+          });
+          var saleTxt = saleLines.length ? '🏆 From Brigham\'s sale:\n' + saleLines.map(function (l) { return '• ' + l; }).join('\n') + '\n' : '';
+          var opts = {description: (cleanNote ? cleanNote + '\n' : '') + saleTxt
             + 'Applied from the Shop Manager schedule proposal (' + plan.week + ')'};
           var spot = spotFor_(evTitle);
           if (spot) opts.location = spot;
