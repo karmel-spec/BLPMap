@@ -1958,8 +1958,10 @@ function savePhoto_(req, who) {
  * the folder link. Further shots of the same piano+kind within 45 minutes
  * fold into that one email (CacheService debounce) — a 10-shot wizard run
  * is one message, not ten. Never blocks the save. */
+var BA_PHOTO_MAIL = true;
 var BA_PHOTO_TO = 'alisa@brighamlarsonpianos.com,marcus@brighamlarsonpianos.com';
 function notifyBaPhoto_(kind, serial, found, folder, who, stage) {
+  if (!BA_PHOTO_MAIL) return;
   try {
     var cache = CacheService.getScriptCache();
     var ck = 'bamail_' + kind + '_' + serial;
