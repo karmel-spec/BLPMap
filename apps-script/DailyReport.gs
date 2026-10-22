@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-22.6';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-22.7';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -7902,6 +7902,10 @@ function buildShopManagerReport_(dayOffset) {
   // every active piano on a map spot with a blank phase (Walter 10/14) — it
   // used to count only the CUSTOM SHOPWORK section, which found none
   R.noPhase = pianos.filter(function (p) {
+    // storage pianos never go through phases (Mark 10/22) — a storage
+    // section (PD STORAGE, MISC STORAGE…) or a Storage track keeps a piano off
+    if (/storage/i.test(String(p.section || ''))) return false;
+    if (String(p.track || '').split(',').some(function (t) { return /^\s*storage\s*$/i.test(t); })) return false;
     return p.active !== false && !p.coming && p.isSlot && !String(p.phase || '').trim();
   });
   R.noCab = pianos.filter(function (p) {
