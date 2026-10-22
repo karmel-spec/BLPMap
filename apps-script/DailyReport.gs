@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-22.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-22.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -1278,6 +1278,20 @@ function doPost(e) {
             + String(req.text || '').slice(0, 160)
             + ' (review in Store Map → Admin → App Requests → Handbook suggestions)');
         } catch (eH) { /* text best-effort */ }
+      }
+      // 💡 every other Store Map request → a quick-summary text to Karmel
+      // (Mark 10/22): the first sentence (or ~150 characters) of the request,
+      // who filed it, the type and the id. Owners skip quiet hours.
+      if (sg.ok && String(req.type || '') !== 'handbook') {
+        try {
+          var sgWho = String(clockTech_(req) || who || 'Someone').replace(/\s*<[^>]*>\s*/, '').replace(/\s*\(.*\)\s*$/, '').trim();
+          var sgTxt = String(req.text || '').replace(/\s+/g, ' ').trim();
+          var sgFirst = (sgTxt.match(/^.{20,200}?[.!?](?=\s|$)/) || [])[0];
+          var sgSum = sgFirst || (sgTxt.length > 150 ? sgTxt.slice(0, 150).replace(/\s+\S*$/, '') + '…' : sgTxt);
+          var sgIcon = {bug: '🐛', edit: '✏️', idea: '💡'}[String(req.type || '')] || '💡';
+          notifyTeam_(['Karmel'], sgIcon + ' Store Map ' + String(req.type || 'idea') + ' from ' + sgWho + ': ' + sgSum
+            + (sg.screenshot ? ' 📎' : '') + ' (' + sg.id + ')');
+        } catch (eK) { /* text best-effort */ }
       }
       return json_(sg);
     }
