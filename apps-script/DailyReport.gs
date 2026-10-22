@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-21.16';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-22.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -6099,6 +6099,12 @@ var SM_ADMIN_STEPS = ['$1000 Queue Payment', 'Welcome Email',
 function smDenverDay_(d) {
   return Utilities.formatDate(d || new Date(), 'America/Denver', 'yyyy-MM-dd');
 }
+// not in the building yet: a Coming Soon row, or a location that says
+// "not here yet" (Mark 10/22, app request 102226hales63) — no serial or map
+// number is expected until it arrives
+function smNotHereYet_(p) {
+  return !!p.coming || /coming soon|not here yet/i.test(String(p.location || ''));
+}
 function smIsShopwork_(p) {
   return String(p.section || '').trim().toUpperCase() === 'CUSTOM SHOPWORK';
 }
@@ -7817,7 +7823,7 @@ function buildShopManagerReport_(dayOffset) {
 
   // data gaps
   R.noMap = pianos.filter(function (p) {
-    return smIsShopwork_(p) && !p.isSlot && !/coming soon|david hyde|attic/i.test(p.location || '');
+    return smIsShopwork_(p) && !p.isSlot && !smNotHereYet_(p) && !/david hyde|attic/i.test(p.location || '');
   });
   R.noTrack = pianos.filter(function (p) {
     return smIsShopwork_(p) && !String(p.track || '').trim();
@@ -8194,7 +8200,7 @@ function shopManagerHtml_(R) {
       var ser = String(p.serial || '').trim();
       return '<li style="margin:2px 0">' + smName_(p)
         + (p.location ? ' (#' + smSpot_(p) + ')' : '')
-        + ' — <b>' + (ser ? 'SER ' + ser : 'no serial in the log') + '</b></li>';
+        + ' — <b>' + (ser && ser !== '?' ? 'SER ' + ser : smNotHereYet_(p) ? 'not here yet' : 'no serial in the log') + '</b></li>';
     }).join('');
     var more = list.length > cap
       ? '<li>…and ' + (list.length - cap) + ' more — see the Store Map reports</li>' : '';
