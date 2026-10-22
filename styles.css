@@ -2395,7 +2395,7 @@ table.tchktbl td.chk .tcasap input{width:15px;height:15px}
 .cardphoto img{width:100%;height:100%;object-fit:cover;display:block}
 @keyframes cardphotoin{from{opacity:0}to{opacity:1}}
 @media (max-width:600px){
-  .cardphoto{top:32px;right:10px;width:64px;height:64px;border-radius:7px}
+  .cardphoto{top:46px;right:10px;width:64px;height:64px;border-radius:7px}   /* clear of the ✕ (Melissa 10/22, 102226terry99) */
   .popsticky:has(.cardphoto.on) > h3,
   .popsticky:has(.cardphoto.on) > .rowflex{margin-right:78px}
 }
