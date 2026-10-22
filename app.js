@@ -13566,6 +13566,32 @@ function renderReport() {
   const open = S.openReport;
   const defs = REPORT_DEFS().filter(r => !r.show || r.show());
   const opened = open && defs.find(r => r.id === open);
+  // keep each scrolling list where it was (Mark 10/22, app request
+  // 102226hales64): the rebuild below replaced the Time Clock report's
+  // .stickytbl boxes, so pressing ✎ adjust deep in a list jumped that list
+  // back to its top. Keyed by the section heading above each box.
+  const boxKey = (el, i) => {
+    let h = el.previousElementSibling;
+    while (h && !(h.matches && h.matches('h4'))) h = h.previousElementSibling;
+    return (h ? h.textContent.trim().slice(0, 40) : '') + '|' + i;
+  };
+  const keptScroll = {};
+  if (opened && body.querySelector('.rpt[data-r="' + opened.id + '"]')) {
+    body.querySelectorAll('.stickytbl').forEach((el, i) => { if (el.scrollTop) keptScroll[boxKey(el, i)] = el.scrollTop; });
+  }
+  const restoreScroll = () => {
+    body.querySelectorAll('.stickytbl').forEach((el, i) => {
+      const k = boxKey(el, i);
+      if (keptScroll[k]) el.scrollTop = keptScroll[k];
+    });
+    // the row being edited is taller than a plain row — make sure all of it shows
+    const ed = body.querySelector('.stickytbl tr.adjediting');
+    if (ed) {
+      const box = ed.closest('.stickytbl'), r = ed.getBoundingClientRect(), b = box.getBoundingClientRect();
+      if (r.bottom > b.bottom) box.scrollTop += Math.min(r.bottom - b.bottom + 8, r.top - b.top);
+      else if (r.top < b.top) box.scrollTop -= b.top - r.top + 8;
+    }
+  };
   if (opened) {
     // FULL-PAGE report (Brigham 8/26): one report at a time, ✕ top-right
     // returns to the reports list — no more accordion scrolling
@@ -13580,6 +13606,7 @@ function renderReport() {
         <p class="pd">${opened.desc}</p>
         <div class="tscroll">${opened.html()}</div>
       </div>`;
+    restoreScroll();
     if (opened.id === 'buffing') renderBuffing();
     body.querySelector('.rptx').onclick = () => {
       S.openReport = null;
