@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-22.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-22.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -6421,6 +6421,13 @@ function smDeliveryForecast_(pianos, events, refDate) {
       return ln && (ln.indexOf(nlow) >= 0 || nlow.indexOf(ln) >= 0);
     })[0] || null;
     if (!h && p && p.serial) h = deps.filter(function (x) { return x.serial && String(x.serial) === String(p.serial); })[0] || null;
+    // shop work only (Mark 10/22): a WON shop handoff (won-deposits carries
+    // shop projects only), or a card in CUSTOM SHOPWORK / a "piano coming"
+    // placeholder. Storage, showroom and other cards are left off — the shop
+    // does nothing with storage-only pianos — and an arrival with no card or
+    // handoff at all (the Mall concert, an unknown pickup) is left to the
+    // "Arrivals with no Piano Log row" list.
+    if (!(h || (p && (smIsShopwork_(p) || p.coming)))) return;
     var st = String((p && p.status) || ''), sec = String((p && p.section) || '').trim();
     var ready = null, why = '';
     // a dated down payment in the Piano Log counts as the deposit (Mark 10/20,
@@ -8095,7 +8102,7 @@ function shopManagerHtml_(R) {
     var FC = R.forecast.items || [];
     var fmtD = function (iso) { var dd = new Date(iso + 'T12:00:00'); return isNaN(dd) ? iso : Utilities.formatDate(dd, 'America/Denver', 'EEE M/d'); };
     sec('🚚', 'Delivery Forecasting', FC.length,
-      'Pianos arriving at BLP ' + fmtD(R.forecast.from) + ' – ' + fmtD(R.forecast.to) + ' (moving calendar). YES only when the $1,000 queue deposit is confirmed — the card says Queue Approved, the Piano Log has a down-payment date, or the WON handoff recorded it collected.');
+      'Shop-work pianos arriving at BLP ' + fmtD(R.forecast.from) + ' – ' + fmtD(R.forecast.to) + ' (moving calendar; storage and unknown pickups left off). YES only when the $1,000 queue deposit is confirmed — the card says Queue Approved, the Piano Log has a down-payment date, or the WON handoff recorded it collected.');
     if (FC.length) {
       topUl(FC.map(function (x) {
         var what = x.p ? ref(x.p) : '<b>' + esc_(x.pianoLabel || 'piano') + '</b>' + (x.lead ? ' <span style="color:#8a847b">· ' + esc_(x.lead) + '</span>' : '');
@@ -8104,7 +8111,7 @@ function shopManagerHtml_(R) {
           + '<br><span style="font-size:12px;color:#6f6a63">' + esc_(x.summary) + (x.why ? ' · ' + esc_(x.why) : '') + '</span>';
       }));
     } else {
-      H.push('<p style="margin:0 0 8px;font:12.5px Helvetica,Arial;color:#8a847b">No pianos arriving in the next 14 days on the moving calendar.</p>');
+      H.push('<p style="margin:0 0 8px;font:12.5px Helvetica,Arial;color:#8a847b">No shop-work pianos arriving in the next 14 days on the moving calendar.</p>');
     }
   }
   if (R.appLive && R.appLive.length) {
