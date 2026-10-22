@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-22.4';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-22.5';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -6805,6 +6805,12 @@ var CHATTER_RE = [
  * standing rules hold even if a line slipped past review — a line that
  * mentions money or payment, or carries a phone number, email or street
  * address, is left off whole. */
+/* "(see notes)" rides on an applied event's title when it carries notes from
+ * Brigham's sale (Mark 10/22). Every title match — Approve's "already on the
+ * calendar" check, the schedule check's duplicate finder — compares titles
+ * without it, so a re-run never doubles an event. */
+function calBaseTitle_(t) { return String(t || '').replace(/\s*\(see notes\)\s*$/i, ''); }
+
 function saleNotesClean_(scope) {
   var PERSONAL = /[\w.+-]+@[\w-]+\.[\w.]+|\(?\b\d{3}\)?[\s.-]*\d{3}[\s.-]*\d{4}\b|\b\d{2,6}\s+(?:[NSEW]\.?\s+)?[A-Za-z0-9.' ]{2,30}\s(?:st|street|rd|road|dr|drive|ave|avenue|ln|lane|ct|court|cir|circle|way|blvd|pl|place|trail|hwy)\b/i;
   var MONEY = /\$\s?\d|\b\d[\d,]*\s?(?:dollars|usd)\b|\b(pay|paid|payment|deposit|invoice|price|priced|cost|financ|insurance|refund|balance|owe)/i;
@@ -7028,7 +7034,7 @@ function applyScheduleLocked_(req) {
     // same block twice makes it once.
     var onCal = {}, alreadyOn = [], plateHeld = [];
     var calKey_ = function (title, when) {
-      return String(title || '').toLowerCase().replace(/[^a-z0-9]+/g, '') + '|' + Math.round(when.getTime() / 60000);
+      return String(calBaseTitle_(title)).toLowerCase().replace(/[^a-z0-9]+/g, '') + '|' + Math.round(when.getTime() / 60000);
     };
     var standing = [];   // the tech's own events that Approve did not make (standing / one-off)
     try {
@@ -7127,6 +7133,9 @@ function applyScheduleLocked_(req) {
             return cleanNote.toLowerCase().indexOf(l.toLowerCase().slice(0, 40)) < 0;   // not already in the plan note
           });
           var saleTxt = saleLines.length ? '🏆 From Brigham\'s sale:\n' + saleLines.map(function (l) { return '• ' + l; }).join('\n') + '\n' : '';
+          // "Labrousse 15145 - CAP (see notes)" when the sale left notes for the
+          // tech (Mark 10/22) — matching ignores the suffix (calBaseTitle_)
+          var calTitle = saleTxt ? evTitle + ' (see notes)' : evTitle;
           var opts = {description: (cleanNote ? cleanNote + '\n' : '') + saleTxt
             + 'Applied from the Shop Manager schedule proposal (' + plan.week + ')'};
           var spot = spotFor_(evTitle);
@@ -7179,7 +7188,7 @@ function applyScheduleLocked_(req) {
               // Adding the guest still puts the event on their own calendar;
               // it just arrives quietly. Same for QCs.
               opts.sendInvites = false;
-              var mk = orgCal.createEvent(evTitle, d1, d2, opts);
+              var mk = orgCal.createEvent(calTitle, d1, d2, opts);
               placed = true;
               if (orgCal === tuneMaster) bookedTunes.push({key: tuneKey_(evTitle), when: Utilities.formatDate(d1, 'America/Denver', 'EEE h:mm a'),
                 ev: mk, title: evTitle, start: d1, end: d2, guests: [String(calId).toLowerCase()]});
@@ -7187,7 +7196,7 @@ function applyScheduleLocked_(req) {
             } catch (eT) { delete opts.guests; delete opts.sendInvites; }
           }
           if (!placed) {
-            cal.createEvent(evTitle, d1, d2, opts);
+            cal.createEvent(calTitle, d1, d2, opts);
             if (b[2] === 'tune') tuneFellBack++;
             if (b[2] === 'qc') qcFellBack++;
           }
@@ -7379,7 +7388,7 @@ function scheduleCheck_(req) {
       try { desc = String(ev.getDescription() || ''); } catch (e3) {}
       if (desc.indexOf(APPLIED_TAG) < 0) return;
       row.applied++;
-      var k = ev.getTitle() + '|' + ev.getStartTime().getTime() + '|' + ev.getEndTime().getTime();
+      var k = calBaseTitle_(ev.getTitle()) + '|' + ev.getStartTime().getTime() + '|' + ev.getEndTime().getTime();
       // every tagged event, so a planned-vs-on-calendar mismatch is explainable
       // (Mark showed 7 vs 6 on 9/6 with counts alone)
       row.events.push({title: String(ev.getTitle() || ''),
