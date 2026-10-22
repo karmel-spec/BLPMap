@@ -43,7 +43,7 @@ PHASE_NUMS['PRSBb - Plate In'] = PHASE_NUMS['PRSB - Notching and Pins'];
 const PHASE_STATES = ['In Queue', 'Paused', 'Player Piano Work', 'For Sale', 'Sale Pending', 'Sold', 'Post Sale QC',
   'Waiting on Brigham', 'Waiting on Curtis Harper', 'Waiting on Customer', 'Waiting on OTHER'];
 // work tracks (multi-select, stored comma-separated in the TRACK column)
-const TRACKS = ['Rebuild', 'Hybrid', 'Refurbish', 'Refinish', 'Technology', 'Old Player', 'Storage', 'Misc'];   // unnumbered states; For Sale turns the icon green
+const TRACKS = ['Rebuild', 'Hybrid', 'Refurbish', 'Refinish', 'Technology', 'Player Rebuild', 'Storage', 'Misc'];   // Player Rebuild (was Old Player, Mark 10/22): player parts only, no other shop work   // unnumbered states; For Sale turns the icon green
 // Admin section: client payment plans, the shop-progress milestones that
 // trigger a payment email to info@, and the client's admin-experience steps
 const KEY_SERVICE = ['Ivory', 'Plastic', 'Ebony'];   // key-top service, multi-select
@@ -8100,10 +8100,18 @@ function cabPretty(tok) {
 
 // TRACK col entries are comma-separated; Misc carries its write-in summary
 // as "Misc (summary)" — commas in the summary are stored as ';'
+// a track cell's words → the card's track names: "old player" / "Old Player" /
+// "Player" read as Player Rebuild (renamed 10/22), and any other name matches
+// its pill whatever its case — so toggling a pill never drops one the sheet
+// spelled differently
+function trackCanon(t) {
+  if (/^(old\s*)?player(\s*rebuild)?$/i.test(t)) return 'Player Rebuild';
+  return TRACKS.find(k => k.toLowerCase() === String(t).toLowerCase()) || t;
+}
 function trackParts(str) {
   const raw = (str || '').split(',').map(t => t.trim()).filter(Boolean);
   const m = raw.map(t => t.match(/^Misc\s*\((.*)\)$/)).find(Boolean);
-  return {list: raw.map(t => (/^Misc\b/.test(t) ? 'Misc' : t)), miscNote: m ? m[1] : ''};
+  return {list: raw.map(t => (/^Misc\b/.test(t) ? 'Misc' : trackCanon(t))), miscNote: m ? m[1] : ''};
 }
 async function toggleTrack(p, track, pop, miscNote) {
   const msg = pop.querySelector('.trkmsg');
@@ -11649,8 +11657,10 @@ function tasksTable() {
  * (keytops, plates out, refinishing, plating+buffing, decals, bass strings)
  * has a clean, accurate to-do list. */
 function refinPending(p) {
-  const tr = (p.track || '').toLowerCase();
-  if (!/refinish|rebuild|hybrid/.test(tr)) return false;
+  // whole track names, not a word inside one: "Player Rebuild" is player work
+  // only and never waits on refinishing (Mark 10/22)
+  const tl = trackParts(p.track).list.map(t => t.toLowerCase());
+  if (!tl.some(t => t === 'refinish' || t === 'rebuild' || t === 'hybrid')) return false;
   const seq = pianoPhases(p) || PHASES;
   const ri = seq.indexOf('Refinishing');
   if (ri < 0) return false;

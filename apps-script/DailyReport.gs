@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-22.5';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-22.6';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -2771,12 +2771,19 @@ function migratePhases_() {
 
 /**
  * Work TRACK(s) — multi-select (Rebuild, Hybrid, Refurbish, Refinish,
- * Technology, Old Player), stored comma-separated in a TRACK column
+ * Technology, Player Rebuild — was Old Player until 10/22), stored comma-separated in a TRACK column
  * (header row 2, created at the first free column like CURRENT PHASE).
  */
 var TRACK_HEADER = 'TRACK';
 var TRACK_VALUES = ['Rebuild', 'Hybrid', 'Refurbish', 'Refinish',
-                    'Technology', 'Old Player', 'Storage', 'Misc'];
+                    'Technology', 'Player Rebuild', 'Storage', 'Misc'];
+// older spellings still accepted, saved under the current name (Mark 10/22)
+function trackCanon_(t) {
+  t = String(t || '').trim();
+  if (/^(old\s*)?player(\s*rebuild)?$/i.test(t)) return 'Player Rebuild';
+  for (var i = 0; i < TRACK_VALUES.length; i++) if (TRACK_VALUES[i].toLowerCase() === t.toLowerCase()) return TRACK_VALUES[i];
+  return t;
+}
 
 function trackCol_(sh) {
   var last = sh.getLastColumn();
@@ -2794,7 +2801,7 @@ function setTrack_(req) {
   if (found.error) return found;
   var tracks = [];
   (req.tracks || []).forEach(function (t) {
-    t = String(t).trim();
+    t = trackCanon_(t);
     if (TRACK_VALUES.indexOf(t) >= 0 && tracks.indexOf(t) < 0) tracks.push(t);
   });
   var col = trackCol_(sh);
@@ -6265,15 +6272,15 @@ function smNormPhase_(s) {
   return String(s || '').trim();
 }
 function smTrackKeys_(p, defs) {
-  var have = String(p.track || '').toLowerCase();
+  // whole track names (Mark 10/22): "Player Rebuild" must not read as Rebuild
+  var have = String(p.track || '').split(',').map(function (t) { return trackCanon_(t.replace(/\(.*\)/, '')).toLowerCase(); });
   var alias = {rebuild: 'rebuild', hybrid: 'hybrid', refurbish: 'refurbishing',
                refurbishing: 'refurbishing', repair: 'repair'};
   var keys = [];
-  for (var a in alias) {
-    if (have.indexOf(a) >= 0 && defs.tracks[alias[a]] && keys.indexOf(alias[a]) < 0) {
-      keys.push(alias[a]);
-    }
-  }
+  have.forEach(function (t) {
+    var k = alias[t];
+    if (k && defs.tracks[k] && keys.indexOf(k) < 0) keys.push(k);
+  });
   return keys;
 }
 function smGoTo_(phase, type, defs) {
