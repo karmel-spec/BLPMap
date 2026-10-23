@@ -7801,7 +7801,7 @@ function openPhaseGateModal(p, phase, was, pop) {
         const pm = ov.querySelector('.pg-msg');
         if (j.ok) {
           pm.className = 'pg-msg phmsg ok';
-          pm.textContent = j.existing ? '✓ Already requested — the inspector has the link.' : '✓ Requested — Brigham just got a text with the inspection link (Karmel copied). The phase advances when it passes.';
+          pm.textContent = j.existing ? '✓ Already requested — the inspector has the link.' : '✓ Requested — Shop managers just got a text with the inspection link. The phase advances when it passes.';
           setTimeout(close, 2600);
         } else { pm.className = 'pg-msg phmsg err'; pm.textContent = '✗ ' + (j.error || 'failed'); go.disabled = false; }
       };
