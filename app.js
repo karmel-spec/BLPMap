@@ -7749,7 +7749,7 @@ function openPhaseGateModal(p, phase, was, pop) {
     <div class="rfbar pg-qc" style="gap:14px;align-items:center">
       <!-- not a mini-QC (Mark 10/23): these phases advance on the tech's own
            confirmation — the tap still records pass / fix in the QC Log -->
-      <b style="font-size:13px">Confirm work on the ${esc(was)} work is completed.</b>
+      <b style="font-size:13px">Confirm the ${esc(was)} work is completed.</b>
       <label style="cursor:pointer"><input type="radio" name="pgqc" value="pass"> ✅ Completed</label>
       <label style="cursor:pointer"><input type="radio" name="pgqc" value="fix"> 🔧 Needs fixes</label>
     </div>
