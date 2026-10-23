@@ -6318,13 +6318,21 @@ function popHTML(p) {
   // option, and the Keytop material dropdown leaves Shop Progress). Plating
   // finish moved up here from Shop Progress the same day — both are scope
   // decisions. Same KEYTOP MATERIAL / PLATE HARDWARE FINISH cells as before.
+  // Other… = a typed one-time choice for this piano only (Melissa 9/28,
+  // 092826terry67) — saved to the same cell, never added to the list
   const cfPills = (f, label, title) => {
     const cur = String(p[f] || '').trim();
-    const opts = CARD_FIELD_OPTS[f].concat(cur && !CARD_FIELD_OPTS[f].includes(cur) ? [cur] : []);
+    const old = CARD_FIELD_OLD[f] || [];
+    const typed = cur && !CARD_FIELD_OPTS[f].includes(cur) && !old.includes(cur);
+    const opts = CARD_FIELD_OPTS[f].concat(cur && old.includes(cur) ? [cur] : []);
     return `<div class="row trkrow cfpillrow" title="${esc(title)}">${label}
         <span class="trkchips">${opts.map(v =>
           `<button class="trk cfpill ${cur === v ? 'on' : ''}" data-f="${f}" data-v="${esc(v)}">${esc(v)}${!CARD_FIELD_OPTS[f].includes(v) ? ' (old)' : ''}</button>`).join('')}
-        </span></div>${cfSuggest(p, f)}<div class="cfmsg-${f} phmsg"></div>`;
+          <button class="trk cfother ${typed ? 'on' : ''}" data-f="${f}" data-v="${typed ? esc(cur) : ''}" title="${typed ? 'typed for this piano only — tap to change or clear' : 'type a one-time choice for this piano'}">${typed ? '✎ ' + esc(cur) : 'Other…'}</button>
+        </span></div>
+        <div class="cfotherbox" data-f="${f}" hidden><input class="cfotherin" maxlength="120" placeholder="one-time choice for this piano">
+          <button class="cfothersave">Save</button>${typed ? '<button class="cfotherclear">Clear</button>' : ''}<button class="cfothercancel">Cancel</button></div>
+        ${cfSuggest(p, f)}<div class="cfmsg-${f} phmsg"></div>`;
   };
   const keysRow = p.serial
     ? cfPills('keytopMaterial', 'Keys', 'what Marcelo should fit — tap one; tap again to clear')
@@ -6775,7 +6783,8 @@ function wirePop(p) {
     try {
       const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
         headers: {'content-type': 'text/plain;charset=utf-8'},
-        body: JSON.stringify({pin, action: 'setcardfield', field: f, value, serial: p.serial, row: p.row, ...authFields()})});
+        body: JSON.stringify({pin, action: 'setcardfield', field: f, value, serial: p.serial, row: p.row,
+          other: !!value && !(CARD_FIELD_OPTS[f] || []).includes(value), ...authFields()})});
       const j = await r.json();
       if (j.error) throw new Error(j.error);
       if (!j.ok) throw new Error('the bridge did not confirm the save — try again');
@@ -6790,6 +6799,28 @@ function wirePop(p) {
   pop.querySelectorAll('.cfpill').forEach(b => b.onclick = ev => {
     ev.stopPropagation();
     saveCardField(b.dataset.f, b.classList.contains('on') ? '' : b.dataset.v);   // tap again = clear
+  });
+  pop.querySelectorAll('.cfother').forEach(b => b.onclick = ev => {
+    ev.stopPropagation();
+    const box = pop.querySelector(`.cfotherbox[data-f="${b.dataset.f}"]`);
+    if (!box) return;
+    box.hidden = !box.hidden;
+    const inp = box.querySelector('.cfotherin');
+    if (!box.hidden) { inp.value = b.dataset.v || ''; inp.focus(); }
+  });
+  pop.querySelectorAll('.cfotherbox').forEach(box => {
+    const f = box.dataset.f, inp = box.querySelector('.cfotherin');
+    const save = () => {
+      const v = inp.value.replace(/\s+/g, ' ').trim();
+      const hit = (CARD_FIELD_OPTS[f] || []).find(o => o.toLowerCase() === v.toLowerCase());
+      saveCardField(f, hit || v);   // typed a list choice → save the list spelling
+    };
+    box.onclick = ev => ev.stopPropagation();
+    box.querySelector('.cfothersave').onclick = save;
+    inp.onkeydown = ev => { if (ev.key === 'Enter') { ev.preventDefault(); save(); } else if (ev.key === 'Escape') box.hidden = true; };
+    const clr = box.querySelector('.cfotherclear');
+    if (clr) clr.onclick = () => saveCardField(f, '');
+    box.querySelector('.cfothercancel').onclick = () => { box.hidden = true; };
   });
   pop.querySelectorAll('.cfsuguse').forEach(b => b.onclick = ev => { ev.stopPropagation(); const box = b.closest('.cfsug'); saveCardField(box.dataset.f, box.dataset.v); });
   const phwsel = pop.querySelector('.platehwsel');
@@ -7073,7 +7104,9 @@ function wirePop(p) {
     ev.stopPropagation();
     setMedia(p, b.dataset.f, pop, !!b.dataset.skip);
   });
-  pop.querySelectorAll('.trk:not(.dn):not(.typebtn)').forEach(b => b.onclick = ev => {
+  // .cfpill / .cfother share the .trk look but save Keys / Plating finish —
+  // without this exclusion a tap re-saved the track instead (fixed 10/23)
+  pop.querySelectorAll('.trk:not(.dn):not(.typebtn):not(.cfpill):not(.cfother)').forEach(b => b.onclick = ev => {
     ev.stopPropagation();
     if (b.dataset.t === 'Misc' && !b.classList.contains('on')) { openMiscModal(p, pop); return; }
     toggleTrack(p, b.dataset.t, pop);
@@ -11680,6 +11713,7 @@ function plateHwStageLabel(v) {
 // 🎨 finish choices (Melissa 9/16, request 091626terry44) — mirrors CARD_FIELDS in the bridge
 // keytops: two ivory choices (Melissa 9/25, 092526terry62) — what Marcelo does differs
 const CARD_FIELD_OPTS = {plateFinish: ['Brass', 'Nickel', 'Copper', 'No electroplating'], keytopMaterial: ['White Acrylic', 'Off-white Acrylic', 'Ivory - clean & leave as is', 'Ivory - replace damaged keys', 'No key service']};   // No key service: Melissa 10/13 (101326terry91) — refurbs, minor repairs, refinishing-only
+const CARD_FIELD_OLD = {keytopMaterial: ['Ivory']};   // saved before the 9/25 ivory split — shown as (old), not as a typed Other
 const CARD_FIELD_LABEL = {plateFinish: 'Plating finish', keytopMaterial: 'Keytop material'};
 // read the scope of work / notes and propose a finish when none is set yet
 function cfGuess(p, f) {
