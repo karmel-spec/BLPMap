@@ -6382,6 +6382,7 @@ function popHTML(p) {
       <i class="secarrow">${tagsOn ? '▾' : '▸'}</i></div>
     <div class="secbody${tagsOn ? '' : ' closed'}" data-sec="tags">`;
   const admin = p.serial ? secWrap('admin', '🔐 Admin', `
+    ${payBar}
     ${contractBlock}
     ${crVal === 'yes' ? `<div class="tagbtns histbtns"><button class="tagbtn creports">🤝 Client Reports History</button></div>` : ''}
     ${crAsk}
@@ -6406,8 +6407,7 @@ function popHTML(p) {
           ? `<button class="asskip undo" data-as="${esc(s)}" title="put this step back on the list">↩ Restore</button>`
           : `<button class="asskip" data-as="${esc(s)}" title="not needed for this client — skip it">Skip ⤼</button>`}
       </div>`;
-    }).join('')}</div><div class="asmsg phmsg"></div>
-    ${payBar}`) : '';
+    }).join('')}</div><div class="asmsg phmsg"></div>`) : '';
   const typeBtns = p.serial
     ? `<span class="trkchips hdrtype" title="wrong icon on the map? tap the correct type — digitals are marked as uprights">
         ${['grand', 'upright'].map(t =>
