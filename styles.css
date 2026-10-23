@@ -2384,7 +2384,11 @@ table.tchktbl td.chk .tcasap input{width:15px;height:15px}
 .tmload{color:#9a948a;font-style:italic}
 
 /* 🖼 card photo — PROTOTYPE (Melissa 10/16, 101626terry92) */
-.popsticky{position:relative}
+/* the header stays position:sticky (Melissa 10/22, 102226terry00: it must stay
+   frozen while the card scrolls — `relative` here had silently undone that);
+   a sticky box is still the positioning parent for the absolute photo, and
+   the header grows to cover the photo so nothing hangs below the frozen bar */
+.popsticky:has(.cardphoto.on){min-height:142px}
 .cardphoto{display:none;position:absolute;top:34px;right:12px;width:96px;height:96px;border-radius:9px;overflow:hidden;
   background:#f4f1ec;border:1px solid #dfe3e8;cursor:zoom-in;animation:cardphotoin .25s ease}
 .cardphoto.on{display:block}
@@ -2396,6 +2400,7 @@ table.tchktbl td.chk .tcasap input{width:15px;height:15px}
 @keyframes cardphotoin{from{opacity:0}to{opacity:1}}
 @media (max-width:600px){
   .cardphoto{top:46px;right:10px;width:64px;height:64px;border-radius:7px}   /* clear of the ✕ (Melissa 10/22, 102226terry99) */
+  .popsticky:has(.cardphoto.on){min-height:118px}
   .popsticky:has(.cardphoto.on) > h3,
   .popsticky:has(.cardphoto.on) > .rowflex{margin-right:78px}
 }
