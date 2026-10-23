@@ -8400,6 +8400,50 @@ async function setTypeOverride(p, type, pop) {
     if (msg) { msg.className = 'typemsg phmsg err'; msg.textContent = 'Error: ' + e.message; }
   }
 }
+/* 💰 PAYMENT MILESTONES report (Melissa 10/8, 100726terry86; Mark 10/23):
+ * one list instead of opening cards one at a time. Same % as the card
+ * (shopProgressPct); the bridge's morning sweep sends the milestone emails. */
+function payMilestoneRows(all) {
+  const marksFor = plan => plan === '2 Progress Payments' ? [50, 100] : [25, 50, 75, 100];
+  return S.data.pianos.filter(p => p.active && p.serial && String(p.serial).trim() !== '?' && inShopwork(p)
+      && (p.payPlan || '').trim() && (all || /progress payments/i.test(p.payPlan)))
+    .map(p => {
+      const list = (pianoPhases(p) || PHASES).filter(ph => ph !== 'Delivered');
+      const dl = (p.phasesDone || '').split(',').map(t => t.trim()).filter(Boolean);
+      const effIdx = list.indexOf(effectivePhase(p));
+      let done = 0; list.forEach((ph, i) => { if (dl.includes(ph) || (effIdx >= 0 && i < effIdx)) done++; });
+      const pct = shopProgressPct(p);
+      const plan = p.payPlan.trim(), marks = marksFor(plan);
+      const last = +String(p.payMilestone || '').replace(/\D/g, '') || 0;
+      const pending = Math.max(0, ...PAY_MILESTONES.filter(m => pct >= m && m > last));   // crossed, not yet emailed
+      const upcoming = marks.find(m => pct < m) || 0;
+      let toGo = 0;
+      if (upcoming) { for (let k = 1; k <= list.length - done; k++) { if (Math.min(100, Math.round((done + k) / list.length * 100)) >= upcoming) { toGo = k; break; } } }
+      const billNow = !!upcoming && toGo === 1;
+      return {p, pct, plan, phase: effectivePhase(p) || (p.queuePos ? 'In Queue' : ''), last, pending, upcoming, toGo, billNow, phases: list.length};
+    })
+    .sort((a, b) => (b.billNow - a.billNow) || ((b.pending ? 1 : 0) - (a.pending ? 1 : 0)) || ((a.toGo || 99) - (b.toGo || 99)) || b.pct - a.pct);
+}
+function payMilestoneTable() {
+  const all = !!S.pmAll;
+  const rows = payMilestoneRows(all);
+  const chip = r => r.billNow ? `<span class="chip" style="background:#9e2020;color:#fff">BILL NOW — ${r.upcoming}% at the next phase</span>`
+    : r.pending ? `<span class="chip" style="background:#fdf3ec;color:#8a6a00">${r.pending}% reached — email goes out with the next morning sweep</span>`
+    : r.upcoming ? `<span class="chip" style="background:#eef4ff;color:#2b5fa8">${r.toGo} phase${r.toGo === 1 ? '' : 's'} to ${r.upcoming}%</span>`
+    : `<span class="chip" style="background:#eaf5ec;color:#2f7d4f">all milestones reached</span>`;
+  return `<div class="rfbar" style="margin-bottom:8px"><label style="font-size:12.5px"><input type="checkbox" ${all ? 'checked' : ''} onchange="S.pmAll=this.checked;renderReport()"> show every payment plan, not just progress payments</label></div>
+    <table><tr><th>PIANO</th><th>PLAN</th><th>PHASE</th><th>SHOP PROGRESS</th><th>STATUS</th><th>LAST EMAILED</th></tr>
+    ${rows.map(r => `<tr class="mrow" data-row="${r.p.row}">
+      <td>${esc(pianoName(r.p).slice(0, 36))}<br><span class="lite" style="color:#8a929a;font-size:11px">${esc(r.p.serial)}</span></td>
+      <td>${esc(r.plan)}</td>
+      <td>${esc(r.phase || '—')}</td>
+      <td style="min-width:150px"><b>${r.pct}%</b> <span class="lite" style="font-size:11px">of ${r.phases} phases</span>
+        <div class="pbar"><i style="width:${r.pct}%"></i><s style="left:25%"></s><s style="left:50%"></s><s style="left:75%"></s></div></td>
+      <td>${chip(r)}</td>
+      <td>${r.last ? r.last + '%' : '<span class="lite">never</span>'}</td></tr>`).join('')
+      || `<tr><td colspan="6" class="empty">No shop pianos on ${all ? 'a payment plan' : 'a progress-payment plan'}.</td></tr>`}
+    </table>`;
+}
 /* ---- Admin section: shop progress %, payment plan, admin steps, milestones ---- */
 // % of this piano's own track phases complete (explicit Done checks plus
 // everything ordered before the current phase); Delivered excluded
@@ -13708,6 +13752,10 @@ const REPORT_DEFS = () => [
      p.active && !notYetArrived(p) && (mediaNeeds(p).photo || mediaNeeds(p).video)).length,
    desc: 'Before photos/video for every arrived piano; after photos/video once it reaches Tuning or later. Pianos that haven\'t arrived yet join once they\'re here.',
    html: mediaTable},
+  {id: 'paymilestones', sec: 'admin', show: () => isTeamAdmin(), icon: '💰', title: 'PAYMENT MILESTONES',
+   count: (() => { try { return payMilestoneRows(false).filter(r => r.billNow).length; } catch (e) { return null; } })(),
+   desc: 'Every shop piano on a progress-payment plan: its shop progress (the same % the card shows), the next 25 / 50 / 75 / 100% mark, and how many phases away it is. BILL NOW = the next phase change reaches the mark — Brigham wants the invoice out just before. A mark already reached that nobody has been emailed about goes out with the next morning sweep (7:45 AM).',
+   html: payMilestoneTable},
   {id: 'timeoffrep', sec: 'admin', icon: '🏖', title: 'TIME OFF', count: (() => {
      try { const t = new Date().toLocaleDateString('en-CA');
        return TO.rows ? TO.rows.filter(r => r.end >= t && !/^duplicate/i.test(r.status || '')).length : null; } catch (e) { return null; } })(),
