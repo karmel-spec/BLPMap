@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-22.7';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-22.9';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -1670,6 +1670,11 @@ function doPost(e) {
       if (tos.ok) logAct_(who, 'Time off ' + (String(tos.status).indexOf('approved') === 0 ? 'APPROVED ✅'
         : String(tos.status).indexOf('duplicate') === 0 ? 'copy archived ⧉' : 'DENIED ❌'), tos.tech, tos.span);
       return json_(tos);
+    }
+    if (req.action === 'reimburse') {   // 💸 reimbursement request (Melissa 9/24, 092426terry55)
+      var rb = reimburseAdd_(req, who);
+      if (rb.ok && !rb.duplicate) logAct_(who, 'Reimbursement request', rb.tech, rb.type + ' $' + rb.amount + (rb.note ? ' — ' + rb.note : ''));
+      return json_(rb);
     }
     if (req.action === 'timeoff') {
       var toa = timeOffAdd_(req, who);
@@ -9953,6 +9958,73 @@ function timeOffSheet_() {
     sh.setFrozenRows(1);
   }
   return sh;
+}
+/* 💸 Reimbursements (Melissa 9/24, 092426terry55): one row per request on the
+ * "Reimbursements" tab of Melissa's Payroll Preparation sheet (the sheet she
+ * linked in the request), receipt photo in a "Reimbursement Receipts" Drive
+ * folder, text to Melissa. Melissa marks Status / Paid in payroll on the tab. */
+var REIMB_SHEET_ID = '1ShvkhoHKNj6JFSd1y3wLUlNgXyRcBUHnh_7E6tNjqEQ';
+var REIMB_TYPES = ['Mileage', 'Gas', 'Parts & supplies', 'Tools', 'Shipping / postage', 'Meals (travel or team)', 'Other'];
+function reimbSheet_() {
+  var ss = SpreadsheetApp.openById(REIMB_SHEET_ID);
+  var sh = ss.getSheetByName('Reimbursements');
+  if (!sh) {
+    sh = ss.insertSheet('Reimbursements', ss.getSheets().length);
+    sh.getRange(1, 1, 1, 10).setValues([['Submitted', 'Name', 'Type', 'Date', 'Miles', 'Amount', 'What for', 'Receipt', 'Status', 'Paid in payroll']]);
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+function reimbReceiptFolder_() {
+  var it = DriveApp.getFoldersByName('Reimbursement Receipts');
+  return it.hasNext() ? it.next() : DriveApp.createFolder('Reimbursement Receipts');
+}
+function reimburseAdd_(req, who) {
+  var tech = clockTech_(req);
+  if (!tech) return {error: 'sign in first — reimbursements are filed under your name'};
+  var type = String(req.type || '').trim();
+  if (REIMB_TYPES.indexOf(type) < 0) return {error: 'pick what the reimbursement is for'};
+  var date = String(req.date || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return {error: 'pick the date'};
+  var miles = Math.round((Number(req.miles) || 0) * 10) / 10;
+  var amount = Math.round((Number(req.amount) || 0) * 100) / 100;
+  if (!(amount > 0)) return {error: 'enter the amount'};
+  var note = String(req.note || '').trim().slice(0, 200);
+  if (!note) return {error: 'say what it was for'};
+  var sh = reimbSheet_();
+  // a re-tap on Send within 10 minutes is the same request
+  try {
+    var last = sh.getLastRow();
+    if (last >= 2) {
+      var from = Math.max(2, last - 30), recent = sh.getRange(from, 1, last - from + 1, 7).getValues();
+      for (var i = recent.length - 1; i >= 0; i--) {
+        var v = recent[i];
+        if (String(v[1]) === tech && String(v[2]) === type && Number(v[5]) === amount && String(v[6] || '') === note
+            && (Date.now() - new Date(v[0]).getTime()) < 600000) return {ok: true, duplicate: true, tech: tech, type: type, amount: amount, row: from + i};
+      }
+    }
+  } catch (eD) {}
+  var receiptUrl = '';
+  if (req.receipt) {
+    try {
+      var name = (tech + ' ' + date + ' ' + type + ' $' + amount.toFixed(2)).replace(/[\/\\:*?"<>|]/g, '-') + '.jpg';
+      var blob = Utilities.newBlob(Utilities.base64Decode(String(req.receipt)), String(req.mime || 'image/jpeg'), name);
+      var file = reimbReceiptFolder_().createFile(blob);
+      receiptUrl = file.getUrl();
+    } catch (eR) { receiptUrl = 'photo failed: ' + String(eR).slice(0, 60); }
+  }
+  sh.appendRow([new Date().toISOString(), tech, type, date, miles || '', amount, note, receiptUrl, 'requested', '']);
+  var msg = '💸 Reimbursement request — ' + tech + ': $' + amount.toFixed(2) + ' ' + type
+    + (miles ? ' (' + miles + ' mi)' : '') + ', ' + date + ' — ' + note + (receiptUrl && receiptUrl.indexOf('http') === 0 ? ' · receipt: ' + receiptUrl : ' · no receipt');
+  if (!req.silent) {
+    try {
+      MailApp.sendEmail('melissa@brighamlarsonpianos.com', msg.slice(0, 120), msg
+        + '\n\nFiled from the Store Map dashboard by ' + who
+        + '.\nAll requests: Payroll Preparation sheet → Reimbursements tab.');
+    } catch (e) {}
+    notifyTeam_(['Melissa'], msg.slice(0, 600));
+  }
+  return {ok: true, tech: tech, type: type, amount: amount, miles: miles, note: note, receipt: receiptUrl.indexOf('http') === 0 ? receiptUrl : ''};
 }
 function timeOffAdd_(req, who) {
   var tech = clockTech_(req);

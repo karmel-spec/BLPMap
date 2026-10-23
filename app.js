@@ -5952,6 +5952,76 @@ function timeOffModal() {
     return true;
   });
 }
+/* 💸 Reimbursement request (Melissa 9/24, 092426terry55): mileage, gas,
+ * supplies… from the personal dashboard. Rows land on the "Reimbursements"
+ * tab of Melissa's Payroll Preparation sheet; a receipt photo files to Drive;
+ * Melissa gets a text. Mileage pays the shop rate the payroll register shows. */
+const REIMB_TYPES = ['Mileage', 'Gas', 'Parts & supplies', 'Tools', 'Shipping / postage', 'Meals (travel or team)', 'Other'];
+const REIMB_MILE_RATE = 0.725;   // $/mile — "Mileage Reim" rate on the isolved register (Sept 2026)
+function reimbModal() {
+  const old = document.querySelector('.dsheetov'); if (old) old.remove();
+  const ov = document.createElement('div');
+  ov.className = 'dsheetov';
+  const today = new Date().toLocaleDateString('en-CA');
+  ov.innerHTML = `<div class="dsheet"><button class="dsx">✕</button>
+    <h3>💸 Reimbursement request</h3>
+    <div class="dssub">Goes to Melissa for the next payroll. Snap the receipt if there is one.</div>
+    <div class="rfbar"><span class="rfd">for <select class="rb-type">${REIMB_TYPES.map(t => `<option>${esc(t)}</option>`).join('')}</select></span>
+      <span class="rfd">on <input type="date" class="rb-date" value="${today}"></span></div>
+    <div class="rfbar rb-milesrow"><span class="rfd">miles <input type="number" class="rb-miles" min="0" step="0.1" inputmode="decimal" style="width:90px" placeholder="0"></span>
+      <span class="lite">× $${REIMB_MILE_RATE.toFixed(3)}/mi = <b class="rb-mileamt">$0.00</b></span></div>
+    <div class="rfbar"><span class="rfd">amount $<input type="number" class="rb-amount" min="0" step="0.01" inputmode="decimal" style="width:110px" placeholder="0.00"></span></div>
+    <div class="rfbar"><input type="text" class="rb-note" placeholder="what it was for (store, piano, trip…)" maxlength="200" style="flex:1"></div>
+    <div class="rfbar"><label class="csvbtn rb-shotlbl" style="background:#fff;color:#2b2f33;border:1px solid #cfd6dc">📷 Receipt photo<input type="file" class="rb-shot" accept="image/*" hidden></label><span class="rb-shotname lite"></span></div>
+    <div class="rfbar"><button class="csvbtn rb-send">Send request</button><span class="rb-msg phmsg"></span></div>
+  </div>`;
+  document.body.appendChild(ov);
+  ov.querySelector('.dsx').onclick = () => ov.remove();
+  const typeSel = ov.querySelector('.rb-type'), milesRow = ov.querySelector('.rb-milesrow'),
+        miles = ov.querySelector('.rb-miles'), amount = ov.querySelector('.rb-amount'), mileAmt = ov.querySelector('.rb-mileamt');
+  let lastType = typeSel.value;
+  const syncType = () => {
+    const m = typeSel.value === 'Mileage';
+    milesRow.style.display = m ? '' : 'none';
+    amount.readOnly = m;
+    if (m) { const v = Math.round((parseFloat(miles.value) || 0) * REIMB_MILE_RATE * 100) / 100; amount.value = v ? v.toFixed(2) : ''; mileAmt.textContent = '$' + v.toFixed(2); }
+    else if (lastType === 'Mileage') amount.value = '';   // the auto-filled mileage dollars don't carry over
+    lastType = typeSel.value;
+  };
+  typeSel.onchange = syncType; miles.oninput = syncType; syncType();
+  const shot = ov.querySelector('.rb-shot');
+  shot.onchange = () => { ov.querySelector('.rb-shotname').textContent = shot.files && shot.files[0] ? '✓ ' + (shot.files[0].name || 'photo attached') : ''; };
+  const btn = ov.querySelector('.rb-send');
+  btn.onclick = oneShot(btn, 'Sending…', async () => {
+    const msg = ov.querySelector('.rb-msg');
+    const amt = parseFloat(amount.value);
+    if (!(amt > 0)) { msg.textContent = typeSel.value === 'Mileage' ? 'enter the miles' : 'enter the amount'; return false; }
+    if (!ov.querySelector('.rb-date').value) { msg.textContent = 'pick the date'; return false; }
+    const note = ov.querySelector('.rb-note').value.trim();
+    if (!note) { msg.textContent = 'say what it was for'; return false; }
+    msg.textContent = 'sending…';
+    const body = {action: 'reimburse', type: typeSel.value, date: ov.querySelector('.rb-date').value,
+      miles: typeSel.value === 'Mileage' ? (parseFloat(miles.value) || 0) : 0, amount: amt, note};
+    let j;
+    if (shot.files && shot.files[0]) {
+      try {
+        const dataUrl = await downscalePhoto(shot.files[0], 1600, 0.8);
+        body.receipt = dataUrl.split(',')[1]; body.mime = 'image/jpeg';
+      } catch (e) { msg.textContent = 'could not read the photo — try again or send without it'; return false; }
+      const wa = writeAuth();
+      if (!wa.ok) { msg.textContent = 'sign in first'; return false; }
+      j = await photoPost({pin: wa.pin, ...body, ...authFields()});
+    } else {
+      j = await adjustPost(body);
+    }
+    if (!j || j.error) { msg.textContent = (j && j.error) || 'no reply — try again'; return false; }
+    ov.querySelector('.dsheet').innerHTML = j.duplicate
+      ? '<h3>✅ Already sent</h3><div class="dssub">That request was filed a moment ago — no second copy was made.</div>'
+      : `<h3>✅ Request sent</h3><div class="dssub">Melissa got a text — $${amt.toFixed(2)} ${esc(typeSel.value)} is on the Reimbursements list for the next payroll.${j.receipt ? ' Receipt filed.' : ''}</div>`;
+    setTimeout(() => ov.remove(), 3200);
+    return true;
+  });
+}
 function trainReqModal() {
   const old = document.querySelector('.dsheetov'); if (old) old.remove();
   const ov = document.createElement('div');
@@ -14621,6 +14691,7 @@ function renderDash() {
       <!-- My Week, Piano Card Audit and My Calendar removed from the dashboard (Mark 10/20: not used) -->
       <div class="dlocker" data-h="#report"><span class="ic">📝</span><b>Weekly Report</b><span>due Thursday 6pm</span></div>
       <div class="dlocker" data-pay="1"><span class="ic">💵</span><b>Paylogics ↗</b><span>paystubs · time off</span></div>
+      <div class="dlocker" data-reimb="1"><span class="ic">💸</span><b>Reimbursement</b><span>mileage · gas · supplies</span></div>
     </div>
     ${isTimelogAdmin() ? (() => {
       // 🧑‍💼 management time (Brigham 9/3): managers clock time that isn't
@@ -14919,6 +14990,8 @@ function renderDash() {
   if (pay) pay.onclick = () => window.open('https://identity.myisolved.com', '_blank', 'noopener');
   const toff = body.querySelector('[data-timeoff]');
   if (toff) toff.onclick = () => timeOffModal();
+  const rmb = body.querySelector('[data-reimb]');
+  if (rmb) rmb.onclick = () => reimbModal();
   const aud = body.querySelector('[data-audit]');
   if (aud) aud.onclick = () => { SCHED.tab = 'audit'; switchView('sched'); };
   const pt = body.querySelector('#dashPianos');
