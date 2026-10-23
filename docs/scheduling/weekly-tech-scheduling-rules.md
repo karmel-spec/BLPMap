@@ -311,3 +311,9 @@ NO work that week: five empty days, hours blank, `who` = "OUT this week — <rea
 a lane forward onto them, and do not move their work to someone else unless the note says who
 takes it. They stay empty in later revisions until a note says they are back. The Team Schedule
 tab's off-days are the same idea for recurring days off.
+
+**Approved time off (Mark 10/23/2026).** Read the bridge's `fn=timeoffrows` and treat every row with
+status `approved` that falls in the plan week as binding: a whole day off (no Times value) gets no
+blocks for that technician; a partial day (a Times value such as "8–noon") gets nothing in those
+hours. This is independent of the Team Schedule tab and of calendar off markers — approving a
+request in the Store Map is enough on its own. Approve skips approved whole days too.
