@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-23.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-23.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -9658,6 +9658,32 @@ function moverFirsts_() {
   MOVERS_MEMO = out;
   return out;
 }
+/* Admin first names from the roster's Position column (Mark 10/23: admins
+ * never get the piano clock reminder — Melissa was texted after one
+ * Management session). "Larson Family / Administrator" counts; a position
+ * that also names shop work (technician, rebuilder, tuner, refinisher,
+ * intern, shop manager) does not. Last good list kept for a failed read. */
+var ADMINS_MEMO = null;
+function adminFirsts_() {
+  if (ADMINS_MEMO) return ADMINS_MEMO;
+  var out = {}, live = false;
+  try {
+    var r = UrlFetchApp.fetch('https://blpsalesapp.netlify.app/.netlify/functions/team-roster?key=pianoman', {muteHttpExceptions: true});
+    var rows = (JSON.parse(r.getContentText()).tabs || {})['Current Team'] || [];
+    for (var i = 1; i < rows.length; i++) {
+      var pos = String(rows[i][2] || '');
+      if (/\badmin/i.test(pos) && !/technician|rebuild|tuner|refinish|intern|shop manager/i.test(pos)) {
+        out[String(rows[i][0] || '').trim().toLowerCase()] = 1;
+      }
+    }
+    live = rows.length > 1;
+  } catch (e) {}
+  var props = PropertiesService.getScriptProperties();
+  if (live) { try { props.setProperty('ADMINS_LAST', JSON.stringify(out)); } catch (eS) {} }
+  else { try { out = JSON.parse(props.getProperty('ADMINS_LAST') || 'null') || out; } catch (eR) {} }
+  ADMINS_MEMO = out;
+  return out;
+}
 /* ---------- Retired Friday-report chaser (Brigham 8/28; retired Karmel 2026-09-20) ----------
  * Weekly tech reports now happen Thursdays. The old Friday/Saturday sweep is
  * disabled; this block remains so old trigger/function references fail safe
@@ -9771,12 +9797,14 @@ function pianoNudge_(opt) {
       var st = new Date(v[4]).getTime();
       if (isNaN(st)) return;
       var k = key(v[0]);
-      if (st >= since30) users[k] = 1;
+      // Management time alone doesn't make someone a Work Clock user (Mark 10/23)
+      if (st >= since30 && String(v[1] || '').toUpperCase() !== 'MGMT') users[k] = 1;
       (sessions[k] = sessions[k] || []).push({start: st, end: v[5] ? new Date(v[5]).getTime() : null,
         what: String(v[2] || v[1] || '')});
     });
   }
   var movers = moverFirsts_();
+  var admins = adminFirsts_();
   var exempt = {};
   String(appSetting_('piano_nudge_exempt', '') || '').split(',').forEach(function (n) { if (key(n)) exempt[key(n)] = 1; });
   // day punches on that date
@@ -9800,6 +9828,7 @@ function pianoNudge_(opt) {
     var row = {tech: pu.tech, dayIn: at, lang: teamLang_(pu.tech)};
     if (!users[k]) { row.why = 'not a Work Clock user (no piano clock in 30 days)'; out.notChecked.push(row); return; }
     if (movers[first.toLowerCase()]) { row.why = 'mover'; out.notChecked.push(row); return; }
+    if (admins[first.toLowerCase()]) { row.why = 'admin (roster position)'; out.notChecked.push(row); return; }
     if (exempt[k]) { row.why = 'on the piano_nudge_exempt list'; out.notChecked.push(row); return; }
     var check = pu.start + HOUR;
     if (live && now < check) { row.why = 'not an hour in yet'; out.notChecked.push(row); return; }
