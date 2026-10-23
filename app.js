@@ -3086,6 +3086,13 @@ function printShopTag(p) {
       /* double-sided (Lisa 8/31): a second identical page so a duplex
          print puts the tag on BOTH faces of each cut half */
       body.duplex .sheet.s2 { display: block; page-break-before: always; }
+      /* phone printing (Mark 10/23, 102326hales65): two tags filled 10.28 of
+         the page's 10.56 in, and a phone's larger margins cut the second one
+         off mid-tag. A 94% sheet leaves room on any printer, and each tag
+         sits in a plain block a page break can't split (WebKit ignores
+         "avoid" on the flex tag itself). */
+      .sheet { zoom: .94; }
+      .half { display: block; break-inside: avoid; page-break-inside: avoid; }
     }
   </style></head><body class="duplex">
     <div class="bar"><b>Shop tag</b> — click any field to edit, tap 1·2·3 to set the refinishing level
@@ -3095,11 +3102,22 @@ function printShopTag(p) {
       <b>📝 Notes from the log — nothing prints unless you tick it.</b> Leave anything private or unkind unticked.
       ${d.noteSegs.map((t, i) => `<label><input type="checkbox" class="lgn" data-i="${i}"> ${esc(t)}</label>`).join('')}
     </div>` : ''}
-    <div class="sheet">${tag}<div class="cut">✂ cut</div>${tag.replace('class="tag"', 'class="tag copy2"')}</div>
-    <div class="sheet s2">${tag.replace('class="tag"', 'class="tag copy2"')}<div class="cut">✂ cut</div>${tag.replace('class="tag"', 'class="tag copy2"')}</div>
+    <div class="sheet"><div class="half">${tag}</div><div class="cut">✂ cut</div><div class="half">${tag.replace('class="tag"', 'class="tag copy2"')}</div></div>
+    <div class="sheet s2"><div class="half">${tag.replace('class="tag"', 'class="tag copy2"')}</div><div class="cut">✂ cut</div><div class="half">${tag.replace('class="tag"', 'class="tag copy2"')}</div></div>
     <script>
       const t1 = document.querySelectorAll('.tag')[0];
-      const sync = () => { document.querySelectorAll('.tag').forEach(t => { if (t !== t1) t.innerHTML = t1.innerHTML; }); };
+      // copy the edits (text you typed, the 1·2·3 level) into the other three
+      // tags WITHOUT rebuilding them: re-setting innerHTML re-created their QR
+      // and logo images at print time, and a phone printed them blank (Mark 10/23)
+      const EDIT = '.rw b, .nm h1, .nm .sub, .rail span';
+      const sync = () => {
+        const src = [...t1.querySelectorAll(EDIT)], lv = [...t1.querySelectorAll('.lv i')];
+        document.querySelectorAll('.tag').forEach(t => {
+          if (t === t1) return;
+          [...t.querySelectorAll(EDIT)].forEach((el, i) => { if (src[i] && el.innerHTML !== src[i].innerHTML) el.innerHTML = src[i].innerHTML; });
+          [...t.querySelectorAll('.lv i')].forEach((el, i) => { if (lv[i]) el.className = lv[i].className; });
+        });
+      };
       // wait for every image (both QR copies + logos) to be fully decoded
       // before printing — otherwise the re-created copy prints as a blank box
       async function doPrint() {
