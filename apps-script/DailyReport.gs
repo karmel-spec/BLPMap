@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-23.5';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-23.6';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -4502,9 +4502,9 @@ function setKeyService_(req) {
   var found = findPiano_(sh, req.serial, req.row);
   if (found.error) return found;
   var col = pianoCol_(sh, 'KEY SERVICE');
-  var ok = ['ivory', 'plastic', 'ebony'];
+  var ok = ['ivory', 'acrylic', 'ebony'];   // keytops are acrylic, never "plastic" (Arnold 10/23)
   var keep = String(req.keys == null ? '' : req.keys).split(',')
-    .map(function (t) { return t.trim(); })
+    .map(function (t) { return t.trim().replace(/^plastic$/i, 'Acrylic'); })
     .filter(function (t) { return ok.indexOf(t.toLowerCase()) >= 0; });
   var val = keep.join(', ');
   sh.getRange(found.row, col).setValue(val);

@@ -46,7 +46,7 @@ const PHASE_STATES = ['In Queue', 'Paused', 'Player Piano Work', 'For Sale', 'Sa
 const TRACKS = ['Rebuild', 'Hybrid', 'Refurbish', 'Refinish', 'Technology', 'Player Rebuild', 'Storage', 'Misc'];   // Player Rebuild (was Old Player, Mark 10/22): player parts only, no other shop work   // unnumbered states; For Sale turns the icon green
 // Admin section: client payment plans, the shop-progress milestones that
 // trigger a payment email to info@, and the client's admin-experience steps
-const KEY_SERVICE = ['Ivory', 'Plastic', 'Ebony'];   // key-top service, multi-select
+const KEY_SERVICE = ['Ivory', 'Acrylic', 'Ebony'];   // key-top service, multi-select — keytops are acrylic, never "plastic" (Arnold 10/23, 102326arnold01); old 'Plastic' cells read as Acrylic
 // 2 Progress Payments (Melissa 10/10, 101026terry89): smaller jobs like refinishing-only — due at 50% and at completion
 const PAY_PLANS = ['Pd in Full', 'Pay upon completion', '12 Month', '24 Month', '2 Progress Payments', '4 Progress Payments', 'Financed'];
 // refinishing-only jobs pay upon completion (Brigham 9/18): when a piano's
@@ -2683,7 +2683,9 @@ function tagSnapDrift(p, snap) {
   const LBL = {track: 'Track', plan: 'Plan', refin: 'Refinishing', lvl: 'Refinishing level',
                tech: 'Technology', keys: 'Keys', plating: 'Plating', bench: 'Bench',
                notes: 'Notes', owner: 'Owner', serial: 'Serial'};
-  for (const k in LBL) { if (String(now[k] || '') !== String(was[k] || '')) out.push(LBL[k]); }
+  // tags printed before 10/23 say "Plastic" — same keys, not a stale tag
+  const norm = (k, v) => k === 'keys' ? String(v || '').replace(/\bPlastic\b/g, 'Acrylic') : String(v || '');
+  for (const k in LBL) { if (norm(k, now[k]) !== norm(k, was[k])) out.push(LBL[k]); }
   return out;
 }
 function openTagSnapshot(p) {
@@ -2722,7 +2724,7 @@ function openTagSnapshot(p) {
  * refinishing land on their own scope row instead of the Notes blob. */
 const TAG_PRICE_RE = /\$\s?\d|\b\d+\s?k\b|price|payment|paid|deposit|invoice|qbo|\bbill\b|\/mo\b|payout|credit card|financ|\b\d{1,3}%/i;
 const TAG_ROUTES = [
-  ['keys', /\bkey(s|top|work)?\b|ivor(y|ies)|ebony key|plastic key/i],
+  ['keys', /\bkey(s|top|work)?\b|ivor(y|ies)|ebony key|plastic key|acrylic/i],
   ['bench', /\bbench\b|upholst/i],
   ['plating', /replat|plating|chrome|nickel/i],
   ['tech', /\bqrs\b|player system|pianodisc|self.?play/i],
@@ -2789,7 +2791,7 @@ function shopTagFields(p) {
       const kw = (p.keywork || '').trim();
       if (kw && !/^(done|\u2713|x+|completed?)[.!\s]*$/i.test(kw)) return kw;   // requested work, verbatim
       if (kw) return 'Done \u2713';
-      return '\u2610 Ivory \u00b7 \u2610 Plastic \u00b7 \u2610 Ebony';        // unknown: mark by hand
+      return '\u2610 Ivory \u00b7 \u2610 Acrylic \u00b7 \u2610 Ebony';        // unknown: mark by hand
     })() + xtra('keys'),
     plating: (/^y/i.test(p.replate || '') ? 'Yes'
       : /^n/i.test(p.replate || '') ? 'No'
@@ -8341,7 +8343,7 @@ function refinishState(p) {
   return {value: yes ? 'Yes' : 'No', derived: true, plan};
 }
 function keyTokens(p) {
-  return String(p.keyService || '').split(',').map(t => t.trim())
+  return String(p.keyService || '').split(',').map(t => t.trim().replace(/^plastic$/i, 'Acrylic'))
     .filter(t => KEY_SERVICE.some(k => k.toLowerCase() === t.toLowerCase()))
     .map(t => KEY_SERVICE.find(k => k.toLowerCase() === t.toLowerCase()));
 }
