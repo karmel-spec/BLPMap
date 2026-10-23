@@ -2425,3 +2425,9 @@ table.tchktbl td.chk .tcasap input{width:15px;height:15px}
 .adjsecbtn[aria-expanded="false"]{background:#4b74b8}
 .adjsec .adjsecbody > .bfhd{display:none}
 @media (max-width:600px){.adjsecbtn{padding:12px 13px;font-size:14px}.adjsecbtn small{display:none}}
+
+/* 👤 name picker on the missed-punch forms (Melissa 10/22) */
+.a-techpick{border:1px solid #c9ced4;background:#fff;border-radius:7px;padding:5px 9px;margin-left:-4px;font-size:13px;cursor:pointer;color:#2b2f33;line-height:1.1}
+.namepick{flex-basis:100%;display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 4px;max-height:168px;overflow-y:auto}
+.namepick button{border:1px solid #cfd6dc;background:#f7f8f9;border-radius:999px;padding:7px 12px;font:600 13px Helvetica,Arial;color:#20242a;cursor:pointer}
+.namepick button:active{background:#e8ebee}

@@ -13041,7 +13041,7 @@ function clockAdjustTable() {
     // at the top of the report (Mark 9/8): a forgotten day punch is the most
     // common fix and shouldn't need a scroll past every table to reach
     payAdd = `<div class="rfbar adjaddbar" data-clock="pay"><b>+ missed day punch:</b>
-        <input type="text" class="a-tech" placeholder="team member name" list="adjtechs" autocomplete="off">
+        <input type="text" class="a-tech" placeholder="team member name" list="adjtechs" autocomplete="off"><button type="button" class="a-techpick" title="pick a team member">▾</button>
         <span class="rfd">in <input type="datetime-local" class="a-start"></span>
         <span class="rfd">out <input type="datetime-local" class="a-end"></span>
         <button class="csvbtn adjaddbtn">Add</button><span class="adjmsg phmsg"></span></div>`;
@@ -13062,7 +13062,7 @@ function clockAdjustTable() {
     // top of the report too (Mark 9/8, request 090826hales38): it used to be
     // the very last thing on the page
     tlAdd = `<div class="rfbar adjaddbar" data-clock="piano"><b>+ missed piano session:</b>
-        <input type="text" class="a-tech" placeholder="tech name" list="adjtechs" autocomplete="off">
+        <input type="text" class="a-tech" placeholder="tech name" list="adjtechs" autocomplete="off"><button type="button" class="a-techpick" title="pick a team member">▾</button>
         <input type="text" class="a-serial" placeholder="piano serial · or TIDY / MGMT">
         <input type="text" class="a-phase" placeholder="phase">
         <span class="rfd">in <input type="datetime-local" class="a-start"></span>
@@ -14042,6 +14042,38 @@ function renderReport() {
   body.querySelectorAll('.adjfclear').forEach(b => b.onclick = () => {
     S.adjF = {who: '', from: '', to: ''};
     renderReport();
+  });
+  // 👤 name picker on the missed-punch forms (Melissa 10/22, 102226terry98): the
+  // browser's own type-ahead list never shows on her phone, so ▾ (and, on a
+  // touch screen, simply focusing the box) opens a tappable list of the known
+  // names, filtered by what is typed. Desktop keeps the type-ahead too.
+  const touchOnly = matchMedia('(hover: none)').matches;
+  body.querySelectorAll('.adjaddbar').forEach(bar => {
+    const inp = bar.querySelector('.a-tech'), btn = bar.querySelector('.a-techpick');
+    if (!inp || !btn) return;
+    if (touchOnly) inp.removeAttribute('list');   // one picker, not two
+    let list = null;
+    const close = () => { if (list) { list.remove(); list = null; } };
+    const open = () => {
+      close();
+      const q = inp.value.trim().toLowerCase();
+      const names = adjKnownNames().filter(n => !q || n.toLowerCase().includes(q));
+      list = document.createElement('div');
+      list.className = 'namepick';
+      list.innerHTML = names.map(n => `<button type="button" data-n="${esc(n)}">${esc(n)}</button>`).join('')
+        || '<span class="lite">no match — keep typing the full name</span>';
+      list.querySelectorAll('button').forEach(b => b.onclick = ev => {
+        ev.stopPropagation(); inp.value = b.dataset.n; close();
+        inp.dispatchEvent(new Event('change', {bubbles: true}));
+      });
+      list.onclick = ev => ev.stopPropagation();
+      btn.insertAdjacentElement('afterend', list);
+    };
+    btn.onclick = ev => { ev.stopPropagation(); if (list) close(); else { open(); inp.focus(); } };
+    inp.addEventListener('focus', () => { if (touchOnly) open(); });
+    inp.addEventListener('input', () => { if (list || touchOnly) open(); });
+    inp.addEventListener('keydown', ev => { if (ev.key === 'Escape') close(); });
+    inp.addEventListener('blur', () => setTimeout(close, 300));
   });
   // 🔵 Time Clock section buttons: toggle in place, remember per browser
   body.querySelectorAll('.adjsecbtn').forEach(b => b.onclick = ev => {
