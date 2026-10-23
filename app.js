@@ -2189,6 +2189,7 @@ function keytopPhotoGate(p, o) {
   const pc = ov.querySelector('.pg-cancel');
   if (pc) pc.onclick = close;
   const shotMsg = ov.querySelector('.pg-shot'), go = ov.querySelector('.pg-go');
+  photoWarm(p, 'tech');   // the gate photo files to the Tech folder
   ov.querySelector('.pg-file').onchange = async ev => {
     const f = ev.target.files && ev.target.files[0];
     if (!f) return;
@@ -7182,7 +7183,7 @@ function wirePop(p) {
   });
   const pi = pop.querySelector('.photoin');
   pop.querySelectorAll('.photobtn').forEach(pb =>
-    pb.onclick = ev => { ev.stopPropagation(); popPinned = true; pi.click(); });
+    pb.onclick = ev => { ev.stopPropagation(); popPinned = true; photoWarm(p, 'tech'); pi.click(); });
   const psqc = pop.querySelector('.psqcbtn');
   if (psqc) psqc.onclick = ev => {
     ev.stopPropagation(); popPinned = true;
@@ -7414,6 +7415,7 @@ function wirePop(p) {
   pop.querySelectorAll('.wizbtn').forEach(b => b.onclick = ev => {
     ev.stopPropagation(); popPinned = true;
     const kind = b.dataset.kind, box = pop.querySelector('.phchoose');
+    photoWarm(p, kind);
     if (!box) { openShotWizard(p, kind); return; }
     if (!box.hidden && box.dataset.kind === kind) { box.hidden = true; return; }
     box.dataset.kind = kind;
@@ -7456,6 +7458,7 @@ function wirePop(p) {
     // the same Drive plan and marketing pipeline as before / after media.
     pop.querySelectorAll('.socbtn').forEach(b => b.onclick = ev => {
       ev.stopPropagation(); popPinned = true;
+      if (b.dataset.kind === 'photo') photoWarm(p, 'social');
       if (b.dataset.kind === 'video') vkind = 'social';
       openSocialChooser(p, pop, b.dataset.kind);
     });
@@ -7738,6 +7741,7 @@ function openPhaseGateModal(p, phase, was, pop) {
   ov.querySelector('.dsx').onclick = close;
   ov.querySelector('.pg-cancel').onclick = close;
   const shotMsg = ov.querySelector('.pg-shot'), go = ov.querySelector('.pg-go');
+  photoWarm(p, 'tech');   // the gate photo files to the Tech folder
   ov.querySelector('.pg-file').onchange = async ev => {
     const f = ev.target.files && ev.target.files[0];
     if (!f) return;
@@ -10009,6 +10013,21 @@ async function submitBrigham(p, ov) {
  * the same three steps videos use. If the session can't be opened or the PUT
  * fails (e.g. a dev origin Google won't accept), the base64 photoPost path
  * takes over, so nothing is lost. Returns the same {saved, name, link, id…}. */
+/* Pre-warm the bridge's folder cache the moment a photo button is tapped —
+ * the camera takes longer to open and shoot than the lookup takes, so the
+ * first photo of a piano is as quick as the second. Fire-and-forget. */
+const photoWarmed = new Set();
+function photoWarm(p, kind) {
+  if (!p || !p.serial) return;
+  const k = (kind || 'tech') + '|' + p.serial;
+  if (photoWarmed.has(k)) return;
+  photoWarmed.add(k);
+  const {pin, ok} = writeAuth();
+  if (!ok) { photoWarmed.delete(k); return; }
+  fetchT(BRIDGE_URL, {method: 'POST', redirect: 'follow', headers: {'content-type': 'text/plain;charset=utf-8'},
+    body: JSON.stringify({pin, action: 'photowarm', serial: p.serial, row: p.row, kind: kind || 'tech'})}, 30000)
+    .catch(() => photoWarmed.delete(k));
+}
 async function photoUpload(fields, dataUrl) {
   const b64 = dataUrl.split(',')[1];
   let file = null;

@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-22.11';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-22.12';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -1797,6 +1797,10 @@ function doPost(e) {
     }
     // ⚡ fast photo path (Mark 10/5, 100526hales48): the phone PUTs the JPEG
     // straight to Drive, the bridge only opens the session and logs the file
+    if (req.action === 'photowarm') {   // tapping a photo button pre-resolves the folder while the camera is up
+      var pw = photoTarget_(req);
+      return json_(pw.error ? {ok: false, error: pw.error} : {ok: true, cached: pw.cached, summary: pw.summary});
+    }
     if (req.action === 'photosession') return json_(photoSession_(req, who));
     if (req.action === 'photodone') {
       var pd = photoDone_(req, who);
