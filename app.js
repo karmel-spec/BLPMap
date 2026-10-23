@@ -4998,7 +4998,10 @@ async function openWorkChecklist(serial, phase) {
             <div style="font-size:10.5px;color:#8a847b;margin-top:5px">YouTube links are best for video. Uploaded files go to the “Checklist Training Media” Drive folder — video files over ~30 MB won't fit, put those on YouTube.</div>
           </div>` : ''}
           </div>`;
-        }).join('')}`;
+        }).join('')}
+        ${qcEndBtnNeeded(phase, work) ? (clAllDone(work, st)
+          ? `<div style="border-top:1px solid #f0ece5;padding:10px 2px 4px"><b style="font-size:12.5px">All steps done — request the mini-QC to move on:</b>${qcStepBtnHTML(p, phase, st)}</div>`
+          : `<div style="border-top:1px solid #f0ece5;padding:10px 2px 4px;font-size:12px;color:#8a847b">📨 When every step is done, the <b>Request Mini-QC</b> button appears here.</div>`) : ''}`;
       { const _ns = ov.querySelector('.dsheet'); if (_ns && _keep) _ns.scrollTop = _keep; }
       ov.querySelector('.dsx').onclick = close;
       ov.onclick = ev => { if (ev.target === ov) close(); };
@@ -5153,6 +5156,7 @@ async function openWorkChecklist(serial, phase) {
             ? `<div style="margin-top:10px"><button class="csvbtn clcabbtn" style="background:#5b4a8a">🗄 Assign the cabinetry shelf now</button>
                <span style="font-size:11px;color:#8a847b;margin-left:8px">${(cabTokens(p) || []).length ? 'on: ' + esc(cabTokens(p).join(', ')) : 'records which rack + shelf this piano\'s cabinetry is on'}</span></div>` : ''}
           ${isQcRequestStep(it) ? qcStepBtnHTML(p, phase, st) : ''}
+          ${idx === work.length - 1 && qcEndBtnNeeded(phase, work) && clAllDone(work, st) ? `<div style="margin-top:12px"><b style="font-size:13px">All steps done — request the mini-QC to move on:</b>${qcStepBtnHTML(p, phase, st)}</div>` : ''}
         </div>
         ${st.skips.has(it.i) ? `<div style="background:#fdf6e3;border-radius:8px;padding:8px 10px;font-size:12.5px;color:#9a5b13;margin-top:8px">⏭ This step is skipped — ${esc(st.skips.get(it.i))}</div>` : ''}
         <div style="display:flex;gap:8px;margin-top:12px">
@@ -5211,6 +5215,11 @@ async function openWorkChecklist(serial, phase) {
 // 9/24, 092426rawlings07) — no trip to the phase dropdown. The next phase is
 // the one after this phase in the piano's own track.
 const isQcRequestStep = it => /\brequest\b[^.]*\bmini-?qc\b/i.test(String((it && it.text) || ''));
+// a phase that needs a mini-QC but whose checklist has no "request … mini-QC"
+// step (CAP, Action Problems and Hammer Prep — Mark 10/23, Steinway 3536):
+// the request button goes at the END, once every step is done or skipped
+const qcEndBtnNeeded = (phase, work) => qcGated(phase) && !(work || []).some(isQcRequestStep);
+const clAllDone = (work, st) => (work || []).length > 0 && work.every(it => st.done.has(it.i) || st.skips.has(it.i));
 function qcNextPhase(p, phase) {
   const seq = pianoPhases(p) || PHASES;
   const i = seq.indexOf(phase);
