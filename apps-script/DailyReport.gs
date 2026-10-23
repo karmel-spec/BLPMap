@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-23.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-23.4';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -387,6 +387,13 @@ function doGet(e) {
   // calendars through here. Key-gated; read-only; 60-day window max.
   // 👀 the shop brief rendered, nothing sent (Walter 10/14) — key-gated like calevents
   // ⏰ piano clock reminder (Mark 10/21) — the sales app's cron calls this every 15 min
+  // 💰 payment milestone sweep — ?dry=1 lists what would be emailed (Mark 10/23)
+  if (e && e.parameter && e.parameter.fn === 'paymilestonesweep') {
+    var pmk = String(e.parameter.key || '');
+    if (pmk !== TEAM_PIN && pmk.toLowerCase() !== 'pianoman') return json_({error: 'unauthorized'});
+    try { return json_(payMilestoneSweep_(e.parameter.dry !== '0')); }   // live only with dry=0
+    catch (errPm) { return json_({error: String(errPm)}); }
+  }
   if (e && e.parameter && e.parameter.fn === 'pianonudge') {
     var pnk = String(e.parameter.key || '');
     if (pnk !== TEAM_PIN && pnk.toLowerCase() !== 'pianoman') return json_({error: 'unauthorized'});
@@ -6209,6 +6216,133 @@ function payMilestone_(req) {
   return {ok: true, row: found.row, milestone: ms, emailed: REPORT_TO};
 }
 
+/* ===== Payment milestone sweep (Melissa 10/8, 100726terry86; Mark 10/23) =====
+ * The card's milestone email fired only from the phase dropdown, on the device
+ * that changed the phase, signed in — a phase set by text, the relay or Approve
+ * never triggered it, and 10 of 14 progress-plan pianos had no email at all.
+ * This runs every morning with the SAME progress % the card shows (the piano's
+ * own track phases — pmPhaseSeq_ mirrors app.js pianoPhases / shopProgressPct)
+ * and sends the highest crossed milestone not yet emailed, once (payMilestone_
+ * records it in PAY MILESTONE, so a piano past several marks gets ONE email). */
+function pmNormPhase_(s) {
+  var t = String(s || '').toLowerCase();
+  if (t.indexOf('new arrival') >= 0) return 'New Arrival - Admin';
+  if (t.indexOf('assessment') >= 0) return 'Assessment';
+  if (t.indexOf('add-ons') === 0) return 'Add-ons';
+  if (t.indexOf('key servic') >= 0) return 'Key Service';
+  if (t.indexOf('refurb') >= 0) return 'Refurb Checklist';
+  if (t.indexOf('repair') >= 0) return 'Repair Work';
+  if (t.indexOf('chip tuning') >= 0) return 'Chip Tuning';
+  if (t.indexOf('string') >= 0) return 'Restringing';
+  if (t.indexOf('cap') >= 0) return 'CAP';
+  if (t.indexOf('notch') >= 0 || t.indexOf('bridge pin') >= 0 || t.indexOf('prsbb') >= 0
+      || (t.indexOf('prsb') >= 0 && t.indexOf('plate in') >= 0)) return 'PRSB - Notching and Pins';
+  if (t.indexOf('downbearing') >= 0 || t.indexOf('prsb') >= 0) return 'PRSB - Downbearing';
+  if (t.indexOf('lacquer') >= 0) return 'Lacquer Soundboard';
+  if (t.indexOf('dhrt') >= 0) return 'DHRT';
+  if (t.indexOf('1st tuning') >= 0) return '1st Tuning';
+  if (t.indexOf('2nd tuning') >= 0) return '2nd Tuning';
+  if (t.indexOf('(refinishing') === 0) return 'Refinishing';
+  if (t.indexOf('qc') >= 0) return 'QC & Assembly';
+  if (t.indexOf('exit prep') >= 0) return 'Exit Prep - Admin';
+  if (t.indexOf('delivered') >= 0) return 'Delivered';
+  if (t === 'tuning') return '1st Tuning';
+  return String(s || '').trim().replace(/\s+/g, ' ').replace(/^./, function (c) { return c.toUpperCase(); });
+}
+var PM_PHASES = ['New Arrival - Admin', 'Assessment', 'CAP', 'PRSB - Downbearing', 'PRSB - Notching and Pins', 'Lacquer Soundboard',
+  'Restringing', 'Chip Tuning', 'DHRT', '1st Tuning', 'Refinishing', 'QC & Assembly', '2nd Tuning', 'Exit Prep - Admin', 'Delivered'];
+var PM_REFURB_UPRIGHT = ['Cabinetry Cleaning and Prep', 'Action Problems and Hammer Prep', 'Action Lubrication and Alignment', 'Regulation'];
+function pmPhaseSeq_(p, defs) {
+  var keys = smTrackKeys_(p, defs);
+  if (!keys.length) return null;
+  var lists = keys.map(function (k) { return (defs.tracks[k].phases || []).map(pmNormPhase_); });
+  var seq = lists[0].filter(function (x, i, a) { return a.indexOf(x) === i; });
+  for (var li = 1; li < lists.length; li++) {
+    var anchor = -1;
+    lists[li].forEach(function (ph) {
+      var at = seq.indexOf(ph);
+      if (at >= 0) { anchor = at; return; }
+      seq.splice(anchor + 1, 0, ph); anchor += 1;
+    });
+  }
+  var ai = seq.indexOf('PRSB - Downbearing');
+  if (ai >= 0 && seq.indexOf('PRSB - Notching and Pins') < 0) seq.splice(ai + 1, 0, 'PRSB - Notching and Pins');
+  var ri = seq.indexOf('Refurb Checklist');
+  if (ri >= 0 && p.type !== 'grand') Array.prototype.splice.apply(seq, [ri, 1].concat(PM_REFURB_UPRIGHT));
+  return seq;
+}
+function pmEffectivePhase_(p) { if (p.phase) return p.phase; return (p.isNew && !p.coming) ? 'New Arrival - Admin' : ''; }
+function pmProgressPct_(p, defs) {
+  var list = (pmPhaseSeq_(p, defs) || PM_PHASES).filter(function (ph) { return ph !== 'Delivered'; });
+  if (!list.length || !p.serial) return 0;
+  var dl = String(p.phasesDone || '').split(',').map(function (t) { return t.trim(); }).filter(Boolean);
+  var eff = list.indexOf(pmEffectivePhase_(p)), done = 0;
+  list.forEach(function (ph, i) { if (dl.indexOf(ph) >= 0 || (eff >= 0 && i < eff)) done++; });
+  return Math.min(100, Math.round(done / list.length * 100));
+}
+function pmOwnerName_(blob) {
+  var lines = String(blob || '').split('\n').map(function (x) { return x.trim(); }).filter(Boolean);
+  var bad = /sold|consign|paid|add |qrs|pick.?up|deliver|steps|@|http|\d{3}[-.)\s]\d{3}|\*\*?/i;
+  for (var i = 0; i < lines.length; i++) {
+    var ln = lines[i];
+    if (bad.test(ln)) continue;
+    if (/^[A-Za-z][A-Za-z .,'&-]+$/.test(ln) && ln.split(/\s+/).length >= 2 && ln.length < 40) return ln.replace(/,+$/, '');
+  }
+  for (var j = 0; j < lines.length; j++) {
+    var t = lines[j].replace(/^(consignment|sold to:?|owner:?)\s*/i, '').replace(/\s*\(.*$/, '').trim();
+    if (t !== lines[j] && /^[A-Za-z][A-Za-z .,'&-]+$/.test(t) && t.split(/\s+/).length >= 2 && t.length < 40) return t;
+  }
+  return '';
+}
+function pmOwnerEmail_(blob) { var m = /[\w.+-]+@[\w-]+\.[\w.]+/.exec(String(blob || '')); return m ? m[0] : ''; }
+function pmClientDraft_(p, milestone, plan) {
+  var rawFirst = (pmOwnerName_(p.owner) || 'there').split(/\s+/)[0];
+  var first = rawFirst.charAt(0).toUpperCase() + rawFirst.slice(1).toLowerCase();
+  var nmYr = [p.year, p.make, p.model].filter(Boolean).join(' ') || p.summary;
+  var monthly = /^Monthly\b/i.test(plan);
+  var payAsk = plan === 'Pd in Full' ? ''
+    : plan === 'Pay upon completion' ? '\n\nPayment for this work is due upon completion — nothing is due at this milestone.'
+    : (plan === '4 Progress Payments' || (plan === '2 Progress Payments' && (milestone === 50 || milestone === 100)))
+      ? '\n\nWith the ' + milestone + '% milestone reached, this is also the point in your payment plan where the next progress payment comes due. We\'ll send the invoice separately — and as always, reach out with any questions.'
+    : plan === '2 Progress Payments'
+      ? '\n\nNothing is due at this milestone — your next progress payment comes due ' + (milestone < 50 ? 'at the 50% mark' : 'at completion') + '.'
+    : monthly ? '\n\nYour monthly payment plan (' + plan.replace(/^Monthly\s*/i, '') + ') simply continues as arranged — nothing extra is due at this milestone.'
+    : '\n\nA friendly note that per your ' + plan + ' plan, this milestone is a great time for the next payment — we\'ll send the details separately.';
+  return 'Subject: Your ' + nmYr + ' — ' + milestone + '% complete at Brigham Larson Pianos\n\n'
+    + 'Hi ' + first + ',\n\nGreat news from the shop — your ' + nmYr + ' has reached ' + milestone + '% completion. '
+    + 'The piano is currently in ' + (pmEffectivePhase_(p) || 'the shop') + ', and the work is moving along beautifully.' + payAsk + '\n\n'
+    + 'We\'ll keep the updates coming as we move into the next phase.\n\nWarmly,\nBrigham Larson Pianos';
+}
+function payMilestoneSweep_(dry) {
+  var live = JSON.parse(UrlFetchApp.fetch(APP_URL + '/api/data').getContentText());
+  var defs = null;
+  try { defs = JSON.parse(UrlFetchApp.fetch(TRACKDEFS_URL).getContentText()); } catch (eD) {}
+  if (!defs || !defs.tracks) return {error: 'track definitions unavailable — nothing sent'};
+  var out = {ok: true, dry: !!dry, checked: 0, sent: [], skipped: [], all: []};
+  (live.pianos || []).forEach(function (p) {
+    if (!p.active || p.coming || !p.serial || String(p.serial).trim() === '?') return;
+    if (String(p.section || '').trim().toUpperCase() !== 'CUSTOM SHOPWORK') return;
+    var plan = String(p.payPlan || '').trim();
+    if (!plan) return;
+    out.checked++;
+    var pct = pmProgressPct_(p, defs);
+    var last = parseInt(String(p.payMilestone || '').replace(/\D/g, ''), 10) || 0;
+    var crossed = [25, 50, 75, 100].filter(function (m) { return pct >= m && m > last; });
+    var item = {serial: p.serial, piano: p.summary, plan: plan, pct: pct, phase: pmEffectivePhase_(p), lastEmailed: last,
+                milestone: crossed.length ? Math.max.apply(null, crossed) : 0};
+    out.all.push(item);
+    if (!crossed.length) return;
+    if (dry) { out.sent.push(item); return; }
+    var r = payMilestone_({serial: p.serial, row: p.row, milestone: item.milestone, pct: pct, phase: item.phase, plan: plan,
+      summary: p.summary, ownerName: pmOwnerName_(p.owner), clientEmail: pmOwnerEmail_(p.owner), clientDraft: pmClientDraft_(p, item.milestone, plan)});
+    if (r.ok && !r.skipped) {
+      logAct_('Store Map (milestone sweep)', 'Payment milestone email', p.summary || p.serial, item.milestone + '% — emailed ' + (r.emailed || ''));
+      out.sent.push(item);
+    } else out.skipped.push({serial: p.serial, why: r.error || r.skipped || '?'});
+  });
+  return out;
+}
+
 /* ============ SHOP MANAGER DAILY BRIEFING ============
  * A working checklist for the shop manager, not just a headcount: what
  * changed yesterday and who did it, what's blocked, what needs a decision,
@@ -9120,6 +9254,9 @@ function morningBriefs() {
   // a dated down payment ticks the "$1000 Queue Payment" step before the
   // Admin Brief reads the steps (Melissa 10/7, 100726terry85)
   try { var dps = dpStepSync_(false); reqlogAdd_('TRIGGER morningBriefs: dp steps ' + ((dps.changed || []).length), Date.now() - mb0); }
+  catch (eDp0) {}
+  // 💰 payment milestone emails for any piano that crossed a mark since the last one (Mark 10/23)
+  try { var pmsw = payMilestoneSweep_(false); reqlogAdd_('TRIGGER morningBriefs: milestone sweep ' + ((pmsw.sent || []).length), Date.now() - mb0); }
   catch (eDp) { /* tomorrow's run catches up */ }
   var sendShop = dow <= 5;
   var sendAdmin = dow <= 6;
