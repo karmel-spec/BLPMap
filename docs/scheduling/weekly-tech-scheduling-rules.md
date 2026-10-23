@@ -304,3 +304,10 @@ reportOverrides[]}. Keytop Q map button (v330) feeds Marcelo's queue picks.
 - Approve = Planner button (no PIN since sched.js v22) → bridge applyschedule writes live tech calendars.
 - 9/11 review of the Sep 14–18 proposal texted to Brigham + Karmel (6 items: Mark Wed–Fri TENTATIVE, Alex Martin
   missing, 3 techs on Steinway 3536 Mon–Tue, Conover 4329 unattended, Korban Fri 9:30 open, Jake Tue QC on 154950).
+
+**Technician OUT (Mark 10/23/2026).** When the shop manager says a technician is out, on vacation,
+"out all week", "clear his/her week" or "do not schedule him/her this week", that technician gets
+NO work that week: five empty days, hours blank, `who` = "OUT this week — <reason>". Do not carry
+a lane forward onto them, and do not move their work to someone else unless the note says who
+takes it. They stay empty in later revisions until a note says they are back. The Team Schedule
+tab's off-days are the same idea for recurring days off.
