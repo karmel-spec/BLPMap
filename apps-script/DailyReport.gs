@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-22.10';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-22.11';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -1924,13 +1924,40 @@ function photoFolderFor_(sh, row, serial, kind) {
   if (kind === 'social') return socialPhotoFolderFor_(sh, row, serial);
   return techFolderFor_(sh, row, serial);
 }
-function photoName_(folder, serial, stage, mime) {
+function photoName_(serial, stage, mime) {
+  // serial__stage__day__HHmmss — unique without listing the folder (the base64
+  // path counts files instead; listing a big Tech folder was seconds of the wait)
   var stageSlug = String(stage || '').replace(/[^\w &-]+/g, '').trim().replace(/\s+/g, '-') || 'no-phase';
-  var day = Utilities.formatDate(new Date(), 'America/Denver', 'yyyy-MM-dd');
-  var prefix = serial + '__' + stageSlug + '__' + day;
-  var n = 1, it = folder.getFiles();
-  while (it.hasNext()) { if (it.next().getName().indexOf(prefix) === 0) n++; }
-  return prefix + '__' + n + (String(mime || '') === 'image/png' ? '.png' : '.jpg');
+  var stamp = Utilities.formatDate(new Date(), 'America/Denver', 'yyyy-MM-dd__HHmmss');
+  return serial + '__' + stageSlug + '__' + stamp + (String(mime || '') === 'image/png' ? '.png' : '.jpg');
+}
+/* Where the time went (measured 10/22: 7–13 s of server time per call): opening
+ * the Piano Log, finding the row, walking Drive to the piano's folder. The
+ * folder for (serial, kind) and the piano's summary are cached 6 h, so a
+ * repeat photo of the same piano skips the sheet and the Drive walk entirely. */
+function photoTarget_(req) {
+  var serial = String(req.serial || '').trim();
+  var kind = String(req.kind || 'tech').toLowerCase();
+  var cache = CacheService.getScriptCache();
+  var ck = 'pfold_' + kind + '_' + serial;
+  if (serial) {
+    var hit = cache.get(ck);
+    if (hit) {
+      try {
+        var cv = JSON.parse(hit);
+        var fcached = DriveApp.getFolderById(cv.id);
+        return {folder: fcached, summary: cv.summary || '', row: cv.row || null, serial: serial, kind: kind, cached: true};
+      } catch (eC) { /* folder gone — fall through and look again */ }
+    }
+  }
+  var ss = SpreadsheetApp.openById(PIANO_LOG_ID);
+  var sh = pianoSheet_(ss);
+  var found = findPiano_(sh, req.serial, req.row);
+  if (found.error) return {error: found.error};
+  var folder = photoFolderFor_(sh, found.row, serial, kind);
+  if (!folder) return {error: 'no Drive folder found for this piano — add its link to the Main Folder column in the Piano Log'};
+  if (serial) { try { cache.put(ck, JSON.stringify({id: folder.getId(), summary: found.summary || '', row: found.row}), 21600); } catch (eP) {} }
+  return {folder: folder, summary: found.summary || '', row: found.row, location: found.location || '', serial: serial, kind: kind, cached: false};
 }
 /* ⚡ Direct-to-Drive photo (Mark 10/5, 100526hales48): like videos, the phone
  * uploads the JPEG bytes to Google itself. photosession picks the folder and
@@ -1938,15 +1965,10 @@ function photoName_(folder, serial, stage, mime) {
  * (PHOTO LOG row, share, before/after + social emails) exactly like the
  * base64 path. The app falls back to action 'photo' when either step fails. */
 function photoSession_(req, who) {
-  var ss = SpreadsheetApp.openById(PIANO_LOG_ID);
-  var sh = pianoSheet_(ss);
-  var found = findPiano_(sh, req.serial, req.row);
-  if (found.error) return found;
-  var serial = String(req.serial || '').trim();
-  var kind = String(req.kind || 'tech').toLowerCase();
-  var folder = photoFolderFor_(sh, found.row, serial, kind);
-  if (!folder) return {error: 'no Drive folder found for this piano — add its link to the Main Folder column in the Piano Log'};
-  var name = photoName_(folder, serial, req.stage, req.mime);
+  var tg = photoTarget_(req);
+  if (tg.error) return {error: tg.error};
+  var folder = tg.folder, serial = tg.serial, kind = tg.kind;
+  var name = photoName_(serial, req.stage, req.mime);
   var resp = UrlFetchApp.fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&supportsAllDrives=true&fields=id,name,webViewLink,size', {
     method: 'post', contentType: 'application/json; charset=UTF-8', muteHttpExceptions: true,
     headers: {Authorization: 'Bearer ' + ScriptApp.getOAuthToken(),
@@ -1959,18 +1981,24 @@ function photoSession_(req, who) {
   var loc = hdrs['Location'] || hdrs['location'];
   if (code !== 200 || !loc) return {error: 'Drive would not open an upload (' + code + ')'};
   return {ok: true, sessionUrl: String(loc), name: name, folderId: folder.getId(), folderUrl: folder.getUrl(),
-          row: found.row, summary: found.summary, kind: kind};
+          row: tg.row, summary: tg.summary, kind: kind, cached: tg.cached};
 }
 function photoDone_(req, who) {
   var file;
   try { file = DriveApp.getFileById(String(req.fileId || '')); } catch (e) { return {error: 'uploaded photo not found in Drive'}; }
-  var ss = SpreadsheetApp.openById(PIANO_LOG_ID);
-  var sh = pianoSheet_(ss);
-  var found = findPiano_(sh, req.serial, req.row);
-  if (found.error) return found;
   var serial = String(req.serial || '').trim();
   var kind = String(req.kind || 'tech').toLowerCase();
-  var parents = file.getParents(); var folder = parents.hasNext() ? parents.next() : null;
+  // the session already resolved the piano — reuse what the app sends back
+  var found = {summary: String(req.summary || ''), row: Number(req.row) || null, location: ''};
+  if (!found.summary) {
+    var tg = photoTarget_(req);
+    if (tg.error) return {error: tg.error};
+    found = {summary: tg.summary, row: tg.row, location: tg.location || ''};
+  }
+  var ss = SpreadsheetApp.openById(PIANO_LOG_ID);
+  var folder = null;
+  try { if (req.folderId) folder = DriveApp.getFolderById(String(req.folderId)); } catch (eF) {}
+  if (!folder) { var parents = file.getParents(); folder = parents.hasNext() ? parents.next() : null; }
   var note = String(req.note || '').trim().slice(0, 400);
   if (note) { try { file.setDescription(note); } catch (eD) {} }
   var log = ss.getSheetByName(PHOTO_LOG_TAB);

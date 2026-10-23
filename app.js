@@ -10023,22 +10023,29 @@ async function photoUpload(fields, dataUrl) {
     if (!(put.status === 200 || put.status === 201)) throw new Error('PUT ' + put.status);
     file = await put.json();
     if (!file || !file.id) throw new Error('Drive did not confirm the file');
+    var sessInfo = sess;
   } catch (e) {
     return photoPost({...fields, action: 'photo', mime: 'image/jpeg', data: b64});   // the trusty slow path
   }
-  // the bytes are in Drive — log them; never re-upload on a logging hiccup
-  for (let a = 0; a < 3; a++) {
-    try {
-      const r2 = await fetchT(BRIDGE_URL, {method: 'POST', redirect: 'follow',
-        headers: {'content-type': 'text/plain;charset=utf-8'},
-        body: JSON.stringify({...fields, action: 'photodone', fileId: file.id})}, 30000);
-      const j = await r2.json();
-      if (j && j.saved) return j;
-      if (j && j.error) return {error: j.error};
-    } catch (e2) {}
-    await new Promise(res => setTimeout(res, 1200 * (a + 1)));
-  }
-  return {ok: true, saved: true, unlogged: true, name: file.name, id: file.id, link: file.webViewLink || ('https://drive.google.com/file/d/' + file.id + '/view')};
+  // the bytes are in Drive — the tech is done waiting. The PHOTO LOG row,
+  // share and emails are written in the background (3 tries, never a
+  // re-upload); the result carries everything the callers use (id, link, name).
+  const done = (async () => {
+    for (let a = 0; a < 3; a++) {
+      try {
+        const r2 = await fetchT(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+          headers: {'content-type': 'text/plain;charset=utf-8'},
+          body: JSON.stringify({...fields, action: 'photodone', fileId: file.id, folderId: sessInfo.folderId, summary: sessInfo.summary || '', row: sessInfo.row || fields.row})}, 45000);
+        const j = await r2.json();
+        if (j && (j.saved || j.error)) return j;
+      } catch (e2) {}
+      await new Promise(res => setTimeout(res, 1500 * (a + 1)));
+    }
+    return null;
+  })();
+  photoUpload.pending = (photoUpload.pending || Promise.resolve()).then(() => done).catch(() => {});
+  return {ok: true, saved: true, name: file.name, id: file.id, folder: sessInfo.name ? '' : '', folderUrl: sessInfo.folderUrl,
+          summary: sessInfo.summary, link: file.webViewLink || ('https://drive.google.com/file/d/' + file.id + '/view'), logging: done};
 }
 async function photoPost(body) {
   // one id per photo across retries (Alisa 10/5): the bridge files it once and
