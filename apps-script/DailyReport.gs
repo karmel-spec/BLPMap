@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-22.9';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-22.10';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -1795,6 +1795,16 @@ function doPost(e) {
     if (req.action === 'mediarepair') {
       return json_(mediaRepair_(req, who));
     }
+    // ⚡ fast photo path (Mark 10/5, 100526hales48): the phone PUTs the JPEG
+    // straight to Drive, the bridge only opens the session and logs the file
+    if (req.action === 'photosession') return json_(photoSession_(req, who));
+    if (req.action === 'photodone') {
+      var pd = photoDone_(req, who);
+      if (pd.saved) logAct_(who,
+        req.kind === 'before' ? 'Before photo' : req.kind === 'after' ? 'After photo' : req.kind === 'social' ? 'Social photo' : 'Progress photo',
+        pd.summary || req.serial, (req.stage || '(no phase)') + ' → ' + pd.name);
+      return json_(pd);
+    }
     if (req.action === 'photo') {
       var pt = savePhoto_(req, who);
       if (pt.saved) logAct_(who,
@@ -1904,6 +1914,77 @@ function cardMedia_(req, who) {
   try { file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch (e) {}
   logAct_(who, 'Card media', String(req.cardId || ''), name);
   return {ok: true, url: file.getUrl(), name: name};
+}
+/* The folder a photo of this kind files into — shared by savePhoto_ (base64
+ * path) and photoSession_ (direct-to-Drive path). */
+function photoFolderFor_(sh, row, serial, kind) {
+  if (kind === 'before-edited' || kind === 'after-edited') return editedFolderFor_(sh, row, serial, kind.replace('-edited', ''));
+  if (kind === 'before' || kind === 'after') return mediaFolderFor_(sh, row, serial, kind);
+  if (kind === 'paperwork') return paperworkFolderFor_(sh, row, serial);
+  if (kind === 'social') return socialPhotoFolderFor_(sh, row, serial);
+  return techFolderFor_(sh, row, serial);
+}
+function photoName_(folder, serial, stage, mime) {
+  var stageSlug = String(stage || '').replace(/[^\w &-]+/g, '').trim().replace(/\s+/g, '-') || 'no-phase';
+  var day = Utilities.formatDate(new Date(), 'America/Denver', 'yyyy-MM-dd');
+  var prefix = serial + '__' + stageSlug + '__' + day;
+  var n = 1, it = folder.getFiles();
+  while (it.hasNext()) { if (it.next().getName().indexOf(prefix) === 0) n++; }
+  return prefix + '__' + n + (String(mime || '') === 'image/png' ? '.png' : '.jpg');
+}
+/* ⚡ Direct-to-Drive photo (Mark 10/5, 100526hales48): like videos, the phone
+ * uploads the JPEG bytes to Google itself. photosession picks the folder and
+ * file name and opens a resumable upload; photodone logs the finished file
+ * (PHOTO LOG row, share, before/after + social emails) exactly like the
+ * base64 path. The app falls back to action 'photo' when either step fails. */
+function photoSession_(req, who) {
+  var ss = SpreadsheetApp.openById(PIANO_LOG_ID);
+  var sh = pianoSheet_(ss);
+  var found = findPiano_(sh, req.serial, req.row);
+  if (found.error) return found;
+  var serial = String(req.serial || '').trim();
+  var kind = String(req.kind || 'tech').toLowerCase();
+  var folder = photoFolderFor_(sh, found.row, serial, kind);
+  if (!folder) return {error: 'no Drive folder found for this piano — add its link to the Main Folder column in the Piano Log'};
+  var name = photoName_(folder, serial, req.stage, req.mime);
+  var resp = UrlFetchApp.fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&supportsAllDrives=true&fields=id,name,webViewLink,size', {
+    method: 'post', contentType: 'application/json; charset=UTF-8', muteHttpExceptions: true,
+    headers: {Authorization: 'Bearer ' + ScriptApp.getOAuthToken(),
+              'X-Upload-Content-Type': String(req.mime || 'image/jpeg'),
+              'X-Upload-Content-Length': String(Number(req.size) || 0),
+              Origin: APP_URL},
+    payload: JSON.stringify({name: name, parents: [folder.getId()]})});
+  var code = resp.getResponseCode();
+  var hdrs = resp.getAllHeaders();
+  var loc = hdrs['Location'] || hdrs['location'];
+  if (code !== 200 || !loc) return {error: 'Drive would not open an upload (' + code + ')'};
+  return {ok: true, sessionUrl: String(loc), name: name, folderId: folder.getId(), folderUrl: folder.getUrl(),
+          row: found.row, summary: found.summary, kind: kind};
+}
+function photoDone_(req, who) {
+  var file;
+  try { file = DriveApp.getFileById(String(req.fileId || '')); } catch (e) { return {error: 'uploaded photo not found in Drive'}; }
+  var ss = SpreadsheetApp.openById(PIANO_LOG_ID);
+  var sh = pianoSheet_(ss);
+  var found = findPiano_(sh, req.serial, req.row);
+  if (found.error) return found;
+  var serial = String(req.serial || '').trim();
+  var kind = String(req.kind || 'tech').toLowerCase();
+  var parents = file.getParents(); var folder = parents.hasNext() ? parents.next() : null;
+  var note = String(req.note || '').trim().slice(0, 400);
+  if (note) { try { file.setDescription(note); } catch (eD) {} }
+  var log = ss.getSheetByName(PHOTO_LOG_TAB);
+  if (!log) {
+    log = ss.insertSheet(PHOTO_LOG_TAB, ss.getSheets().length);
+    log.appendRow(['When', 'Serial', 'Piano', 'Stage', 'By', 'File', 'Link']);
+    log.setFrozenRows(1);
+  }
+  log.appendRow([new Date(), serial, found.summary || '', String(req.stage || ''), who, file.getName(), file.getUrl(), note]);
+  if (req.share || kind === 'before-edited' || kind === 'after-edited') { try { shareAnyoneWithLink_(file.getId()); } catch (e2) {} }
+  if ((kind === 'before' || kind === 'after') && folder) notifyBaPhoto_(kind, serial, found, folder, who, req.stage);
+  if (kind === 'social' && folder) notifySocial_('photo', serial, found, folder, who, note, file.getUrl());
+  return {ok: true, saved: true, name: file.getName(), link: file.getUrl(), id: file.getId(),
+          folder: folder ? folder.getName() : '', folderUrl: folder ? folder.getUrl() : '', summary: found.summary};
 }
 function savePhoto_(req, who) {
   if (!req.data) return {error: 'no image data'};
