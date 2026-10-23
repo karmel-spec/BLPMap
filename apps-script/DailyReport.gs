@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-22.12';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-23.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -5016,6 +5016,16 @@ function whereIs_() {
       }
     }
   } catch (e) {}
+  // approved time off today (Mark 10/23): a whole day shows as off, a partial day as part
+  try {
+    var todayY = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
+    var tOffToday = approvedTimeOff_(todayY, todayY);
+    for (var tk in tOffToday) {
+      var tv = tOffToday[tk][todayY];
+      if (!tv) continue;
+      out[tk] = tv === 'all day' ? {st: 'off', why: 'approved time off'} : {st: 'part', why: 'time off ' + tv};
+    }
+  } catch (eTO2) {}
   try {
     var cals = techCalMap_();
     var now = new Date();
@@ -7133,6 +7143,15 @@ function applyScheduleLocked_(req) {
   }
   var results = [];
   var applied = [];
+  // approved time off for the plan week (Mark 10/23) — first name → {day: 'all day' | times}
+  var timeOffByTech = {};
+  try {
+    var toFrom = String(plan.weekStart || got.meta.weekStart || '');
+    if (/^\d{4}-\d{2}-\d{2}$/.test(toFrom)) {
+      var toEnd = new Date(toFrom + 'T12:00:00'); toEnd.setDate(toEnd.getDate() + 6);
+      timeOffByTech = approvedTimeOff_(toFrom, Utilities.formatDate(toEnd, 'America/Denver', 'yyyy-MM-dd'));
+    }
+  } catch (eTO) { timeOffByTech = {}; }
   (plan.techs || []).forEach(function (tch) {
     var key = String(tch.name || '').toLowerCase();
     if (only && !only[key]) return;
@@ -7148,7 +7167,7 @@ function applyScheduleLocked_(req) {
     var cal;
     try { cal = calById_(calId); } catch (e) { cal = null; }   // subscribes if only shared
     if (!cal) { results.push({tech: tch.name, error: 'no access to ' + calId}); return; }
-    var made = 0, failed = 0, offDays = [], tuned = 0, tuneFellBack = 0, fieldHeld = 0, qcRouted = 0, qcFellBack = 0, alreadyBooked = [], movedTunes = [], slotTaken = [];
+    var made = 0, failed = 0, offDays = [], partialOff = [], tuned = 0, tuneFellBack = 0, fieldHeld = 0, qcRouted = 0, qcFellBack = 0, alreadyBooked = [], movedTunes = [], slotTaken = [];
     // Already-on-the-calendar guard (Walter 10/7): Korban's 3–4 "Vacuum/sweep/mop"
     // came out twice a day for weeks — a standing event on his calendar plus
     // the copy Approve made from the Scheduling Rules. Any block whose title
@@ -7210,6 +7229,13 @@ function applyScheduleLocked_(req) {
       if (onlyDays && onlyDays.indexOf(di) < 0) return;
       var dayAt = new Date(start); dayAt.setDate(dayAt.getDate() + di);
       var off = calOffMarker_(cal, dayAt);
+      // approved time off (Mark 10/23): an approved whole day off on the Time
+      // Off tab skips the day like a calendar off marker; a partial day is
+      // reported but still gets its blocks
+      var dayYmd = Utilities.formatDate(dayAt, 'America/Denver', 'yyyy-MM-dd');
+      var tOff = (timeOffByTech[key.split(/\s+/)[0]] || {})[dayYmd] || '';
+      if (!off && tOff === 'all day') off = 'approved time off';
+      if (tOff && tOff !== 'all day') partialOff.push({day: Utilities.formatDate(dayAt, 'America/Denver', 'EEE M/d'), times: tOff});
       if (off && (blocks || []).some(planBlockOnCal_)) {
         offDays.push({day: Utilities.formatDate(dayAt, 'America/Denver', 'EEE M/d'), why: off});
         return;
@@ -7342,6 +7368,7 @@ function applyScheduleLocked_(req) {
     if (qcRouted) res.onQcCal = qcRouted;
     if (qcFellBack) res.qcFellBackToOwnCal = qcFellBack;
     if (offDays.length) res.offDays = offDays;
+    if (partialOff.length) res.partialTimeOff = partialOff;
     results.push(res);
     // a tech whose every event-create failed (e.g. read-only calendar access)
     // must NOT be recorded as applied — that hid Matthew's failure on 8/16
@@ -10332,6 +10359,28 @@ function timeOffRows_(viewer) {
   }
   out.reverse();
   return {ok: true, rows: out.slice(0, 500)};
+}
+/* Approved time off (Mark 10/23): whole-day rows of the Time Off tab with
+ * status approved, keyed by first name → {yyyy-MM-dd: 'all day' | times}.
+ * A row with a Times value is a partial day — listed, never clears the day. */
+function approvedTimeOff_(fromYmd, toYmd) {
+  var rows = (timeOffRows_().rows || []), out = {};
+  rows.forEach(function (r) {
+    if (!/^approved/i.test(String(r.status || ''))) return;
+    var s = String(r.start || ''), e = String(r.end || '') || s;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(e)) e = s;
+    if (e < fromYmd || s > toYmd) return;
+    var k = String(r.who || '').trim().toLowerCase().split(/\s+/)[0];
+    if (!k) return;
+    var d = new Date(s + 'T12:00:00'), end = new Date(e + 'T12:00:00');
+    for (var n = 0; d <= end && n < 60; d.setDate(d.getDate() + 1), n++) {
+      var ymd = Utilities.formatDate(d, 'America/Denver', 'yyyy-MM-dd');
+      if (ymd < fromYmd || ymd > toYmd) continue;
+      (out[k] = out[k] || {})[ymd] = String(r.times || '').trim() || 'all day';
+    }
+  });
+  return out;
 }
 function trainReqAdd_(req, who) {
   var tech = clockTech_(req);
