@@ -13075,7 +13075,24 @@ function clockAdjustTable() {
   // date filters as the punch tables above
   const totals = canPay ? `<h4 class="bfhd" style="margin-top:22px">📊 Totals &amp; exports — weekly / monthly / regular-overtime, hours by category and by piano, CSVs · ${adjFiltered ? 'same person and dates as above' : 'everything loaded (190 days of day clock, 365 of piano clock) — set a person or dates above to narrow it'}</h4>
     <div class="adjtotals">${payTimeTable('adj')}</div>` : '';
-  return techList + payAdd + tlAdd + fixes + pay + tl + totals;
+  // 🔵 big section buttons (Melissa 10/22, 102226terry01): each section collapses
+  // and expands under one blue bar named like the section; the old heading
+  // text rides along as the small subtitle; open/closed remembered per browser
+  if (!S.adjOpen) { try { S.adjOpen = JSON.parse(lsGet('blp.adjsec') || '{}'); } catch (e) { S.adjOpen = {}; } }
+  const adjSec = (key, label, html) => {
+    if (!html) return '';
+    const m = /^\s*<h4 class="bfhd"[^>]*>([\s\S]*?)<\/h4>/.exec(html);
+    const sub = m ? m[1] : '', inner = m ? html.slice(m[0].length) : html;
+    const open = S.adjOpen[key] !== false;
+    return `<section class="adjsec" data-k="${key}">
+      <button class="adjsecbtn" type="button" aria-expanded="${open}"><span class="chev">${open ? '▾' : '▸'}</span><b>${label}</b>${sub ? `<small>${sub}</small>` : ''}</button>
+      <div class="adjsecbody" ${open ? '' : 'hidden'}>${inner}</div></section>`;
+  };
+  return techList + payAdd + tlAdd
+    + adjSec('fix', 'Time fix requests', fixes)
+    + adjSec('day', 'Day clock punches', pay)
+    + adjSec('piano', 'Piano clock punches', tl)
+    + adjSec('totals', 'Totals & exports', totals);
 }
 
 /* 📦 Delivered-archive report — same rows as the old sidebar view (click a
@@ -14025,6 +14042,18 @@ function renderReport() {
   body.querySelectorAll('.adjfclear').forEach(b => b.onclick = () => {
     S.adjF = {who: '', from: '', to: ''};
     renderReport();
+  });
+  // 🔵 Time Clock section buttons: toggle in place, remember per browser
+  body.querySelectorAll('.adjsecbtn').forEach(b => b.onclick = ev => {
+    ev.stopPropagation();
+    const sec = b.closest('.adjsec'), bd = sec && sec.querySelector('.adjsecbody');
+    if (!bd) return;
+    const open = bd.hidden;
+    bd.hidden = !open;
+    b.querySelector('.chev').textContent = open ? '▾' : '▸';
+    b.setAttribute('aria-expanded', String(open));
+    (S.adjOpen = S.adjOpen || {})[sec.dataset.k] = open;
+    try { localStorage.setItem('blp.adjsec', JSON.stringify(S.adjOpen)); } catch (e) {}
   });
   body.querySelectorAll('.rptf').forEach(el => {
     const apply = () => {
