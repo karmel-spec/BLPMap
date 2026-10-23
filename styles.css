@@ -90,6 +90,7 @@ body{background:#f7f8f9;color:#121212;display:flex;flex-direction:column;overflo
 .piano.tune .pbody{fill:#3a6ea5}
 .piano.coming .pbody{fill:#f4c20d}   /* not yet at the store — bench stays ownership-colored */
 .piano.rented .pbody{fill:#e8871e}   /* out on rental — orange; bench stays ownership-colored */
+.piano.pdstorage .pbody{fill:#8d6e63}   /* paid storage (PD STORAGE) — brown (Melissa 10/8) */
 .rentzone{fill:#fdf5ec;stroke:#e8b47e;stroke-width:2;stroke-dasharray:10 6}
 .renttitle{fill:#c26a10;font-weight:800;letter-spacing:2px}
 .rentname{fill:#7a4708;font-weight:600;pointer-events:none}
@@ -194,6 +195,7 @@ body{background:#f7f8f9;color:#121212;display:flex;flex-direction:column;overflo
 .pop .tag.sched{background:#f0eafd;color:#5b3fb0}
 .pop .tag.tune{background:#e8eef6;color:#3a6ea5}
 .pop .tag.coming{background:#fdf3cf;color:#8a6a00}
+.pop .tag.pdstorage{background:#efe6e1;color:#6d4c41}
 .tunebtn{width:100%;margin-top:8px;background:#fff;color:#3a6ea5;border:1.5px solid #3a6ea5;border-radius:7px;padding:8px;font-weight:700;font-size:12.5px;cursor:pointer}
 .photobtn{width:100%;margin-top:8px;background:#fff;color:#2e7d4f;border:1.5px solid #2e7d4f;border-radius:7px;padding:8px;font-weight:700;font-size:12.5px;cursor:pointer}
 .photobtn:hover{background:#e8f4ec}

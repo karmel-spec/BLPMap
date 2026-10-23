@@ -1519,11 +1519,14 @@ function pianoStatus(p) {
     const ev = S.data.events.find(e => (e.summary + e.description).includes(p.serial));
     if (ev) return ev.date === today ? 'move' : 'sched';
   }
+  if (isPaidStorage(p)) return 'pdstorage';   // paid storage (PD STORAGE section) — brown (Melissa 10/8, 100826terry87)
   if (/^(For Sale|Post Sale QC|Sale Pending|Sold)$/.test(p.phase || '')) return 'sale';
   if (tuningInfo(p).next) return 'tune';
   if (p.isNew) return 'new';
   return 'in';
 }
+// pianos the customer pays BLP to store: the Piano Log's PD STORAGE section
+function isPaidStorage(p) { return /^PD\s*STORAGE/i.test((p.section || '').trim()); }
 function ownerClass(p) {
   const o = (p.owner || '').toLowerCase();
   if (o.includes('consign')) return 'csgn';
@@ -6204,7 +6207,7 @@ function popHTML(p) {
   const st = pianoStatus(p);
   const ti = tuningInfo(p);
   const tags = {in: 'IN PLACE', new: 'NEW', sched: 'SCHEDULED', move: 'IN TRANSIT',
-                coming: 'COMING SOON', rented: 'RENTED',
+                coming: 'COMING SOON', rented: 'RENTED', pdstorage: 'PAID STORAGE',
                 tune: 'TUNING CAL', sale: 'FOR SALE'};
   // title: year (col E) then make/model; fall back to the summary as-is
   const base = [p.make, p.model].filter(Boolean).join(' ');
@@ -18362,6 +18365,7 @@ const LEGEND_LISTS = {
   sale:     {t: '🟢 For sale',       f: p => (p.phase || '') === 'For Sale'},
   coming:   {t: '🟡 Coming soon',    f: p => comingSoon(p)},
   rented:   {t: '🟠 Rented',         f: p => isRented(p)},
+  pdstorage:{t: '🟤 Paid storage',   f: p => isPaidStorage(p)},
   tune:     {t: '🔵 On the tuning calendar', f: p => !!tuningInfo(p).next},
   financed: {t: '💚 Private financing', f: p => isPrivateFinancing(p)},
   larson:   {t: '🩵 Larson Family',  f: p => /conference room|larson home/i.test(p.location || '') && !isPrivateFinancing(p)},
