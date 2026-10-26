@@ -99,11 +99,30 @@ Brigham's rules so far (2026-07-27):
   technicians' Google Calendars historically (gog -a karmel@ calendar events
   <tech calendar> works — verified 7/27) to estimate typical scheduled time
   per phase, and size future blocks to roughly those durations.
-- **Deadline notes on calendar entries**: when a downstream phase is already
-  scheduled, the upstream tech's entry carries a soft-deadline note tied to
-  the reason — e.g. "shoot to finish by Thu — QC is scheduled Fri", or
-  "ideally wrap X by Wed because [next task] is planned next". Deadlines
-  reference the dependent event, not arbitrary dates.
+- **Calendar block notes (Mark 2026-10-26, standing rule — replaces the 7/27
+  "deadline notes on calendar entries" rule):** a block's note is
+  `[CAL: what the technician sees] what the managers see`. Approve puts ONLY the
+  `[CAL: …]` segment on the technician's event; everything after it stays in the
+  Planner. Set `"calNotes": "cal-only"` at the top level of the plan JSON so
+  Approve knows the plan follows this rule (a block with no segment then gets no
+  description).
+  - In the segment: only what the technician needs for the PIANO WORK in that
+    block — what to do or check, next steps, a known problem and how to fix it,
+    parts waiting on / arrived, a client's request about the piano. Words a
+    manager's note asked to put on the calendar are copied verbatim.
+  - Second person / imperative: "Next steps: finish the let-off", "Waiting on #9
+    bridge pins", "Bush the pedal rod hole with felt". Never he/she/his/her/they
+    or the technician's name.
+  - Never in the segment: anything schedule-related (times, days, dates, end
+    times, days off, field bookings, "full shop day", open slots, who covers
+    what, reassignments, deadlines or pacing); anything private (health,
+    personal matters, progress or performance comments, payment status, client
+    contact details); anything written for the managers rather than the
+    technician — why the block is here, card or scope-note status ("That closes
+    the card's 'CAP stays open - waiting for new whippens' scope note, so the CAP
+    can actually finish this week" is for Mark, not Avery), report echoes, queue
+    ranks, "continuing"; the make/serial or spot (title and location carry them).
+  - Nothing piano-specific to say → no segment.
 - **Concurrent-task timing is two-sided** (2026-07-27): each task's merged
   span on the track tab gives (a) an earliest START — schedule it as soon as
   that phase begins, especially order-lead-time tasks (parts/decal/plating

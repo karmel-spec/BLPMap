@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-26.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-26.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -7072,7 +7072,19 @@ var CHATTER_RE = [
   /\b(is|are|remains|was) the (correct|right|logical|next)\b|\bcorrect (next|first|first-rotation) phase\b|\bintern rotation\b|\bcorrectly sequenced\b|\bnext phase on the \w+ track\b/i,
   /\breplac(es|ed|ing) the (prior|previous|earlier|old)\b|\bprior plan\b|\bpush(es|ed)? to (next|the following) week\b|\bboth push\b/i,
   /\bPROPOSED\b|\bslot was open\b|\bhas (exactly )?\d+ working days\b|\bnever scheduled on\b|\bdedicated special project\b|\bclosed (its|the|his|her) .{0,40}\bDONE\b/,
-  /\bgave no (day )?estimate\b|\bno day estimate\b|\bsee changes\b|\bre-?confirmation\b|\bbumped to\b|\boverflow\b|^FLAG:|^spot\s+[\w<>]+\.?$/i
+  /\bgave no (day )?estimate\b|\bno day estimate\b|\bsee changes\b|\bre-?confirmation\b|\bbumped to\b|\boverflow\b|^FLAG:|^spot\s+[\w<>]+\.?$/i,
+  // Mark 10/26 — a calendar note is ONLY about the piano work, in second person:
+  // nothing private (health, personal, performance, payment) …
+  /\b(migraines?|sick|illness|injur\w*|surgery|doctor|medical|hospital|funeral|pregnan\w*|family emergency|personal (day|reasons))\b|\bno (reported )?progress\b|\bweeks with no\b|\bfell behind\b|\bbehind schedule\b|\bPAID IN FULL\b|\$\s?\d|\b(paid|payment|deposit|invoice|refund|balance due|financ\w*)\b/i,
+  // … nothing about the schedule (times, days off, field bookings, who covers
+  // what, open slots, dates) …
+  /\b(Mon|Tues|Wednes|Thurs|Fri|Satur|Sun)day\b|\b(today|tomorrow|tonight|this week|next week|this hour|this slot)\b|\b\d{1,2}\/\d{1,2}\b|\b\d{1,2}:\d\d\b|\b\d{1,2}\s*(am|pm)\b|\b\d{1,2}\s*-\s*\d{1,2}\s*(am|pm)\b/i,
+  /\b(ends?|starts?|begins?) at\b|\b(is|he's|she's) off\b|\bday off\b|\boff (for|from)\b|\bfield (appointments?|bookings?|work|tunings?|days?)\b|\bfull shop day\b|\buninterrupted\b|\bopen (day|slot|block|afternoon|morning)\b|\bfills? (his|her|their|the)\b|\bfrees? (this|the|up)\b|\brehearsal\b|\bcalendar\b|\breassign\w*\b|\bcheck-?back\b|\bevery gap\b|\b(his|her|their) (whole )?week\b|\bdays? of report\b|\bschedule[ds]?\b/i,
+  // … no Planner bookkeeping about the card or other pianos …
+  /\bnothing gates\b|\bgates? (it|the)\b|\bblocks \w+ only\b|\bthat closes\b|\bscope note\b|\bis stale\b|\bnot this piano\b|\bruns? concurrently\b|\btwin[- ]check\b|\bdistinguish\b|\bsee questions\b|\bwith Brigham\b|\boverdue\b|\bhas run every\b|\bcard phase\b|\bBLP owned\b|\bTuning Queue\b|\brank \d+\b|\bthe pause is over\b|\blive job\b|\bthe card's\b|\bTask Status tab\b|\bcard note\b|\bwait note\b|\bhandoff\b/i,
+  // … no filler, and no third person ("she says", "his next steps")
+  /^(continuing|continued)\b[^.]*\.?$|^one block a day\.?$/i,
+  /\b(he|she|him|his|her|hers|he's|she's)\b/i
 ];
 /* The card's 🏆 sale lines, fit for a technician's calendar (Mark 10/22):
  * the header and "Fix requests:" / "Piano note:" labels come off, and the
@@ -7097,9 +7109,12 @@ function saleNotesClean_(scope) {
     .slice(0, 6);
 }
 
-function calDescription_(note) {
+function calDescription_(note, calOnly) {
   var s = String(note || '').replace(/\s+/g, ' ').trim();
   s = s.replace(/[\u2019\u2018]/g, "'");               // curly apostrophes → straight, so "Today's list" is recognised
+  s = s.replace(/[\u201c\u201d]/g, '"');
+  // "Her own next steps, in her words:" / "His stated next steps:" → "Next steps:" (Mark 10/26)
+  s = s.replace(/\b(?:his|her|their)\s+(?:own\s+|stated\s+)?next steps(?:,\s*in\s+(?:his|her|their)\s+(?:own\s+)?words)?\s*:/gi, 'Next steps:');
   // [CAL: …] = words a note asked to put on the calendar, copied verbatim by the
   // Planner AI. They go on top untouched and never meet the chatter filter
   // (Walter 10/13: Garrett's "Lupita is still restringing…" was fused into a
@@ -7109,6 +7124,10 @@ function calDescription_(note) {
     t = String(t).trim(); if (t && cal.indexOf(t) < 0) cal.push(t); return ' ';
   }).replace(/\s+/g, ' ').trim();
   var calTxt = cal.join('\n').slice(0, 1000);
+  // Mark 10/26: the Planner writes each block's calendar text in [CAL: …]
+  // (second person, the piano work only) and keeps its reasoning outside it —
+  // when a note has the segment, nothing else in it reaches the calendar
+  if (calTxt || calOnly) return calTxt;   // calOnly: a plan written to the 10/26 rule — no segment, no description
   // planner metadata inside a job line — "(queue #27, PRSB — Downbearing)" —
   // is dropped on its own so the job itself survives (Walter 10/2: Korban's
   // whole Today's list vanished because "queue #27" read as chatter)
@@ -7118,7 +7137,9 @@ function calDescription_(note) {
   // "spot 88. …", "spot 78 - PROPOSED…", and a phase/title echo in front of it
   // ("Restringing - spot TBD - P.S. Wick 29908. …") — the spot is in Location
   // and the title is the event, so neither belongs in the description
-  s = s.replace(/^[A-Za-z&' ]{2,30} - spot [^.-]{1,16} - [A-Z][\w.&' ]*?\d+[A-Za-z]*(?: \([^)]*\))?[.,]?\s*/, '');
+  // (Mark 10/26: a size like 5' 2" stopped the old pattern mid-name and left
+  // '" 20772 (Jane Larsen).' on the calendar — the echo now goes to its sentence end)
+  s = s.replace(/^[A-Za-z&' ]{2,30} - spot [^.-]{1,16} - .*?(?:[)"\d]|[a-z]{2})\.(?:\s+|$)/, '');
   s = s.replace(/^spot\s+[^.·-]{1,16}(?:\.\s*|\s*-\s*|\s*$)/i, '');
   // "- target completion today" / "- target wrap Tuesday" is the Planner's
   // pacing, not a commitment (rule 9/28): strip the fragment, keep "Day 2 of 2"
@@ -7126,7 +7147,13 @@ function calDescription_(note) {
   s = s.replace(/·\s*HOLD \(Walter[^)]*\)[^.]*\.?/g, '');
   // split into sentences / clauses; keep the ones that read as instructions
   // sentence split — "8:00 a.m. to 4:00 p.m." and "e.g." are not sentence ends
-  var guarded = s.replace(/\b([ap])\.m\./gi, '$1\u0002m\u0002').replace(/\be\.g\./gi, 'e\u0002g\u0002').replace(/\bvs\./gi, 'vs\u0002');
+  var guarded = s.replace(/\b([A-Z])\.([A-Z])\./g, '$1\u0002$2\u0002')   // "P.S. Wick" is not a sentence end
+    .replace(/\b([ap])\.m\./gi, '$1\u0002m\u0002').replace(/\be\.g\./gi, 'e\u0002g\u0002').replace(/\bvs\./gi, 'vs\u0002');
+  // a quoted phrase is one piece (Mark 10/26: "'Muffler rail clicks. D7 clicks…'"
+  // split inside the quote and left "D7 clicks and jack needs adjustment.'." behind)
+  guarded = guarded.replace(/(^|[\s(])(['"])([^'"]{2,300}?)\2(?=[\s.,;)]|$)/g, function (m, pre, q, inner) {
+    return pre + q + inner.replace(/\./g, '\u0002') + q;
+  });
   // a semicolon separates clauses too (Walter 10/16): "The client comes in for
   // a final look; Avery closed the refurb checklist DONE this week" keeps the
   // instruction and drops the reasoning instead of losing both
@@ -7146,7 +7173,7 @@ function calDescription_(note) {
       .replace(/\s+([.,;])/g, '$1').replace(/\s{2,}/g, ' ').trim();
   }
   var list = '';
-  var lm = /\b(Jobs in this block[^:]*:|Open items this week:|Today's list:)/i.exec(guarded);
+  var lm = /\b(Jobs in this block[^:]*:|Open items[^:.]{0,30}:|Today's list:)/i.exec(guarded);
   if (lm) { list = dropAsides(guarded.slice(lm.index).replace(/\u0002/g, '.')).slice(0, 1500); guarded = guarded.slice(0, lm.index); }
   var parts = guarded.replace(/([.!?])\s+/g, '$1\u0001').replace(/\s+·\s+/g, '\u0001').split('\u0001')
     .map(function (x) { return x.replace(/\u0002/g, '.'); })
@@ -7162,14 +7189,16 @@ function calDescription_(note) {
     var clauses = t.split(/;\s+/);
     if (clauses.length > 1) {
       if (isChatter(clauses[0])) continue;
-      var kc = clauses.filter(function (c) { return !isChatter(c); });
-      keep.push(kc.join('; '));
+      var kc = clauses.filter(function (c) { return !isChatter(c); }).join('; ');
+      // a dropped clause inside "( … ; … )" leaves the paren open — cut back to it
+      if ((kc.match(/\(/g) || []).length > (kc.match(/\)/g) || []).length) kc = kc.slice(0, kc.lastIndexOf('(')).replace(/[\s,;:-]+$/, '');
+      if (kc) keep.push(kc);
       continue;
     }
     if (isChatter(t)) {
       // an instruction hiding inside a chatter sentence: keep the DEADLINE part only
-      var m = /((?:DEADLINE|Deadline)[^.]*\.?)/.exec(t);
-      if (m) keep.push(m[1].trim());
+      var m = /\b((?:DEADLINE|Deadline)\s*(?::|by\b)[^.]*\.?)/.exec(t);   // "no DEADLINE line to carry" is not one
+      if (m && !/\bno\s+$/i.test(t.slice(0, m.index))) keep.push(m[1].trim());
       continue;
     }
     keep.push(t);
@@ -7410,7 +7439,7 @@ function applyScheduleLocked_(req) {
           // Korban's Hardware Buffing Queue (Walter 10/19): the calendar text is
           // the live buffing list — top two plate screws, top two visible
           // hardware — not the Planner's guess at his jobs
-          var cleanNote = calDescription_(b[4]);
+          var cleanNote = calDescription_(b[4], plan.calNotes === 'cal-only');
           if (/hardware buffing queue/i.test(evTitle)) {
             var bd = buffingDesc_();
             if (bd) {
