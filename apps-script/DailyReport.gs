@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-26.5';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-26.6';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -8187,6 +8187,8 @@ function buildShopManagerReport_(dayOffset) {
     // section (PD STORAGE, MISC STORAGE…) or a Storage track keeps a piano off
     if (/storage/i.test(String(p.section || ''))) return false;
     if (String(p.track || '').split(',').some(function (t) { return /^\s*storage\s*$/i.test(t); })) return false;
+    // a queue number reads as "In Queue" on the card (app.js) — not phaseless (Mark 10/26: Wurlitzer 79836, Q-48)
+    if (p.queuePos) return false;
     return p.active !== false && !p.coming && p.isSlot && !String(p.phase || '').trim();
   });
   R.noCab = pianos.filter(function (p) {
