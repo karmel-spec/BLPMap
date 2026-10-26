@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-23.7';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-26.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -411,6 +411,8 @@ function doGet(e) {
     if (ckey !== TEAM_PIN && ckey.toLowerCase() !== 'pianoman') return json_({error: 'unauthorized'});
     try {
       var cid = String(e.parameter.cal || '');
+      // cal=<tech name> reads the Tech Calendars tab (10/26, read-only checks of what Approve wrote)
+      if (cid && cid.indexOf('@') < 0) { var cmap = techCalMap_(); cid = cmap[cid.toLowerCase()] || cmap[cid.toLowerCase().split(/\s+/)[0]] || ''; if (!cid) return json_({error: 'no calendar on the Tech Calendars tab for ' + e.parameter.cal}); }
       var cfrom = new Date(String(e.parameter.from || '')), cto = new Date(String(e.parameter.to || ''));
       if (!cid || isNaN(cfrom) || isNaN(cto) || cto - cfrom > 60 * 86400000) return json_({error: 'cal, from, to (≤60 days) required'});
       var ccal = CalendarApp.getCalendarById(cid);
