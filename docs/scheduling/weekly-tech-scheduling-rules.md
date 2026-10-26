@@ -99,8 +99,14 @@ Brigham's rules so far (2026-07-27):
   technicians' Google Calendars historically (gog -a karmel@ calendar events
   <tech calendar> works — verified 7/27) to estimate typical scheduled time
   per phase, and size future blocks to roughly those durations.
-- **Calendar block notes (Mark 2026-10-26, standing rule — replaces the 7/27
-  "deadline notes on calendar entries" rule):** a block's note is
+- **Deadline notes on calendar entries** (7/27, kept by Mark 10/26): when a
+  downstream phase is already scheduled, the upstream tech's entry carries a
+  soft-deadline line tied to the reason, inside the `[CAL: …]` segment and
+  starting "Deadline:" — e.g. "Deadline: shoot to finish by Thu — QC is
+  scheduled Fri", "Deadline: ideally wrap the CAP by Wed — PRSB is planned
+  next". Deadlines reference the dependent event, not arbitrary dates. This is
+  the ONE schedule item allowed on a calendar.
+- **Calendar block notes (Mark 2026-10-26, standing rule):** a block's note is
   `[CAL: what the technician sees] what the managers see`. Approve puts ONLY the
   `[CAL: …]` segment on the technician's event; everything after it stays in the
   Planner. Set `"calNotes": "cal-only"` at the top level of the plan JSON so
@@ -115,9 +121,11 @@ Brigham's rules so far (2026-07-27):
     or the technician's name.
   - Never in the segment: anything schedule-related (times, days, dates, end
     times, days off, field bookings, "full shop day", open slots, who covers
-    what, reassignments, deadlines or pacing); anything private (health,
+    what, reassignments, pacing) — except the soft "Deadline:" line above; anything private (health,
     personal matters, progress or performance comments, payment status, client
-    contact details); anything written for the managers rather than the
+    contact details); client / owner names (not confidential — just not
+    useful: technicians work by make, model and serial; Melissa, Brigham and
+    Mark are the ones who use owner names); anything written for the managers rather than the
     technician — why the block is here, card or scope-note status ("That closes
     the card's 'CAP stays open - waiting for new whippens' scope note, so the CAP
     can actually finish this week" is for Mark, not Avery), twin-check / duplicate-

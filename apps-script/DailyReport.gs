@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-26.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-26.4';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -7112,7 +7112,7 @@ var CHATTER_RE = [
   // … no Planner bookkeeping about the card or other pianos …
   /\bnothing gates\b|\bgates? (it|the)\b|\bblocks \w+ only\b|\bthat closes\b|\bscope note\b|\bis stale\b|\bnot this piano\b|\bruns? concurrently\b|\btwin[- ]check\b|\bdistinguish\b|\bsee questions\b|\bwith Brigham\b|\boverdue\b|\bhas run every\b|\bcard phase\b|\bBLP owned\b|\bTuning Queue\b|\brank \d+\b|\bthe pause is over\b|\blive job\b|\bthe card's\b|\bTask Status tab\b|\bcard note\b|\bwait note\b|\bhandoff\b/i,
   // … no filler, and no third person ("she says", "his next steps")
-  /^(continuing|continued)\b[^.]*\.?$|^one block a day\.?$/i,
+  /^(continuing|continued)\b[^.]*\.?$|^one block a day\.?$|\bper (brigham|mark|melissa|walter|karmel)\b|\bmoved (here|up|back|in)\b/i,
   /\b(he|she|him|his|her|hers|he's|she's)\b/i
 ];
 /* The card's 🏆 sale lines, fit for a technician's calendar (Mark 10/22):
