@@ -120,8 +120,10 @@ Brigham's rules so far (2026-07-27):
     contact details); anything written for the managers rather than the
     technician — why the block is here, card or scope-note status ("That closes
     the card's 'CAP stays open - waiting for new whippens' scope note, so the CAP
-    can actually finish this week" is for Mark, not Avery), report echoes, queue
-    ranks, "continuing"; the make/serial or spot (title and location carry them).
+    can actually finish this week" is for Mark, not Avery), twin-check / duplicate-
+    serial notes ("also on the TWIN CHECK list… distinguish by serial"), report
+    echoes, queue ranks, "continuing"; the make/serial or spot (title and
+    location carry them).
   - Nothing piano-specific to say → no segment.
 - **Concurrent-task timing is two-sided** (2026-07-27): each task's merged
   span on the track tab gives (a) an earliest START — schedule it as soon as
