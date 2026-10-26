@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-26.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-26.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -1105,6 +1105,13 @@ function doPost(e) {
       var arc = addRecurring_(req);
       if (arc.ok && !arc.dryrun) logAct_(who, 'Recurring event added', arc.tech, arc.title + ' · ' + arc.when);
       return json_(arc);
+    }
+    if (req.action === 'setcaldescs') {
+      // rewrite applied events' notes to the 10/26 calendar-note rule (Mark) —
+      // each item changes only if the event's note is still exactly `expect`
+      var sd = setCalDescs_(req);
+      if (sd.ok && !sd.dryrun && sd.updated) logAct_(who, 'Calendar notes cleaned', '', sd.updated + ' event(s)');
+      return json_(sd);
     }
     if (req.action === 'refreshbuffing') {
       // rewrite this week's Hardware Buffing Queue events from the live
@@ -3824,6 +3831,28 @@ function addRecurring_(req) {
   var series = cal.createEventSeries(title, first.st, first.en, rec, {description: String(req.description || '').slice(0, 1000)});
   out.seriesId = series.getId();
   return out;
+}
+
+function setCalDescs_(req) {
+  var items = (req.items || []).slice(0, 200), map = null, out = [], updated = 0;
+  items.forEach(function (it) {
+    var cid = String(it.cal || '');
+    if (cid.indexOf('@') < 0) { map = map || techCalMap_(); cid = map[cid.toLowerCase()] || ''; }
+    var cal = cid ? calById_(cid) : null;
+    if (!cal) { out.push({title: it.title, status: 'no calendar'}); return; }
+    var st = new Date(String(it.start || ''));
+    if (isNaN(st)) { out.push({title: it.title, status: 'bad start'}); return; }
+    var ev = cal.getEvents(new Date(st.getTime() - 60000), new Date(st.getTime() + 60000)).filter(function (e) {
+      return e.getTitle() === String(it.title || '') && e.getStartTime().getTime() === st.getTime();
+    })[0];
+    if (!ev) { out.push({title: it.title, start: it.start, status: 'event not found'}); return; }
+    var cur = String(ev.getDescription() || '');
+    if (cur !== String(it.expect || '')) { out.push({title: it.title, start: it.start, status: 'note changed since the preview — left alone'}); return; }
+    if (!req.dryrun) ev.setDescription(String(it.desc || ''));
+    updated++;
+    out.push({title: it.title, start: it.start, status: req.dryrun ? 'would update' : 'updated'});
+  });
+  return {ok: true, dryrun: !!req.dryrun, updated: updated, results: out};
 }
 
 function refreshBuffing_(req) {
