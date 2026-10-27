@@ -65,7 +65,10 @@ function parseEvents(ics) {
     if (['OFF', 'NO MOVES', ''].includes(clean.toUpperCase())) continue;
     events.push({
       date: day, time: hhmm, summary: clean, done,
-      description: (props.DESCRIPTION || '').replace(/\\n/g, ' ').replace(/\\,/g, ',').slice(0, 400),
+      // the whole note: a multi-piano move list ("In store" 10/28) ran past the
+      // old 400-char cut, so pianos near the end never showed SCHEDULED (Mark 10/27)
+      description: (props.DESCRIPTION || '').replace(/\\n/g, ' ').replace(/\\,/g, ',')
+        .replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 4000),
     });
   }
   events.sort((a, b) => (a.date + (a.time || '99')).localeCompare(b.date + (b.time || '99')));
