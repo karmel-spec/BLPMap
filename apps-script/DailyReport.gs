@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-26.6';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-27.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -2491,10 +2491,12 @@ function videoFolderFor_(sh, row, serial, kind) {
     if (re.test(f.getName()) && /video/i.test(f.getName())) { folder = f; break; }
   }
   if (!folder) folder = parent.createFolder(VIDEO_FOLDER_NAMES[kind] || 'Before Video');
-  // the Piano Log cell holds the folder link (= "✓ have" on the card) unless a human
-  // already pasted a different link there
+  // Alisa 10/27: the BEFORE/AFTER VIDEO cell is NOT a Drive link any more. It follows the video:
+  // "✓ uploaded <date>" (raw footage, = "✓ have" on the card) → "done" (edited cut in Drive, set by the
+  // Marketing app) → the YouTube link once it's public (also the Marketing app, which then embeds it
+  // on the website). So only an EMPTY cell gets the stamp here; the folder is found by name next time.
   if (col) {
-    try { if (!cell.trim() || /^(✓|Skipped)/.test(cell.trim())) sh.getRange(row, col).setValue(folder.getUrl()); } catch (e2) {}
+    try { if (!cell.trim()) sh.getRange(row, col).setValue('✓ uploaded ' + Utilities.formatDate(new Date(), 'America/Denver', 'MMM d, yyyy')); } catch (e2) {}
   }
   return folder;
 }
