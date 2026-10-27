@@ -6516,7 +6516,7 @@ function popHTML(p) {
             <option value="__other__">✏️ Other — write it in…</option>
             <option value="Admin / Misc">📋 Admin / Misc</option>
             <option value="Moving">🚚 Moving</option>
-            <option value="Buffing — plate hardware">🪞 Buffing — plate hardware</option>
+            <option value="Buffing">🪞 Buffing</option>
             <option value="Rework">🔁 Rework — fixing earlier work</option>
             <option value="" disabled>— shop phases —</option>
             ${opts.map(ph => `<option value="${esc(ph)}">${esc(ph)}</option>`).join('')}
