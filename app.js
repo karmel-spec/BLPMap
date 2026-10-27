@@ -4633,6 +4633,7 @@ function qcQueueTable() {
   const recent = QCQ.rows.filter(r => r.status !== 'pending')
     .sort((x, y) => String(y.updated || '').localeCompare(String(x.updated || ''))).slice(0, 25);
   const inspector = (S.settings && S.settings.qc_inspector) || '';
+  const prsbInspector = (S.settings && S.settings.qc_inspector_prsb) || 'Matthew Wessman';   // Mark 10/27
   const row = r => {
     const p = pianoOf(r.serial);
     return `<tr class="mrow" data-row="${p ? p.row : ''}">
@@ -4654,7 +4655,7 @@ function qcQueueTable() {
       <td>${canJudge ? `<button class="qcopen" data-id="${r.id}">view</button>` : ''}</td></tr>`;
   };
   return `<div class="qcsum">${pending.length
-      ? `<b>${pending.length}</b> mini-QC${pending.length === 1 ? '' : 's'} waiting${inspector ? ` · inspector on duty: <b>${esc(inspector)}</b>` : ''}${pending.some(r => r.escalated) ? ` · <span class="qcesc">⏰ ${pending.filter(r => r.escalated).length} past the escalation window</span>` : ''}`
+      ? `<b>${pending.length}</b> mini-QC${pending.length === 1 ? '' : 's'} waiting${inspector ? ` · inspector on duty: <b>${esc(inspector)}</b> (PRSB: <b>${esc(prsbInspector)}</b>)` : ''}${pending.some(r => r.escalated) ? ` · <span class="qcesc">⏰ ${pending.filter(r => r.escalated).length} past the escalation window</span>` : ''}`
       : 'Nothing waiting — every requested mini-QC has a verdict. 🎉'}
       <button class="qcrefresh" title="refresh">↻</button></div>
     <table><tr><th>PIANO</th><th>PHASE → NEXT</th><th>REQUESTED BY</th><th>WAITING SINCE</th><th>PROGRESS</th><th></th></tr>
@@ -18049,6 +18050,7 @@ const SETTING_FIELDS = [
   ]],
   ['🔍 Mini-QC routing', [
     ['qc_inspector', 'Inspection requests text (name)'],
+    ['qc_inspector_prsb', 'PRSB requests text instead (name — blank = Matthew Wessman)'],
     ['qc_video_copy', 'Also texted, for training videos (blank = off)'],
     ['qc_escalate_minutes', 'Minutes before escalation'],
     ['qc_escalate_to', 'Escalation texts go to (comma names)'],
