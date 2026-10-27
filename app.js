@@ -1509,14 +1509,32 @@ function comingSoon(p) {
 function outForService(p) {
   return /david hyde/i.test((p.location || '').trim());
 }
+// does a moving-calendar event name this piano? A 5+ character serial
+// matches anywhere in the title or notes; a 4-character one only right after
+// the make ("Grotrian 4120"), so it can't hit a stray number (Mark 10/27).
+// A cell holding two serials ("9374 / 18324") matches on either.
+const foldText = t => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+const reEsc = t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+function eventNamesPiano(blob, p) {
+  const whole = String(p.serial || '').trim();
+  if (!whole) return false;
+  if (whole.length > 4 && blob.includes(whole)) return true;
+  const parts = whole.split(/\s*[\/,;]\s*/).map(x => x.replace(/^#/, '').trim()).filter(x => x && x !== whole);
+  if (parts.some(x => x.length > 4 && blob.includes(x))) return true;
+  const short = (whole.length === 4 ? [whole] : []).concat(parts.filter(x => x.length === 4));
+  const make = foldText(p.make).split(/[^a-z]+/).find(w => w.length >= 3);
+  if (!short.length || !make) return false;
+  const text = foldText(blob);
+  return short.some(x => new RegExp('\\b' + reEsc(make) + '\\b[^<>\\n.;:]{0,25}?(?:^|[^a-z0-9])' + reEsc(x.toLowerCase()) + '(?![a-z0-9])').test(text));
+}
 function pianoStatus(p) {
   const today = localDay();
   if (comingSoon(p)) return 'coming';   // not yet at the store — yellow
   if (isRented(p)) return 'rented';     // out on rental — orange
-  if (p.serial && p.serial.length > 4) {
+  if (p.serial) {
     // note: the calendar's "x " prefix is admin bookkeeping (reminder
     // calls), NOT completion — so any mention today counts as in transit
-    const ev = S.data.events.find(e => (e.summary + e.description).includes(p.serial));
+    const ev = S.data.events.find(e => eventNamesPiano((e.summary || '') + ' ' + (e.description || ''), p));
     if (ev) return ev.date === today ? 'move' : 'sched';
   }
   if (isPaidStorage(p)) return 'pdstorage';   // paid storage (PD STORAGE section) — brown (Melissa 10/8, 100826terry87)
@@ -1990,9 +2008,8 @@ function moverChecklist() {
 // the piano a calendar move belongs to — same serial-in-title convention
 // the map's scheduled/in-transit colors use
 function moveEventPiano(e) {
-  const blob = (e.summary || '') + (e.description || '');
-  return S.data.pianos.find(p => p.active && p.serial && p.serial.length > 4
-    && blob.includes(p.serial)) || null;
+  const blob = (e.summary || '') + ' ' + (e.description || '');
+  return S.data.pianos.find(p => p.active && eventNamesPiano(blob, p)) || null;
 }
 function renderMoves() {
   const evs = todaysMoves();
