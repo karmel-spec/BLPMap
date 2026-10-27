@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-27.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-27.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -990,8 +990,11 @@ function fetchEventsLive_() {
     events.push({
       date: day, time: hhmm, summary: clean,
       done: /^\s*x\s/i.test(raw),
+      // the whole note, tags stripped: the 10/28 'In store' move list ran past
+      // the old 400-char cut, so later pianos never showed SCHEDULED (Mark 10/27)
       description: (props.DESCRIPTION || '').replace(/\\n/g, ' ')
-        .replace(/\\,/g, ',').slice(0, 400),
+        .replace(/\\,/g, ',').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ')
+        .replace(/^\s+|\s+$/g, '').slice(0, 4000),
     });
   }
   events.sort(function (a, b) {
