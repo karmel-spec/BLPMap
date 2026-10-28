@@ -3618,7 +3618,8 @@ function phaseCol_(sh) {
  * itself is made by the Client Portal; this bridge only reports the event:
  *   arrived        first shop tag printed (tagprinted, kind 'tag')
  *   phase_changed  every real phase change (the portal emails the ones that
- *                  passed a mini-QC, and the final-QC one) with that phase's
+ *                  passed a mini-QC, Restringing + Refinishing advances, and
+ *                  the final-QC one) with that phase's
  *                  team photos from the PHOTO LOG
  *   video          a before / after / progress video filed (videodone)
  * Best-effort and fire-and-forget: the portal answers 202 at once and works

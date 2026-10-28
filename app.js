@@ -7099,7 +7099,7 @@ function popHTML(p) {
         <button class="crsw cropt ${crOn ? 'sel' : ''}" data-on="1" role="radio" aria-checked="${crOn}">${crOn ? '✓ ' : ''}SEND REPORTS</button>
         <button class="crsw cropt ${!crOn && !crUnset ? 'sel' : ''}" data-on="0" role="radio" aria-checked="${!crOn && !crUnset}">${!crOn && !crUnset ? '✓ ' : ''}NO REPORTS</button>
       </div>
-      <div class="crhint">${crOn ? 'This client <b>WILL</b> get an emailed update at each shop event (arrival + shop tag, photos approved, each mini-QC pass, final QC, videos) — drafted into info@ Drafts for an admin to send.' : crUnset ? 'Not decided yet — should this client get emailed updates at each shop event? (Blank = updates are drafted.)' : 'This client will <b>NOT</b> get emailed updates — no owner-update drafts are made for this piano.'}</div>
+      <div class="crhint">${crOn ? 'This client <b>WILL</b> get an emailed update at each shop event (arrival + shop tag, photos approved, each mini-QC pass, restringing + refinishing done, final QC, videos) — drafted into info@ Drafts for an admin to send.' : crUnset ? 'Not decided yet — should this client get emailed updates at each shop event? (Blank = updates are drafted.)' : 'This client will <b>NOT</b> get emailed updates — no owner-update drafts are made for this piano.'}</div>
       <span class="crmsg"></span></div>` : '';
   const ownerLine = [ownerNameOf(p), ownerCityStateOf(p)].filter(Boolean).join(' — ') || '—';
   const pct = shopProgressPct(p);
