@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-27.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-28.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -712,13 +712,14 @@ function korbanSlot_(cal, tz) {
 // any other technician: first open gap (minutes long, default 90) in
 // weekday working hours (8am-4pm, starts on the half hour); days with an
 // all-day NO/OFF/VACATION event are skipped
-function openGap_(cal, tz, techName, minutes) {
+function openGap_(cal, tz, techName, minutes, isOffDay) {
   minutes = minutes || TUNING_MINUTES;
   for (var d = 1; d <= 42; d++) {
     var day = new Date(Date.now() + d * 86400000);
     var dow = Number(Utilities.formatDate(day, tz, 'u'));
     if (dow > 5) continue;
     var y = Utilities.formatDate(day, tz, 'yyyy-MM-dd');
+    if (isOffDay && isOffDay(y)) continue;
     var dayEvents = cal.getEvents(new Date(y + 'T00:00:00'), new Date(y + 'T23:59:59'));
     var off = dayEvents.some(function (ev) {
       var t = ev.getTitle() || '';
@@ -3882,6 +3883,39 @@ function deleteService_(req) {
  * technician invited so it reaches their calendar too. req: {serial, row?,
  * techId, techName, notes?, minutes (30-min increments), dryrun?}
  */
+/* Days a tech is never booked for a service / QC request (Mark 10/28:
+ * Curtis doesn't work Wednesdays or Fridays). A BLANK weekday cell on the
+ * Team Schedule tab is a scheduled day off — the same reading the Shop Board
+ * and the Friday draft use — and approved whole-day time off counts too.
+ * Returns fn('yyyy-MM-dd') → true when the tech is off that day. A row with
+ * every weekday blank is read as "no schedule", not "never works". */
+function serviceOffDay_(techName, tz) {
+  var first = String(techName || '').trim().toLowerCase().split(/\s+/)[0];
+  var offDow = {};
+  try {
+    var vals = SpreadsheetApp.openById('11RoeVRETag5rZYX6_tEH-rf6x8JL0JeZU0P5AT0WI-I')
+      .getSheetByName('Team Schedule').getDataRange().getValues();
+    for (var i = 1; i < vals.length; i++) {
+      if (String(vals[i][0] || '').trim().toLowerCase().split(/\s+/)[0] !== first) continue;
+      var blank = {}, worked = 0;
+      for (var u = 1; u <= 5; u++) {
+        if (String(vals[i][u + 1] || '').trim()) worked++; else blank[u] = true;
+      }
+      if (worked) offDow = blank;
+      break;
+    }
+  } catch (e) {}
+  var tOff = {};
+  try {
+    var from = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
+    var to = Utilities.formatDate(new Date(Date.now() + 43 * 86400000), tz, 'yyyy-MM-dd');
+    tOff = approvedTimeOff_(from, to)[first] || {};
+  } catch (eT) {}
+  return function (ymd) {
+    var u = Number(Utilities.formatDate(new Date(ymd + 'T12:00:00'), tz, 'u'));
+    return !!offDow[u] || tOff[ymd] === 'all day';
+  };
+}
 function scheduleService_(req) {
   var tz = 'America/Denver';
   var techId = String(req.techId || 'jakepulver.blp@gmail.com').trim();
@@ -3900,7 +3934,7 @@ function scheduleService_(req) {
   // one appointment per piano (Walter 10/16): same tech → add to it
   var hit = existingService_(master, req.serial, techId, techName);
   if (hit && hit.sameTech) return combineService_(master, techCal, hit, req, minutes, found, techName, tz, false);
-  var slot = openGap_(searchCal, tz, techName, minutes);
+  var slot = openGap_(searchCal, tz, techName, minutes, serviceOffDay_(techName, tz));
   if (!slot) return {error: 'no open ' + minutes + '-minute slot found on ' + techName + "'s calendar in the next 6 weeks"};
   var desc = 'Requested via BLP Store Map ('
     + Utilities.formatDate(new Date(), tz, 'MMM d, h:mm a') + ')'
@@ -3924,8 +3958,8 @@ function scheduleService_(req) {
 
 /**
  * ASAP showroom service/repair — same request as scheduleService_ but skips
- * the "next open slot" search: books tomorrow (or Monday, if tomorrow is a
- * weekend) at 8am on the QC & Showroom repairs calendar, tech invited. If
+ * the "next open slot" search: books tomorrow (rolled past the weekend and
+ * the tech's days off) at 8am on the QC & Showroom repairs calendar, tech invited. If
  * the tech's own calendar already has a "fieldwork" event that morning, the
  * appointment starts right after that event ends instead of at 8am.
  * req: {serial, row?, techId, techName, notes?, minutes, dryrun?}
@@ -3943,12 +3977,15 @@ function scheduleServiceAsap_(req) {
   var techName = String(req.techName || (techCal ? techCal.getName() : techId))
     .replace(/^\d+\s*-\s*/, '').trim();
 
-  // tomorrow, rolled to Monday if that's a Saturday or Sunday
-  var day = new Date(Date.now() + 86400000);
-  var dow = Number(Utilities.formatDate(day, tz, 'u'));
-  if (dow === 6) day = new Date(day.getTime() + 2 * 86400000);
-  else if (dow === 7) day = new Date(day.getTime() + 1 * 86400000);
-  var y = Utilities.formatDate(day, tz, 'yyyy-MM-dd');
+  // tomorrow, rolled past the weekend and the tech's days off (Curtis is
+  // never booked on a Wednesday or Friday — Mark 10/28)
+  var isOff = serviceOffDay_(techName, tz);
+  var day = new Date(Date.now() + 86400000), y;
+  for (var n = 0; n < 21; n++, day = new Date(day.getTime() + 86400000)) {
+    y = Utilities.formatDate(day, tz, 'yyyy-MM-dd');
+    if (Number(Utilities.formatDate(day, tz, 'u')) > 5 || isOff(y)) continue;
+    break;
+  }
   // one appointment per piano (Walter 10/16): an appointment with the same
   // tech that is already on or before the ASAP day takes the request
   var hit = existingService_(master, req.serial, techId, techName);

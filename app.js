@@ -9565,7 +9565,7 @@ async function submitService(p, ov, asap) {
   const techName = sel.options[sel.selectedIndex].text;
   btns.forEach(b => b.disabled = true);
   msg.className = 'tmmsg';
-  msg.textContent = asap ? `Booking ${techName} ASAP (tomorrow, or Monday if that's a weekend)…`
+  msg.textContent = asap ? `Booking ${techName} ASAP (their next working day)…`
     : `Finding ${techName}’s next open slot…`;
   try {
     const r = await bridgeFetch(BRIDGE_URL, {
