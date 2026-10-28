@@ -1277,6 +1277,18 @@ function doPost(e) {
         var told = exitPrepNotify_(req, ph);
         if (told) { ph.exitPrepTexted = told; logAct_(who, 'Exit Prep handoff texted', ph.summary || req.serial, told); }
       }
+      if (ph.ok && ph.row && String(ph.previous || '') !== String(ph.phase || '')) {
+        // owner update (10/28): the portal decides whether this change gets an email
+        try {
+          var ofs = ownerFacts_(pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID)), ph.row);
+          var prevPh = String(ph.previous || '');
+          var ou = ownerUpdate_('phase_changed', {serial: String(req.serial || ''), summary: ofs.summary || ph.summary, owner: ofs.owner,
+            prev: prevPh, phase: String(ph.phase || ''), miniQcPassed: !!req.miniQcPassed, manager: String(req.qcManager || ''),
+            note: String(req.qcNote || ''), by: who, photos: prevPh ? phasePhotos_(String(req.serial || ''), prevPh) : []});
+          ph.ownerUpdate = ou;
+          if (/^queued/.test(ou)) logAct_(who, 'Owner update drafted', ph.summary || req.serial, prevPh + ' → ' + ph.phase + ' (' + ou + ')');
+        } catch (eO) {}
+      }
       return json_(ph);
     }
     if (req.action === 'fixtabs') return json_(fixTabs_());
@@ -1961,7 +1973,18 @@ function doPost(e) {
       return json_(setImportant_(req, who));
     }
     if (req.action === 'tagprinted') {
-      return json_(tagPrinted_(req, who));
+      var tp = tagPrinted_(req, who);
+      if (tp.ok && tp.row && String(req.kind || 'tag') !== 'bench') {
+        // owner update (10/28): the FIRST shop tag = the piano has arrived and has its map space
+        try {
+          var tfs = ownerFacts_(pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID)), tp.row);
+          var tou = ownerUpdate_('arrived', {serial: String(req.serial || ''), summary: tfs.summary || tp.summary, owner: tfs.owner, location: tfs.location,
+            status: tfs.status, adminSteps: tfs.adminSteps, tagSnapshot: tfs.tagSnapshot || String(req.snapshot || ''), entered: tfs.entered, by: who});
+          tp.ownerUpdate = tou;
+          if (/^queued/.test(tou)) logAct_(who, 'Owner update drafted', tp.summary || req.serial, 'arrived (' + tou + ')');
+        } catch (eT) {}
+      }
+      return json_(tp);
     }
     if (req.action === 'pianonote') {
       return json_(pianoNote_(req, who));
@@ -2015,7 +2038,25 @@ function doPost(e) {
     // video buttons on a computer, where there is no camera to record with (Brigham 11/10)
     if (req.action === 'videofolder') return json_(videoFolder_(req));
     if (req.action === 'videosession') return json_(videoSession_(req, who));
-    if (req.action === 'videodone') return json_(videoDone_(req, who));
+    if (req.action === 'videodone') {
+      var vd = videoDone_(req, who);
+      var vk = videoKind_(req.kind);
+      if (vd.ok && (vk === 'before' || vk === 'after' || vk === 'progress')) {
+        // owner update (10/28): before / after / progress videos go to the client
+        try {
+          var vsh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+          var vf = findPiano_(vsh, req.serial, req.row);
+          if (!vf.error) {
+            var vfs = ownerFacts_(vsh, vf.row);
+            var vou = ownerUpdate_('video', {serial: String(req.serial || ''), summary: vfs.summary || vf.summary, owner: vfs.owner, kind: vk,
+              fileId: String(req.fileId || ''), name: vd.name, mb: vd.mb, link: vd.link, note: String(req.note || ''), by: who});
+            vd.ownerUpdate = vou;
+            if (/^queued/.test(vou)) logAct_(who, 'Owner update drafted', vfs.summary || req.serial, vk + ' video (' + vou + ')');
+          }
+        } catch (eV) {}
+      }
+      return json_(vd);
+    }
     if (req.action === 'videothumb') return json_(videoThumb_(req, who));
     if (req.action === 'mediarepair') {
       return json_(mediaRepair_(req, who));
@@ -3571,6 +3612,67 @@ function phaseCol_(sh) {
  * add Lisa there any time, no code change) with what admin still has to
  * finish. Fires only on the move INTO Exit Prep - Admin, once per piano per
  * 12 h, so a retried POST cannot text twice. */
+/* ===== OWNER UPDATES (Brigham 10/28) =====
+ * Shop events on a client's piano draft an owner-update email into the
+ * info@ Gmail Drafts folder for an admin to read, edit and send. The draft
+ * itself is made by the Client Portal; this bridge only reports the event:
+ *   arrived        first shop tag printed (tagprinted, kind 'tag')
+ *   phase_changed  every real phase change (the portal emails the ones that
+ *                  passed a mini-QC, and the final-QC one) with that phase's
+ *                  team photos from the PHOTO LOG
+ *   video          a before / after / progress video filed (videodone)
+ * Best-effort and fire-and-forget: the portal answers 202 at once and works
+ * after; it also de-duplicates, so a retried call never drafts twice.
+ * Replaces the batch client-update drafting (Shop Manager Client Reports +
+ * the portal's 30-minute phase emails). */
+var OWNER_UPDATE_URL = 'https://blpclientportal.netlify.app/api/webhooks/shop-event';
+function ownerFacts_(sh, row) {
+  var f = {};
+  try {
+    f.owner = String(sh.getRange(row, 2).getValue() || '');
+    f.summary = String(sh.getRange(row, 4).getValue() || '');
+    f.status = String(sh.getRange(row, 19).getValue() || '');
+    f.location = String(sh.getRange(row, 21).getValue() || '');
+    f.entered = String(sh.getRange(row, 22).getValue() || '');
+    f.adminSteps = String(sh.getRange(row, pianoCol_(sh, 'ADMIN STEPS')).getValue() || '');
+    f.tagSnapshot = String(sh.getRange(row, pianoCol_(sh, 'TAG SNAPSHOT')).getValue() || '');
+  } catch (e) {}
+  return f;
+}
+/* the PHOTO LOG rows of one piano taken during one phase (team photos), newest last, max 12 */
+function phasePhotos_(serial, stage) {
+  var out = [];
+  try {
+    var log = SpreadsheetApp.openById(PIANO_LOG_ID).getSheetByName(PHOTO_LOG_TAB);
+    if (!log || log.getLastRow() < 2) return out;
+    var n = Math.min(log.getLastRow() - 1, 2500);
+    var vals = log.getRange(log.getLastRow() - n + 1, 1, n, 7).getValues();
+    for (var i = 0; i < vals.length; i++) {
+      var v = vals[i];
+      if (String(v[1] || '').trim() !== String(serial).trim()) continue;
+      if (String(v[3] || '').trim() !== String(stage).trim()) continue;
+      var m = /\/d\/([A-Za-z0-9_-]+)|[?&]id=([A-Za-z0-9_-]+)/.exec(String(v[6] || ''));
+      var id = m ? (m[1] || m[2]) : '';
+      if (!id) continue;
+      out.push({id: id, name: String(v[5] || ''), link: String(v[6] || ''), stage: String(v[3] || ''), by: String(v[4] || ''), when: v[0] ? new Date(v[0]).toISOString() : ''});
+    }
+  } catch (e) {}
+  return out.slice(-12);
+}
+function ownerUpdate_(event, data) {
+  try {
+    var owner = String(data.owner || '');
+    if (!owner.trim() || /blp\s*owned|^\s*blp\s*$|^sold$/i.test(owner.trim())) return 'skipped (BLP-owned / no owner)';
+    var key = PropertiesService.getScriptProperties().getProperty('APP_ACCESS_KEY') || 'pianoman';
+    var payload = {key: key, event: event};
+    for (var k in data) if (data[k] != null) payload[k] = data[k];
+    var r = UrlFetchApp.fetch(OWNER_UPDATE_URL, {method: 'post', contentType: 'application/json',
+      payload: JSON.stringify(payload), muteHttpExceptions: true});
+    var j = {}; try { j = JSON.parse(r.getContentText()); } catch (eJ) {}
+    return j.ok ? ((j.queued || []).length ? 'queued ' + (j.queued || []).length : (j.duplicates || []).length ? 'already drafted' : 'no email for this event')
+                : 'portal ' + r.getResponseCode() + ' ' + (j.error || '');
+  } catch (e) { return 'failed: ' + String(e && e.message || e).slice(0, 80); }
+}
 function exitPrepNotify_(req, ph) {
   if (String(ph.phase || '') !== 'Exit Prep - Admin') return '';
   if (String(ph.previous || '') === 'Exit Prep - Admin') return '';
