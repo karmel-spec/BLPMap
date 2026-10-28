@@ -3636,6 +3636,7 @@ function ownerFacts_(sh, row) {
     f.entered = String(sh.getRange(row, 22).getValue() || '');
     f.adminSteps = String(sh.getRange(row, pianoCol_(sh, 'ADMIN STEPS')).getValue() || '');
     f.tagSnapshot = String(sh.getRange(row, pianoCol_(sh, 'TAG SNAPSHOT')).getValue() || '');
+    f.clientReports = String(sh.getRange(row, pianoCol_(sh, 'CLIENT REPORTS')).getValue() || '');   // the card's SEND REPORTS / NO REPORTS switch
   } catch (e) {}
   return f;
 }
@@ -3663,6 +3664,7 @@ function ownerUpdate_(event, data) {
   try {
     var owner = String(data.owner || '');
     if (!owner.trim() || /blp\s*owned|^\s*blp\s*$|^sold$/i.test(owner.trim())) return 'skipped (BLP-owned / no owner)';
+    if (/^no$/i.test(String(data.clientReports || '').trim())) return 'skipped (NO REPORTS on the card)';
     var key = PropertiesService.getScriptProperties().getProperty('APP_ACCESS_KEY') || 'pianoman';
     var payload = {key: key, event: event};
     for (var k in data) if (data[k] != null) payload[k] = data[k];

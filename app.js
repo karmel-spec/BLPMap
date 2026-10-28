@@ -7099,7 +7099,7 @@ function popHTML(p) {
         <button class="crsw cropt ${crOn ? 'sel' : ''}" data-on="1" role="radio" aria-checked="${crOn}">${crOn ? '✓ ' : ''}SEND REPORTS</button>
         <button class="crsw cropt ${!crOn && !crUnset ? 'sel' : ''}" data-on="0" role="radio" aria-checked="${!crOn && !crUnset}">${!crOn && !crUnset ? '✓ ' : ''}NO REPORTS</button>
       </div>
-      <div class="crhint">${crOn ? 'This client <b>WILL</b> receive emailed update reports as the work progresses.' : crUnset ? 'Not decided yet — should this client receive emailed update reports?' : 'This client will <b>NOT</b> receive emailed update reports.'}</div>
+      <div class="crhint">${crOn ? 'This client <b>WILL</b> get an emailed update at each shop event (arrival + shop tag, photos approved, each mini-QC pass, final QC, videos) — drafted into info@ Drafts for an admin to send.' : crUnset ? 'Not decided yet — should this client get emailed updates at each shop event? (Blank = updates are drafted.)' : 'This client will <b>NOT</b> get emailed updates — no owner-update drafts are made for this piano.'}</div>
       <span class="crmsg"></span></div>` : '';
   const ownerLine = [ownerNameOf(p), ownerCityStateOf(p)].filter(Boolean).join(' — ') || '—';
   const pct = shopProgressPct(p);
@@ -19410,8 +19410,10 @@ function admClientHTML() {
   const optIn = S.data.pianos.filter(p => p.active && (p.clientReports || '').trim().toLowerCase() === 'yes');
   const unasked = S.data.pianos.filter(p => p.active && p.serial && inShopwork(p)
     && !['yes', 'no'].includes((p.clientReports || '').trim().toLowerCase()));
-  return `<p class="pd">Client-report pianos (opt-in on each card\u2019s 🔐 Admin section). Open a piano to
-      draft/send from its 🤝 Client Reports History.</p>
+  return `<p class="pd">Client-report pianos (the SEND REPORTS switch on each card\u2019s 🔐 Admin section). Since 10/28 every
+      client email is drafted automatically into the <b>info@ Drafts</b> folder when a shop event happens (arrival + first shop tag,
+      before/after photos approved, a phase passing its mini-QC, final QC, videos) — NO REPORTS on the card stops them.
+      <a href="https://blpclientportal.netlify.app/admin/outbox" target="_blank" rel="noopener">Drafts made so far ↗</a></p>
     <h4 class="tmsec">Opted in <span class="pc">${optIn.length}</span></h4>
     <div class="tmgrid">${optIn.map(p => `<div class="tmtile mrowqc" data-row="${p.row}" style="cursor:pointer">
       <b>${esc(((p.year ? p.year + ' ' : '') + [p.make, p.model].filter(Boolean).join(' ')).slice(0, 30))}</b>
