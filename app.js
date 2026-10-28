@@ -13132,6 +13132,17 @@ function adjNewestDayFirst(a, b) {
   const ka = da.toLocaleDateString('en-CA'), kb = db.toLocaleDateString('en-CA');
   return ka === kb ? da - db : (ka < kb ? 1 : -1);
 }
+// a date filter that redraws the report must wait for a whole year: typing
+// "2" made the value 0002-10-20, the change event redrew the bar and the
+// field lost the rest of the year (Mark 10/28). Runs fn when the year is
+// 2000+ (or the field is cleared), else once the field loses focus.
+function onDateSettled(el, fn) {
+  const ok = () => !el.value || Number(el.value.slice(0, 4)) >= 2000;
+  const last = () => el.dataset.applied === undefined ? el.defaultValue : el.dataset.applied;
+  const run = () => { if (el.value === last()) return; el.dataset.applied = el.value; fn(); };
+  el.onchange = () => { if (ok()) run(); };
+  el.onblur = () => { if (ok()) run(); };
+}
 function clockAdjustTable() {
   if (!S.payRows || !S.tlRows) return '<div class="empty">Loading clocks…</div>';
   // the punch tables don't wait for the fix-request list — it fills in when it lands
@@ -14059,7 +14070,7 @@ function renderReport() {
     const d = new Date((S.payDay || new Date().toLocaleDateString('en-CA', {timeZone: 'America/Denver'})) + 'T12:00:00');
     d.setDate(d.getDate() + (+b.dataset.d)); S.payDay = d.toLocaleDateString('en-CA'); renderReport();
   });
-  const pdd = body.querySelector('.paydaydate'); if (pdd) pdd.onchange = () => { if (pdd.value) { S.payDay = pdd.value; renderReport(); } };
+  const pdd = body.querySelector('.paydaydate'); if (pdd) onDateSettled(pdd, () => { if (pdd.value) { S.payDay = pdd.value; renderReport(); } });
   body.querySelectorAll('.dayjump').forEach(b => b.onclick = () => { S.payDay = b.dataset.day; S.payDayView = true; renderReport(); });
   body.querySelectorAll('.dayedit').forEach(b => b.onclick = () => { S.adjEdit = {clock: 'pay', row: +b.dataset.row}; S.payDayView = false; renderReport(); });
   body.querySelectorAll('.dayvoid').forEach(b => b.onclick = () => { S.adjEdit = {clock: 'pay', row: +b.dataset.row, mode: 'void'}; S.payDayView = false; renderReport(); });
@@ -14382,7 +14393,8 @@ function renderReport() {
         again.focus(); again.setSelectionRange(again.value.length, again.value.length);
       }
     };
-    if (el.tagName === 'SELECT' || el.type === 'date') el.onchange = apply;
+    if (el.type === 'date') onDateSettled(el, apply);
+    else if (el.tagName === 'SELECT') el.onchange = apply;
     else el.oninput = () => { clearTimeout(el._t); el._t = setTimeout(apply, 350); };
   });
   body.querySelectorAll('.arf').forEach(el => {
@@ -15130,7 +15142,7 @@ function renderDash() {
   /* History filters. Changing "from" can ask for more than is loaded, so the
    * loader is told how far back and refetches when the window grows; the card
    * says it is fetching rather than looking empty (Walter 9/22). */
-  body.querySelectorAll('.myhf').forEach(el => el.onchange = async () => {
+  body.querySelectorAll('.myhf').forEach(el => onDateSettled(el, async () => {
     MYHIST[el.dataset.f] = el.value;
     const need = myHistNeedDays();
     if (need > MYCLOCK.days) {
@@ -15139,7 +15151,7 @@ function renderDash() {
       await loadMyClock(MYCLOCK.forName || clockName(), need);
     }
     renderDash();
-  });
+  }));
   const myhc = body.querySelector('.myhclear');
   if (myhc) myhc.onclick = () => { MYHIST.from = ''; MYHIST.to = ''; MYHIST.clock = ''; renderDash(); };
   const cfx2 = body.querySelector('.cfixlink2');
