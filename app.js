@@ -12704,6 +12704,25 @@ function adjKnownNames() {
   });
   return Object.values(best).sort((a, b) => a.localeCompare(b));
 }
+// the roster names reach the Time Clock even when the Team view was never
+// opened on this device (Melissa 10/28, 102826terry12: Joseph Larson, on the
+// roster but never clocked, wasn't in the name list) — one fetch, then the
+// datalist is refilled in place so nothing she has typed is lost
+let adjRosterAsked = false;
+function adjEnsureRoster() {
+  if (adjRosterAsked || (typeof TEAM !== 'undefined' && TEAM.roster)) return;
+  adjRosterAsked = true;
+  fetch(TEAM_ROSTER_API + '?key=' + encodeURIComponent('pianoman')).then(r => r.json()).then(ros => {
+    if (!ros || !ros.tabs) return;
+    TEAM.roster = ros.tabs;
+    try {
+      const c = JSON.parse(lsGet('blpTeam1') || 'null') || {};
+      lsSet('blpTeam1', JSON.stringify({...c, roster: ros.tabs, at: c.at || Date.now()}));
+    } catch (e) {}
+    const dl = document.getElementById('adjtechs');
+    if (dl) dl.innerHTML = adjKnownNames().map(w => `<option value="${esc(w)}">`).join('');
+  }).catch(() => {});
+}
 function adjCanonName(typed) {
   const k = adjNameKey(typed);
   if (!k) return null;
@@ -13326,6 +13345,7 @@ function clockAdjustTable() {
         <span class="rfd">out <input type="datetime-local" class="a-end"></span>
         <button class="csvbtn adjaddbtn">Add</button><span class="adjmsg phmsg"></span></div>`;
   }
+  if (payAdd || tlAdd) adjEnsureRoster();
   const techList = (payAdd || tlAdd) ? `<datalist id="adjtechs">${adjKnownNames().map(w => `<option value="${esc(w)}">`).join('')}</datalist>` : '';
   // 📊 the payroll report's totals, groupings, category / piano hours and CSV
   // exports live here too now (Mark 10/20, merge step 2) — same person and
