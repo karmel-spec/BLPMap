@@ -7976,8 +7976,9 @@ function wirePop(p) {
   const cr = pop.querySelector('.creports');
   if (cr) cr.onclick = ev => {
     ev.stopPropagation();
-    window.open('https://blpshop.netlify.app/manager.html#client-' + encodeURIComponent(p.serial),
-      '_blank', 'noopener');
+    // Client Reports retired 10/28: client emails are event-triggered drafts in info@ Drafts;
+    // the portal's Outbox lists every owner update made for this (and every) piano
+    window.open('https://blpclientportal.netlify.app/admin/outbox', '_blank', 'noopener');
   };
   const rqb = pop.querySelector('.reqbtn');
   if (rqb) rqb.onclick = ev => {
