@@ -378,6 +378,36 @@ function writeCache() {
   } catch (e) { /* quota / private mode — caching is best-effort */ }
 }
 
+/* pianos didn't load and this device has no saved copy (Sadie 10/28,
+ * 102826erickson05: the shop laptops showed an empty map, the phone a saved
+ * one) — say so on the map with the reason, and retry every 15 s instead of
+ * waiting for the 2½-minute refresh */
+function dataRetry(why) {
+  let b = document.getElementById('dataerr');
+  if (!b) {
+    b = document.createElement('div');
+    b.id = 'dataerr';
+    b.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);top:84px;z-index:9998;max-width:92vw;'
+      + 'background:#9e2020;color:#fff;padding:10px 16px;border-radius:12px;font:600 13.5px Helvetica,Arial;'
+      + 'box-shadow:0 6px 24px rgba(0,0,0,.3);text-align:center';
+    document.body.appendChild(b);
+  }
+  b.innerHTML = `⚠ The pianos didn't load (${esc(why)}) — trying again in 15 s… <button type="button" style="margin-left:8px">Retry now</button>`;
+  let done = false;
+  const go = async () => {
+    if (done) return; done = true; clearTimeout(t);
+    b.textContent = '⏳ Loading the pianos…';
+    try {
+      const d = await fetchData('active');
+      if (!d || !d.pianos || !d.pianos.length) throw new Error(d && d.error ? d.error : 'no pianos in the reply');
+      S.data = d; index(); renderAll();
+      if (!d.stale) writeCache();
+      b.remove();
+    } catch (e) { dataRetry(String((e && e.message) || e)); }
+  };
+  const t = setTimeout(go, 15000);
+  b.querySelector('button').onclick = go;
+}
 async function boot() {
   const cached = readCache();
   if (cached) {                     // repeat visit: full map on screen instantly
@@ -387,7 +417,8 @@ async function boot() {
   }
   // kick both requests off together, and draw the floor plan the moment
   // the geometry lands — pianos pop in as soon as their data arrives
-  const dataP = fetchData('active').catch(() => null);
+  let dataErr = '';
+  const dataP = fetchData('active').catch(e => { dataErr = String((e && e.message) || e); return null; });
   try {
     const m = await fetchSlots();
     if (m && m.floors) S.map = m;
@@ -397,6 +428,7 @@ async function boot() {
   if (d && d.pianos) S.data = d;
   index(); renderAll();
   if (!S.data.stale && S.data.pianos.length) writeCache();
+  if (!(d && d.pianos && d.pianos.length) && !S.data.pianos.length) dataRetry(dataErr || 'no pianos in the reply');
   tryDeepLink();   // #piano=SERIAL from a scanned shop tag → open that card
   tryReportLink(); // #report=<id> from a shared link → open that report
   tryCardLink(); tryBoardLink();   // #card=<id> from a task-board notification text/email
