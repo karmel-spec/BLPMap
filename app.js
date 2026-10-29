@@ -12785,11 +12785,13 @@ function adjRow(clock, r, label, sub, dateCell) {
   // movers and Melissa — say which. Rows closed by the retired "last
   // activity" rule (before 9/24) keep their old chip so history still reads.
   const byEvidence = adjAutoClosed(r) && /last activity/i.test(r.note || '');
-  const autoAt = adjAutoClosed(r) && /stamped 8:00 PM/i.test(r.note || '') ? '8 PM' : '6 PM';
+  // the chip names the time the sweep stamped: 6 PM, 8 PM (Melissa), 10 PM (movers), or a personal cut-off
+  const stampM = adjAutoClosed(r) && /stamped (\d{1,2}):(\d{2}) ([AP]M)/i.exec(r.note || '');
+  const autoAt = stampM ? stampM[1] + (stampM[2] === '00' ? '' : ':' + stampM[2]) + ' ' + stampM[3].toUpperCase() : '6 PM';
   const auto = !adjAutoClosed(r) ? ''
     : byEvidence
       ? ` <span class="autochip" title="${esc(String(r.note || ''))}">⏰ auto · last activity</span>`
-      : ` <span class="autochip" title="nobody clocked out, so the app stamped ${autoAt === '8 PM' ? '8:00 PM (late crew — movers are no longer auto-closed)' : '6:00 PM'} — ask them for the real finish time and adjust">⏰ auto ${autoAt}</span>`;
+      : ` <span class="autochip" title="nobody clocked out, so the app stamped ${autoAt === '10 PM' ? '10:00 PM (movers)' : autoAt === '8 PM' ? '8:00 PM (late crew)' : autoAt} — ask them for the real finish time and adjust">⏰ auto ${autoAt}</span>`;
   const voided = String(r.voided || '');
   if (voided) {
     return `<tr class="adjvoided">${dt}<td>${label}</td><td>${sub}</td>
@@ -13298,7 +13300,7 @@ function clockAdjustTable() {
     const rows = S.payAutoOnly ? allPay.filter(adjAutoClosed) : allPay;
     const autoEv = allPay.filter(r => adjAutoClosed(r) && /last activity/i.test(r.note || '')).length;
     const autoBand = autoN
-      ? `<div class="autoband">⏰ <b>${autoN}</b> punch${autoN === 1 ? '' : 'es'} in the last 14 days ${autoN === 1 ? 'was' : 'were'} closed automatically because nobody clocked out — stamped <b>6:00 PM</b> (<b>8:00 PM</b> for movers and Melissa). The stamp is a placeholder, not a finish time: ask the person what time they actually left and adjust.${
+      ? `<div class="autoband">⏰ <b>${autoN}</b> punch${autoN === 1 ? '' : 'es'} in the last 14 days ${autoN === 1 ? 'was' : 'were'} closed automatically because nobody clocked out — stamped <b>6:00 PM</b> (<b>8:00 PM</b> for Melissa, <b>10:00 PM</b> for movers). The stamp is a placeholder, not a finish time: ask the person what time they actually left and adjust.${
           autoEv ? ` <b>${autoEv}</b> older row${autoEv === 1 ? '' : 's'} ${autoEv === 1 ? 'was' : 'were'} ended at “last activity” under the previous rule.` : ''}
           <button class="cfxclear payautotog">${S.payAutoOnly ? 'show all punches' : 'show only these ' + autoN}</button></div>`
       : '';

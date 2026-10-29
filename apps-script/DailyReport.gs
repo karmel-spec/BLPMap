@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-28.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-29.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -4704,8 +4704,8 @@ function clockOutLocked_(req) {
   return {ok: true, closed: out};
 }
 /* Forgotten PIANO sessions: anything still open from a PREVIOUS day is
- * closed at the same flat time as the day clock (6 PM; 8 PM for movers and
- * Melissa — Walter 9/24), +1 h if it began after that, capped at 10 hours.
+ * closed at the same flat time as the day clock (6 PM; 8 PM for Melissa;
+ * 10 PM for movers — Mark 10/29), +1 h if it began after that, capped at 10 hours.
  * The "last activity" lookup that used to stretch these is retired for the
  * same reason as on the day clock: it was not reviewable. Runs
  * opportunistically, at most every 10 min. */
@@ -4735,7 +4735,6 @@ function sweepForgottenClocks_() {
   var crew = lateCrew_(), movers = moverFirsts_();
   if (!MOVERS_KNOWN) { cache.remove('clocksweep'); return 0; }   // roster unreadable — never guess who is a mover
   todo.forEach(function (t) {
-    if (movers[finishKey_(t.v[0]).split(' ')[0]]) return;   // movers: no auto clock-out (see sweepForgottenPay_)
     var start = t.start;
     var flat = flatStamp_(start, flatFinishFor_(t.v[0], crew, start));
     var end = flat > start ? flat : new Date(start.getTime() + 3600000);
@@ -4866,8 +4865,13 @@ function closePayRow_(sh, open, endAt, note) {
           end: end.toISOString(), minutes: mins};
 }
 /* Forgotten DAY clocks close at a FLAT time (Walter 9/24): 6:00 PM for the
- * shop and admin side, 8:00 PM for the late crew — movers (roster Position
- * says "Mover") plus Melissa. Nothing else moves the stamp.
+ * shop and admin side, 8:00 PM for Melissa, and 10:00 PM for movers (roster
+ * Position says "Mover"; App Settings mover_finish — Mark 10/29). Movers had
+ * no auto clock-out from 10/1: five forgotten punches in four weeks stayed
+ * open one to three days through the morning texts, and one ran 45 hours
+ * before anyone caught it. Their latest real finish was 9:38 PM, so 10 PM
+ * closes the night's punch without cutting a move short. Nothing else moves
+ * the stamp.
  *
  * Two smarter rules were tried and retired the same week. Ending at the
  * person's "last activity" (9/16) made the auto-clock-out report hard to
@@ -4893,6 +4897,22 @@ function lateCrew_() {
 function flatFinishHour_(name, crew) {
   var first = finishKey_(name).split(' ')[0];
   return crew[first] ? 20 : 18;
+}
+/* Movers' flat clock-out (Mark 10/29): App Settings mover_finish, e.g.
+ * "10 PM" or "22:30" — default 10:00 PM. */
+function moverFinishLabel_() {
+  var f = moverFinish_();
+  return ((f.h % 12) || 12) + ':' + ('0' + f.m).slice(-2) + (f.h < 12 ? ' AM' : ' PM');
+}
+function moverFinish_() {
+  var tm = /(\d{1,2})(?::(\d{2}))?\s*([ap]\.?m\.?)?/i.exec(String(appSetting_('mover_finish', '') || ''));
+  if (!tm) return {h: 22, m: 0};
+  var h = Number(tm[1]), m = Number(tm[2] || 0);
+  if (tm[3]) { var pm = /p/i.test(tm[3]); if (pm && h < 12) h += 12; if (!pm && h === 12) h = 0; }
+  return h <= 23 && m <= 59 ? {h: h, m: m} : {h: 22, m: 0};
+}
+function isMover_(name) {
+  return !!moverFirsts_()[finishKey_(name).split(' ')[0]];
 }
 /* Personal flat finish time (Mark 10/19, Lisa): an App Settings row
  * `flat_finish_<first name>` — e.g. "Mon-Fri 2:05 PM, Sat 6:05 PM" —
@@ -4926,6 +4946,7 @@ function flatFinishFor_(name, crew, when) {
       if (ok) return {h: h, m: m};
     }
   }
+  if (isMover_(name)) return moverFinish_();
   return {h: flatFinishHour_(name, crew), m: 0};
 }
 function flatStamp_(start, fm) {
@@ -4958,10 +4979,6 @@ function sweepForgottenPay_(sh) {
   var crew = lateCrew_(), movers = moverFirsts_();
   if (!MOVERS_KNOWN) return;   // roster unreadable — close nothing rather than stamp a mover (10/7)
   todo.forEach(function (t) {
-    // movers get NO auto clock-out (Walter 10/1, 093026terry70): their jobs
-    // run past any flat time — the punch stays open and the 10 AM text
-    // (moverMorningNudge) asks them to clock out and send a fix
-    if (movers[finishKey_(t.v[0]).split(' ')[0]]) return;
     var start = t.start;
     var fm = flatFinishFor_(t.v[0], crew, start);
     var flat = flatStamp_(start, fm);
@@ -4970,7 +4987,7 @@ function sweepForgottenPay_(sh) {
     var when = Utilities.formatDate(end, 'America/Denver', 'h:mm a');
     var personal = !!appSetting_('flat_finish_' + finishKey_(t.v[0]).split(' ')[0], '');
     closePayRow_(sh, {row: t.row, v: t.v}, end.toISOString(),
-      'auto: forgot to clock out — stamped ' + when + (personal ? ' (personal cut-off)' : fm.h === 20 ? ' (late crew)' : '')
+      'auto: forgot to clock out — stamped ' + when + (personal ? ' (personal cut-off)' : isMover_(t.v[0]) ? ' (movers)' : fm.h === 20 ? ' (late crew)' : '')
       + ' — nobody clocked out; check the real finish time before payroll');
   });
 }
@@ -10103,8 +10120,8 @@ function lateClockNudge(e) {
   names.forEach(function (n) {
     var msg = moverPass && moverOnly[firstOf(n)]
       ? '\u23f0 BLP Store Map: it\u2019s after 8pm and you\u2019re still clocked in \u2014 ' + group[n].join(' + ')
-        + '. Still out on a job? Ignore this. Finished? Open the Store Map and clock out. '
-        + 'Movers are never clocked out automatically \u2014 if it\u2019s still open in the morning you\u2019ll get a text at 10 to clock out and send a fix.'
+        + '. Still out on a job? Ignore this. Finished? Open the Store Map and clock out \u2014 otherwise your day gets '
+        + 'recorded as ending at ' + moverFinishLabel_() + '. Wrong time already saved? Send a fix: ' + APP_URL + '/#fixclock'
       : moverPass
       ? '\u23f0 BLP Store Map: it\u2019s after 8pm and you\u2019re still clocked in \u2014 ' + group[n].join(' + ')
         + '. Still out on a job? Ignore this. Finished? Open the Store Map and clock out \u2014 otherwise your day gets '
@@ -10139,8 +10156,9 @@ function lateClockNudge(e) {
   return {ok: true, texted: names, moverPass: moverPass, eightPmBooked: booked};
 }
 
-/* Movers' morning text (Walter 10/1, 093026terry70): movers are never
- * clocked out automatically — a mover still clocked in from a previous day
+/* Movers' morning text (Walter 10/1, 093026terry70): since 10/29 movers are
+ * auto-closed at 10 PM like everyone else at their flat time, so this is a
+ * backstop only — a mover still clocked in from a previous day
  * (day clock or piano clock) gets ONE text at 10 AM: clock out, clock in for
  * today, and send a time-clock fix with the real finish time. Mon–Sat; the
  * Monday pass covers Saturday night. Installed trigger: moverMorningNudge
