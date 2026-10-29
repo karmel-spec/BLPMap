@@ -380,6 +380,41 @@ function writeCache() {
   } catch (e) { /* quota / private mode — caching is best-effort */ }
 }
 
+/* reload lands where you were (Sadie 10/28, 102826erickson04): a refresh or
+ * "App update ready" used to open the map again, so the report or handbook
+ * page you were on had to be found again. The view (with its report, handbook
+ * doc, floor and scroll) is kept for THIS tab only and only for 15 minutes; a
+ * link with #… (a shared report, a card) still wins. */
+const VIEW_KEY = 'blpViewState';
+function saveViewState() {
+  try {
+    const el = $('#view-' + S.view);
+    sessionStorage.setItem(VIEW_KEY, JSON.stringify({at: Date.now(), v: S.view, report: S.openReport || '',
+      doc: S.view === 'trainingdoc' ? S.trainDoc || null : null, floor: S.floor || 0,
+      top: el ? el.scrollTop : 0}));
+  } catch (e) {}
+}
+addEventListener('pagehide', saveViewState);
+function restoreViewState() {
+  let st = null;
+  try { st = JSON.parse(sessionStorage.getItem(VIEW_KEY) || 'null'); sessionStorage.removeItem(VIEW_KEY); } catch (e) {}
+  if (!st || Date.now() - st.at > 15 * 60000 || /[#&](report|piano|card|board|fixclock|qc)=?/.test(location.hash || '')) return;
+  if (st.floor && st.floor !== S.floor && S.map && st.floor < S.map.floors.length) { S.floor = st.floor; renderTabs(); renderMap(); }
+  if (st.v === 'report' && st.report && REPORT_DEFS().some(r => r.id === st.report)) {
+    S.openReport = st.report; preloadReport(st.report); switchView('report'); renderReport();
+  } else if (st.v === 'trainingdoc' && st.doc && st.doc.doc) {
+    openTrainingDoc(st.doc).then(() => { if (st.top > 0) setTimeout(() => backToSpot(st), 50); });
+    return;
+  } else if (st.v && st.v !== 'map' && document.getElementById('view-' + st.v)) {
+    switchView(st.v);
+  } else return;
+  // back to the same spot on the page once its content has drawn
+  if (st.top > 0) [600, 1800, 4000].forEach(ms => setTimeout(() => backToSpot(st), ms));
+}
+function backToSpot(st) {
+  const el = $('#view-' + S.view);
+  if (el && S.view === st.v && el.scrollTop < 10) el.scrollTop = st.top;
+}
 /* pianos didn't load and this device has no saved copy (Sadie 10/28,
  * 102826erickson05: the shop laptops showed an empty map, the phone a saved
  * one) — say so on the map with the reason, and retry every 15 s instead of
@@ -416,6 +451,7 @@ async function boot() {
     S.map = cached.map;
     S.data = {...cached.data, stale: true};
     index(); renderAll();
+    restoreViewState();   // the saved map is enough to reopen the page you were on
   }
   // kick both requests off together, and draw the floor plan the moment
   // the geometry lands — pianos pop in as soon as their data arrives
@@ -426,6 +462,9 @@ async function boot() {
     if (m && m.floors) S.map = m;
   } catch (e) { if (!cached) throw e; }   // cached geometry keeps us alive
   if (!cached) { S.data = EMPTY; index(); renderAll(); }
+  // a reload / app update reopens the page you were on — right away, not after
+  // the pianos load; an open report redraws itself when they land
+  if (!cached) restoreViewState();
   const d = await dataP;
   if (d && d.pianos) S.data = d;
   index(); renderAll();
@@ -4254,6 +4293,7 @@ setTimeout(() => {
    * tap-to-update banner whenever it's behind — checked on load, every
    * 15 min, and each time the app comes back to the foreground. */
   const hardRefreshNow = async () => {
+    saveViewState();
     try {
       if ('caches' in window) {
         const ks = await caches.keys();
@@ -4293,6 +4333,7 @@ setTimeout(() => {
   const hrb = document.getElementById('hardRefreshBtn');
   if (hrb) hrb.onclick = async () => {
     hrb.textContent = '⏳';
+    saveViewState();
     try {
       if (window.caches) {
         const ks = await caches.keys();
@@ -15431,6 +15472,7 @@ async function fetchTrainingDoc(id, lang) {
   return (trainDocCache[key] = await r.json());
 }
 async function openTrainingDoc(t) {
+  S.trainDoc = {doc: t.doc, title: t.title || '', video: t.video || '', forceLang: t.forceLang || ''};
   const body = $('#trainingDocBody');
   switchView('trainingdoc');
   const close = $('#view-trainingdoc .viewclose');
