@@ -11412,9 +11412,30 @@ function place(pop, el) {
 function inShopwork(p) {
   return (p.section || '').trim().toUpperCase() === 'CUSTOM SHOPWORK';
 }
+/* only real gaps and errors (Mark 10/29): a blank phase with a queue number
+ * is "In Queue" — phase 0, next up, not a problem. What IS a problem:
+ *   · no TRACK — nobody has said what work the piano gets (the Behr 29952 was
+ *     refinish-only and unmarked; a full CAP on it would have been a disaster)
+ *   · no phase and not in the queue — it has fallen out of the line
+ *   · a phase that isn't a step on its track (e.g. an upright Refurbish still
+ *     on the retired single "Refurb Checklist" step)
+ * Tracks without a step list on the Sequence sheet (Refinish, Player Rebuild…)
+ * are valid — they just can't be checked for the last one. */
+const PHASE_RENAMED = {'PRSBa - Pre-Plate': 'PRSB - Downbearing', 'PRSBb - Plate In': 'PRSB - Notching and Pins'};
+function stageProblems(p) {
+  const out = [];
+  if (!String(p.track || '').trim()) out.push('No track — what work does it get?');
+  if (!p.phase && !p.queuePos) out.push('No phase and not in the queue');
+  const seq = p.phase && String(p.track || '').trim() ? pianoPhases(p) : null;
+  const ph = PHASE_RENAMED[p.phase] || p.phase;
+  if (seq && !PHASE_STATES.includes(ph) && ph !== 'New Arrival - Admin' && !seq.includes(ph)) {
+    out.push(`Phase “${p.phase}” isn’t a step on its ${p.track} track`);
+  }
+  return out;
+}
 function missingStage() {
   return S.data.pianos.filter(p => p.active && !comingSoon(p) && !p.isNew
-    && inShopwork(p) && (!p.phase || !p.track));
+    && inShopwork(p) && stageProblems(p).length);
 }
 function pianoName(p) {
   return (p.year ? p.year + ' ' : '')
@@ -11438,13 +11459,14 @@ function dupTable() {
 }
 function missingStageTable() {
   const ms = missingStage();
-  const missing = p => [!p.phase && 'Phase', !p.track && 'Track'].filter(Boolean).join(' & ');
-  return `<table><tr><th>PIANO</th><th>SERIAL</th><th>LOCATION</th><th>MISSING</th><th></th></tr>` +
+  const phaseTxt = p => p.phase || (p.queuePos ? `In Queue (#${p.queuePos})` : '—');
+  return `<table><tr><th>PIANO</th><th>SERIAL</th><th>LOCATION</th><th>TRACK · PHASE</th><th>PROBLEM</th><th></th></tr>` +
     (ms.map(p => `<tr class="mrow" data-row="${p.row}"><td>${esc(pianoName(p))}</td>
       <td>${esc(p.serial)}</td><td class="locraw">${esc(p.location || '(blank)')}</td>
-      <td>${esc(missing(p))}</td>
+      <td>${esc(p.track || '—')} · ${esc(phaseTxt(p))}</td>
+      <td>${stageProblems(p).map(esc).join('<br>')}</td>
       <td><a target="_blank" rel="noopener" href="${logLink(p)}">log ↗</a></td></tr>`).join('')
-     || '<tr><td colspan="5" class="empty">None — every Custom Shopwork piano has a phase and track. 🎉</td></tr>') + '</table>';
+     || '<tr><td colspan="6" class="empty">None — every Custom Shopwork piano has a track and a phase that fits it. 🎉</td></tr>') + '</table>';
 }
 // one bare table of pianos (no "still needed" column — the section
 // heading already says which category this is)
@@ -13980,7 +14002,7 @@ const REPORT_DEFS = () => [
    desc: 'Two or more active pianos claim the same map spot — one of them is wrong.',
    html: dupTable},
   {id: 'stage', sec: 'shop', icon: '🔧', title: 'MISSING SHOP STAGE', count: missingStage().length,
-   desc: 'Pianos in the Custom Shopwork section missing a CURRENT PHASE or TRACK — storage, rentals, financing, and other non-shopwork sections are exempt. Click a row to jump to the piano.',
+   desc: 'Custom Shopwork pianos with a real gap: no TRACK (nobody has said what work it gets), no phase while not in the queue, or a phase that isn’t a step on its track. In Queue is phase 0 and is fine. Storage, rentals, financing and other non-shopwork sections are exempt. Click a row to jump to the piano.',
    html: missingStageTable},
   {id: 'media', sec: 'admin', icon: '📸', title: 'MEDIA NEEDED', count: S.data.pianos.filter(p =>
      p.active && !notYetArrived(p) && (mediaNeeds(p).photo || mediaNeeds(p).video)).length,
