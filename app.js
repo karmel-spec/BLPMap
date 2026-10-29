@@ -11961,6 +11961,27 @@ function adjOpenPunchFor(name) {
   const k = adjNameKey(name);
   return unvoided(S.payRows).find(r => !r.end && adjNameKey(techName(r.tech)) === k) || null;
 }
+/* A session that overlaps one already on the clock (Mark 10/29): Josh's own
+ * 3:49–7:31 PM day punch on 10/27 got a second, hand-added 4:00–7:35 PM beside
+ * it and the evening counted twice. Only an exact copy was caught before; now
+ * any overlap for the same person is shown to whoever is adding, who can still
+ * add it on purpose. Day clock: the person's day punches. Piano clock: their
+ * piano sessions on any piano — nobody works two pianos at once. An open punch
+ * runs until now. */
+function adjOverlapsFor(clock, name, startIso, endIso) {
+  const k = adjNameKey(name), now = Date.now();
+  const s = new Date(startIso).getTime(), e = endIso ? new Date(endIso).getTime() : now;
+  return unvoided(clock === 'pay' ? S.payRows : S.tlRows).filter(r => {
+    if (!r.start || adjNameKey(techName(r.tech)) !== k) return false;
+    const rs = new Date(r.start).getTime(), re = r.end ? new Date(r.end).getTime() : now;
+    return rs < e && s < re;
+  });
+}
+function adjOverlapText(clock, name, rows) {
+  const one = r => `${new Date(r.start).toLocaleDateString('en-US', {month: 'numeric', day: 'numeric', timeZone: 'America/Denver'})} ${fmtT(r.start)}–${r.end ? fmtT(r.end) : 'still open'}`
+    + (clock === 'piano' ? ` on ${r.piano || ('#' + (r.serial || '?'))}` : '');
+  return `⚠ Possible duplicate — ${name} already has ${rows.slice(0, 3).map(one).join(', ')}${rows.length > 3 ? ` and ${rows.length - 3} more` : ''}, which overlaps this one. Edit or void that session instead, or press Add anyway if both are real.`;
+}
 // remember a just-saved plate status across data polls (see applyPending)
 function notePlateEdit(p, val) {
   if (!p || !p.row) return;
@@ -14469,6 +14490,12 @@ function renderReport() {
     adjResolveFrom(fromFix, null);
     refreshClocksQuiet();
   });
+  // changing a time or name after a duplicate warning starts the check over
+  body.querySelectorAll('.adjaddbar').forEach(bar => bar.addEventListener('input', () => {
+    if (!bar.dataset.overlapok) return;
+    delete bar.dataset.overlapok;
+    const b = bar.querySelector('.adjaddbtn'); if (b && b.textContent === 'Add anyway') b.textContent = 'Add';
+  }));
   body.querySelectorAll('.adjaddbar .adjaddbtn').forEach(b => b.onclick = async () => {
     const bar = b.closest('.adjaddbar'), clock = bar.dataset.clock;
     const val = c => { const el = bar.querySelector(c); return el ? el.value.trim() : ''; };
@@ -14502,6 +14529,26 @@ function renderReport() {
         return;
       }
     }
+    // overlaps a session already on the clock → say so; a second press adds it
+    const overlapKey = [clock, tech, start, end].join('|');
+    const overlapOk = bar.dataset.overlapok === overlapKey;
+    if (!overlapOk) {
+      const startIso = new Date(start).toISOString(), endIso = end ? new Date(end).toISOString() : '';
+      const hits = adjOverlapsFor(clock, tech, startIso, endIso);
+      if (hits.some(r => r.start === startIso && (r.end || '') === endIso
+          && (clock === 'pay' || String(r.serial || '').trim() === val('.a-serial')))) {
+        msg.className = 'adjmsg phmsg adjerr';
+        msg.textContent = `${tech} already has this exact session on the clock — nothing to add.`;
+        return;
+      }
+      if (hits.length) {
+        msg.className = 'adjmsg phmsg adjerr';
+        msg.textContent = adjOverlapText(clock, tech, hits);
+        bar.dataset.overlapok = overlapKey;
+        b.textContent = 'Add anyway';
+        return;
+      }
+    }
     if (adjExpired()) {
       adjStashAndRenew({add: {clock, tech, serial: val('.a-serial'), phase: val('.a-phase'), start, end, fromFix: bar.dataset.fromfix || null}});
       return;
@@ -14513,12 +14560,21 @@ function renderReport() {
     // after a slow bridge is recognised rather than filed as a second punch
     // (Karmel's missed day punch landed 3× on 9/9 — Walter 9/22)
     const reqId = 'add-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
-    const j = await adjustPost({action: 'adjustclock', clock, add: true, tech, reqId,
+    const j = await adjustPost({action: 'adjustclock', clock, add: true, tech, reqId, overlapOk,
       serial: val('.a-serial'), phase: val('.a-phase'),
       start: new Date(start).toISOString(), end: end ? new Date(end).toISOString() : ''});
     clearTimeout(slow);
+    // the bridge looks further back than the app's loaded rows — same warning
+    if (j && j.overlap) {
+      msg.className = 'adjmsg phmsg adjerr';
+      msg.textContent = adjOverlapText(clock, tech, j.overlaps || []);
+      bar.dataset.overlapok = overlapKey;
+      b.textContent = 'Add anyway'; b.disabled = false;
+      return;
+    }
     const added = `${tech}: ${fmtT(new Date(start).toISOString())} → ${end ? fmtT(new Date(end).toISOString()) : 'open'}`;
     if (!adjFeedback(msg, j, j && j.duplicate ? `already there — ${added} (not added twice)` : `added — ${added}`)) { b.disabled = false; return; }
+    delete bar.dataset.overlapok;
     b.textContent = '✓ added';
     bar.querySelectorAll('input').forEach(i => i.value = '');
     const fromFix = bar.dataset.fromfix; delete bar.dataset.fromfix;

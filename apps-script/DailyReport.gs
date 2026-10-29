@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-29.4';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-29.5';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -5488,6 +5488,33 @@ function dupPunchRow_(sh, width, ix, tech, startIso, endIso, serial) {
   } catch (e) { /* dedupe is best-effort — never block a real punch */ }
   return 0;
 }
+/* Sessions of this person that overlap [start, end) — an open one runs until
+ * now (Mark 10/29: Josh's 10/27 evening was on the day clock twice, his own
+ * 3:49–7:31 PM and a hand-added 4:00–7:35 PM). The add is held back with the
+ * list unless the person adding says both are real (overlapOk). */
+function overlapPunchRows_(sh, width, ix, tech, start, end) {
+  var out = [];
+  try {
+    var last = sh.getLastRow();
+    if (last < 2) return out;
+    var from = Math.max(2, last - 600);
+    var vals = sh.getRange(from, 1, last - from + 1, width).getValues();
+    var now = Date.now(), s = start.getTime(), e = end ? end.getTime() : now;
+    var want = finishKey_(tech);
+    for (var i = vals.length - 1; i >= 0 && out.length < 5; i--) {
+      if (vals[i][ix.void] || finishKey_(vals[i][ix.tech]) !== want) continue;
+      var rs = new Date(vals[i][ix.start]).getTime();
+      if (isNaN(rs)) continue;
+      var re = vals[i][ix.end] ? new Date(vals[i][ix.end]).getTime() : now;
+      if (!(rs < e && s < re)) continue;
+      out.push({row: from + i, start: new Date(rs).toISOString(),
+                end: vals[i][ix.end] ? new Date(re).toISOString() : '',
+                serial: ix.serial != null ? String(vals[i][ix.serial] || '') : '',
+                piano: ix.piano != null ? String(vals[i][ix.piano] || '') : ''});
+    }
+  } catch (e) { /* best-effort — never block a real punch */ }
+  return out;
+}
 /* The app keeps one reqId across its own retries, so a retried POST is
  * recognised exactly rather than guessed at from the values. */
 function addPunchSeen_(reqId) {
@@ -5540,6 +5567,10 @@ function adjustClock_(req) {
             + Utilities.formatDate(new Date(openNow.v[2]), 'America/Denver', 'h:mm a')
             + ') — edit that punch instead of adding a second open one', openRow: openNow.row, openSince: String(openNow.v[2])};
         }
+        if (!req.overlapOk) {
+          var payHits = overlapPunchRows_(sh, 8, {tech: 0, start: 2, end: 3, void: 7}, req.tech, start, end);
+          if (payHits.length) return {error: 'overlaps a session already on the clock', overlap: true, overlaps: payHits};
+        }
         sh.appendRow([String(req.tech),
           Utilities.formatDate(start, 'America/Denver', 'yyyy-MM-dd'),
           start.toISOString(), end ? end.toISOString() : '', mins, 'adjust', 'added: ' + stamp.slice(9)]);
@@ -5564,6 +5595,10 @@ function adjustClock_(req) {
         addPunchRemember_(req.reqId, seenTl);
         return {ok: true, tech: String(req.tech), duplicate: true, row: seenTl,
                 piano: String(tsh.getRange(seenTl, 3).getValue() || req.serial)};
+      }
+      if (!req.overlapOk) {
+        var tlHits = overlapPunchRows_(tsh, 10, {tech: 0, serial: 1, piano: 2, start: 4, end: 5, void: 9}, req.tech, start, end);
+        if (tlHits.length) return {error: 'overlaps a session already on the clock', overlap: true, overlaps: tlHits};
       }
       // a pseudo-serial session (OUTSIDE / MGMT / TIDY …) has no Piano Log row:
       // the label comes from pianoName (an Outside project's job name) or the
