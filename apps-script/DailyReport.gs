@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-29.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-29.4';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -287,7 +287,8 @@ function doGet(e) {
     catch (err) { return json_({error: String(err), rows: []}); }
   }
   if (e && e.parameter && e.parameter.fn === 'requests') {
-    try { return json_(requestsList_()); }
+    // &app=CRM → only that app's requests (each app's 💡 admin panel, 10/29)
+    try { return json_(requestsList_(e.parameter.app)); }
     catch (err) { return json_({error: String(err), requests: []}); }
   }
   if (e && e.parameter && e.parameter.fn === 'history') {
@@ -1310,7 +1311,7 @@ function doPost(e) {
           var sgFirst = (sgTxt.match(/^.{20,200}?[.!?](?=\s|$)/) || [])[0];
           var sgSum = sgFirst || (sgTxt.length > 150 ? sgTxt.slice(0, 150).replace(/\s+\S*$/, '') + '…' : sgTxt);
           var sgIcon = {bug: '🐛', edit: '✏️', idea: '💡'}[String(req.type || '')] || '💡';
-          notifyTeam_(['Karmel'], sgIcon + ' Store Map ' + String(req.type || 'idea') + ' from ' + sgWho + ': ' + sgSum
+          notifyTeam_(['Karmel'], sgIcon + ' ' + (sg.app || 'Store Map') + ' ' + String(req.type || 'idea') + ' from ' + sgWho + ': ' + sgSum
             + (sg.screenshot ? ' 📎' : '') + ' (' + sg.id + ')');
         } catch (eK) { /* text best-effort */ }
       }
@@ -1321,6 +1322,8 @@ function doPost(e) {
     }
     if (req.action === 'soldsweep') return json_(soldSweep_(req));
     if (req.action === 'touchupsfirst') return json_(touchupsFirst_(!!req.dryrun));
+    // fills the Requests tab's App column (K) from each row's Context — idempotent
+    if (req.action === 'requestsbackfill') return json_(backfillRequestApps_());
     if (req.action === 'requeststatus') {
       var rs = setRequestStatus_(req);
       if (rs.ok) logAct_(who, 'App request ' + rs.status, rs.id, rs.text);
@@ -5844,16 +5847,59 @@ function preQueueApprove_(req) {
 }
 
 var REQUESTS_TAB = 'Requests';
+/* Which app a request is about (Karmel 10/29): col K "App", appended after
+ * Status At so every reader of A:J keeps working. Each app's 💡 (lightbulb.js
+ * on the Store Map site, data-app="CRM") files with its own name and its
+ * admin panel lists ?fn=requests&app=<name>. Rows from before col K existed
+ * carried the app only as " · app: X" inside Context — appOfRequest_ falls
+ * back to that, then to Store Map (the only 💡 until 8/27). */
+var REQUEST_APPS = ['Admin Training', 'Agent App', 'BLP Website', 'Client Portal', 'CRM',
+  'Marketing', 'Movers', 'Piano Log', 'Piano Technology Library', 'Price Tag Maker',
+  'Sales App', 'Shop App', 'Store Map', 'Tuning Academy', 'US Sales Map', 'Other'];
+var REQUEST_APP_ALIASES = {'marketing app': 'Marketing', 'marketing engine': 'Marketing',
+  'piano log app': 'Piano Log', 'shop manager': 'Shop App', 'tuning training': 'Tuning Academy',
+  'agents': 'Agent App', 'agent console': 'Agent App', 'client portal app': 'Client Portal',
+  'blp crm': 'CRM', 'super-crm': 'CRM', 'storemap': 'Store Map', 'blp movers': 'Movers'};
+function canonApp_(name) {
+  var s = String(name || '').replace(/\s+/g, ' ').trim();
+  if (!s) return '';
+  var k = s.toLowerCase();
+  for (var i = 0; i < REQUEST_APPS.length; i++) if (REQUEST_APPS[i].toLowerCase() === k) return REQUEST_APPS[i];
+  return REQUEST_APP_ALIASES[k] || s.slice(0, 40);
+}
+function appOfRequest_(appCell, context) {
+  var a = canonApp_(appCell);
+  if (a) return a;
+  var m = String(context || '').match(/(?:^|·)\s*app:\s*([^·]+)/);
+  return (m && canonApp_(m[1])) || 'Store Map';
+}
 function requestsSheet_() {
   var ss = SpreadsheetApp.openById('11RoeVRETag5rZYX6_tEH-rf6x8JL0JeZU0P5AT0WI-I');
   var sh = ss.getSheetByName(REQUESTS_TAB);
   if (!sh) {
     sh = ss.insertSheet(REQUESTS_TAB, ss.getSheets().length);
-    sh.getRange(1, 1, 1, 10).setValues([['ID', 'Date', 'Who', 'Type', 'Request',
-      'Context', 'Screenshot', 'Status', 'Status By', 'Status At']]);
+    sh.getRange(1, 1, 1, 11).setValues([['ID', 'Date', 'Who', 'Type', 'Request',
+      'Context', 'Screenshot', 'Status', 'Status By', 'Status At', 'App']]);
     sh.setFrozenRows(1);
   }
   return sh;
+}
+// one-time (idempotent) col K header + backfill for rows filed before it existed
+function backfillRequestApps_() {
+  var sh = requestsSheet_();
+  if (String(sh.getRange(1, 11).getValue()) !== 'App') sh.getRange(1, 11).setValue('App');
+  var last = sh.getLastRow();
+  if (last < 2) return {ok: true, filled: 0};
+  var vals = sh.getRange(2, 1, last - 1, 11).getValues();
+  var out = [], filled = 0, counts = {};
+  for (var i = 0; i < vals.length; i++) {
+    var a = vals[i][0] ? appOfRequest_(vals[i][10], vals[i][5]) : String(vals[i][10] || '');
+    if (a !== String(vals[i][10] || '')) filled++;
+    if (a) counts[a] = (counts[a] || 0) + 1;
+    out.push([a]);
+  }
+  if (filled) sh.getRange(2, 11, out.length, 1).setValues(out);
+  return {ok: true, filled: filled, rows: vals.length, apps: counts};
 }
 function addRequest_(req) {
   var sh = requestsSheet_();
@@ -5900,10 +5946,12 @@ function addRequest_(req) {
       if (f.id) { shareAnyoneWithLink_(f.id); shot = f.webViewLink || ('https://drive.google.com/file/d/' + f.id + '/view'); }
     } catch (e) { shot = ''; }
   }
+  var app = appOfRequest_(req.app, req.context);
+  if (String(sh.getRange(1, 11).getValue()) !== 'App') sh.getRange(1, 11).setValue('App');
   sh.appendRow([id, new Date().toISOString(), who, String(req.type || 'idea'),
     String(req.text || '').slice(0, 2000), String(req.context || '').slice(0, 300),
-    shot, 'Requested', '', '']);
-  return {ok: true, id: id, screenshot: shot};
+    shot, 'Requested', '', '', app]);
+  return {ok: true, id: id, screenshot: shot, app: app};
 }
 function setRequestStatus_(req) {
   // Duplicate (Brigham 9/11: lots of re-sent requests) + Declined (the Store Map offered it but this list rejected it)
@@ -5917,6 +5965,7 @@ function setRequestStatus_(req) {
       sh.getRange(i + 1, 8, 1, 3).setValues([[String(req.status),
         clockTech_(req) || '', new Date().toISOString()]]);
       var rWho = String(vals[i][2]), rText = String(vals[i][4]);
+      var rApp = appOfRequest_(vals[i][10], vals[i][5]);
       // Walter 9/9: flipping a request to Live from the Store Map now texts
       // the requester (the Shop Manager already did) — once, not on every
       // re-select of the same status. `quiet: true` skips the text (used when
@@ -5926,12 +5975,13 @@ function setRequestStatus_(req) {
         try {
           notifyTeam_([rWho], '✅ Your app request ' + String(req.id) + ' is live — "'
             + rText.slice(0, 110) + (rText.length > 110 ? '…' : '')
-            + '". Try it, then open the 💡 box in the Store Map and tap "It works" (or send a new request if it isn’t right yet).');
+            + '". Try it, then open the 💡 box in the ' + rApp
+            + ' and tap "It works" (or send a new request if it isn’t right yet).');
           texted = true;
         } catch (eT) { /* text best-effort */ }
       }
       return {ok: true, id: String(req.id), status: String(req.status),
-              who: rWho, text: rText.slice(0, 140), texted: texted};
+              who: rWho, text: rText.slice(0, 140), app: rApp, texted: texted};
     }
   }
   return {error: 'request not found'};
@@ -5972,21 +6022,27 @@ function teamPhones_() {
   return {ok: true, phones: out};
 }
 
-function requestsList_() {
+function requestsList_(app) {
   var sh = requestsSheet_();
   var last = sh.getLastRow();
+  var want = canonApp_(app);
+  // one app's panel scans further back: its own list is short, the window isn't
+  var span = want ? 3000 : 500;
   var out = [];
   if (last >= 2) {
-    var vals = sh.getRange(Math.max(2, last - 499), 1, Math.min(500, last - 1), 10).getValues();
+    var vals = sh.getRange(Math.max(2, last - span + 1), 1, Math.min(span, last - 1), 11).getValues();
     for (var i = vals.length - 1; i >= 0; i--) {
       var v = vals[i];
       if (!v[0]) continue;
+      var a = appOfRequest_(v[10], v[5]);
+      if (want && a !== want) continue;
       out.push({id: String(v[0]), date: String(v[1]), who: String(v[2]), type: String(v[3]),
                 text: String(v[4]), context: String(v[5]), screenshot: String(v[6]),
-                status: String(v[7]) || 'Requested', statusBy: String(v[8]), statusAt: String(v[9])});
+                status: String(v[7]) || 'Requested', statusBy: String(v[8]), statusAt: String(v[9]),
+                app: a});
     }
   }
-  return {ok: true, requests: out};
+  return {ok: true, app: want || '', apps: REQUEST_APPS, requests: out};
 }
 
 /* Paperwork — QC checklist scans live in one shared Drive folder, filed in
@@ -8571,7 +8627,8 @@ function shopManagerHtml_(R) {
       'Fixes and features that went LIVE this week. Managers: mention these at the morning '
       + 'meeting and thank the requester by name; Tested means the requester confirmed it works.');
     topUl(R.appLive.map(function (x) {
-      return (LICON[x.type] || '💡') + ' ' + String(x.text).slice(0, 130)
+      return (LICON[x.type] || '💡') + ' ' + (x.app && x.app !== 'Store Map' ? '<b>' + x.app + ':</b> ' : '')
+        + String(x.text).slice(0, 130)
         + ' <span style="color:#8a847b">(asked by <b>' + x.who + '</b>'
         + (x.context ? ', ' + x.context : '') + ')</span> '
         + pill(x.status, x.status === 'Tested' ? '#eaf5ec' : '#eaf2fd',

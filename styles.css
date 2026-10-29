@@ -1453,6 +1453,7 @@ button.cfxapply:hover{border-color:#9e2020;color:#9e2020}
 .cm-who{display:flex;gap:6px;flex-wrap:wrap;margin:-4px 0 8px}
 .karch.kback,.cm-del.cm-back{background:#2f7d4f;border-color:#2f7d4f;color:#fff}
 .c-hb{background:#fdf3e3;color:#8a5a12}
+.c-app{background:#e9eef6;color:#2c4d7a}
 .admreqhb{border-color:#e8d5b0;background:#fffdf8}
 .kmove{display:flex;gap:6px;margin-top:7px}
 .kmove button{border:1px solid #d8dce1;background:#fafbfc;border-radius:6px;padding:2px 10px;

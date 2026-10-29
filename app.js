@@ -4080,6 +4080,11 @@ $('#pop').addEventListener('mouseleave', scheduleHide);
  * apps, with an optional screenshot and auto-captured context. Requests
  * live on the report sheet; status flows Requested -> In progress -> Live
  * -> Tested, and the requester confirms "Tested" from their own list here. */
+// the bridge's canonical app list (REQUEST_APPS in DailyReport.gs) — each app's
+// own 💡 (lightbulb.js, data-app) files under one of these names (10/29)
+const REQUEST_APPS = ['Admin Training', 'Agent App', 'BLP Website', 'Client Portal', 'CRM',
+  'Marketing', 'Movers', 'Piano Log', 'Piano Technology Library', 'Price Tag Maker',
+  'Sales App', 'Shop App', 'Store Map', 'Tuning Academy', 'US Sales Map', 'Other'];
 function openSuggestBox() {
   const old = document.querySelector('.sgbox');
   if (old) { old.remove(); return; }
@@ -4105,7 +4110,7 @@ function openSuggestBox() {
       </div>
       <div class="sgselrow">
         <label class="sgsellbl">App <select class="sgsel sgapp" title="which BLP app is this about?">
-          ${['Admin Training', 'Agent App', 'BLP Website', 'CRM', 'Piano Log', 'Piano Technology Library', 'Price Tag Maker', 'Sales App', 'Shop App', 'Store Map', 'US Sales Map', 'Other']
+          ${REQUEST_APPS
             .map(a => `<option ${a === 'Store Map' ? 'selected' : ''}>${a}</option>`).join('')}</select></label>
         <label class="sgsellbl">Train an agent <select class="sgsel sgagent" title="optional — suggest training for one of the AI agents">
           <option value="">— none —</option>
@@ -17902,13 +17907,14 @@ function admRequestsHTML() {
   // Filters (Walter 9/9): "Open" is Requested + In progress only — a request
   // that went Live leaves the working list, but stays one filter or search
   // away (status, team member, type, free text) for later reference.
-  const f = ADMDASH.reqF || (ADMDASH.reqF = {st: 'open', who: '', type: '', q: ''});
+  const f = ADMDASH.reqF || (ADMDASH.reqF = {st: 'open', who: '', type: '', app: '', q: ''});
   // Resolved / Archived: legacy statuses from the Shop Manager era — closed too
   const isOpen = r => !['Live', 'Tested', 'Declined', 'Duplicate', 'Resolved', 'Archived'].includes(r.status);
   const stOk = r => f.st === 'open' ? isOpen(r) : f.st === 'all' ? true : r.status === f.st;
   const q = f.q.trim().toLowerCase();
   const match = r => stOk(r) && (!f.who || r.who === f.who) && (!f.type || (r.type || 'edit') === f.type)
-    && (!q || `${r.who} ${r.type || 'edit'} ${r.id} ${r.text} ${r.context || ''} ${r.status}`.toLowerCase().includes(q));
+    && (!f.app || (r.app || 'Store Map') === f.app)
+    && (!q || `${r.who} ${r.type || 'edit'} ${r.id} ${r.text} ${r.context || ''} ${r.status} ${r.app || ''}`.toLowerCase().includes(q));
   const hits = ADMDASH.req.filter(match);
   // 📖 handbook suggestions (Karmel 9/8) sit in their own section — Brigham
   // reviews/approves them before the Restoration Handbook is edited
@@ -17916,7 +17922,8 @@ function admRequestsHTML() {
   const open = hits.filter(r => !isHb(r));
   const whos = [...new Set(ADMDASH.req.map(r => r.who).filter(Boolean))].sort((a, b) => a.localeCompare(b));
   const types = [...new Set(ADMDASH.req.map(r => r.type || 'edit'))].sort();
-  const filtered = f.st !== 'open' || f.who || f.type || q;
+  const apps = [...new Set(ADMDASH.req.map(r => r.app || 'Store Map'))].sort((a, b) => a.localeCompare(b));
+  const filtered = f.st !== 'open' || f.who || f.type || f.app || q;
   const STATES = [['open', 'Open (Requested + In progress)'], ['Live', 'Live — shipped'], ['Tested', 'Tested — confirmed by requester'], ['Declined', 'Declined'], ['Duplicate', 'Duplicate — same ask already filed']]
     .concat(['Resolved', 'Archived'].filter(s => ADMDASH.req.some(r => r.status === s)).map(s => [s, s + ' (legacy)']))
     .concat([['all', 'All requests']]);
@@ -17926,6 +17933,8 @@ function admRequestsHTML() {
         ${whos.map(w => `<option ${f.who === w ? 'selected' : ''}>${esc(w)}</option>`).join('')}</select>
       <select class="reqf" data-f="type"><option value="">All types</option>
         ${types.map(t => `<option ${f.type === t ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select>
+      <select class="reqf" data-f="app"><option value="">All apps</option>
+        ${apps.map(a => `<option ${f.app === a ? 'selected' : ''}>${esc(a)}</option>`).join('')}</select>
       <input type="text" class="reqf" data-f="q" placeholder="🔍 words, name, or request id…" value="${esc(f.q)}">
       <span class="lite" style="font-size:11.5px;white-space:nowrap">${hits.length} of ${ADMDASH.req.length}${filtered ? ' <button class="cfxclear reqfclear" type="button">clear filters</button>' : ''}</span>
     </div>`;
@@ -17933,6 +17942,7 @@ function admRequestsHTML() {
   const row = r => `<div class="admreq${isHb(r) ? ' admreqhb' : ''}">
       <div class="admreqtop"><b>${esc(r.who)}</b>
         <span class="chip ${r.type === 'bug' ? 'c-due' : r.type === 'idea' ? 'c-from' : isHb(r) ? 'c-hb' : 'c-piano'}">${esc(r.type || 'edit')}</span>
+        ${r.app && r.app !== 'Store Map' ? `<span class="chip c-app">${esc(r.app)}</span>` : ''}
         <small>${esc(String(r.date).slice(0, 10))} · ${esc(r.id)}</small>
         <select class="reqst" data-id="${esc(r.id)}">
           ${REQ_STATES.map(st => `<option ${r.status === st ? 'selected' : ''}>${st}</option>`).join('')}
@@ -18106,7 +18116,7 @@ function renderAdmDash() {
   // app's App Requests page (Brigham 9/3)
   el.querySelectorAll('.rqcopy').forEach(b => b.onclick = async () => {
     const x = (ADMDASH.req || []).find(r => r.id === b.dataset.id); if (!x) return;
-    const brief = `App request ${x.id} (${x.type || 'edit'}) from ${x.who}, ${String(x.date).slice(0, 10)}:\n"${x.text}"\nContext: ${x.context || '—'}${x.screenshot ? '\nScreenshot: ' + x.screenshot : ''}`;
+    const brief = `App request ${x.id} — ${x.app || 'Store Map'} (${x.type || 'edit'}) from ${x.who}, ${String(x.date).slice(0, 10)}:\n"${x.text}"\nContext: ${x.context || '—'}${x.screenshot ? '\nScreenshot: ' + x.screenshot : ''}`;
     try { await navigator.clipboard.writeText(brief); b.textContent = '✓ copied'; }
     catch (e) { b.textContent = '✗ copy blocked'; }
     setTimeout(() => { b.textContent = '📋 Copy for Claude'; }, 1500);
