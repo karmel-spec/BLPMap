@@ -12372,9 +12372,14 @@ function payTimeTable(scopeIn) {
   const cats = [...new Set(tlAll.map(r => r.phase || '(no phase)'))].sort();
   const tl = f.cat ? tlAll.filter(r => (r.phase || '(no phase)') === f.cat) : tlAll;
   const showTl = f.detail === 'all';
+  // the person + date pickers sit in this bar on BOTH pages: on 🛠 Time Clock
+  // they are the same filters as the punch tables (S.adjF), repeated here
+  // because those tables are usually collapsed — "Pay period: no date range
+  // set" and nowhere to set it (Melissa 10/24, 102426terry05)
   const bar = filterBar(scope, [
-    adj ? '' : fSel('pay', 'who', f.who, techs, 'All team members'),
-    adj ? '' : fDate('pay', 'from', f.from, 'from'), adj ? '' : fDate('pay', 'to', f.to, 'to'),
+    fSel(scope, 'who', f.who, techs, 'All team members'),
+    fDate(scope, 'from', f.from, 'from'), fDate(scope, 'to', f.to, 'to'),
+    adj && (f.who || f.from || f.to) ? '<button class="adjfclear" type="button">clear filters</button>' : '',
     `<select class="rptf" data-scope="${scope}" data-f="group">
        ${adj ? '' : `<option value="day" ${f.group === 'day' ? 'selected' : ''}>Daily punches</option>`}
        <option value="week" ${f.group === 'week' ? 'selected' : ''}>Weekly totals</option>
@@ -12411,7 +12416,7 @@ function payTimeTable(scopeIn) {
     main = `<div class="lite" style="font-size:12px;margin:-4px 0 8px">Pay period <b>${esc(rangeTxt)}</b> · one line per person · hours are decimal (8h 30m = 8.50)
         and only hours inside the pay period are counted. Overtime is anything over 40 in a Sunday–Saturday week; a week that started before
         the period is checked in full, so overtime it causes shows here even though its earlier hours were paid last period.
-        ${!f.from ? '<b>Set a from date</b> so the week before it is looked back at.' : ''}</div>
+        ${!f.from ? '<b>Set the pay period with the from / to dates above</b> — the week before the from date is then looked back at.' : ''}</div>
       <table><tr><th>TEAM MEMBER</th><th>REGULAR HOURS</th><th>OVERTIME HOURS</th><th>TOTAL HOURS</th><th>NOTES</th></tr>
       ${pw.totals.map(t => `<tr><td>${esc(t.who)}</td><td>${regDec(t)}</td>
         <td${t.ot ? ' style="color:#a33;font-weight:600"' : ''}>${hDec(t.ot)}</td><td>${hDec(t.inMins)}</td>
@@ -14372,7 +14377,7 @@ function renderReport() {
     refreshClocksQuiet();
   });
   body.querySelectorAll('.adjfclear').forEach(b => b.onclick = () => {
-    S.adjF = {who: '', from: '', to: ''};
+    S.adjF = {...(S.adjF || {}), who: '', from: '', to: ''};   // keep the totals grouping (e.g. regular/overtime)
     renderReport();
   });
   // 👤 name picker on the missed-punch forms (Melissa 10/22, 102226terry98): the
