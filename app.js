@@ -1608,8 +1608,11 @@ function pianoStatus(p) {
   if (isRented(p)) return 'rented';     // out on rental — orange
   if (p.serial) {
     // note: the calendar's "x " prefix is admin bookkeeping (reminder
-    // calls), NOT completion — so any mention today counts as in transit
-    const ev = S.data.events.find(e => eventNamesPiano((e.summary || '') + ' ' + (e.description || ''), p));
+    // calls), NOT completion — so any mention today counts as in transit.
+    // The feed also carries yesterday's moves (the move board shows them);
+    // a move that's already happened is not "scheduled" — the 10/28 in-store
+    // move kept its pianos purple the next day (Mark 10/29)
+    const ev = S.data.events.find(e => e.date >= today && eventNamesPiano((e.summary || '') + ' ' + (e.description || ''), p));
     if (ev) return ev.date === today ? 'move' : 'sched';
   }
   if (isPaidStorage(p)) return 'pdstorage';   // paid storage (PD STORAGE section) — brown (Melissa 10/8, 100826terry87)
