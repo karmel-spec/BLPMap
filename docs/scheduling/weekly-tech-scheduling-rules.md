@@ -85,6 +85,17 @@ below emergency). Match delivery names to owners in the Piano Log to find
 serials (e.g. "John & Gina Piet" → Cunningham 16124, "Kris Almgren" →
 Mathushek 8409).
 
+**Outside-shop trips are NOT deliveries (Mark 2026-10-29).** A moving-calendar
+trip that takes a piano TO an outside shop or specialist — Barrus Pianos,
+David Hyde, Curtis Harper (plating), a QRS or player installer — gets no
+pre-delivery tuning or QC, even when the piano is sold. Outside work (QRS and
+player installs above all) is checked AFTER the piano comes back: schedule its
+QC once the return is on the moving calendar, before the trip to the customer.
+A Piano Log note like "we are putting a QRS on" means the QRS is NOT on yet.
+(Chickering 80147, week of 10/26: "Barrus: Swap uprights" took it to Barrus to
+have its QRS installed; the draft read it as a delivery and booked a 30-minute
+"pre-delivery QC" the day before — Melissa, 102626terry10.)
+
 Brigham's rules so far (2026-07-27):
 - **Loosely follow the queue**: prioritize pianos highest in the Custom
   Shopwork queue, BUT if no suitable tech is available for that piano's next
