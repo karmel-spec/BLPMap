@@ -270,7 +270,9 @@ const AREA_BINS = [
 // Every destination a tech may type into "new spot #": real map slots plus
 // the named work areas. Anything else gets rejected before the bridge call.
 const MOVE_AREAS = ['Attic', 'Refinishing Shop', 'Sanding Shop', 'Conference Room',
-  'Larson Home', 'Recital Hall Wing Room 4'];
+  'Larson Home', 'Recital Hall Wing Room 4',
+  // outside shops — a piano sent out for service lands in the map's OUT FOR SERVICE box (Mark 10/29)
+  'David Hyde', 'Barrus Pianos'];
 function moveDests() {
   const out = [];
   for (const f of ((S.map && S.map.floors) || []))
@@ -1536,10 +1538,11 @@ function ghostBadge(p, cx, cy, sc) {
 function comingSoon(p) {
   return (p.location || '').trim().replace(/\s+/g, ' ').toLowerCase().startsWith('coming soon');
 }
-// out at an external tech's shop for service (David Hyde today; the name
-// match is easy to extend if other outside shops come up later)
+// out at an outside shop for service: David Hyde, or Barrus Pianos (Mark
+// 10/29). Both are Move-box choices; a typed "Barrus …" / "David Hyde 10/7"
+// in the Piano Log counts too
 function outForService(p) {
-  return /david hyde/i.test((p.location || '').trim());
+  return /david hyde|barrus/i.test((p.location || '').trim());
 }
 // does a moving-calendar event name this piano? A 5+ character serial
 // matches anywhere in the title or notes; a 4-character one only right after
