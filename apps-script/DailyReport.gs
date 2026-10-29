@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-29.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-29.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -1819,6 +1819,12 @@ function doPost(e) {
         pd.summary || req.serial, (req.stage || '(no phase)') + ' → ' + pd.name);
       return json_(pd);
     }
+    if (req.action === 'phototrash') {
+      var ptr = photoTrash_(req);
+      if (ptr.ok && !ptr.already) logAct_(who, 'Photo retaken', ptr.summary || req.serial,
+        (req.stage || '') + ' — old ' + ptr.name + ' moved to Drive trash');
+      return json_(ptr);
+    }
     if (req.action === 'photo') {
       var pt = savePhoto_(req, who);
       if (pt.saved) logAct_(who,
@@ -2027,6 +2033,41 @@ function photoDone_(req, who) {
   if (kind === 'social' && folder) notifySocial_('photo', serial, found, folder, who, note, file.getUrl());
   return {ok: true, saved: true, name: file.getName(), link: file.getUrl(), id: file.getId(),
           folder: folder ? folder.getName() : '', folderUrl: folder ? folder.getUrl() : '', summary: found.summary};
+}
+/* ↻ Shot-list retake (Melissa 9/25, 092526terry60): the review screen at the
+ * end of the 13-shot list lets the photographer retake one shot; the new
+ * photo uploads first, then the one it replaces comes here. Only a wizard
+ * shot of THIS piano (file named <serial>__Before-S04…/After-S04…) taken in
+ * the last 12 hours can be removed; it goes to Drive's trash (recoverable for
+ * 30 days, never deleted outright) and its PHOTO LOG row is cleared so the
+ * shot list and the Media columns don't count it. */
+function photoTrash_(req) {
+  var serial = String(req.serial || '').trim();
+  var id = String(req.fileId || '').trim();
+  if (!serial || !/^[-\w]{10,}$/.test(id)) return {error: 'serial and photo id required'};
+  var file;
+  try { file = DriveApp.getFileById(id); } catch (e) { return {error: 'photo not found in Drive'}; }
+  var name = file.getName();
+  if (name.indexOf(serial + '__') !== 0 || !/__(Before|After)-S\d{2}/.test(name)) {
+    return {error: 'only a shot-list photo of this piano can be replaced'};
+  }
+  if (Date.now() - file.getDateCreated().getTime() > 12 * 3600000) {
+    return {error: 'that photo is older than today\u2019s session — remove it in Drive instead'};
+  }
+  var summary = '';
+  var log = SpreadsheetApp.openById(PIANO_LOG_ID).getSheetByName(PHOTO_LOG_TAB);
+  if (log && log.getLastRow() >= 2) {
+    var from = Math.max(2, log.getLastRow() - 400);
+    var vals = log.getRange(from, 1, log.getLastRow() - from + 1, 7).getValues();
+    for (var i = vals.length - 1; i >= 0; i--) {
+      if (String(vals[i][6] || '').indexOf(id) < 0) continue;
+      summary = summary || String(vals[i][2] || '');
+      log.deleteRow(from + i);
+    }
+  }
+  if (file.isTrashed()) return {ok: true, already: true, name: name, summary: summary};
+  file.setTrashed(true);
+  return {ok: true, trashed: true, name: name, summary: summary};
 }
 function savePhoto_(req, who) {
   if (!req.data) return {error: 'no image data'};

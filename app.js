@@ -2276,7 +2276,10 @@ function openShotWizard(p, kind) {
   document.querySelectorAll('.shotwiz').forEach(el => el.remove());
   const list = SHOT_LISTS[p.type === 'grand' ? 'grand' : 'upright'];
   const listName = p.type === 'grand' ? 'GRAND' : 'UPRIGHT';
-  const W = {kind, idx: 0, done: {}, beforeIds: {}, beforeFolder: [], busy: false, stream: null, noCam: false};
+  // taken: shots filed in THIS run — {id, thumb, logging} — so the review
+  // screen can show them and a retake can replace one (Melissa 9/25, 092526terry60)
+  const W = {kind, idx: 0, done: {}, beforeIds: {}, beforeFolder: [], busy: false, stream: null, noCam: false,
+             taken: {}, review: false};
   const ov = document.createElement('div');
   ov.className = 'tagview shotwiz';
   document.body.appendChild(ov);
@@ -2323,7 +2326,7 @@ function openShotWizard(p, kind) {
         ${live ? `<video class="swvideo" autoplay playsinline muted></video>
                   <img class="swghost" alt="" src="${refUrl}">`
                : `<img class="swsampleimg" alt="" src="${refUrl}">`}
-        ${isDone ? '<span class="swdonelbl">✓ already taken — shooting again adds another photo</span>' : ''}
+        ${isDone ? `<span class="swdonelbl">${W.taken[W.idx] ? '↻ retaking — the new photo replaces the one you took' : '✓ already taken — shooting again adds another photo'}</span>` : ''}
       </div>
       <div class="swrefrow">
         <img class="swref" alt="" src="${refUrl}">
@@ -2343,11 +2346,11 @@ function openShotWizard(p, kind) {
       </div>
       <input type="file" class="swcam" accept="image/*" hidden>
       <input type="file" class="swfile" accept="image/*" hidden>
-      <div class="swnav">
+      ${W.review ? `<div class="swnav"><span></span><button class="swtoreview">‹ back to review</button><span></span></div>` : `<div class="swnav">
         <button class="swprev" ${W.idx === 0 ? 'disabled' : ''}>‹ back</button>
         <span class="swcount">${doneCount()}/${list.length} done</span>
         <button class="swnext">${W.idx === list.length - 1 ? 'finish' : 'skip ›'}</button>
-      </div>
+      </div>`}
       <div class="swdots">${list.map((x, i) =>
         `<i data-i="${i}" class="${W.done[i] ? 'ok' : ''} ${i === W.idx ? 'on' : ''}" title="${esc(x.t)}"></i>`).join('')}</div>
     </div>`;
@@ -2356,25 +2359,79 @@ function openShotWizard(p, kind) {
   };
 
   const advance = () => {
+    if (W.review) { finishScreen(); return; }   // a retake from the review goes back to it
     for (let i = W.idx + 1; i < list.length; i++) if (!W.done[i]) { W.idx = i; render(); return; }
     for (let i = 0; i < list.length; i++) if (!W.done[i]) { W.idx = i; render(); return; }
     finishScreen();
   };
+  // ✅ review before finishing (Melissa 9/25, 092526terry60): every shot of the
+  // list with what was taken this run; tap one to retake it — the new photo
+  // replaces the old one (which goes to Drive's trash) — or take a skipped one
   const finishScreen = () => {
     stopCam();
-    ov.innerHTML = `<div class="tvbox swbox">
-      <div class="tvhead"><div><b>🧭 ${kind === 'before' ? 'BEFORE' : 'AFTER'} shots — ${esc(p.serial)}</b></div>
+    W.review = true;
+    const tile = (s, i) => {
+      const t = W.taken[i];
+      const img = t ? `<img alt="" src="${t.thumb || `https://drive.google.com/thumbnail?id=${esc(t.id)}&sz=w240`}">`
+        : `<span class="swrvico">${W.done[i] ? '✓' : s.i}</span>`;
+      const note = t ? (t.replaced ? 'replaced ✓' : 'tap to retake')
+        : W.done[i] ? 'taken earlier' : 'skipped — tap to take';
+      return `<button class="swrvtile ${t ? 'taken' : W.done[i] ? 'earlier' : 'missing'}" data-i="${i}" type="button">
+        ${img}<b>${i + 1}. ${esc(s.t)}</b><small>${note}</small></button>`;
+    };
+    ov.innerHTML = `<div class="tvbox swbox swreview">
+      <div class="tvhead"><div><b>🧭 ${kind === 'before' ? 'BEFORE' : 'AFTER'} shots — ${esc(p.serial)}</b>
+        <span>review before you finish</span></div>
         <span class="x swx">✕</span></div>
-      <div class="swfin">${doneCount() >= list.length ? '🎉' : '👍'}</div>
-      <div class="swtitle" style="text-align:center">${doneCount()}/${list.length} shots in the ${kind} folder</div>
-      <div class="swhint" style="text-align:center">${doneCount() >= list.length
-        ? 'Full set! The photos are filed in the piano’s Drive folder.'
-        : 'The missing shots stay on the list — reopen the wizard any time to finish.'}</div>
-      <button class="swsnap swclose2">Done</button>
+      <div class="swtitle" style="text-align:center;margin-top:10px">${doneCount()}/${list.length} shots in the ${kind} folder</div>
+      <div class="swhint" style="text-align:center;margin-top:0">${Object.keys(W.taken).length
+        ? 'Check each photo. Tap one to retake it — the new photo replaces the old one.'
+        : 'Nothing was taken this time.'}${doneCount() < list.length ? ' Skipped shots can be taken now or any time later.' : ''}</div>
+      <div class="swmsg"></div>
+      <div class="swrvgrid">${list.map(tile).join('')}</div>
+      <button class="swsnap swclose2">${doneCount() >= list.length ? '🎉 Done — full set filed' : 'Done'}</button>
     </div>`;
     ov.querySelector('.swx').onclick = close;
     ov.querySelector('.swclose2').onclick = close;
+    ov.querySelectorAll('.swrvtile').forEach(b => b.onclick = async () => {
+      W.idx = +b.dataset.i;
+      await ensureCam();
+      render();
+    });
   };
+  // the photo a retake replaced: wait for its PHOTO LOG row to be written,
+  // then the bridge moves it to Drive's trash and clears that row
+  const trashReplaced = async (old, i) => {
+    try {
+      if (old.logging) await old.logging;
+      const wa = writeAuth();
+      const r = await fetchT(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+        headers: {'content-type': 'text/plain;charset=utf-8'},
+        body: JSON.stringify({pin: wa.pin, action: 'phototrash', serial: p.serial, fileId: old.id,
+          stage: shotStage(kind, i, list[i]), ...authFields()})}, 45000);
+      const j = await r.json();
+      if (!j.ok) throw new Error(j.error || 'not removed');
+      if (W.taken[i]) W.taken[i].replaced = true;
+    } catch (e) {
+      if (W.taken[i]) W.taken[i].replaceErr = e.message;
+      const msg = ov.querySelector('.swmsg');
+      if (msg) { msg.className = 'swmsg err'; msg.textContent = `✗ shot ${i + 1}: the old photo is still in the folder (${e.message}) — delete it in Drive`; }
+    }
+    if (W.review && !ov.querySelector('.swframe')) finishScreen();
+  };
+  // a small copy for the review grid — the Drive thumbnail isn't ready for a few seconds
+  const thumbOf = dataUrl => new Promise(res => {
+    const im = new Image();
+    im.onload = () => {
+      const c = document.createElement('canvas'), side = 240;
+      c.width = side; c.height = side;
+      const sq = Math.min(im.width, im.height);
+      c.getContext('2d').drawImage(im, (im.width - sq) / 2, (im.height - sq) / 2, sq, sq, 0, 0, side, side);
+      res(c.toDataURL('image/jpeg', 0.7));
+    };
+    im.onerror = () => res('');
+    im.src = dataUrl;
+  });
 
   // square center-crop capture straight from the live viewfinder
   const captureFrame = () => {
@@ -2403,6 +2460,9 @@ function openShotWizard(p, kind) {
       const j = await photoUpload({pin: wa.pin, kind, serial: p.serial, row: p.row,
           stage: shotStage(kind, W.idx, list[W.idx]), share: 1, ...authFields()}, dataUrl);
       if (!j.saved) throw new Error(j.error || 'upload failed');
+      const i = W.idx, old = W.taken[i];
+      W.taken[i] = {id: j.id, thumb: await thumbOf(dataUrl), logging: j.logging};
+      if (old && old.id && old.id !== j.id) trashReplaced(old, i);   // retake: the new one is safe in Drive first
       W.done[W.idx] = true;
       if (kind === 'before' && j.id) W.beforeIds[W.idx] = j.id;
       if (kind === 'before') p.bphoto = p.bphoto || true; else p.aphoto = p.aphoto || true;
@@ -2443,8 +2503,11 @@ function openShotWizard(p, kind) {
     ov.querySelector('.swlib').onclick = () => lib.click();
     cam.onchange = () => { uploadFile(cam.files[0]); cam.value = ''; };
     lib.onchange = () => { uploadFile(lib.files[0]); lib.value = ''; };
-    ov.querySelector('.swprev').onclick = () => { if (W.idx > 0) { W.idx--; render(); } };
-    ov.querySelector('.swnext').onclick = () =>
+    const back = ov.querySelector('.swtoreview');
+    if (back) back.onclick = finishScreen;
+    const prev = ov.querySelector('.swprev'), next = ov.querySelector('.swnext');
+    if (prev) prev.onclick = () => { if (W.idx > 0) { W.idx--; render(); } };
+    if (next) next.onclick = () =>
       W.idx === list.length - 1 ? finishScreen() : (W.idx++, render());
     ov.querySelectorAll('.swdots i').forEach(d =>
       d.addEventListener('click', ev => { W.idx = +ev.target.closest('i').dataset.i; render(); }));
