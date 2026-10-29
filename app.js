@@ -11422,10 +11422,21 @@ function inShopwork(p) {
  * Tracks without a step list on the Sequence sheet (Refinish, Player Rebuild…)
  * are valid — they just can't be checked for the last one. */
 const PHASE_RENAMED = {'PRSBa - Pre-Plate': 'PRSB - Downbearing', 'PRSBb - Plate In': 'PRSB - Notching and Pins'};
+// every piano that is shop work — any of the four SHOPWORK sections, whatever
+// its phase, or anywhere else with a phase that means work is under way
+// (In Queue, New Arrival, CAP … Paused, Waiting on …) — must carry a track
+// (Mark 10/29: "everything should have a track"). Finished For Sale / sold
+// pianos outside the shop sections are left out.
+const IDLE_PHASES = ['For Sale', 'Sale Pending', 'Sold', 'Post Sale QC'];
+function shopSection(p) { return /SHOP ?WORK/i.test(p.section || ''); }
+function needsTrack(p) {
+  const ph = effectivePhase(p) || (p.queuePos ? 'In Queue' : '');
+  return shopSection(p) || (!!ph && !IDLE_PHASES.includes(ph));
+}
 function stageProblems(p) {
   const out = [];
   if (!String(p.track || '').trim()) out.push('No track — what work does it get?');
-  if (!p.phase && !p.queuePos) out.push('No phase and not in the queue');
+  if (shopSection(p) && !effectivePhase(p) && !p.queuePos) out.push('No phase and not in the queue');
   const seq = p.phase && String(p.track || '').trim() ? pianoPhases(p) : null;
   const ph = PHASE_RENAMED[p.phase] || p.phase;
   if (seq && !PHASE_STATES.includes(ph) && ph !== 'New Arrival - Admin' && !seq.includes(ph)) {
@@ -11434,8 +11445,7 @@ function stageProblems(p) {
   return out;
 }
 function missingStage() {
-  return S.data.pianos.filter(p => p.active && !comingSoon(p) && !p.isNew
-    && inShopwork(p) && stageProblems(p).length);
+  return S.data.pianos.filter(p => p.active && !comingSoon(p) && needsTrack(p) && stageProblems(p).length);
 }
 function pianoName(p) {
   return (p.year ? p.year + ' ' : '')
@@ -11459,14 +11469,14 @@ function dupTable() {
 }
 function missingStageTable() {
   const ms = missingStage();
-  const phaseTxt = p => p.phase || (p.queuePos ? `In Queue (#${p.queuePos})` : '—');
-  return `<table><tr><th>PIANO</th><th>SERIAL</th><th>LOCATION</th><th>TRACK · PHASE</th><th>PROBLEM</th><th></th></tr>` +
+  const phaseTxt = p => effectivePhase(p) || (p.queuePos ? `In Queue (#${p.queuePos})` : '—');
+  return `<table><tr><th>PIANO</th><th>SERIAL</th><th>SECTION · LOCATION</th><th>TRACK · PHASE</th><th>PROBLEM</th><th></th></tr>` +
     (ms.map(p => `<tr class="mrow" data-row="${p.row}"><td>${esc(pianoName(p))}</td>
-      <td>${esc(p.serial)}</td><td class="locraw">${esc(p.location || '(blank)')}</td>
+      <td>${esc(p.serial)}</td><td class="locraw">${esc((p.section || '—').trim())}<br>${esc(p.location || '(blank)')}</td>
       <td>${esc(p.track || '—')} · ${esc(phaseTxt(p))}</td>
       <td>${stageProblems(p).map(esc).join('<br>')}</td>
       <td><a target="_blank" rel="noopener" href="${logLink(p)}">log ↗</a></td></tr>`).join('')
-     || '<tr><td colspan="6" class="empty">None — every Custom Shopwork piano has a track and a phase that fits it. 🎉</td></tr>') + '</table>';
+     || '<tr><td colspan="6" class="empty">None — every shop piano has a track and a phase that fits it. 🎉</td></tr>') + '</table>';
 }
 // one bare table of pianos (no "still needed" column — the section
 // heading already says which category this is)
@@ -14002,7 +14012,7 @@ const REPORT_DEFS = () => [
    desc: 'Two or more active pianos claim the same map spot — one of them is wrong.',
    html: dupTable},
   {id: 'stage', sec: 'shop', icon: '🔧', title: 'MISSING SHOP STAGE', count: missingStage().length,
-   desc: 'Custom Shopwork pianos with a real gap: no TRACK (nobody has said what work it gets), no phase while not in the queue, or a phase that isn’t a step on its track. In Queue is phase 0 and is fine. Storage, rentals, financing and other non-shopwork sections are exempt. Click a row to jump to the piano.',
+   desc: 'Shop pianos with a real gap: no TRACK (nobody has said what work it gets), no phase while not in the queue, or a phase that isn’t a step on its track. Covers every piano in the shopwork sections whatever its phase, plus any piano elsewhere whose phase means work is under way (In Queue, New Arrival, a shop step, Paused, Waiting on…). In Queue is phase 0 and is fine; finished For Sale pianos outside the shop sections are left out. Click a row to jump to the piano.',
    html: missingStageTable},
   {id: 'media', sec: 'admin', icon: '📸', title: 'MEDIA NEEDED', count: S.data.pianos.filter(p =>
      p.active && !notYetArrived(p) && (mediaNeeds(p).photo || mediaNeeds(p).video)).length,
