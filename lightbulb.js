@@ -11,6 +11,8 @@
  *                 app says who is signed in, whether they see the admin panel
  *                 and which team key the bridge should get. Without it (or
  *                 when it fails) the widget asks for a name and the team PIN.
+ * data-who-key  : optional localStorage key where the app keeps the person's
+ *                 name — used when the session doesn't carry one.
  * data-dock     : optional CSS selector; the 💡 renders inline inside it.
  * data-position : bottom-left (default) | bottom-right | top-right.
  *
@@ -34,6 +36,7 @@
   var ds = script.dataset || {};
   var APP = ds.app || document.title.slice(0, 30) || 'Other';
   var SESSION_URL = ds.session || '';
+  var WHO_KEY = ds.whoKey || '';
   var DOCK = ds.dock || '';
   var POS = ds.position || 'bottom-left';
   var LS_NAME = 'blp_lightbulb_name', LS_KEY = 'blp_lightbulb_key';
@@ -65,17 +68,18 @@
           var r = await fetchT(SESSION_URL, {credentials: 'same-origin', cache: 'no-store'}, 12000);
           if (r.ok) {
             var j = await r.json();
-            if (j && (j.name || j.email)) {
-              S.name = String(j.name || j.email.split('@')[0]);
+            // a passcode-only sign-in may know the team key but not the person
+            if (j && (j.name || j.email || j.key)) {
+              S.name = String(j.name || (j.email ? j.email.split('@')[0] : ''));
               S.email = String(j.email || '');
               S.admin = !!j.admin;
               S.key = String(j.key || '');
-              S.fromHost = true;
+              S.fromHost = !!S.key;
             }
           }
         } catch (e) { /* fall back to asking */ }
       }
-      if (!S.name) S.name = lsGet(LS_NAME) || lsGet('blp_suggest_name');
+      if (!S.name) S.name = (WHO_KEY && lsGet(WHO_KEY) !== 'app' && lsGet(WHO_KEY)) || lsGet(LS_NAME) || lsGet('blp_suggest_name');
       if (!S.key) S.key = lsGet(LS_KEY);
       S.loaded = true;
       paintBtn();
@@ -110,7 +114,8 @@
       if (j && j.error) break;
       await sleep(1000 * (a + 1));
     }
-    if (j && j.error === 'unauthorized' && !S.fromHost) { S.key = ''; lsSet(LS_KEY, ''); }
+    // a rejected key (typed, remembered, or the host's) → ask for the PIN next time
+    if (j && j.error === 'unauthorized') { S.key = ''; S.fromHost = false; lsSet(LS_KEY, ''); }
     throw new Error(j && j.error === 'unauthorized'
       ? 'the team PIN wasn’t accepted — check it and try again'
       : (j && j.error) || 'the Google bridge hiccuped — try again in a few seconds');
@@ -394,9 +399,13 @@
       }).join('');
       box.querySelectorAll('.ok').forEach(function (b) {
         b.onclick = async function () {
+          if (!S.key) S.key = $('.pin').value.trim();
           if (!S.key) { msg.className = 'msg err'; msg.textContent = 'Enter the team PIN above first.'; paintIdRow(); return; }
           b.textContent = '…'; b.disabled = true;
-          try { await bridgePost(Object.assign(authBody(), {action: 'requeststatus', id: b.dataset.id, status: 'Tested'}), 'status'); }
+          try {
+            await bridgePost(Object.assign(authBody(), {action: 'requeststatus', id: b.dataset.id, status: 'Tested'}), 'status');
+            if (!S.fromHost) lsSet(LS_KEY, S.key);
+          }
           catch (e) { msg.className = 'msg err'; msg.textContent = '✗ ' + e.message; }
           loadMine(true);
         };
@@ -479,10 +488,15 @@
     });
   }
   async function setStatus(id, status, el) {
-    if (!S.key) { toast('No team key for this sign-in — ask Karmel'); return; }
+    if (!S.key) {
+      var typed = (window.prompt('Team PIN (the same one the Store Map uses):') || '').trim();
+      if (!typed) return;
+      S.key = typed;
+    }
     el.disabled = true;
     try {
       var j = await bridgePost(Object.assign(authBody(), {action: 'requeststatus', id: id, status: status}), 'status');
+      if (!S.fromHost) lsSet(LS_KEY, S.key);
       var x = REQ.find(function (r) { return r.id === id; });
       if (x) { x.status = j.status; x.statusBy = S.name; x.statusAt = new Date().toISOString(); }
       toast(j.texted ? '✓ Live — ' + String(j.who || 'the requester').split(' ')[0] + ' has been texted' : '✓ ' + id + ' → ' + j.status);
