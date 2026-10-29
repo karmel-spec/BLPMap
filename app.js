@@ -15468,6 +15468,13 @@ async function openTrainingDoc(t) {
     const yt = v.dataset.yt, start = v.dataset.start || 0, title = v.dataset.title || '';
     if (!yt) return;
     v.innerHTML = `<img src="https://i.ytimg.com/vi/${esc(yt)}/hqdefault.jpg" alt="${esc(title)}" loading="lazy"><span class="tdplay">▶</span>${title ? `<span class="tdvtitle">${esc(title)}</span>` : ''}`;
+    // a way around the player when it won't play here — the shop laptops showed
+    // YouTube's "An error occurred" while phones played fine (Sadie 10/28, 102826erickson03)
+    const yl = document.createElement('a');
+    yl.className = 'tdytlink'; yl.target = '_blank'; yl.rel = 'noopener';
+    yl.href = `https://www.youtube.com/watch?v=${encodeURIComponent(yt)}${+start ? '&t=' + (+start) + 's' : ''}`;
+    yl.textContent = 'Video won’t play? Open it on YouTube ↗';
+    v.after(yl);
     v.onclick = () => {
       const f = document.createElement('iframe');
       f.className = 'tdiframe';
