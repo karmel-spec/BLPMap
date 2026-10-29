@@ -12886,7 +12886,10 @@ function cfxTimes(note) {
   const norm = (h, mi, ap) => {
     h = +h; mi = +(mi || 0);
     if (h > 23 || mi > 59) return null;
-    if (ap === 'pm' && h < 12) h += 12; else if (ap === 'am' && h === 12) h = 0;
+    // "12:09 AM" in a shop request is the noon hour picked as AM (Myrrhanda
+    // 10/22: back from lunch at 12:09 PM; read as midnight it prefilled a
+    // 10½-hour morning session — Mark 10/29), so 12 AM stays noon
+    if (ap === 'pm' && h < 12) h += 12;
     else if (!ap && h >= 1 && h <= 6) h += 12;          // shop hours: bare "2:40" is afternoon
     return String(h).padStart(2, '0') + ':' + String(mi).padStart(2, '0');
   };
