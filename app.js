@@ -18145,6 +18145,7 @@ const SETTING_FIELDS = [
     ['report_exempt', 'Thursday-sweep skips these first names (comma)'],
     ['week_cap_default', 'Default weekly hours cap'],
     ['geofence_meters', 'Day-punch distance from store (meters)'],
+    ['mover_finish', 'Movers\' auto clock-out time (blank = 10 PM)'],
   ]],
   ['🧨 Danger zone', [
     ['force_refresh_below', 'Force-reload app versions BELOW this number (blank = off)'],
