@@ -271,8 +271,9 @@ const AREA_BINS = [
 // the named work areas. Anything else gets rejected before the bridge call.
 const MOVE_AREAS = ['Attic', 'Refinishing Shop', 'Sanding Shop', 'Conference Room',
   'Larson Home', 'Recital Hall Wing Room 4',
-  // outside shops — a piano sent out for service lands in the map's OUT FOR SERVICE box (Mark 10/29)
-  'David Hyde', 'Barrus Pianos'];
+  // outside shop — a piano sent out for service lands in the map's OUT FOR SERVICE box (Mark 10/29;
+  // David Hyde works for Barrus, so Barrus Pianos is the one choice)
+  'Barrus Pianos'];
 function moveDests() {
   const out = [];
   for (const f of ((S.map && S.map.floors) || []))
@@ -1577,9 +1578,9 @@ function ghostBadge(p, cx, cy, sc) {
 function comingSoon(p) {
   return (p.location || '').trim().replace(/\s+/g, ' ').toLowerCase().startsWith('coming soon');
 }
-// out at an outside shop for service: David Hyde, or Barrus Pianos (Mark
-// 10/29). Both are Move-box choices; a typed "Barrus …" / "David Hyde 10/7"
-// in the Piano Log counts too
+// out at an outside shop for service: Barrus Pianos (Mark 10/29) — the
+// Move-box choice. David Hyde works for Barrus, so a Piano Log location typed
+// "David Hyde 10/7" from before still counts, as does a typed "Barrus …"
 function outForService(p) {
   return /david hyde|barrus/i.test((p.location || '').trim());
 }
