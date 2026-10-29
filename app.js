@@ -11469,12 +11469,21 @@ function dupTable() {
 }
 function missingStageTable() {
   const ms = missingStage();
-  const phaseTxt = p => effectivePhase(p) || (p.queuePos ? `In Queue (#${p.queuePos})` : '—');
-  return `<table><tr><th>PIANO</th><th>SERIAL</th><th>SECTION · LOCATION</th><th>TRACK · PHASE</th><th>PROBLEM</th><th></th></tr>` +
+  // quick-glance layout (Mark 10/29): the gap shows in its own cell in red —
+  // "No track", a blank phase, or a phase that isn't a step on the track
+  const bad = (txt, why) => `<span style="color:#9e2020;font-weight:700"${why ? ` title="${esc(why)}"` : ''}>${esc(txt)}</span>`;
+  const trackCell = p => String(p.track || '').trim() ? esc(p.track) : bad('No track');
+  const phaseCell = p => {
+    const probs = stageProblems(p);
+    const ph = effectivePhase(p) || (p.queuePos ? `In Queue (#${p.queuePos})` : '');
+    if (!ph) return probs.some(x => x.startsWith('No phase')) ? bad('No phase') : '—';
+    const off = probs.find(x => x.startsWith('Phase'));
+    return off ? bad(ph, off) : esc(ph);
+  };
+  return `<table><tr><th>PIANO</th><th>SERIAL</th><th>LOCATION</th><th>TRACK</th><th>PHASE</th><th></th></tr>` +
     (ms.map(p => `<tr class="mrow" data-row="${p.row}"><td>${esc(pianoName(p))}</td>
-      <td>${esc(p.serial)}</td><td class="locraw">${esc((p.section || '—').trim())}<br>${esc(p.location || '(blank)')}</td>
-      <td>${esc(p.track || '—')} · ${esc(phaseTxt(p))}</td>
-      <td>${stageProblems(p).map(esc).join('<br>')}</td>
+      <td>${esc(p.serial)}</td><td class="locraw">${esc(p.location || '(blank)')}</td>
+      <td>${trackCell(p)}</td><td>${phaseCell(p)}</td>
       <td><a target="_blank" rel="noopener" href="${logLink(p)}">log ↗</a></td></tr>`).join('')
      || '<tr><td colspan="6" class="empty">None — every shop piano has a track and a phase that fits it. 🎉</td></tr>') + '</table>';
 }
