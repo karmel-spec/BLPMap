@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-30.11';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-30.12';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -378,6 +378,24 @@ function doGet(e) {
       }
       return json_({ok: true, copy: ssCopy.getName(), sheet: ssSh.getName(), rows: ssOut});
     } catch (eS) { return json_({error: String(eS && eS.message || eS)}); }
+  }
+  // Scheduling Rules with their SHEET row numbers (Mark 10/30 rules cleanup):
+  // the CSV export drops blank rows, so row numbers from it don't match the
+  // replaceRow / deleteRow guards. ?fn=schedrules&key=<pin>
+  if (e && e.parameter && e.parameter.fn === 'schedrules') {
+    var srK = String(e.parameter.key || '');
+    if (srK !== TEAM_PIN && srK.toLowerCase() !== 'pianoman') return json_({error: 'unauthorized'});
+    try {
+      var srSh = schedRulesSheet_();
+      var srLast = srSh.getLastRow();
+      var srVals = srLast >= 2 ? srSh.getRange(2, 1, srLast - 1, 3).getValues() : [];
+      var srOut = [];
+      for (var sri = 0; sri < srVals.length; sri++) {
+        var srRule = String(srVals[sri][1] || '').trim();
+        srOut.push({row: sri + 2, when: String(srVals[sri][0] || ''), rule: srRule, by: String(srVals[sri][2] || ''), blank: !srRule});
+      }
+      return json_({ok: true, rows: srOut});
+    } catch (eR) { return json_({error: String(eR && eR.message || eR)}); }
   }
   if (e && e.parameter && e.parameter.fn === 'timeoffrows') {
     try { return json_(timeOffRows_(verifyGoogle_(e.parameter.idToken))); }
