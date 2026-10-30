@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-30.5';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-30.6';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -348,6 +348,36 @@ function doGet(e) {
   // verifyGoogle_. No token, or a token that fails, returns every row with
   // the note blank. The shop briefing calls timeOffRows_() with no argument
   // and still receives notes.
+  // SCOPE NOTES from a saved copy of the Piano Log (Mark 10/30): the bottleneck
+  // answers job overwrote 21 cards' Scope Notes; Mark copied the 9:46 AM
+  // version from the sheet's history. Read-only — never writes to the copy.
+  //   ?fn=scopesnap&key=<pin>&sid=<copy's spreadsheet id>[&serials=a,b,c]
+  if (e && e.parameter && e.parameter.fn === 'scopesnap') {
+    var ssK = String(e.parameter.key || '');
+    if (ssK !== TEAM_PIN && ssK.toLowerCase() !== 'pianoman') return json_({error: 'unauthorized'});
+    try {
+      var ssId = String(e.parameter.sid || '').trim();
+      if (!ssId) return json_({error: 'sid (the copy\'s spreadsheet id) required'});
+      var ssCopy = SpreadsheetApp.openById(ssId);
+      var ssSh = pianoSheet_(ssCopy);
+      var ssHdr = ssSh.getRange(2, 1, 1, ssSh.getLastColumn()).getValues()[0];
+      var ssCol = {};
+      for (var hc = 0; hc < ssHdr.length; hc++) ssCol[String(ssHdr[hc] || '').trim().toUpperCase()] = hc;
+      if (ssCol['SCOPE NOTES'] == null) return json_({error: 'no SCOPE NOTES column on that sheet', sheet: ssSh.getName()});
+      var want = String(e.parameter.serials || '').split(',').map(function (x) { return x.trim().toUpperCase(); }).filter(Boolean);
+      var ssVals = ssSh.getRange(3, 1, Math.max(1, ssSh.getLastRow() - 2), ssSh.getLastColumn()).getValues();
+      var ssOut = [];
+      for (var vr = 0; vr < ssVals.length; vr++) {
+        var row = ssVals[vr];
+        var sn = String(row[2] || '').trim();          // serial = column C, summary = column D (as findPiano_)
+        var sc = String(row[ssCol['SCOPE NOTES']] || '').trim();
+        if (want.length ? want.indexOf(sn.toUpperCase()) < 0 : !sc) continue;
+        ssOut.push({row: vr + 3, serial: sn, summary: String(row[3] || '').trim(), scopeNotes: sc});
+        if (ssOut.length >= 400) break;
+      }
+      return json_({ok: true, copy: ssCopy.getName(), sheet: ssSh.getName(), rows: ssOut});
+    } catch (eS) { return json_({error: String(eS && eS.message || eS)}); }
+  }
   if (e && e.parameter && e.parameter.fn === 'timeoffrows') {
     try { return json_(timeOffRows_(verifyGoogle_(e.parameter.idToken))); }
     catch (err) { return json_({error: String(err), rows: []}); }
