@@ -133,29 +133,34 @@ Brigham's rules so far (2026-07-27):
   technicians' Google Calendars historically (gog -a karmel@ calendar events
   <tech calendar> works — verified 7/27) to estimate typical scheduled time
   per phase, and size future blocks to roughly those durations.
-- **Deadline notes on calendar entries** (7/27, kept by Mark 10/26): when a
-  downstream phase is already scheduled, the upstream tech's entry carries a
-  soft-deadline line tied to the reason, inside the `[CAL: …]` segment and
-  starting "Deadline:" — e.g. "Deadline: shoot to finish by Thu — QC is
-  scheduled Fri", "Deadline: ideally wrap the CAP by Wed — PRSB is planned
-  next". Deadlines reference the dependent event, not arbitrary dates. This is
-  the ONE schedule item allowed on a calendar.
+- **Deadline notes on calendar entries** — RETIRED (Mark 2026-10-30): no
+  automatic "Deadline: shoot to finish by …" line on a tech's calendar. A
+  deadline goes on the calendar only when a manager's note asks for it.
+  (Korban's hardware-ready DEADLINE inside his Hardware Buffing Queue block,
+  rule 10, is separate and stays.)
 - **Calendar block notes (Mark 2026-10-26, standing rule):** a block's note is
   `[CAL: what the technician sees] what the managers see`. Approve puts ONLY the
   `[CAL: …]` segment on the technician's event; everything after it stays in the
   Planner. Set `"calNotes": "cal-only"` at the top level of the plan JSON so
   Approve knows the plan follows this rule (a block with no segment then gets no
   description).
-  - In the segment: only what the technician needs for the PIANO WORK in that
-    block — what to do or check, next steps, a known problem and how to fix it,
-    parts waiting on / arrived, a client's request about the piano. Words a
-    manager's note asked to put on the calendar are copied verbatim.
+  - **NEW information only (Mark 2026-10-30):** the segment carries only what
+    the technician does NOT already know — a manager's instruction from the
+    notes, a client's request about the piano, parts that arrived or are now
+    holding the work, a problem someone else found. Words a manager's note
+    asked to put on the calendar are copied verbatim. NEVER restate the
+    technician's own weekly report — what they did, what's left, their next
+    steps, days to finish — they wrote it. Never repeat facts already on the
+    card (tuned to 432 Hz, finish, model details). **Most blocks get no
+    segment.** (Garrett's 11/2 Monday segment restated his report — "three
+    days left per your report. Hammers aligned… after-touch is the open step"
+    — plus a deadline and the 432 Hz pitch: all redundant.)
   - Second person / imperative: "Next steps: finish the let-off", "Waiting on #9
     bridge pins", "Bush the pedal rod hole with felt". Never he/she/his/her/they
     or the technician's name.
   - Never in the segment: anything schedule-related (times, days, dates, end
     times, days off, field bookings, "full shop day", open slots, who covers
-    what, reassignments, pacing) — except the soft "Deadline:" line above; anything private (health,
+    what, reassignments, pacing, deadlines unless a note asks); anything private (health,
     personal matters, progress or performance comments, payment status, client
     contact details); client / owner names (not confidential — just not
     useful: technicians work by make, model and serial; Melissa, Brigham and
