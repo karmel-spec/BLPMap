@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-30.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-30.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -10204,26 +10204,33 @@ function lateClockNudge(e) {
   var dow = Number(Utilities.formatDate(now, 'America/Denver', 'u'));
   if (dow > 6 && !dry) return;                       // Sundays stay quiet
   var hour = Number(Utilities.formatDate(now, 'America/Denver', 'H'));
-  // Movers work past 6 (Mark 9/16). The 6pm pass still skips them, but if a
-  // mover is on the clock it books a ONE-SHOT evening pass tonight just for them
-  // (8pm until 10/30, 9pm since — Mark, with the movers' 11 PM stamp),
-  // so they get a reminder instead of being silently stamped by the
-  // forgotten-clock sweep next morning. No new installed trigger needed.
-  // The late crew is the same list the sweep uses — movers by roster Position
-  // PLUS Melissa (Walter 9/24) — so she is no longer texted at 6 while still
-  // working, and the evening text quotes the 8:00 PM stamp her group actually gets.
-  var moverPass = !dry && hour >= 19;
+  // Movers work past 6 (Mark 9/16). The 6pm pass still skips the late crew,
+  // but if one of them is on the clock it books a ONE-SHOT evening pass
+  // tonight just for them, so they get a reminder instead of being silently
+  // stamped by the forgotten-clock sweep next morning. No new installed
+  // trigger needed. The late crew is the same list the sweep uses — movers by
+  // roster Position PLUS Melissa (Walter 9/24) — so she is no longer texted at
+  // 6 while still working. Two evening passes since 10/30 (Mark): Melissa
+  // keeps hers at 8pm (her 8:00 PM stamp); movers moved to 9pm with their
+  // 11 PM stamp. Each text quotes the stamp that person actually gets.
+  var evening = !dry && hour >= 19;
+  var moverPass = evening && hour >= 21;     // 9pm one-shot: movers
+  var crewPass = evening && !moverPass;      // 8pm one-shot: Melissa
   var props = PropertiesService.getScriptProperties();
-  if (!dry) {   // clear last night's one-shot (a project is capped at 20 triggers)
-    try {
-      var oldId = props.getProperty('lateNudgeOneShot');
-      if (oldId) {
-        ScriptApp.getProjectTriggers().forEach(function (t) {
-          if (t.getUniqueId() === oldId) { try { ScriptApp.deleteTrigger(t); } catch (eD) {} }
-        });
-        props.deleteProperty('lateNudgeOneShot');
-      }
-    } catch (eP) {}
+  if (!dry) {   // clear spent one-shots (a project is capped at 20 triggers) —
+    // the 8pm pass must not delete tonight's still-pending 9pm one
+    var keys = moverPass ? ['lateNudgeOneShot'] : crewPass ? ['lateNudgeOneShot8'] : ['lateNudgeOneShot', 'lateNudgeOneShot8'];
+    keys.forEach(function (pk) {
+      try {
+        var oldId = props.getProperty(pk);
+        if (oldId) {
+          ScriptApp.getProjectTriggers().forEach(function (t) {
+            if (t.getUniqueId() === oldId) { try { ScriptApp.deleteTrigger(t); } catch (eD) {} }
+          });
+          props.deleteProperty(pk);
+        }
+      } catch (eP) {}
+    });
   }
   var movers = lateCrew_();
   var firstOf = function (n) { return String(n || '').trim().split(/\s+/)[0].toLowerCase(); };
@@ -10244,51 +10251,60 @@ function lateClockNudge(e) {
         + Utilities.formatDate(new Date(o.start), 'America/Denver', 'h:mm a') + ')');
     });
   } catch (e2) {}
+  var moverOnly = moverFirsts_();
+  var crewOpen = {}, onlyMovers = {};   // the late crew split: Melissa (8pm) / movers (9pm)
+  Object.keys(moversOpen).forEach(function (n) { (moverOnly[firstOf(n)] ? onlyMovers : crewOpen)[n] = moversOpen[n]; });
   if (dry) {
     return {ok: true, hour: hour,
             wouldText: Object.keys(late).map(function (n) { return {name: n, open: late[n]}; }),
-            moversAt8pm: Object.keys(moversOpen).map(function (n) { return {name: n, open: moversOpen[n]}; })};
+            crewAt8pm: Object.keys(crewOpen).map(function (n) { return {name: n, open: crewOpen[n]}; }),
+            moversAt9pm: Object.keys(onlyMovers).map(function (n) { return {name: n, open: onlyMovers[n]}; })};
   }
-  var group = moverPass ? moversOpen : late;
+  var group = moverPass ? onlyMovers : crewPass ? crewOpen : late;
+  var passLbl = moverPass ? ' (movers, 9pm)' : crewPass ? ' (late crew, 8pm)' : '';
   var names = Object.keys(group);
-  var moverOnly = moverFirsts_();
   names.forEach(function (n) {
-    var msg = moverPass && moverOnly[firstOf(n)]
+    var msg = moverPass
       ? '\u23f0 BLP Store Map: it\u2019s after 9pm and you\u2019re still clocked in \u2014 ' + group[n].join(' + ')
         + '. Still out on a job? Ignore this. Finished? Open the Store Map and clock out \u2014 otherwise your day gets '
         + 'recorded as ending at ' + moverFinishLabel_() + '. Wrong time already saved? Send a fix: ' + APP_URL + '/#fixclock'
-      : moverPass
-      ? '\u23f0 BLP Store Map: it\u2019s after 9pm and you\u2019re still clocked in \u2014 ' + group[n].join(' + ')
+      : crewPass
+      ? '\u23f0 BLP Store Map: it\u2019s after 8pm and you\u2019re still clocked in \u2014 ' + group[n].join(' + ')
         + '. Still out on a job? Ignore this. Finished? Open the Store Map and clock out \u2014 otherwise your day gets '
         + 'recorded as ending at 8:00 PM. Wrong time already saved? Send a fix: ' + APP_URL + '/#fixclock'
       : '\u23f0 BLP Store Map: it\u2019s after 6pm and you\u2019re still clocked in \u2014 ' + group[n].join(' + ')
         + '. If you\u2019ve gone home, open the Store Map and clock out, then submit a '
         + 'time-fix request with the time you actually finished: ' + APP_URL + '/#fixclock';
     notifyTeam_([n], msg);
-    logAct_('Store Map (auto)', 'Late clock nudge' + (moverPass ? ' (movers, 9pm)' : ''), n, group[n].join(' + ').slice(0, 140));
+    logAct_('Store Map (auto)', 'Late clock nudge' + passLbl, n, group[n].join(' + ').slice(0, 140));
   });
-  // 6pm pass: book tonight's 9pm mover pass if any mover is still on the clock
-  var booked = 0;
-  if (!moverPass && Object.keys(moversOpen).length) {
-    try {
-      var eight = new Date(Utilities.formatDate(now, 'America/Denver', "yyyy-MM-dd'T'21:00:00XXX"));   // 9pm (Mark 10/30)
-      if (eight > now) {
-        var t2 = ScriptApp.newTrigger('lateClockNudge').timeBased().at(eight).create();
-        props.setProperty('lateNudgeOneShot', t2.getUniqueId());
-        booked = Object.keys(moversOpen).length;
-      }
-    } catch (eT) { /* trigger quota or permissions — the 6pm pass still went out */ }
+  // 6pm pass: book tonight's 8pm pass (Melissa) and/or 9pm pass (movers) for
+  // whoever of the late crew is still on the clock
+  var booked = 0, bookedLbl = [];
+  if (!evening) {
+    [[crewOpen, 20, 'lateNudgeOneShot8', '8pm'], [onlyMovers, 21, 'lateNudgeOneShot', '9pm']].forEach(function (b) {
+      var n = Object.keys(b[0]).length;
+      if (!n) return;
+      try {
+        var at = new Date(Utilities.formatDate(now, 'America/Denver', "yyyy-MM-dd'T'" + b[1] + ":00:00XXX"));
+        if (at > now) {
+          var t2 = ScriptApp.newTrigger('lateClockNudge').timeBased().at(at).create();
+          props.setProperty(b[2], t2.getUniqueId());
+          booked += n; bookedLbl.push(b[3]);
+        }
+      } catch (eT) { /* trigger quota or permissions — the 6pm pass still went out */ }
+    });
   }
   // summary text to Brigham + Karmel — standing rule (Brigham 8/28): every
   // batch of team texts gets a summary to both.
   if (names.length || booked) {
-    var sum = '\u23f0 Late-clock sweep' + (moverPass ? ' (movers, 9pm)' : '') + ': texted ' + names.length
+    var sum = '\u23f0 Late-clock sweep' + passLbl + ': texted ' + names.length
       + (names.length ? ' \u2014 ' + names.map(function (n) {
           return n.split(/\s+/)[0] + ' (' + group[n].join(' + ') + ')'; }).join('; ') : '')
-      + (booked ? ' \u00b7 ' + booked + ' mover(s) still in \u2014 9pm pass booked' : '');
+      + (booked ? ' \u00b7 ' + booked + ' late crew still in \u2014 ' + bookedLbl.join(' + ') + ' pass booked' : '');
     notifyTeam_(['Karmel'], sum.slice(0, 1100));   // late-clock summary: Karmel only (Brigham 10/21)
   }
-  return {ok: true, texted: names, moverPass: moverPass, eightPmBooked: booked};
+  return {ok: true, texted: names, moverPass: moverPass, crewPass: crewPass, eveningBooked: booked, passes: bookedLbl};
 }
 
 /* Movers' morning text (Walter 10/1, 093026terry70): since 10/29 movers are
