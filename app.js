@@ -10053,7 +10053,7 @@ async function submitPrice(p, ov) {
     edit.price = j.price; pendingEdits.set(p.row, edit);
     renderMap();
     msg.className = 'tmmsg ok';
-    msg.textContent = `✓ Price saved: ${j.price} — a printable tag was emailed to info@ to put on the piano.`;
+    msg.textContent = `✓ Price saved: ${j.price} — info@ got an email with the Price Tag Maker link to print the tag (or use 🏷 Price tag on the card).`;
     setTimeout(() => { ov.hidden = true; }, 2600);
   } catch (e) {
     msg.className = 'tmmsg err'; msg.textContent = '✗ ' + e.message;

@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-30.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-30.4';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -87,7 +87,7 @@ var SERVICE_CAL = 'qualitycontrol.blp@gmail.com';   // 20-QC & Showroom repairs
 var MOVING_CAL = 'pianomoving.blp@gmail.com';
 var MOVE_EVENT_TITLE = 'In-store moves — Store Map requests';
 // price workflow: who gets "please set a price" requests, and who gets the
-// printable tag whenever a price is added or changed
+// Price Tag Maker link whenever a price is added or changed
 var PRICE_REQUEST_TO = 'brigham@brighamlarsonpianos.com';
 var TAG_ALERT_TO = 'info@brighamlarsonpianos.com';
 // Curtis Harper work orders spreadsheet — "Requested" tab gets new rows
@@ -4230,7 +4230,7 @@ function setPrice_(req, who) {
   var prev = String(cell.getValue() || '');
   var pretty = '$' + num.toLocaleString('en-US');
   cell.setValue(pretty);
-  // every added/changed price alerts info@ with a printable tag attached
+  // every added/changed price emails info@ the Price Tag Maker link for it (no PDF since 10/30)
   if (!req.silent && prev !== pretty) {
     try { sendTagEmail_(found, String(req.serial || ''), prev, pretty, who); }
     catch (mailErr) { /* the price is saved either way */ }
@@ -11506,21 +11506,18 @@ function requestPrice_(req, who) {
   return {ok: true, summary: found.summary, sentTo: PRICE_REQUEST_TO, texted: true};
 }
 
-// printable price tag → PDF attachment → info@ ("please print and swap it")
+// new / changed price → email info@ with the Price Tag Maker link, already
+// filled in with the piano, serial and price. The quick PDF tag that used to
+// ride along is gone (Mark 10/30, 102426terry08): it looked nothing like the
+// real tag and the email said to put it on the piano, so Melissa wasn't sure
+// which one belonged on the floor. The Price Tag Maker one is the tag.
 function sendTagEmail_(found, serial, prev, price, who) {
   var name = String(who || '').replace(/\s*<[^>]*>\s*/, '').replace(/\s*\(.*\)\s*$/, '');
   var day = Utilities.formatDate(new Date(), 'America/Denver', 'MMMM d, yyyy');
-  var tagHtml = '<html><body style="margin:0;padding:0">'
-    + '<div style="width:5in;border:3px solid #0d0d0d;font-family:Georgia,serif;text-align:center">'
-    + '<div style="background:#0d0d0d;color:#fff;padding:14px;letter-spacing:5px;font-size:20px">BRIGHAM LARSON PIANOS</div>'
-    + '<div style="padding:26px 20px 8px;font-size:26px;font-weight:bold">' + esc_(found.summary || 'Piano') + '</div>'
-    + '<div style="font-family:Helvetica,Arial,sans-serif;font-size:13px;color:#555;letter-spacing:2px">SERIAL ' + esc_(serial) + '</div>'
-    + '<div style="font-size:64px;font-weight:bold;color:#9e2020;padding:22px 0 6px">' + esc_(price) + '</div>'
-    + '<div style="font-family:Helvetica,Arial,sans-serif;font-size:11px;color:#888;padding-bottom:20px;letter-spacing:1px">'
-    + esc_(day) + ' · brighamlarsonpianos.com</div></div></body></html>';
-  var pdf = Utilities.newBlob(tagHtml, 'text/html', 'tag.html')
-    .getAs('application/pdf').setName('Price Tag — SN ' + serial + '.pdf');
   var verb = prev ? 'updated' : 'added';
+  var makerUrl = 'https://blppricetags.netlify.app/?serial=' + encodeURIComponent(serial)
+    + '&price=' + encodeURIComponent(price.replace(/\.\d{2}\s*$/, '').replace(/[^0-9]/g, ''))
+    + '&model=' + encodeURIComponent(found.summary || '');
   MailApp.sendEmail({
     to: TAG_ALERT_TO,
     subject: '🏷 Price ' + verb + ': ' + (found.summary || 'piano') + ' — now ' + price,
@@ -11529,14 +11526,13 @@ function sendTagEmail_(found, serial, prev, price, who) {
       + '<p style="font-size:15px;margin:6px 0"><b>' + esc_(found.summary || 'Piano') + '</b><br>'
       + 'Serial ' + esc_(serial) + (found.location ? ' · Spot ' + esc_(found.location) : '') + '<br>'
       + (prev ? esc_(prev) + ' → ' : '') + '<b style="color:#2e7d4f;font-size:17px">' + esc_(price) + '</b></p>'
-      + '<p style="font-size:14px"><b>Please print the attached price tag and put it on the piano</b> '
-      + '(or make a fancy one at <a href="https://blppricetags.netlify.app/?serial='
-      + encodeURIComponent(serial) + '&price=' + encodeURIComponent(price.replace(/[^0-9]/g, ''))
-      + '&model=' + encodeURIComponent(found.summary || '') + '" style="color:#9e2020">the Price Tag Maker</a>).</p>'
+      + '<p style="margin:18px 0"><a href="' + makerUrl + '" style="background:#9e2020;color:#fff;text-decoration:none;'
+      + 'padding:11px 18px;border-radius:8px;font-weight:bold;font-size:15px;display:inline-block">🏷 Print the price tag</a></p>'
+      + '<p style="font-size:13px;color:#555">Opens the Price Tag Maker with this piano, serial and price already filled in '
+      + '— print it and put it on the piano' + (prev ? ' in place of the old tag' : '') + '.</p>'
       + '<p style="font-size:12px;color:#777">Changed by ' + esc_(name || 'the team') + ' via the Store Map · ' + esc_(day) + '</p></div>',
     body: 'Price ' + verb + ' for ' + (found.summary || 'piano') + ' SN ' + serial + ': ' + price
-      + '. Please print the attached tag and update the piano.',
-    attachments: [pdf],
+      + '. Print the price tag from the Price Tag Maker: ' + makerUrl,
     name: 'BLP Store Map',
   });
 }
