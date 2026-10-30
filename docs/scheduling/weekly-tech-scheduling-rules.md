@@ -96,6 +96,17 @@ A Piano Log note like "we are putting a QRS on" means the QRS is NOT on yet.
 have its QRS installed; the draft read it as a delivery and booked a 30-minute
 "pre-delivery QC" the day before — Melissa, 102626terry10.)
 
+**AFTER plates go to Lupita (Mark 2026-10-30).** When a piano's card PLATE
+STATUS reads **Plate storage — AFTER** (refinished plate back from Curtis
+Harper), its restringing is **Lupita's next restringing assignment** —
+schedule it to start as soon as her current restring wraps, in shop-queue
+order when more than one AFTER plate is waiting. Don't give it to another
+restringer unless a manager's note says so. If the card's phase is already
+past Restringing (e.g. Exit Prep with the plate status still on AFTER),
+don't schedule a restring — flag the stale plate status as a bottleneck.
+(Schaeffer 23910, week of 11/2: AFTER plate, phase Restringing, while
+Lupita's 160095 restring was done.)
+
 Brigham's rules so far (2026-07-27):
 - **Loosely follow the queue**: prioritize pianos highest in the Custom
   Shopwork queue, BUT if no suitable tech is available for that piano's next
