@@ -227,19 +227,34 @@
   var btn = $('.btn'), pop = $('.pop'), drawer = $('.drawer'), badge = $('.badge');
   var msg = $('.msg');
 
-  function mount() {
+  var inline = null;
+  // Re-attaches the widget whenever the host page drops it: React apps re-render
+  // <body> after a hydration mismatch (Marketing) and swap the dock element on
+  // route changes, which silently removed the 💡 (10/30).
+  function attach() {
     var dockEl = null;
     try { dockEl = DOCK ? document.querySelector(DOCK) : null; } catch (e) { dockEl = null; }
     if (dockEl) {
       // docked: the button lives in the host's element, the popover stays in our root
-      btn.classList.add('dock');
-      var inline = document.createElement('span');
-      var iroot = inline.attachShadow ? inline.attachShadow({mode: 'open'}) : inline;
-      iroot.innerHTML = '<style>' + CSS + '</style>';
-      iroot.appendChild(btn);
-      dockEl.appendChild(inline);
+      if (!inline) {
+        btn.classList.add('dock');
+        inline = document.createElement('span');
+        var iroot = inline.attachShadow ? inline.attachShadow({mode: 'open'}) : inline;
+        iroot.innerHTML = '<style>' + CSS + '</style>';
+        iroot.appendChild(btn);
+      }
+      if (inline.parentNode !== dockEl) dockEl.appendChild(inline);
+    } else if (inline && !inline.isConnected) {
+      // dock gone (a page without it): float the button in our own root again
+      btn.classList.remove('dock');
+      root.appendChild(btn);
+      inline = null;
     }
-    document.body.appendChild(host);
+    if (!host.isConnected) document.body.appendChild(host);
+  }
+  function mount() {
+    attach();
+    setInterval(attach, 1000);
     loadSession().then(function () {
       if (S.admin) refreshAdmin();
       if (/^#requests\b/.test(location.hash) && S.admin) openAdmin();
