@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-29.5';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-30.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -4749,7 +4749,7 @@ function clockOutLocked_(req) {
 }
 /* Forgotten PIANO sessions: anything still open from a PREVIOUS day is
  * closed at the same flat time as the day clock (6 PM; 8 PM for Melissa;
- * 10 PM for movers — Mark 10/29), +1 h if it began after that, capped at 10 hours.
+ * 11 PM for movers — Mark 10/30, was 10 PM from 10/29), +1 h if it began after that, capped at 10 hours.
  * The "last activity" lookup that used to stretch these is retired for the
  * same reason as on the day clock: it was not reviewable. Runs
  * opportunistically, at most every 10 min. */
@@ -4909,12 +4909,13 @@ function closePayRow_(sh, open, endAt, note) {
           end: end.toISOString(), minutes: mins};
 }
 /* Forgotten DAY clocks close at a FLAT time (Walter 9/24): 6:00 PM for the
- * shop and admin side, 8:00 PM for Melissa, and 10:00 PM for movers (roster
- * Position says "Mover"; App Settings mover_finish — Mark 10/29). Movers had
+ * shop and admin side, 8:00 PM for Melissa, and 11:00 PM for movers (roster
+ * Position says "Mover"; App Settings mover_finish — Mark 10/29, 11 PM from 10/30). Movers had
  * no auto clock-out from 10/1: five forgotten punches in four weeks stayed
  * open one to three days through the morning texts, and one ran 45 hours
- * before anyone caught it. Their latest real finish was 9:38 PM, so 10 PM
- * closes the night's punch without cutting a move short. Nothing else moves
+ * before anyone caught it. Their latest real finish was 9:38 PM; 10 PM closed the
+ * night's punch at first, and Mark moved it to 11 PM (10/30) so a late move
+ * isn't cut short. Nothing else moves
  * the stamp.
  *
  * Two smarter rules were tried and retired the same week. Ending at the
@@ -4943,17 +4944,17 @@ function flatFinishHour_(name, crew) {
   return crew[first] ? 20 : 18;
 }
 /* Movers' flat clock-out (Mark 10/29): App Settings mover_finish, e.g.
- * "10 PM" or "22:30" — default 10:00 PM. */
+ * "11 PM" or "22:30" — default 11:00 PM (Mark 10/30; was 10 PM). */
 function moverFinishLabel_() {
   var f = moverFinish_();
   return ((f.h % 12) || 12) + ':' + ('0' + f.m).slice(-2) + (f.h < 12 ? ' AM' : ' PM');
 }
 function moverFinish_() {
   var tm = /(\d{1,2})(?::(\d{2}))?\s*([ap]\.?m\.?)?/i.exec(String(appSetting_('mover_finish', '') || ''));
-  if (!tm) return {h: 22, m: 0};
+  if (!tm) return {h: 23, m: 0};
   var h = Number(tm[1]), m = Number(tm[2] || 0);
   if (tm[3]) { var pm = /p/i.test(tm[3]); if (pm && h < 12) h += 12; if (!pm && h === 12) h = 0; }
-  return h <= 23 && m <= 59 ? {h: h, m: m} : {h: 22, m: 0};
+  return h <= 23 && m <= 59 ? {h: h, m: m} : {h: 23, m: 0};
 }
 function isMover_(name) {
   return !!moverFirsts_()[finishKey_(name).split(' ')[0]];
@@ -10290,7 +10291,7 @@ function lateClockNudge(e) {
 }
 
 /* Movers' morning text (Walter 10/1, 093026terry70): since 10/29 movers are
- * auto-closed at 10 PM like everyone else at their flat time, so this is a
+ * auto-closed at their flat time (11 PM since 10/30) like everyone else, so this is a
  * backstop only — a mover still clocked in from a previous day
  * (day clock or piano clock) gets ONE text at 10 AM: clock out, clock in for
  * today, and send a time-clock fix with the real finish time. Mon–Sat; the
