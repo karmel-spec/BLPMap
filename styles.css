@@ -1722,6 +1722,9 @@ button:disabled{opacity:.55;cursor:progress}
 #schedBody .propblock{border-left:3px solid #9aa3ac;background:#fafbfc;border-radius:0 5px 5px 0;padding:4px 6px;margin-bottom:4px}
 #schedBody .propblock .bt{font-size:10px;color:var(--mut);font-weight:700}
 #schedBody .propblock .bl{font-size:11px;line-height:1.35;color:#222}
+#schedBody .propblock .bs{font-size:10px;color:#2c5d96;font-weight:700;margin-top:1px}
+#schedBody .propblock .bs:first-letter{}
+#schedBody .propblock .bs[data-sn]:not(:empty)~.bn{margin-top:2px}
 #schedBody .propblock .bn{font-size:10px;color:#8a6a00;font-style:italic}
 #schedBody .propboxes{padding:10px 16px 16px}
 #schedBody .propbn{background:#fdf3ec;border:1px solid #eecfae;border-radius:8px;padding:8px 11px;font-size:12px;color:#6b5030;margin-top:8px}

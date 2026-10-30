@@ -741,7 +741,8 @@ async function loadProposal(box){
             `<div class="propblock" style="border-left-color:${colors[b[2]]||"#9aa3ac"}">
                <div class="bt">${esc(b[0])}–${esc(b[1])}</div>
                <div class="bl">${esc(b[3]||"")}</div>
-               ${b[4]?`<div class="bn">${esc(b[4])}</div>`:""}</div>`).join("")}</div>`;
+               ${blockSerial(b[3])?`<div class="bs" data-sn="${esc(blockSerial(b[3]))}">${esc(liveSpot(blockSerial(b[3])))}</div>`:""}
+               ${b[4]?`<div class="bn">${esc(noteForDisplay(b[4]))}</div>`:""}</div>`).join("")}</div>`;
         }).join("")}</div>
         </div><aside class="ptnotes"><div class="ntag">Notes to Claude — ${esc(tc.name)}</div>
         <textarea data-tech="${esc(tc.name)}" placeholder="Adjustments for ${esc(tc.name)}'s week… ('swap Tue/Wed', 'he's out Thursday', 'rule: never schedule him on QC')"></textarea>
@@ -806,6 +807,7 @@ async function loadProposal(box){
   // Cmd/Ctrl+Enter in any box = fire the matching send button (plain Enter stays a newline)
   box.querySelectorAll(".ptnotes textarea, #adjGlobal").forEach(t=>
     t.addEventListener("keydown",e=>{ if(e.key==="Enter"&&(e.metaKey||e.ctrlKey)){ e.preventDefault(); box.querySelector("#adjApply")?.click(); } }));
+  needMapData(fillSpots);   // live spots on the blocks once /api/data is in (no re-render)
   box.querySelectorAll(".bnanswer").forEach(t=>
     t.addEventListener("keydown",e=>{ if(e.key==="Enter"&&(e.metaKey||e.ctrlKey)){ e.preventDefault(); box.querySelector("#bnApply")?.click(); } }));
   // Heavy AI jobs run as Netlify BACKGROUND functions (a schedule revision
@@ -1029,9 +1031,32 @@ function renderPlanner(){
 /* ===== live Store Map data (queue positions, phases, tracks) + roster
  * positions — shared by the Sequence recommendations and the Pipeline's
  * live For Sale / Sale Pending columns ===== */
-let MAPD=null, MAPD_LOADING=false, ROSTER_POS={};
-function needMapData(){
-  if(MAPD || MAPD_LOADING) return !!MAPD;
+let MAPD=null, MAPD_LOADING=false, MAPD_RETRIED=false, ROSTER_POS={}, MAPD_WAITERS=[];
+// the piano's live map spot on every proposal block (Mark 10/30): the
+// "Spot 85a, …" the draft writes into a note was the only spot the Planner
+// showed, so blocks added by a note had none, and a moved piano kept its old
+// one. The spot now comes from /api/data like Approve's event Location does.
+function blockSerial(title){
+  const m=/\b(?=[A-Z0-9-]*\d)[A-Z0-9][A-Z0-9-]{3,}\b/i.exec(String(title||""));
+  return m?m[0].toUpperCase():"";
+}
+function liveSpot(sn){
+  if(!MAPD||!sn) return "";
+  const p=(MAPD.pianos||[]).find(x=>x.active&&String(x.serial||"").toUpperCase().split(/\s*[\/,;]\s*/).includes(sn));
+  // a serial no active piano has (Hunter's "Steinway 415912" — the piano is 451912) is worth seeing before Approve
+  return p?(String(p.location||"").trim()?"📍 "+String(p.location).trim():"📍 no spot"):"⚠ no active piano with serial "+sn;
+}
+function fillSpots(){
+  document.querySelectorAll(".propblock .bs[data-sn]").forEach(el=>{ el.textContent=liveSpot(el.dataset.sn); });
+}
+// the note's own "Spot 79, " lead-in is the draft's copy of the same spot — hidden on screen now that the live one shows
+function noteForDisplay(n){
+  return String(n||"").replace(/(\]\s*|^)spot\s+[^,.;:\]]{1,16}[,.;:]?\s*/i,"$1");
+}
+function needMapData(onReady){
+  if(MAPD){ if(onReady) onReady(); return true; }
+  if(MAPD_LOADING){ if(onReady) MAPD_WAITERS.push(onReady); return false; }
+  if(onReady) MAPD_WAITERS.push(onReady);
   MAPD_LOADING=true;
   Promise.all([
     fetch("/api/data",{signal:AbortSignal.timeout(30000)}).then(r=>r.json()).catch(()=>null),
@@ -1043,8 +1068,12 @@ function needMapData(){
       const first=String(r[0]||"").trim().toLowerCase();
       if(first) ROSTER_POS[first]=String(r[2]||"");
     });
-    schedRerender();
-  }).catch(()=>{}).then(()=>{ MAPD_LOADING=false; });
+    MAPD_LOADING=false;
+    // no map data (a 502 from the data function, a cold instance): try once more
+    // in 8 s rather than leave the blocks without spots until the next render
+    if(!MAPD && !MAPD_RETRIED){ MAPD_RETRIED=true; const w0=MAPD_WAITERS.splice(0); setTimeout(()=>needMapData(()=>w0.forEach(f=>{ try{ f(); }catch(e){} })),8000); return; }
+    const w=MAPD_WAITERS.splice(0); if(w.length) w.forEach(f=>{ try{ f(); }catch(e){} }); else schedRerender();
+  }).catch(()=>{ MAPD_LOADING=false; });
   return false;
 }
 const digitsOf = s => String(s||"").replace(/\D/g,"");
