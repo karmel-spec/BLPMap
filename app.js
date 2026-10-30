@@ -969,10 +969,19 @@ function qItem(p, badge, sub) {
     main: `${esc(p.summary || '')} <span class="lite">#${esc(p.serial)}</span>`,
     right: `<span class="lite">${esc(p.location || '')}</span>`};
 }
+/* Off every concurrent-task queue (Mark 10/30): a Paused piano gets no side
+ * work while it's paused, and a piano whose only track is Player Rebuild gets
+ * player work only — no keytops, plates, plating, decals, bass strings or
+ * refinishing. Rebuild + Player Rebuild still counts as a full job. */
+function playerOnly(p) {
+  const l = trackParts(p.track).list;
+  return l.length > 0 && l.every(t => t === 'Player Rebuild');
+}
+function offTaskQueues(p) { return effectivePhase(p) === 'Paused' || playerOnly(p); }
 const QDEFS = {
   keytop: {title: '🔑 Keytop Queue', noun: 'keytop queue', unit: 'piano',
     sub: 'open keytop work · In Progress first, then the numbered queue', empty: 'Nothing in the keytop queue 🎉',
-    natural: () => S.data.pianos.filter(x => x.active && (x.keytopStatus || '').trim() && !/^done/i.test(x.keytopStatus))
+    natural: () => S.data.pianos.filter(x => x.active && (x.keytopStatus || '').trim() && !/^done/i.test(x.keytopStatus) && !offTaskQueues(x))
       .sort(keytopOrder).map(p => qItem(p, `<b style="min-width:88px;color:#9e2020">${esc(p.keytopStatus)}</b>`))},
   plates: {title: '⚙️ Plate Queue', noun: 'plate queue', unit: 'plate',
     sub: 'from Curtis Harper\'s sheet (its row order = priority)', empty: 'Curtis Harper\'s plate list is empty — nothing in the plate queue.',
@@ -12160,7 +12169,7 @@ const TQ_DEFS = [
    note: p => [p.keytopMaterial ? '🎨 ' + p.keytopMaterial : '', p.keytopStatus, taskVal(p, 'keys')].filter(Boolean).join(' · '),
    // In Progress first, then In Key Queue #n, then Evaluate (Brigham 9/17)
    pool: () => S.data.pianos.filter(p => p.active && p.serial && (p.queuePos || p.phase)
-     && (p.phase || '') !== 'For Sale' && (p.phase || '') !== 'Delivered').sort(keytopOrder)},
+     && (p.phase || '') !== 'For Sale' && (p.phase || '') !== 'Delivered' && !offTaskQueues(p)).sort(keytopOrder)},
   {key: 'plates', icon: '⚙️', title: 'PLATES TO CURTIS HARPER',
    need: p => ['Removed', 'Plate storage — BEFORE'].includes((p.plateStatus || '').trim()),
    note: p => p.plateStatus},
@@ -12221,7 +12230,7 @@ const TQ_DEFS = [
 function taskQueueLists() {
   const pool = S.data.pianos
     .filter(p => p.active && p.serial && (p.queuePos || p.phase)
-      && (p.phase || '') !== 'For Sale' && (p.phase || '') !== 'Delivered')
+      && (p.phase || '') !== 'For Sale' && (p.phase || '') !== 'Delivered' && !offTaskQueues(p))
     .sort((a, b) => (a.queuePos || 999) - (b.queuePos || 999) || a.row - b.row);
   return TQ_DEFS.map(d => ({d, list: (d.pool ? d.pool() : pool).filter(d.need)}));
 }
