@@ -68,13 +68,15 @@
           var r = await fetchT(SESSION_URL, {credentials: 'same-origin', cache: 'no-store'}, 12000);
           if (r.ok) {
             var j = await r.json();
-            // a passcode-only sign-in may know the team key but not the person
-            if (j && (j.name || j.email || j.key)) {
-              S.name = String(j.name || (j.email ? j.email.split('@')[0] : ''));
-              S.email = String(j.email || '');
+            // a passcode-only sign-in may know the team key (or the admin flag)
+            // but not the person — keep what's known, ask for the rest
+            if (j) {
+              if (j.name || j.email) {
+                S.name = String(j.name || (j.email ? j.email.split('@')[0] : ''));
+                S.email = String(j.email || '');
+              }
               S.admin = !!j.admin;
-              S.key = String(j.key || '');
-              S.fromHost = !!S.key;
+              if (j.key) { S.key = String(j.key); S.fromHost = true; }
             }
           }
         } catch (e) { /* fall back to asking */ }
@@ -160,6 +162,7 @@
     '.st{font-size:10.5px;padding:2px 7px;border-radius:99px;background:#eee6da;white-space:nowrap;flex:none}' +
     '.st.sLive{background:#dcefe2;color:#205c35}.st.sTested{background:#e4e4f5;color:#3a3a7a}.st.sInprogress{background:#fdeed3;color:#7a5a12}.st.sDeclined,.st.sDuplicate{background:#f1eeee;color:#7a6e6e}' +
     '.mini{border:1px solid #2e7d46;color:#2e7d46;background:none;border-radius:7px;font-size:11px;padding:2px 7px;cursor:pointer;white-space:nowrap}' +
+    '[hidden]{display:none!important}' +
     '.adminlink{display:block;width:100%;margin-top:10px;border:1px solid #1f1b17;background:#1f1b17;color:#ffd34d;border-radius:8px;padding:8px;font-size:13px;font-weight:600;cursor:pointer}' +
     /* admin drawer — a right-side panel so the app stays visible beside it */
     '.drawer{position:fixed;z-index:2147482002;top:0;right:0;bottom:0;width:min(460px,100vw);background:#fbf9f6;color:#221d18;box-shadow:-10px 0 40px rgba(0,0,0,.28);display:none;flex-direction:column;font-size:13.5px}' +
