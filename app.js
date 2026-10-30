@@ -6326,6 +6326,77 @@ const clockLabel = (clock, serial) => {
   return p || (String(clock || '') + (serial ? ' #' + serial : ''));
 };
 
+/* My pending time-fix requests (Alex 10/30, 103026martin04): the form lists
+ * the signed-in person's requests that nobody has applied yet. ✎ Edit reopens
+ * one in the form with its day, times and clock filled in and saves over it
+ * (bridge editclockfix — still-open, own rows only); Withdraw takes it off the
+ * list. A wrong date or time no longer means a second request for the
+ * approver to sort out. */
+async function cfxEditPost(body) {
+  const {pin, ok} = writeAuth();
+  if (!ok) return {error: 'Sign in first.'};
+  for (let a = 0; a < 3; a++) {
+    try {
+      const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+        headers: {'content-type': 'text/plain;charset=utf-8'},
+        body: JSON.stringify({pin, ...authFields(), ...body})});
+      const j = await r.json();
+      if (j && j.service && !j.error) { await new Promise(res => setTimeout(res, 1200 * (a + 1))); continue; }   // ping imposter — retry (an edit is safe to repeat)
+      return j;
+    } catch (e) { await new Promise(res => setTimeout(res, 1200 * (a + 1))); }
+  }
+  return {error: 'the Google bridge hiccuped and nothing was changed — try again in a minute'};
+}
+async function cfxMineLoad(ov) {
+  const box = ov.querySelector('.cf-mine');
+  const me = cfxMeKey(clockName());
+  if (!box || !me) return;
+  let rows = [];
+  try { rows = (await (await fetch(BRIDGE_URL + '?fn=clockfixes&_=' + Date.now(), {redirect: 'follow'})).json()).rows || []; } catch (e) { return; }
+  const mine = rows.filter(r => r.status === 'open' && cfxMeKey(r.who) === me);
+  if (!mine.length || !document.body.contains(ov)) { box.innerHTML = ''; return; }
+  box.innerHTML = `<div class="cfm-head">${tr('Your requests waiting to be applied', 'Tus solicitudes pendientes')} (${mine.length})</div>`
+    + mine.map(r => `<div class="cfm-row" data-row="${r.row}"><div class="cfm-txt"><b>${esc(r.when)}</b> · ${esc(clockLabel(r.clock, r.serial))}<br>${esc(r.note)}</div>
+        <div class="cfm-btns"><button class="csvbtn cfm-edit">✎ ${tr('Edit', 'Editar')}</button><button class="csvbtn cfm-wd">${tr('Withdraw', 'Retirar')}</button></div></div>`).join('');
+  box.querySelectorAll('.cfm-edit').forEach(b => b.onclick = () => {
+    const r = mine.find(x => x.row === +b.closest('.cfm-row').dataset.row);
+    if (r) cfxFillForEdit(ov, r);
+  });
+  box.querySelectorAll('.cfm-wd').forEach(b => b.onclick = async () => {
+    const rowEl = b.closest('.cfm-row');
+    if (!confirm(tr('Withdraw this request? The approver won’t see it anymore.', '¿Retirar esta solicitud? Ya no le aparecerá a quien la aprueba.'))) return;
+    b.disabled = true; b.textContent = '…';
+    const j = await cfxEditPost({action: 'editclockfix', row: +rowEl.dataset.row, withdraw: true});
+    if (j && j.ok) { rowEl.innerHTML = `<div class="cfm-txt dim">${tr('Withdrawn.', 'Retirada.')}</div>`; S.fixRows = null; }
+    else { b.disabled = false; b.textContent = tr('Withdraw', 'Retirar'); alert((j && j.error) || 'not changed'); }
+  });
+}
+const cfxMeKey = x => String(x || '').replace(/\s*[(<].*$/, '').trim().toLowerCase().replace(/\s+/g, ' ');
+// a request back into the form: day, times, clock / serial, and the free text
+// after the "10/27: clock in 8:00 AM, clock out 4:30 PM." head cfxComposeNote wrote
+function cfxFillForEdit(ov, r) {
+  const note = String(r.note || '').replace(/\s*\(edited [^)]*\)\s*$/i, '');
+  const {named, filed} = cfxDates({note, when: r.when});
+  const t = cfxTimes(note);
+  const sel = ov.querySelector('.cf-clock'), ser = ov.querySelector('.cf-serial');
+  const serial = String(r.serial || '').trim();
+  const pseudo = CLOCK_PSEUDO[serial.toUpperCase()] ? serial.toUpperCase() : '';
+  sel.value = /piano/i.test(r.clock) ? (pseudo && [...sel.options].some(o => o.value === pseudo) ? pseudo : 'piano') : 'pay';
+  ser.style.display = sel.value === 'piano' ? '' : 'none';
+  ser.value = sel.value === 'piano' ? serial : '';
+  ov.querySelector('.cf-date').value = named[0] || filed;
+  ov.querySelector('.cf-in').value = t.in || '';
+  ov.querySelector('.cf-out').value = t.out || '';
+  let rest = note.replace(/^\s*(?:\d{1,2}\/\d{1,2}(?::|\.))?\s*(?:clock in [0-9:]+ [AP]M)?(?:,\s*)?(?:clock out [0-9:]+ [AP]M)?\.?\s*/i, '');
+  if (pseudo) rest = rest.replace(new RegExp('^' + CLOCK_PSEUDO[pseudo] + ' clock\\.\\s*', 'i'), '');
+  ov.querySelector('.cf-note').value = rest.trim();
+  ov.dataset.editRow = String(r.row);
+  const send = ov.querySelector('.cf-send'); send.textContent = tr('Save changes', 'Guardar cambios');
+  const sub = ov.querySelector('.cf-sub');
+  sub.innerHTML = `✎ ${tr('Editing your request from', 'Editando tu solicitud del')} <b>${esc(r.when)}</b> — ${tr('fix the day or times, then Save changes.', 'corrige el día o las horas y guarda.')} <a href="#" class="cf-noedit">${tr('Cancel edit', 'Cancelar')}</a>`;
+  sub.querySelector('.cf-noedit').onclick = ev => { ev.preventDefault(); ov.remove(); clockFixModal(); };
+  ov.querySelectorAll('.cfm-row').forEach(x => x.classList.toggle('cfm-on', +x.dataset.row === r.row));
+}
 function clockFixModal(prefill) {
   const old = document.querySelector('.dsheetov'); if (old) old.remove();
   const ov = document.createElement('div');
@@ -6333,7 +6404,8 @@ function clockFixModal(prefill) {
   const today = new Date().toLocaleDateString('en-CA');
   ov.innerHTML = `<div class="dsheet"><button class="dsx">✕</button>
     <h3>🛠 Request a time fix</h3>
-    <div class="dssub">Pick the day and enter the times that are <b>correct</b> — leave a time blank if that punch is already right.</div>
+    <div class="cf-mine"></div>
+    <div class="dssub cf-sub">Pick the day and enter the times that are <b>correct</b> — leave a time blank if that punch is already right.</div>
     <div class="rfbar"><select class="cf-clock">
       <option value="pay">My day clock (payroll)</option>
       <option value="piano">A piano work clock</option>
@@ -6352,6 +6424,7 @@ function clockFixModal(prefill) {
   ov.querySelector('.dsx').onclick = () => ov.remove();
   const sel = ov.querySelector('.cf-clock'), ser = ov.querySelector('.cf-serial');
   sel.onchange = () => { ser.style.display = sel.value === 'piano' ? '' : 'none'; };   // no serial for pay/TIDY/MGMT
+  cfxMineLoad(ov);
   ov.querySelector('.cf-send').onclick = async ev => {
     const sendBtn = ev.currentTarget;
     if (sendBtn.disabled) return;   // a second tap while the bridge is slow filed the request twice (Mark 9/14)
@@ -6380,9 +6453,18 @@ function clockFixModal(prefill) {
     }, 8000);
     // file it in the language the app is set to, so the "your clock is fixed"
     // text comes back in that language without anyone maintaining a list
-    const j = await clockFixPost({action: 'clockfix', clock, serial, note,
-      date: ymd, inAt: inT, outAt: outT, lang: es() ? 'es' : 'en'});
+    const editRow = ov.dataset.editRow ? +ov.dataset.editRow : 0;
+    const j = editRow
+      ? await cfxEditPost({action: 'editclockfix', row: editRow, clock, serial, note})
+      : await clockFixPost({action: 'clockfix', clock, serial, note,
+          date: ymd, inAt: inT, outAt: outT, lang: es() ? 'es' : 'en'});
     clearInterval(slowTimer);
+    if (editRow && j && j.ok) {
+      ov.querySelector('.dsheet').innerHTML = '<h3>✅ Request updated</h3><div class="dssub">Your request was changed in place — the approver sees the corrected version, no second request.</div>';
+      S.fixRows = null;
+      setTimeout(() => ov.remove(), 2600);
+      return;
+    }
     if (!j || j.error) { msg.textContent = (j && j.error) || 'no reply from the bridge — check 🛠 Time Clock before sending again'; sendBtn.disabled = false; sendBtn.textContent = sendWas; return; }
     if (false) { msg.textContent = j.error; sendBtn.disabled = false; sendBtn.textContent = sendWas; return; }
     ov.querySelector('.dsheet').innerHTML = j.duplicate

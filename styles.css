@@ -915,6 +915,16 @@ body{top:0!important}
 .dframe{flex:1;border:none;width:100%}
 .dsheetov{position:fixed;inset:0;background:rgba(20,22,25,.5);z-index:220;display:flex;align-items:flex-end}
 .dsheet{background:#fff;width:100%;max-height:74vh;overflow:auto;border-radius:18px 18px 0 0;padding:16px;max-width:560px;margin:0 auto}
+/* my pending time-fix requests (Alex 10/30) */
+.cf-mine:empty{display:none}
+.cf-mine{background:#faf7f1;border:1px solid #e8e1d4;border-radius:10px;padding:8px 10px;margin:4px 0 10px}
+.cfm-head{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#8a6a00;margin-bottom:4px}
+.cfm-row{display:flex;gap:8px;align-items:flex-start;padding:6px 0;border-top:1px solid #eee6d8}
+.cfm-row:first-of-type{border-top:0}
+.cfm-row.cfm-on{background:#fff4d6;border-radius:6px;padding:6px}
+.cfm-txt{flex:1;font-size:12.5px;line-height:1.4;color:#333}
+.cfm-btns{display:flex;flex-direction:column;gap:4px}
+.cfm-btns .csvbtn{font-size:11.5px;padding:4px 9px;white-space:nowrap}
 .dsheet h3{font-size:15px;color:#2b2f33;margin:0 0 2px}
 .dssub{font-size:11.5px;color:#8a847b;margin-bottom:10px}
 .dsheet table{width:100%;border-collapse:collapse;font-size:12.5px}
