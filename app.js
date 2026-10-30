@@ -16237,12 +16237,21 @@ function renderTeam() {
  * tab via the bridge. */
 const TB = {rows: null, loading: false, person: '', faces: null, cols: {}};
 const TB_COLS = [['todo', 'TO DO'], ['doing', 'DOING'], ['done', 'DONE']];
-// off the strip (Brigham 8/28: Brigham Jr won't be working here anymore)
+// off the strip (Brigham 8/28: Brigham Jr won't be working here anymore;
+// Lisa Litton no longer works here — Melissa 10/24, 102426terry07)
 const TB_EXCLUDE = ['brigham jr larson', 'brig jr. larson',
   'abby larson', 'brielle larson', 'ben larson', 'susie martinez', 'susie marinez',
-  'louis larson', 'loius larson'];
+  'louis larson', 'loius larson', 'lisa litton'];
 // on the strip even though not on the roster's Current Team tab
-const TB_SEED = ['Lisa Litton'];
+const TB_SEED = [];
+// Anyone on the team roster's "Former BLP" tab drops off the strip too, so
+// moving a person's row there is all it takes (Melissa 10/24) — unless they
+// are also on Current Team (a rehire) or it's you
+function tbRosterNames(j2, tab) {
+  return ((j2.tabs && j2.tabs[tab]) || []).slice(1)
+    .map(row => (String(row[0] || '').trim() + ' ' + String(row[1] || '').trim()).trim())
+    .filter(Boolean);
+}
 // black & white headshots from the website's team page (Shopify CDN)
 const TB_HEADSHOTS = {
   "brigham larson": "https://www.brighamlarsonpianos.com/cdn/shop/files/Brigham.Larson.BW.jpg?v=1709675863&width=240",
@@ -16300,9 +16309,12 @@ function tbPeople() {
   const me = tbMe();
   const owners = [...new Set((TB.rows || []).map(r => r.owner).filter(Boolean))];
   const set = new Map();
+  const current = new Set((TB.faces || []).map(tbNorm));
+  const former = new Set((TB.former || []).map(tbNorm).filter(k => !current.has(k)));
   [me, ...TB_SEED, ...(TB.faces || []), ...owners].forEach(n => {
     const k = tbNorm(n);
     if (!k || TB_EXCLUDE.includes(k)) return;
+    if (former.has(k) && k !== tbNorm(me)) return;
     if (!set.has(k)) set.set(k, TB_DISPLAY[k] || n);
   });
   return [...set.values()].sort((a, b) => a.localeCompare(b));
@@ -16413,9 +16425,8 @@ async function tbFetch() {
     try {
       const r2 = await fetch(TEAM_ROSTER_API + '?key=' + encodeURIComponent('pianoman'));
       const j2 = await r2.json();
-      TB.faces = ((j2.tabs && j2.tabs['Current Team']) || []).slice(1)
-        .map(row => (String(row[0] || '').trim() + ' ' + String(row[1] || '').trim()).trim())
-        .filter(Boolean);
+      TB.faces = tbRosterNames(j2, 'Current Team');
+      TB.former = tbRosterNames(j2, 'Former BLP');
     } catch (e) { TB.faces = []; }
   }
   TB.loading = false;
@@ -16580,9 +16591,8 @@ function renderTaskBoard() {
     fetch(TEAM_ROSTER_API + '?key=' + encodeURIComponent('pianoman'))
       .then(r => r.json())
       .then(j2 => {
-        TB.faces = ((j2.tabs && j2.tabs['Current Team']) || []).slice(1)
-          .map(row => (String(row[0] || '').trim() + ' ' + String(row[1] || '').trim()).trim())
-          .filter(Boolean);
+        TB.faces = tbRosterNames(j2, 'Current Team');
+        TB.former = tbRosterNames(j2, 'Former BLP');
       })
       .catch(() => { TB.faces = null; })   // stays null → retried on next render
       .then(() => { TB.facesLoading = false; if (TB.faces) renderTaskBoard(); });
