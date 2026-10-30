@@ -100,8 +100,9 @@ have its QRS installed; the draft read it as a delivery and booked a 30-minute
 STATUS reads **Plate storage — AFTER** (refinished plate back from Curtis
 Harper), its restringing is **Lupita's next restringing assignment** —
 schedule it to start as soon as her current restring wraps, in shop-queue
-order when more than one AFTER plate is waiting. Don't give it to another
-restringer unless a manager's note says so. If the card's phase is already
+order when more than one AFTER plate is waiting — no note needed, and another
+tech on a DIFFERENT phase of that piano (keytops, DHRT, refinishing) is not a
+conflict. Don't give it to another restringer unless a manager's note says so. If the card's phase is already
 past Restringing (e.g. Exit Prep with the plate status still on AFTER),
 don't schedule a restring — flag the stale plate status as a bottleneck.
 (Schaeffer 23910, week of 11/2: AFTER plate, phase Restringing, while
@@ -112,7 +113,10 @@ its DHRT, its restringing — has ONE technician on it on any given day unless a
 manager's note pairs two by name ("Hunter joins Avery on the 211935 CAP").
 Never double techs up on one phase on your own and never put a second tech
 "behind" the first. DIFFERENT phases on the same piano may overlap —
-restringing and DHRT, keytops alongside other phases — that is fine. (Week of
+restringing and DHRT, keytops alongside other phases — that is fine and needs
+no note: another tech on a different phase is never a reason to leave someone
+unscheduled (week of 11/2: Lupita's week came back blank because Marcelo had
+the Schaeffer's key service — wrong). (Week of
 11/2 draft: "Jake opens the Decker DHRT with Garrett behind him from Thursday";
 earlier, Hunter + Avery both on the 211935 CAP — neither asked for.)
 
