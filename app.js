@@ -3255,6 +3255,10 @@ function printShopTag(p) {
       /* double-sided (Lisa 8/31): a second identical page so a duplex
          print puts the tag on BOTH faces of each cut half */
       body.duplex .sheet.s2 { display: block; page-break-before: always; }
+      /* 1 per page (Melissa 10/28, 102826terry11): only the top tag prints —
+         she turns the sheet around and runs it through again for a second
+         piano's tag on the bottom half */
+      body.one .sheet > .cut, body.one .sheet > .half:last-child { display: none !important; }
       /* phone printing (Mark 10/23, 102326hales65): two tags filled 10.28 of
          the page's 10.56 in, and a phone's larger margins cut the second one
          off mid-tag. A 94% sheet leaves room on any printer, and each tag
@@ -3263,10 +3267,13 @@ function printShopTag(p) {
       .sheet { zoom: .94; }
       .half { display: block; break-inside: avoid; page-break-inside: avoid; }
     }
-  </style></head><body class="duplex">
+  </style></head><body>
     <div class="bar"><b>Shop tag</b> — click any field to edit, tap 1·2·3 to set the refinishing level
-      <label style="display:flex;align-items:center;gap:5px;font-weight:400"><input type="checkbox" id="dup" checked onchange="document.body.classList.toggle('duplex',this.checked);document.querySelector('.bar button').textContent=this.checked?'🖨 Print double-sided':'🖨 Print — 2 per page'"> double-sided <small style="color:#9aa">(pick “two-sided” in the print dialog)</small></label>
-      <button onclick="doPrint()">🖨 Print double-sided</button><button class="xclose" onclick="window.close()" title="close this preview">✕ Close</button></div>
+      <span style="display:flex;align-items:center;gap:10px;font-weight:400">
+        <label><input type="radio" name="lay" value="two" checked onchange="setLay(this.value)"> 2 per page</label>
+        <label><input type="radio" name="lay" value="one" onchange="setLay(this.value)"> 1 per page <small style="color:#9aa">(top half — flip the sheet for another piano)</small></label>
+        <label><input type="radio" name="lay" value="duplex" onchange="setLay(this.value)"> double-sided</label></span>
+      <button onclick="doPrint()">🖨 Print — 2 per page</button><button class="xclose" onclick="window.close()" title="close this preview">✕ Close</button></div>
     ${(d.noteSegs && d.noteSegs.length) ? `<div class="lognotes">
       <b>📝 Notes from the log — nothing prints unless you tick it.</b> Leave anything private or unkind unticked.
       ${d.noteSegs.map((t, i) => `<label><input type="checkbox" class="lgn" data-i="${i}"> ${esc(t)}</label>`).join('')}
@@ -3297,8 +3304,17 @@ function printShopTag(p) {
           im.decode ? im.decode().catch(() => {})
                     : (im.complete ? Promise.resolve()
                                    : new Promise(r => { im.onload = im.onerror = r; }))));
-        if (b) b.textContent = document.getElementById('dup').checked ? '🖨 Print double-sided' : '🖨 Print — 2 per page';
+        if (b) b.textContent = layLabel();
         print();
+      }
+      // print layout (Melissa 10/28): 2 per page is the default every time;
+      // 1 per page prints only the top tag; double-sided adds the back page
+      const layNow = () => (document.querySelector('input[name=lay]:checked') || {}).value || 'two';
+      const layLabel = () => ({two: '🖨 Print — 2 per page', one: '🖨 Print — 1 per page', duplex: '🖨 Print double-sided'})[layNow()];
+      function setLay(v) {
+        document.body.classList.toggle('duplex', v === 'duplex');
+        document.body.classList.toggle('one', v === 'one');
+        const b = document.querySelector('.bar button'); if (b) b.textContent = layLabel();
       }
       window.onbeforeprint = sync;
       t1.querySelectorAll('.rw b, .nm h1, .nm .sub, .rail span').forEach(el => {
