@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-30.12';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-30.13';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -1647,6 +1647,9 @@ function doPost(e) {
     }
     if (req.action === 'clockfixtype') {
       return json_(setClockFixType_(req, who));
+    }
+    if (req.action === 'editclockfix') {
+      return json_(editClockFix_(req, who));
     }
     if (req.action === 'setpaperwork') {
       var spw = setPaperwork_(req);
@@ -5784,6 +5787,39 @@ function clockFixRequest_(req, who) {
  * anyone who may resolve it, so ✎ Apply looks in the right punch list.
  * `clockfix: true` in the reply lets the app tell a real save apart from
  * an older bridge that doesn't know this action yet. */
+/* A team member edits or withdraws their OWN time-fix request while it is
+ * still open (Alex 10/30, 103026martin04: a wrong date or time meant sending a
+ * second request, and the approver then had two to sort out). Signed-in
+ * Google identity required; the row must be theirs and still "open". The
+ * filed time stays — the list keeps its order — and the note says it was
+ * edited. withdraw:true sets the status instead, which never texts. */
+function editClockFix_(req, who) {
+  var g = req._g;
+  if (!g || !(g.email || g.name)) return {error: 'Sign in with Google to change your request.'};
+  var sh = clockFixSheet_();
+  var row = Number(req.row);
+  if (!(row >= 2) || row > sh.getLastRow()) return {error: 'bad row'};
+  var cur = sh.getRange(row, 1, 1, 6).getValues()[0];
+  var rowWho = String(cur[1] || '');
+  var mine = (g.email && rowWho.toLowerCase().indexOf(String(g.email).toLowerCase()) >= 0)
+    || (g.name && cfxWho_(rowWho) === cfxWho_(g.name));
+  if (!mine) return {error: 'You can only change your own requests.'};
+  if (String(cur[5] || 'open') !== 'open') return {error: 'This request was already handled (' + String(cur[5]) + ') — send a new one if something is still wrong.'};
+  var stamp = Utilities.formatDate(new Date(), 'America/Denver', 'M/d h:mm a');
+  if (req.withdraw) {
+    sh.getRange(row, 6).setValue('withdrawn by requester · ' + stamp);
+    logAct_(who, 'Clock fix withdrawn', String(cur[3] || '') || '(day clock)', String(cur[4] || '').slice(0, 120));
+    return {ok: true, row: row, status: 'withdrawn'};
+  }
+  var note = String(req.note || '').trim();
+  if (!note) return {error: 'say what needs fixing (date + correct times helps)'};
+  var clock = req.clock === 'pay' ? 'Day clock' : 'Piano clock';
+  var serial = clock === 'Piano clock' ? String(req.serial || '').trim().slice(0, 40) : '';
+  var finalNote = (note + ' (edited ' + stamp + ')').slice(0, 400);
+  sh.getRange(row, 3, 1, 3).setValues([[clock, serial, finalNote]]);
+  logAct_(who, 'Clock fix edited', serial || '(day clock)', finalNote.slice(0, 120));
+  return {ok: true, row: row, clock: clock, serial: serial, note: finalNote};
+}
 function setClockFixType_(req, who) {
   var g = req._g;
   if (!payrollAdmin_(g) && !timelogAdmin_(g)) {
