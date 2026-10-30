@@ -1723,9 +1723,13 @@ button:disabled{opacity:.55;cursor:progress}
 #schedBody .propblock .bt{font-size:10px;color:var(--mut);font-weight:700}
 #schedBody .propblock .bl{font-size:11px;line-height:1.35;color:#222}
 #schedBody .propblock .bs{font-size:10px;color:#2c5d96;font-weight:700;margin-top:1px}
+#schedBody .propblock .bc{font-size:10.5px;line-height:1.35;color:#1c1c1c;background:#f3f6fb;border-left:2px solid #2c5d96;padding:3px 6px;margin-top:3px;border-radius:0 4px 4px 0}
+#schedBody .propblock .bwarn{font-size:9.5px;color:#9e2020;font-weight:700;margin-left:4px}
+#schedBody .propblock .bc.bc0{color:#8a929a;background:none;border-left-color:#d7dde4}
 #schedBody .propblock .bw{font-size:10px;line-height:1.35;color:#2f7d4f;margin-top:2px}
 #schedBody .propblock .bw:empty{display:none}
-#schedBody .propblock .bn{font-size:10px;color:#8a6a00;font-style:italic}
+#schedBody .propblock .bn{font-size:10px;color:#9a948b;font-style:italic;margin-top:3px}
+#schedBody .propblock .bn::before{content:'why: ';font-style:normal;color:#b3ada4}
 #schedBody .propboxes{padding:10px 16px 16px}
 #schedBody .propbn{background:#fdf3ec;border:1px solid #eecfae;border-radius:8px;padding:8px 11px;font-size:12px;color:#6b5030;margin-top:8px}
 #schedBody .propbn b{display:block;margin-bottom:2px;padding-right:96px}

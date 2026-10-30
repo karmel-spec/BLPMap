@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-30.7';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-30.8';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -7617,7 +7617,13 @@ function applyScheduleLocked_(req) {
           standing.forEach(function (x) { if (x.s >= lastHour && x.s > d1 && x.s < d2) d2 = new Date(x.s); });
         }
         try {
-          var evTitle = String(b[3] || 'Shop work');
+          // a [CAL: …] the Planner wrote INTO the title (Garrett's DHRT blocks,
+          // 10/30) is calendar text: it comes off the title and goes to the
+          // event note with the note's own segments (Mark 10/30)
+          var titleCal = [];
+          var evTitle = String(b[3] || '').replace(/\[\s*CAL\s*:\s*([^\]]*)\]/gi, function (_, tc) {
+            tc = String(tc).trim(); if (tc) titleCal.push('[CAL: ' + tc + ']'); return ' ';
+          }).replace(/\s+/g, ' ').trim() || 'Shop work';
           var ck = calKey_(evTitle, d1);
           if (onCal[ck]) {
             alreadyOn.push(Utilities.formatDate(d1, 'America/Denver', 'EEE h:mm a') + ' ' + evTitle.slice(0, 40));
@@ -7631,7 +7637,7 @@ function applyScheduleLocked_(req) {
           // Korban's Hardware Buffing Queue (Walter 10/19): the calendar text is
           // the live buffing list — top two plate screws, top two visible
           // hardware — not the Planner's guess at his jobs
-          var cleanNote = calDescription_(b[4], plan.calNotes === 'cal-only');
+          var cleanNote = calDescription_((titleCal.length ? titleCal.join(' ') + ' ' : '') + String(b[4] || ''), plan.calNotes === 'cal-only');
           if (/hardware buffing queue/i.test(evTitle)) {
             var bd = buffingDesc_();
             if (bd) {

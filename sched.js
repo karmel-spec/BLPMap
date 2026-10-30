@@ -740,9 +740,11 @@ async function loadProposal(box){
           return `<div class="propday"><div class="dh">${dn}</div>${blocks.map(b=>
             `<div class="propblock" style="border-left-color:${colors[b[2]]||"#9aa3ac"}">
                <div class="bt">${esc(b[0])}–${esc(b[1])}</div>
-               <div class="bl">${esc(b[3]||"")}</div>
-               ${blockSerial(b[3])?`<div class="bs" data-sn="${esc(blockSerial(b[3]))}">${esc(liveSpot(blockSerial(b[3])))}</div><div class="bw" data-sn="${esc(blockSerial(b[3]))}"></div>`:""}
-               ${b[4]?`<div class="bn">${esc(noteForDisplay(b[4]))}</div>`:""}</div>`).join("")}</div>`;
+               <div class="bl">${esc(cleanTitle(b[3]))}${calSegments(b[3]).length?` <span class="bwarn" title="the Planner put calendar text inside the title — shown below as calendar text; Approve moves it to the event note">⚠ CAL in title</span>`:""}</div>
+               ${blockSerial(b[3])?`<div class="bs" data-sn="${esc(blockSerial(b[3]))}">${esc(liveSpot(blockSerial(b[3])))}</div>`:""}
+               ${calPreview(b[3],b[4],plan)}
+               ${blockSerial(b[3])?`<div class="bw" data-sn="${esc(blockSerial(b[3]))}"></div>`:""}
+               ${reasoningOf(b[4])?`<div class="bn">${esc(reasoningOf(b[4]))}</div>`:""}</div>`).join("")}</div>`;
         }).join("")}</div>
         </div><aside class="ptnotes"><div class="ntag">Notes to Claude — ${esc(tc.name)}</div>
         <textarea data-tech="${esc(tc.name)}" placeholder="Adjustments for ${esc(tc.name)}'s week… ('swap Tue/Wed', 'he's out Thursday', 'rule: never schedule him on QC')"></textarea>
@@ -1037,7 +1039,7 @@ let MAPD=null, MAPD_LOADING=false, MAPD_RETRIED=false, ROSTER_POS={}, MAPD_WAITE
 // showed, so blocks added by a note had none, and a moved piano kept its old
 // one. The spot now comes from /api/data like Approve's event Location does.
 function blockSerial(title){
-  const m=/\b(?=[A-Z0-9-]*\d)[A-Z0-9][A-Z0-9-]{3,}\b/i.exec(String(title||""));
+  const m=/\b(?=[A-Z0-9-]*\d)[A-Z0-9][A-Z0-9-]{3,}\b/i.exec(cleanTitle(title));
   return m?m[0].toUpperCase():"";
 }
 function liveSpot(sn){
@@ -1064,9 +1066,32 @@ function fillSpots(){
   document.querySelectorAll(".propblock .bs[data-sn]").forEach(el=>{ el.textContent=liveSpot(el.dataset.sn); });
   document.querySelectorAll(".propblock .bw[data-sn]").forEach(el=>{ const L=liveScope(el.dataset.sn); el.innerHTML=L.length?`<b>🏆 From the sale:</b> ${L.map(esc).join(" · ")}`:""; });
 }
-// the note's own "Spot 79, " lead-in is the draft's copy of the same spot — hidden on screen now that the live one shows
-function noteForDisplay(n){
-  return String(n||"").replace(/(\]\s*|^)spot\s+[^,.;:\]]{1,16}[,.;:]?\s*/i,"$1");
+// What Approve will put on the technician's calendar event, shown before
+// Approve (Mark 10/30): the note's [CAL: …] segments verbatim (the bridge's
+// calDescription_ puts ONLY those on a cal-only plan); Korban's Hardware
+// Buffing Queue block gets the live buffing list instead (+ its DEADLINE
+// lines); the card's 🏆 sale lines follow (.bw, filled from the live map).
+// Everything after the ] is the Planner's reasoning for the managers.
+function calSegments(n){
+  const out=[]; String(n||"").replace(/\[\s*CAL\s*:\s*([^\]]*)\]/gi,(m,t)=>{ t=String(t).trim(); if(t&&!out.includes(t)) out.push(t); return " "; });
+  return out;
+}
+// a [CAL: …] the Planner wrote INTO the title (Garrett's DHRT blocks, 10/30) is calendar text too — the bridge moves it to the note at Approve
+function cleanTitle(t){ return String(t||"").replace(/\s*\[\s*CAL\s*:[^\]]*\]\s*/gi," ").replace(/\s+/g," ").trim(); }
+function calPreview(title,note,plan){
+  const segs=calSegments(String(title||"")+" "+String(note||""));
+  if(/hardware buffing queue/i.test(String(title||""))){
+    const dl=segs.join(" ").match(/[^.\n]*\b(DEADLINE|READY BY)\b[^.\n]*\.?/gi)||[];
+    return `<div class="bc"><b>📅 Calendar:</b> the live Hardware Queue list (top plate screws + visible hardware) at Approve${dl.length?" · "+esc(dl.join(" ").trim()):""}</div>`;
+  }
+  if(segs.length) return `<div class="bc"><b>📅 Calendar:</b> ${segs.map(t=>esc(t)).join("<br>")}</div>`;
+  const calOnly=plan&&plan.calNotes==="cal-only";
+  if(!String(note||"").trim()||calOnly) return `<div class="bc bc0">📅 Calendar: no note</div>`;
+  return `<div class="bc bc0">📅 Calendar: older plan — Approve filters the text below</div>`;
+}
+// the manager-facing rest of the note: CAL segments and the draft's "Spot 79, " lead-in removed
+function reasoningOf(n){
+  return String(n||"").replace(/\[\s*CAL\s*:[^\]]*\]/gi," ").replace(/^\s*spot\s+[^,.;:]{1,16}[,.;:]?\s*/i,"").replace(/\s+/g," ").trim();
 }
 function needMapData(onReady){
   if(MAPD){ if(onReady) onReady(); return true; }
