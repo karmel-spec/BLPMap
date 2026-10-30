@@ -740,7 +740,7 @@ async function loadProposal(box){
           return `<div class="propday"><div class="dh">${dn}</div>${blocks.map(b=>
             `<div class="propblock" style="border-left-color:${colors[b[2]]||"#9aa3ac"}">
                <div class="bt">${esc(b[0])}–${esc(b[1])}</div>
-               <div class="bl">${esc(cleanTitle(b[3]))}${calSegments(b[3]).length?` <span class="bwarn" title="the Planner put calendar text inside the title — shown below as calendar text; Approve moves it to the event note">⚠ CAL in title</span>`:""}</div>
+               <div class="bl">${esc(b[3]||"")}</div>
                ${blockSerial(b[3])?`<div class="bs" data-sn="${esc(blockSerial(b[3]))}">${esc(liveSpot(blockSerial(b[3])))}</div>`:""}
                ${calPreview(b[3],b[4],plan)}
                ${blockSerial(b[3])?`<div class="bw" data-sn="${esc(blockSerial(b[3]))}"></div>`:""}
@@ -1076,10 +1076,10 @@ function calSegments(n){
   const out=[]; String(n||"").replace(/\[\s*CAL\s*:\s*([^\]]*)\]/gi,(m,t)=>{ t=String(t).trim(); if(t&&!out.includes(t)) out.push(t); return " "; });
   return out;
 }
-// a [CAL: …] the Planner wrote INTO the title (Garrett's DHRT blocks, 10/30) is calendar text too — the bridge moves it to the note at Approve
+// a [CAL: …] inside a TITLE stays in the title (Mark 10/30: Garrett's DHRT titles are on purpose) — the event title goes out as written
 function cleanTitle(t){ return String(t||"").replace(/\s*\[\s*CAL\s*:[^\]]*\]\s*/gi," ").replace(/\s+/g," ").trim(); }
 function calPreview(title,note,plan){
-  const segs=calSegments(String(title||"")+" "+String(note||""));
+  const segs=calSegments(note);
   if(/hardware buffing queue/i.test(String(title||""))){
     const dl=segs.join(" ").match(/[^.\n]*\b(DEADLINE|READY BY)\b[^.\n]*\.?/gi)||[];
     return `<div class="bc"><b>📅 Calendar:</b> the live Hardware Queue list (top plate screws + visible hardware) at Approve${dl.length?" · "+esc(dl.join(" ").trim()):""}</div>`;
