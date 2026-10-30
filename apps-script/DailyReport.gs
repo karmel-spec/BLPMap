@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-30.4';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-30.5';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -1304,7 +1304,8 @@ function doPost(e) {
       // 💡 every other Store Map request → a quick-summary text to Karmel
       // (Mark 10/22): the first sentence (or ~150 characters) of the request,
       // who filed it, the type and the id. Owners skip quiet hours.
-      if (sg.ok && String(req.type || '') !== 'handbook') {
+      // "Claude Test" requests (wiring checks) stay silent, same as their Live text
+      if (sg.ok && String(req.type || '') !== 'handbook' && !/^claude test/i.test(String(clockTech_(req) || who || ''))) {
         try {
           var sgWho = String(clockTech_(req) || who || 'Someone').replace(/\s*<[^>]*>\s*/, '').replace(/\s*\(.*\)\s*$/, '').trim();
           var sgTxt = String(req.text || '').replace(/\s+/g, ' ').trim();
