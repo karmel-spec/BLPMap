@@ -8818,7 +8818,7 @@ function openCabUnitModal(u) {
     const here = items.filter(x => x.lvl === lvl && (single || x.side === side));
     const tok = u + '-' + (single ? '' : side) + lvl;
     return `<span class="wbcell">${here.length
-      ? here.map(x => `<a class="cabp" data-row="${x.p.row}">${esc(pianoName(x.p))}${x.p.serial ? `<small> ${esc(x.p.serial)}</small>` : ''}</a>`).join('')
+      ? here.map(x => `<span class="cabline"><a class="cabp" data-row="${x.p.row}">${esc(pianoName(x.p))}${x.p.serial ? `<small> ${esc(x.p.serial)}</small>` : ''}</a><button class="cabclr" data-row="${x.p.row}" data-tok="${tok}" title="take this piano off this shelf">✕</button></span>`).join('')
       : `<a class="wbassign" data-tok="${tok}">+ assign</a>`}</span>`;
   };
   const rows = levels.map(([v]) => `
@@ -8832,7 +8832,21 @@ function openCabUnitModal(u) {
                  : '<span class="wbside">LEFT SIDE</span><span class="wbside">RIGHT SIDE</span>'}</div>
       ${rows}
     </div>
-    <p class="cabnote">Click a piano to jump to it · click “+ assign” to shelve a piano's parts there.</p>`);
+    <p class="cabnote">Click a piano to jump to it · ✕ empties that shelf spot · click “+ assign” to shelve a piano's parts there.</p>`);
+  // ✕ empties a shelf straight from the board (Alex 10/30, 103026martin03):
+  // before, the piano's card was the only place to take a shelf off it
+  ov.querySelectorAll('.cabclr').forEach(b => b.onclick = async ev => {
+    ev.stopPropagation();
+    const p = S.data.pianos.find(x => x.row === +b.dataset.row);
+    if (!p) return;
+    const tok = b.dataset.tok;
+    if (!confirm(`Take ${pianoName(p)}${p.serial ? ' ' + p.serial : ''} off ${cabPretty(tok)}?`)) return;
+    b.disabled = true; b.textContent = '…';
+    const ok = await saveCabinetry(p, cabTokens(p).filter(t => t.toUpperCase() !== tok.toUpperCase()), {querySelector: () => null});
+    if (!ok) { b.disabled = false; b.textContent = '✕'; alert(writeAuth().ok ? 'Not saved — the Google bridge didn\'t answer. Try again.' : 'Sign in with Google (☰ menu) first.'); return; }
+    openCabUnitModal(u);
+    try { renderMap(); } catch (e) {}
+  });
   ov.querySelectorAll('.cabp').forEach(a => a.onclick = () => {
     ov.hidden = true;
     const p = S.data.pianos.find(x => x.row === +a.dataset.row);

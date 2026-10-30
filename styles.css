@@ -566,6 +566,10 @@ td a{color:#9e2020}
 .wbcell .cabp{display:block;color:#1c1c1c;cursor:pointer;padding:1px 0}
 .wbcell .cabp:hover{color:#9e2020}
 .wbcell .cabp small{color:#8a929a;font-family:Helvetica,Arial,sans-serif;font-size:9px}
+.wbcell .cabline{display:flex;justify-content:center;align-items:baseline;gap:6px}
+.wbcell .cabline .cabp{display:inline}
+.wbcell .cabclr{flex:none;border:0;background:none;color:#b8c2ca;font:12px Helvetica,Arial,sans-serif;cursor:pointer;padding:2px 4px;line-height:1}
+.wbcell .cabclr:hover{color:#9e2020}
 .wbassign{color:#b8c2ca;cursor:pointer;font-family:Helvetica,Arial,sans-serif;font-size:10.5px}
 .wbassign:hover{color:#9e2020}
 #cabroommodal .card, .blpmodal .card{max-width:560px}
