@@ -3214,7 +3214,10 @@ function printShopTag(p) {
     .rows { flex: 1; display: flex; flex-direction: column; justify-content: space-evenly; }
     .rw { display: flex; align-items: baseline; gap: .12in; border-top: 1px solid #e4e0d8;
           padding: 3pt 0; font-size: 10pt; }
-    .rw .lb { color: #999; font-size: 6.5pt; letter-spacing: 1.5px; text-transform: uppercase;
+    /* darker, slightly bigger headings (Melissa 10/23, 102326terry03: the
+       light gray SERIAL # / OWNER / TRACK… labels were hard to read on the
+       parchment tag stock) */
+    .rw .lb { color: #333; font-size: 7pt; font-weight: 600; letter-spacing: 1.3px; text-transform: uppercase;
               width: .95in; flex: none; }
     .rw b { line-height: 1.3; min-width: 0; }
     .rw.note b { font-weight: 400; font-style: italic; color: #444; font-size: 8.5pt; }
