@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-30.13';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-30.14';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -4283,8 +4283,14 @@ function setPrice_(req, who) {
   var prev = String(cell.getValue() || '');
   var pretty = '$' + num.toLocaleString('en-US');
   cell.setValue(pretty);
-  // every added/changed price emails info@ the Price Tag Maker link for it (no PDF since 10/30)
-  if (!req.silent && prev !== pretty) {
+  // every added/changed price emails info@ the Price Tag Maker link for it (no PDF since 10/30).
+  // Compare as NUMBERS (Melissa 10/25, 102426terry09): Sheets stores "$24,998"
+  // as 24998, so a second save of the same price read "24998" !== "$24,998"
+  // and sent a "Price updated" email for a price that hadn't changed.
+  var prevNum = Number(String(prev).replace(/[^0-9.]/g, ''));
+  var changed = !(prevNum > 0 && Math.abs(prevNum - num) < 0.005);
+  if (prev && prevNum > 0) prev = '$' + prevNum.toLocaleString('en-US');   // "$24,000 → $24,998", not "24000 → …"
+  if (!req.silent && changed) {
     try { sendTagEmail_(found, String(req.serial || ''), prev, pretty, who); }
     catch (mailErr) { /* the price is saved either way */ }
   }
