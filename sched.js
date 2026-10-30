@@ -741,7 +741,7 @@ async function loadProposal(box){
             `<div class="propblock" style="border-left-color:${colors[b[2]]||"#9aa3ac"}">
                <div class="bt">${esc(b[0])}–${esc(b[1])}</div>
                <div class="bl">${esc(b[3]||"")}</div>
-               ${blockSerial(b[3])?`<div class="bs" data-sn="${esc(blockSerial(b[3]))}">${esc(liveSpot(blockSerial(b[3])))}</div>`:""}
+               ${blockSerial(b[3])?`<div class="bs" data-sn="${esc(blockSerial(b[3]))}">${esc(liveSpot(blockSerial(b[3])))}</div><div class="bw" data-sn="${esc(blockSerial(b[3]))}"></div>`:""}
                ${b[4]?`<div class="bn">${esc(noteForDisplay(b[4]))}</div>`:""}</div>`).join("")}</div>`;
         }).join("")}</div>
         </div><aside class="ptnotes"><div class="ntag">Notes to Claude — ${esc(tc.name)}</div>
@@ -1046,8 +1046,23 @@ function liveSpot(sn){
   // a serial no active piano has (Hunter's "Steinway 415912" — the piano is 451912) is worth seeing before Approve
   return p?(String(p.location||"").trim()?"📍 "+String(p.location).trim():"📍 no spot"):"⚠ no active piano with serial "+sn;
 }
+// the card's 🏆 sale lines (the WON handoff's fix requests / piano note) under
+// every block of that piano — Approve puts them on the technician's event, so
+// the Planner shows what the tech will get (Mark 10/30: Jacob's Labrousse
+// blocks showed nothing of the mouse-nest note). Same filter as the bridge's
+// saleNotesClean_: header and labels off, money / contact lines left out whole.
+function liveScope(sn){
+  if(!MAPD||!sn) return [];
+  const p=(MAPD.pianos||[]).find(x=>x.active&&String(x.serial||"").toUpperCase().split(/\s*[\/,;]\s*/).includes(sn));
+  if(!p) return [];
+  const PERSONAL=/[\w.+-]+@[\w-]+\.[\w.]+|\(?\b\d{3}\)?[\s.-]*\d{3}[\s.-]*\d{4}\b/i, MONEY=/\$\s?\d|\b(pay|paid|payment|deposit|invoice|price|priced|cost|financ|insurance|refund|balance|owe)/i;
+  return String(p.scopeNotes||"").split("\n").map(l=>l.trim()).filter(l=>/^🏆/.test(l)).map(l=>l.replace(/^🏆\s*/,"").trim())
+    .filter(l=>l&&!/^From .{1,40} sale \d/i.test(l)).map(l=>l.replace(/^(Fix requests|Piano note|Service \/ fix requests[^:]*)\s*:\s*/i,"").trim())
+    .filter(l=>l.length>=3&&!MONEY.test(l)&&!PERSONAL.test(l)).slice(0,6);
+}
 function fillSpots(){
   document.querySelectorAll(".propblock .bs[data-sn]").forEach(el=>{ el.textContent=liveSpot(el.dataset.sn); });
+  document.querySelectorAll(".propblock .bw[data-sn]").forEach(el=>{ const L=liveScope(el.dataset.sn); el.innerHTML=L.length?`<b>🏆 From the sale:</b> ${L.map(esc).join(" · ")}`:""; });
 }
 // the note's own "Spot 79, " lead-in is the draft's copy of the same spot — hidden on screen now that the live one shows
 function noteForDisplay(n){
