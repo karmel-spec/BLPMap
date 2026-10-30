@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-30.6';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-30.7';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -351,13 +351,14 @@ function doGet(e) {
   // SCOPE NOTES from a saved copy of the Piano Log (Mark 10/30): the bottleneck
   // answers job overwrote 21 cards' Scope Notes; Mark copied the 9:46 AM
   // version from the sheet's history. Read-only — never writes to the copy.
-  //   ?fn=scopesnap&key=<pin>&sid=<copy's spreadsheet id>[&serials=a,b,c]
+  //   ?fn=scopesnap&key=<pin>&copy=<copy's spreadsheet id>[&serials=a,b,c]
+  //   (not `sid=` — Google's web-app front door answers 400 Page Not Found to that name)
   if (e && e.parameter && e.parameter.fn === 'scopesnap') {
     var ssK = String(e.parameter.key || '');
     if (ssK !== TEAM_PIN && ssK.toLowerCase() !== 'pianoman') return json_({error: 'unauthorized'});
     try {
-      var ssId = String(e.parameter.sid || '').trim();
-      if (!ssId) return json_({error: 'sid (the copy\'s spreadsheet id) required'});
+      var ssId = String(e.parameter.copy || '').trim();
+      if (!ssId) return json_({error: 'copy (the copy\'s spreadsheet id) required'});
       var ssCopy = SpreadsheetApp.openById(ssId);
       var ssSh = pianoSheet_(ssCopy);
       var ssHdr = ssSh.getRange(2, 1, 1, ssSh.getLastColumn()).getValues()[0];
