@@ -740,7 +740,7 @@ async function loadProposal(box){
           return `<div class="propday"><div class="dh">${dn}</div>${blocks.map(b=>
             `<div class="propblock" style="border-left-color:${colors[b[2]]||"#9aa3ac"}">
                <div class="bt">${esc(b[0])}–${esc(b[1])}</div>
-               <div class="bl">${esc(b[3]||"")}</div>
+               <div class="bl">${esc(b[3]||"")}<span class="bsee" data-sn="${esc(blockSerial(b[3]))}">${calSegments(b[4]).length&&!/hardware buffing queue/i.test(b[3]||"")&&!/\(see notes\)\s*$/i.test(b[3]||"")?" (see notes)":""}</span></div>
                ${blockSerial(b[3])?`<div class="bs" data-sn="${esc(blockSerial(b[3]))}">${esc(liveSpot(blockSerial(b[3])))}</div>`:""}
                ${calPreview(b[3],b[4],plan)}
                ${blockSerial(b[3])?`<div class="bw" data-sn="${esc(blockSerial(b[3]))}"></div>`:""}
@@ -1065,6 +1065,8 @@ function liveScope(sn){
 function fillSpots(){
   document.querySelectorAll(".propblock .bs[data-sn]").forEach(el=>{ el.textContent=liveSpot(el.dataset.sn); });
   document.querySelectorAll(".propblock .bw[data-sn]").forEach(el=>{ const L=liveScope(el.dataset.sn); el.innerHTML=L.length?`<b>🏆 From the sale:</b> ${L.map(esc).join(" · ")}`:""; });
+  // "(see notes)" on the title whenever the event will carry a description (Mark 10/30)
+  document.querySelectorAll(".propblock").forEach(bl=>{ const see=bl.querySelector(".bsee"); if(!see||see.textContent) return; const sn=see.dataset.sn; const t=bl.querySelector(".bl").textContent; if(sn&&liveScope(sn).length&&!/hardware buffing queue/i.test(t)&&!/\(see notes\)/i.test(t)) see.textContent=" (see notes)"; });
 }
 // What Approve will put on the technician's calendar event, shown before
 // Approve (Mark 10/30): the note's [CAL: …] segments verbatim (the bridge's

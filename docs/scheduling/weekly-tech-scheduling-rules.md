@@ -121,6 +121,15 @@ change a tech only if a note is written for them, names them, or is GLOBAL.
 Never re-staff or "cover" a piano another note emptied — flag the open lane
 instead. Apply adjustments throws away changes to unnamed techs.
 
+**Calendar titles (Mark 2026-10-30).** (1) When a Planner note (a tech's box
+or the GLOBAL box) says to put words in the calendar TITLE ("add xyz to the calendar title", "as the exact title",
+"in the title"), those words go into the block TITLE verbatim — not into a
+`[CAL: …]` segment. (2) Any block whose event will carry a description (a
+`[CAL: …]` note, or 🏆 sale lines on the card) gets " (see notes)" at the end
+of its title — Approve adds it automatically, so don't write it yourself.
+Korban's Hardware Buffing Queue block is exempt (its description is the
+standing queue list). Most blocks have no note and no "(see notes)".
+
 Brigham's rules so far (2026-07-27):
 - **Loosely follow the queue**: prioritize pianos highest in the Custom
   Shopwork queue, BUT if no suitable tech is available for that piano's next

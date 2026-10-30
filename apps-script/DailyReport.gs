@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-30.9';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-30.10';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -7646,7 +7646,11 @@ function applyScheduleLocked_(req) {
           var saleTxt = saleLines.length ? '🏆 From Brigham\'s sale:\n' + saleLines.map(function (l) { return '• ' + l; }).join('\n') + '\n' : '';
           // "Labrousse 15145 - CAP (see notes)" when the sale left notes for the
           // tech (Mark 10/22) — matching ignores the suffix (calBaseTitle_)
-          var calTitle = saleTxt ? evTitle + ' (see notes)' : evTitle;
+          // "(see notes)" whenever the event carries ANY description — a [CAL: …]
+          // note or sale lines (Mark 10/30; sale lines only until then). Korban's
+          // buffing block is exempt: its description is the standing queue list.
+          var hasNotes = !!(saleTxt || (cleanNote && !/hardware buffing queue/i.test(evTitle)));
+          var calTitle = hasNotes && !/\(see notes\)\s*$/i.test(evTitle) ? evTitle + ' (see notes)' : evTitle;
           var opts = {description: (cleanNote ? cleanNote + '\n' : '') + saleTxt
             + 'Applied from the Shop Manager schedule proposal (' + plan.week + ')'};
           var spot = spotFor_(evTitle);
