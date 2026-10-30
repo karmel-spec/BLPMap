@@ -107,12 +107,14 @@ don't schedule a restring — flag the stale plate status as a bottleneck.
 (Schaeffer 23910, week of 11/2: AFTER plate, phase Restringing, while
 Lupita's 160095 restring was done.)
 
-**One technician per piano (Mark 2026-10-30).** A piano has ONE technician on
-it on any given day unless a manager's note pairs two by name ("Hunter joins
-Avery on 211935"). Never pair techs on your own and never put a second tech
-"behind" the first for part of the week — a free tech gets a different piano,
-or an open lane flagged for Mark. (Week of 11/2 draft: "Jake opens the Decker
-DHRT with Garrett behind him from Thursday" — not asked for.)
+**One technician per phase (Mark 2026-10-30).** A piano's phase — its CAP,
+its DHRT, its restringing — has ONE technician on it on any given day unless a
+manager's note pairs two by name ("Hunter joins Avery on the 211935 CAP").
+Never double techs up on one phase on your own and never put a second tech
+"behind" the first. DIFFERENT phases on the same piano may overlap —
+restringing and DHRT, keytops alongside other phases — that is fine. (Week of
+11/2 draft: "Jake opens the Decker DHRT with Garrett behind him from Thursday";
+earlier, Hunter + Avery both on the 211935 CAP — neither asked for.)
 
 **Only the technicians a note names change (Mark 2026-10-30).** In a revision,
 change a tech only if a note is written for them, names them, or is GLOBAL.
