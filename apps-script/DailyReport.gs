@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-30.10';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-10-30.11';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -1658,7 +1658,7 @@ function doPost(e) {
     }
     if (req.action === 'schedrule') {
       var srl = addSchedRule_(req, who);
-      if (srl.ok) logAct_(who, 'Scheduling rule added', '', srl.rule.slice(0, 120));
+      if (srl.ok) logAct_(who, srl.deleted ? 'Scheduling rule retired' : srl.replaced ? 'Scheduling rule rewritten' : 'Scheduling rule added', '', String(srl.deleted ? srl.was : srl.rule).slice(0, 120));
       return json_(srl);
     }
     // read-only audit of the applied week / delete duplicate applied events
@@ -7827,8 +7827,19 @@ function addSchedRule_(req, who) {
   if (!timelogAdmin_(g)) return {error: 'Only owners and the shop managers can add scheduling rules (Google sign-in required).'};
   // 1000 not 400 (Walter 10/14): Korban's tuning-slot rule was cut off mid-word
   var rule = String(req.rule || '').trim().slice(0, 1000);
-  if (!rule) return {error: 'write the rule first'};
+  if (!rule && !req.deleteRow) return {error: 'write the rule first'};
   var sh = schedRulesSheet_();
+  // deleteRow (Mark 10/30): retire one rule for good — same `expect` guard as
+  // replaceRow, so a stale page can never delete a different rule
+  if (req.deleteRow) {
+    var dr = Number(req.deleteRow);
+    if (!(dr >= 2) || dr > sh.getLastRow()) return {error: 'bad rule row'};
+    var dRule = String(sh.getRange(dr, 2).getValue() || '');
+    var dExp = String(req.expect || '').trim();
+    if (!dExp || dRule.indexOf(dExp) !== 0) return {error: 'that rule row changed — reload and try again'};
+    sh.deleteRow(dr);
+    return {ok: true, deleted: dr, was: dRule.slice(0, 120), rules: sh.getLastRow() - 1};
+  }
   // replaceRow: rewrite one rule in place — only while that row still starts
   // with `expect`, so a stale page can never overwrite a different rule
   if (req.replaceRow) {
