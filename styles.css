@@ -1091,6 +1091,12 @@ button.cfxapply:hover{border-color:#9e2020;color:#9e2020}
   color:#3a4046;border-bottom:2px solid #9e2020;display:flex;justify-content:space-between;align-items:baseline;gap:8px}
 .wbcol>h3 small{font-size:10.5px;letter-spacing:.2px;text-transform:none;color:#8a929a;font-weight:500;text-align:right}
 .wbadd{display:flex;gap:7px;padding:9px 11px;background:#fff;border-bottom:1px solid #e3e6e9}
+/* the "what do we need?" box gets its own full-width line (Myrrhanda 10/30,
+   103026lamping05): in Parts it shared one row with the serial box and + add,
+   and on a phone only about three letters showed while typing */
+.wbadd{flex-wrap:wrap}
+.wbadd:has(.wbfor) input:not(.wbfor){flex:1 1 100%;min-width:0}   /* Parts only — Supplies / Tools keep box + button on one line */
+.wbadd .wbfor{flex:1 1 auto;min-width:0}
 .wbadd input{flex:1;border:1px solid #cfd6dc;border-radius:7px;padding:7px 10px;
   font:13px 'Assistant',sans-serif;min-width:0}
 .wbadd button{flex:none;border:0;background:#9e2020;color:#fff;border-radius:7px;padding:7px 12px;
