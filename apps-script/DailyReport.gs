@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-11-02.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-11-02.4';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -1716,6 +1716,11 @@ function doPost(e) {
       var sas = setAdminSteps_(req);
       if (sas.ok) logAct_(who, 'Admin steps', sas.summary || req.serial, sas.steps || '(cleared)');
       return json_(sas);
+    }
+    if (req.action === 'paytrack') {
+      var ptk = payTrack_(req);
+      if (ptk.ok) logAct_(who, 'Payment tracker', ptk.summary || req.serial, ptk.what || '');
+      return json_(ptk);
     }
     if (req.action === 'paymilestone') {
       var pms = payMilestone_(req);
@@ -6448,6 +6453,81 @@ function setAdminSteps_(req) {
 // A shop-progress payment milestone (25/50/75/100%) was crossed: email info@
 // a shop update + progress-photo folder link + a prepared client email, then
 // record the milestone so it never emails twice
+/* 💰 Payment tracker (Melissa 10/24, 102426terry06 — replaces her
+ * "Restoration Progress Payment Customers" sheet). One Piano Log column,
+ * PAY TRACK, readable in the sheet:
+ *   Installment $6,100 | 25%: requested 2026-09-02, paid 2026-09-05 (Melissa) | 50%: paid 2026-10-03 (Melissa) | 75%: requested 2026-10-30 (Mark)
+ * Set from the 💰 Payment Milestones report — "mark requested" / "mark paid"
+ * / undo per mark, and the installment amount. A mark requested or paid by
+ * hand counts as handled: the morning milestone sweep does not email it. */
+var PAY_TRACK_MARKS = [25, 50, 75, 100];
+function payTrackParse_(s) {
+  var t = {install: '', marks: {}};
+  String(s || '').split('|').forEach(function (seg) {
+    seg = seg.trim(); if (!seg) return;
+    var mi = /^installment\s*\$?\s*([\d,]+(?:\.\d+)?)/i.exec(seg);
+    if (mi) { t.install = mi[1].replace(/,/g, ''); return; }
+    var mm = /^(25|50|75|100)%\s*:\s*(.*)$/i.exec(seg);
+    if (!mm) return;
+    var st = {}, rest = mm[2];
+    var r = /requested\s+(\d{4}-\d{2}-\d{2})/i.exec(rest); if (r) st.req = r[1];
+    var pd = /paid\s+(\d{4}-\d{2}-\d{2})/i.exec(rest); if (pd) st.paid = pd[1];
+    var by = /\(([^)]+)\)\s*$/.exec(rest); if (by) st.by = by[1].trim();
+    if (st.req || st.paid) t.marks[mm[1]] = st;
+  });
+  return t;
+}
+function payTrackFormat_(t) {
+  var parts = [];
+  if (t.install) parts.push('Installment $' + Number(t.install).toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 2}));
+  PAY_TRACK_MARKS.forEach(function (m) {
+    var st = (t.marks || {})[m]; if (!st || !(st.req || st.paid)) return;
+    var bits = [];
+    if (st.req) bits.push('requested ' + st.req);
+    if (st.paid) bits.push('paid ' + st.paid);
+    parts.push(m + '%: ' + bits.join(', ') + (st.by ? ' (' + st.by + ')' : ''));
+  });
+  return parts.join(' | ');
+}
+// the highest mark someone requested or marked paid by hand (0 = none)
+function payTrackHandled_(s) {
+  var t = payTrackParse_(s), hi = 0;
+  PAY_TRACK_MARKS.forEach(function (m) { var st = t.marks[m]; if (st && (st.req || st.paid)) hi = Math.max(hi, m); });
+  return hi;
+}
+function payTrack_(req) {
+  var g = req._g || {};
+  var email = String(g.email || '').toLowerCase();
+  if (!email || (PQ_ADMINS.indexOf(email) < 0 && !payrollAdmin_(g))) return {error: 'Only owners, Melissa and Mark can update payments (Google sign-in required).'};
+  var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+  var f = findPiano_(sh, req.serial, req.row);
+  if (f.error) return f;
+  var col = pianoCol_(sh, 'PAY TRACK');
+  var cell = sh.getRange(f.row, col);
+  var t = payTrackParse_(cell.getValue());
+  var first = String(g.name || email).split(/\s+/)[0];
+  var today = Utilities.formatDate(new Date(), 'America/Denver', 'yyyy-MM-dd');
+  var what = '';
+  if (req.install != null) {
+    var amt = String(req.install).replace(/[^0-9.]/g, '');
+    t.install = amt && Number(amt) > 0 ? String(Number(amt)) : '';
+    what = 'installment ' + (t.install ? '$' + t.install : 'cleared');
+  }
+  var m = String(req.mark || '');
+  if (m) {
+    if (PAY_TRACK_MARKS.indexOf(Number(m)) < 0) return {error: 'bad mark'};
+    var st = t.marks[m] || {};
+    if (req.op === 'req') { st.req = st.req || today; st.by = first; what = m + '% requested'; }
+    else if (req.op === 'paid') { if (!st.req) st.req = today; st.paid = today; st.by = first; what = m + '% paid'; }
+    else if (req.op === 'unpaid') { delete st.paid; what = m + '% paid — undone'; }
+    else if (req.op === 'unreq') { delete st.req; delete st.paid; what = m + '% request — undone'; }
+    else return {error: 'bad op'};
+    if (st.req || st.paid) t.marks[m] = st; else delete t.marks[m];
+  }
+  var val = payTrackFormat_(t);
+  cell.setValue(val);
+  return {ok: true, row: f.row, summary: f.summary, payTrack: val, what: what};
+}
 function payMilestone_(req) {
   var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
   var found = findPiano_(sh, req.serial, req.row);
@@ -6588,8 +6668,11 @@ function payMilestoneSweep_(dry) {
     out.checked++;
     var pct = pmProgressPct_(p, defs);
     var last = parseInt(String(p.payMilestone || '').replace(/\D/g, ''), 10) || 0;
-    var crossed = [25, 50, 75, 100].filter(function (m) { return pct >= m && m > last; });
-    var item = {serial: p.serial, piano: p.summary, plan: plan, pct: pct, phase: pmEffectivePhase_(p), lastEmailed: last,
+    // a mark someone already requested or marked paid by hand (💰 tracker) is
+    // handled — never emailed afterwards (Melissa 10/24: Wendy paid 75% on the phone)
+    var handled = payTrackHandled_(p.payTrack);
+    var crossed = [25, 50, 75, 100].filter(function (m) { return pct >= m && m > last && m > handled; });
+    var item = {serial: p.serial, piano: p.summary, plan: plan, pct: pct, phase: pmEffectivePhase_(p), lastEmailed: last, handledByHand: handled,
                 milestone: crossed.length ? Math.max.apply(null, crossed) : 0};
     out.all.push(item);
     if (!crossed.length) return;

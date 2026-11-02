@@ -1354,6 +1354,10 @@ function applyPending() {
       if ((p.phasesDone || '') === edit.phasesDone) delete edit.phasesDone;
       else { p.phasesDone = edit.phasesDone; stillPending = true; }
     }
+    if ('payTrack' in edit) {   // 💰 tracker marks (Melissa 10/24) — keep the click until the feed shows it
+      if ((p.payTrack || '') === edit.payTrack) delete edit.payTrack;
+      else { p.payTrack = edit.payTrack; stillPending = true; }
+    }
     if ('cabinetry' in edit) {   // plate slats / cabinetry shelves (Mark 9/28)
       if (edit.cabinetry == null || (p.cabinetry || '') === edit.cabinetry) delete edit.cabinetry;
       else { p.cabinetry = edit.cabinetry; stillPending = true; }
@@ -6683,6 +6687,10 @@ function popHTML(p) {
     <div class="row rowflex paycustom" hidden><span>$ per month</span>
       <span><input type="number" class="paymo" min="1" step="1" placeholder="1000" style="width:84px;font:inherit;font-size:12px;padding:3px 6px;border:1px solid #cfd6dc;border-radius:6px">
       <button class="tagbtn paymosave" style="margin-left:4px">Save</button></span></div>
+    ${(() => { const t = payTrackOf(p); const any = t.install || Object.keys(t.marks).length; if (!any) return '';
+        const cellTxt = m => { const st = t.marks[m]; return st && st.paid ? `<b style="color:#2f7d4f">${m}% ✓ ${esc(shortD(st.paid))}</b>` : st && st.req ? `<b style="color:#8a6a00">${m}% requested ${esc(shortD(st.req))}</b>` : `<span class="lite">${m}% —</span>`; };
+        return `<div class="row rowflex" title="from the 💰 Payment Milestones report — mark requested / paid there"><span>💳 Payments${t.install ? ' · ' + esc(money(Number(t.install))) + ' each' : ''}</span>
+          <span style="font-size:11.5px;display:flex;gap:8px;flex-wrap:wrap">${PAY_TRACK_MARKS.map(cellTxt).join('')}</span></div>`; })()}
     <div class="paymsg phmsg"></div>
     <div class="row" title="the client's admin journey — tap a step to mark it done, or skip it">Admin steps
       <b>${asDone.length}/${ADMIN_STEPS.length}</b> <small class="lite">done${asSkipped.length ? ` · ${asSkipped.length} skipped` : ''}</small></div>
@@ -8740,13 +8748,40 @@ function payMilestoneRows(all) {
  * "Restoration Progress Payment Customers" sheet): per piano, the client,
  * the installment amount, and each 25 / 50 / 75 / 100 mark with its state —
  * reached (by shop progress) · requested <date> · paid <date> — set with two
- * buttons per mark. LOCAL PREVIEW: marks and amounts are kept in this
- * browser (blpPayTrack) until the Piano Log columns + bridge actions land. */
-const PAY_TRACK_KEY = 'blpPayTrack';
-const PAY_TRACK_LOCAL = true;   // preview build — flip once the bridge has paymark / payinstall
-function payTrack() { try { return JSON.parse(lsGet(PAY_TRACK_KEY) || '{}'); } catch (e) { return {}; } }
-function payTrackOf(p) { const all = payTrack(); return all[p.serial] || {install: '', n: 0, marks: {}}; }
-function payTrackSet(p, rec) { const all = payTrack(); all[p.serial] = rec; lsSet(PAY_TRACK_KEY, JSON.stringify(all)); }
+ * buttons per mark. Saved on the Piano Log (PAY TRACK) via the bridge; a mark
+ * requested or paid here is skipped by the morning milestone email sweep. */
+// stored on the Piano Log (PAY TRACK column) through the bridge's paytrack
+// action — readable text, parsed here exactly as the bridge parses it
+const PAY_TRACK_MARKS = [25, 50, 75, 100];
+function payTrackParse(str) {
+  const t = {install: '', marks: {}};
+  String(str || '').split('|').forEach(seg => {
+    seg = seg.trim(); if (!seg) return;
+    const mi = /^installment\s*\$?\s*([\d,]+(?:\.\d+)?)/i.exec(seg);
+    if (mi) { t.install = mi[1].replace(/,/g, ''); return; }
+    const mm = /^(25|50|75|100)%\s*:\s*(.*)$/i.exec(seg); if (!mm) return;
+    const st = {}, rest = mm[2];
+    const r = /requested\s+(\d{4}-\d{2}-\d{2})/i.exec(rest); if (r) st.req = r[1];
+    const pd = /paid\s+(\d{4}-\d{2}-\d{2})/i.exec(rest); if (pd) st.paid = pd[1];
+    const by = /\(([^)]+)\)\s*$/.exec(rest); if (by) st.by = by[1].trim();
+    if (st.req || st.paid) t.marks[mm[1]] = st;
+  });
+  return t;
+}
+function payTrackOf(p) { return payTrackParse(p.payTrack); }
+async function payTrackPost(p, body) {
+  const {pin, ok} = writeAuth();
+  if (!ok) { alert('Sign in with Google (☰ menu) first — payments are recorded under your name.'); return null; }
+  try {
+    const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow', headers: {'content-type': 'text/plain;charset=utf-8'},
+      body: JSON.stringify({pin, action: 'paytrack', serial: p.serial, row: p.row, ...body, ...authFields()})});
+    const j = await r.json();
+    if (!j || j.error || typeof j.payTrack !== 'string') { alert((j && j.error) || 'Not saved — the Google bridge did not confirm. Try again.'); return null; }
+    p.payTrack = j.payTrack;
+    const e = pendingEdits.get(p.row) || {}; e.payTrack = j.payTrack; pendingEdits.set(p.row, e);
+    return j;
+  } catch (e) { alert('Not saved — ' + (e && e.message || e)); return null; }
+}
 const money = n => n ? '$' + (Math.abs(n - Math.round(n)) < 0.005 ? Math.round(n).toLocaleString('en-US') : Number(n).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})) : '';
 const today = () => new Date().toLocaleDateString('en-CA');
 const shortD = ymd => ymd ? new Date(ymd + 'T12:00').toLocaleDateString('en-US', {month: 'numeric', day: 'numeric'}) : '';
@@ -8771,7 +8806,7 @@ function payMilestoneTable() {
     return `<td class="pm-cell ${st.paid ? 'is-paid' : st.req ? 'is-req' : reached ? 'is-due' : ''}">${amt ? `<div class="pm-amt">${amt}</div>` : ''}${state}<div class="pm-btns">${btns}</div></td>`;
   };
   return `<div class="rfbar" style="margin-bottom:8px"><label style="font-size:12.5px"><input type="checkbox" ${all ? 'checked' : ''} onchange="S.pmAll=this.checked;renderReport()"> show every payment plan, not just progress payments</label>
-      ${PAY_TRACK_LOCAL ? '<span class="chip" style="background:#fff4d6;color:#7a5a00">PREVIEW — marks and amounts are saved in this browser only</span>' : ''}</div>
+</div>
     <div class="stickytbl"><table class="pmtbl"><tr><th>PIANO</th><th>CLIENT</th><th>PHASE · PROGRESS</th><th>STATUS</th><th>INSTALLMENT</th><th>25%</th><th>50%</th><th>75%</th><th>100%</th><th>REMAINING</th></tr>
     ${rows.map(r => {
       const t = payTrackOf(r.p);
@@ -8792,20 +8827,18 @@ function payMilestoneTable() {
     </table></div>`;
 }
 function wirePayTracker(body) {
-  const who = (clockName() || 'you').split(/\s+/)[0];
-  body.querySelectorAll('.pmtbl .pm-btn').forEach(b => b.onclick = ev => {
+  body.querySelectorAll('.pmtbl .pm-btn').forEach(b => b.onclick = async ev => {
     ev.stopPropagation();
     const tr = b.closest('tr'); const p = S.data.pianos.find(x => x.row === +tr.dataset.row); if (!p) return;
-    const t = payTrackOf(p); t.marks = t.marks || {}; const m = b.dataset.m; const st = t.marks[m] || {};
-    if (b.dataset.op === 'req') st.req = today();
-    if (b.dataset.op === 'paid') { if (!st.req) st.req = today(); st.paid = today(); st.by = who; }
-    if (b.dataset.op === 'unpaid') { delete st.paid; delete st.by; }
-    t.marks[m] = st; payTrackSet(p, t); renderReport();
+    if (b.dataset.op === 'unpaid' && !confirm(`Undo the ${b.dataset.m}% payment on ${pianoName(p)}?`)) return;
+    b.disabled = true; b.textContent = '…';
+    await payTrackPost(p, {mark: b.dataset.m, op: b.dataset.op});
+    renderReport();
   });
   body.querySelectorAll('.pmtbl .pm-install').forEach(inp => {
     inp.onclick = ev => ev.stopPropagation();
-    inp.onchange = ev => { ev.stopPropagation(); const tr = inp.closest('tr'); const p = S.data.pianos.find(x => x.row === +tr.dataset.row); if (!p) return;
-      const t = payTrackOf(p); t.install = String(inp.value).replace(/[^0-9.]/g, ''); payTrackSet(p, t); renderReport(); };
+    inp.onchange = async ev => { ev.stopPropagation(); const tr = inp.closest('tr'); const p = S.data.pianos.find(x => x.row === +tr.dataset.row); if (!p) return;
+      inp.disabled = true; await payTrackPost(p, {install: String(inp.value).replace(/[^0-9.]/g, '')}); renderReport(); };
   });
 }
 /* ---- Admin section: shop progress %, payment plan, admin steps, milestones ---- */
@@ -8919,7 +8952,10 @@ async function checkPayMilestone(p, pop) {
   if (!p.serial || !inShopwork(p)) return;
   const pct = shopProgressPct(p);
   const last = +String(p.payMilestone || '').replace(/\D/g, '') || 0;
-  const crossed = PAY_MILESTONES.filter(m => pct >= m && m > last);
+  // a mark requested / paid by hand on the 💰 tracker is handled — no email (Melissa 10/24)
+  const t = payTrackOf(p);
+  const handled = Math.max(0, ...PAY_TRACK_MARKS.filter(m => t.marks[m] && (t.marks[m].req || t.marks[m].paid)));
+  const crossed = PAY_MILESTONES.filter(m => pct >= m && m > last && m > handled);
   if (!crossed.length || !p.payPlan) return;   // no plan set → no payment emails
   const milestone = Math.max(...crossed);
   const {pin, ok} = writeAuth();
