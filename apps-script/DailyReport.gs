@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-10-30.14';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-11-02.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -471,7 +471,12 @@ function doGet(e) {
         return {title: ev.getTitle(), start: ev.getStartTime().toISOString(), end: ev.getEndTime().toISOString(),
           allDay: ev.isAllDayEvent(), location: String(ev.getLocation() || '').slice(0, 120),
           description: String(ev.getDescription() || '').slice(0, e.parameter.full ? 4000 : 300),   // full=1: whole text (Walter 10/19)
-          guests: e.parameter.full ? (function () { try { return ev.getGuestList().map(function (g) { return String(g.getEmail() || '').toLowerCase(); }); } catch (eG) { return []; } })() : undefined};   // full=1: guest emails (10/23, Approve dry checks)
+          guests: e.parameter.full ? (function () { try { return ev.getGuestList().map(function (g) { return String(g.getEmail() || '').toLowerCase(); }); } catch (eG) { return []; } })() : undefined,   // full=1: guest emails (10/23, Approve dry checks)
+          // full=1: when the event was made / last changed and by whom (Mark 11/2: telling
+          // a hand-typed tuning from one Approve wrote, and which came first)
+          created: e.parameter.full ? (function () { try { return ev.getDateCreated().toISOString(); } catch (eC) { return ''; } })() : undefined,
+          updated: e.parameter.full ? (function () { try { return ev.getLastUpdated().toISOString(); } catch (eU) { return ''; } })() : undefined,
+          creator: e.parameter.full ? (function () { try { return (ev.getCreators() || []).join(', '); } catch (eW) { return ''; } })() : undefined};
       });
       return json_({ok: true, cal: cid, name: ccal.getName(), events: cev});
     } catch (errC) { return json_({error: String(errC).slice(0, 200)}); }
