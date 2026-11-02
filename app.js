@@ -12677,9 +12677,9 @@ function payTimeTable(scopeIn) {
   // because those tables are usually collapsed — "Pay period: no date range
   // set" and nowhere to set it (Melissa 10/24, 102426terry05)
   const bar = filterBar(scope, [
-    fSel(scope, 'who', f.who, techs, 'All team members'),
-    fDate(scope, 'from', f.from, 'from'), fDate(scope, 'to', f.to, 'to'),
-    adj && (f.who || f.from || f.to) ? '<button class="adjfclear" type="button">clear filters</button>' : '',
+    // on 🛠 Time Clock the person + dates come from the report's one top bar (Melissa 10/31)
+    adj ? '' : fSel(scope, 'who', f.who, techs, 'All team members'),
+    adj ? '' : fDate(scope, 'from', f.from, 'from'), adj ? '' : fDate(scope, 'to', f.to, 'to'),
     `<select class="rptf" data-scope="${scope}" data-f="group">
        ${adj ? '' : `<option value="day" ${f.group === 'day' ? 'selected' : ''}>Daily punches</option>`}
        <option value="week" ${f.group === 'week' ? 'selected' : ''}>Weekly totals</option>
@@ -13527,14 +13527,22 @@ function clockAdjustTable() {
     if (!af.from && !af.to) return new Date(r.start) >= cutoff;   // default view unchanged
     return true;
   };
-  const adjBar = (scopeLabel) => `<div class="rfbar">
+  /* ONE filter for the whole report (Melissa 10/31, 103026terry13): the team
+   * member + date pickers lived inside the Day clock section, so with that
+   * section collapsed there was no way to pick a person for the piano clock,
+   * and the fix requests had a second, separate set. This bar sits above
+   * everything, stays on screen while scrolling, and drives every section —
+   * fix requests, day punches, piano punches, totals & exports. */
+  const fixWhos = (S.fixRows || []).filter(cfxSinceLaunch).map(cfxWho);
+  const topWhos = [...new Set(adjWhos.concat(fixWhos).filter(t => t && !/^claude\b/i.test(t)))].sort((a, b) => a.localeCompare(b));
+  const adjTopBar = `<div class="rfbar adjtopbar">
+      <b class="atb-lbl">🔎 Show</b>
       <select class="rptf" data-scope="adj" data-f="who"><option value="">All team members</option>
-        ${adjWhos.map(w => `<option ${af.who === w ? 'selected' : ''}>${esc(w)}</option>`).join('')}</select>
+        ${topWhos.map(w => `<option ${af.who === w ? 'selected' : ''}>${esc(w)}</option>`).join('')}</select>
       <label class="rfd">from <input type="date" class="rptf" data-scope="adj" data-f="from" value="${esc(af.from || '')}"></label>
       <label class="rfd">to <input type="date" class="rptf" data-scope="adj" data-f="to" value="${esc(af.to || '')}"></label>
-      <span class="lite" style="font-size:11.5px;white-space:nowrap">${adjFiltered
-        ? scopeLabel + ' <button class="adjfclear" type="button">clear filters</button>'
-        : 'last 14 days — set a date range to go further back'}</span>
+      ${adjFiltered ? '<button class="adjfclear" type="button">clear filters</button>' : ''}
+      <span class="lite atb-hint">${adjFiltered ? 'applies to every section below' : 'everyone · last 14 days — pick a person or dates for every section below'}</span>
     </div>`;
   // filter bar: status · team member · clock · text · date range. Default
   // view is unchanged (open requests + the 8 most recently handled).
@@ -13543,29 +13551,29 @@ function clockAdjustTable() {
   const whos = [...new Set(since.map(cfxWho))].sort((a, b) => a.localeCompare(b));
   const stOf = r => r.status === 'open' ? 'open' : /dup/i.test(r.status) ? 'duplicate' : 'resolved';
   const q = f.q.trim().toLowerCase();
-  const match = r => (!f.who || cfxWho(r) === f.who)
+  // person + dates from the report's one top bar (Melissa 10/31); a request's
+  // date is the day it is ABOUT ("10/30: …"), so a range shows the requests
+  // next to the punches they fix — the filed day only when none is named
+  const aboutYmd = r => { const d = cfxDates(r); return d.named[0] || d.filed || cfxWhenYmd(r); };
+  const match = r => (!af.who || cfxWho(r) === af.who)
     && (!f.clock || (/piano/i.test(r.clock) ? 'piano' : 'day') === f.clock)
     && (!q || `${cfxWho(r)} ${r.clock} ${r.serial || ''} ${r.note} ${r.status}`.toLowerCase().includes(q))
-    && (!f.from || cfxWhenYmd(r) >= f.from) && (!f.to || cfxWhenYmd(r) <= f.to);
+    && (!af.from || aboutYmd(r) >= af.from) && (!af.to || aboutYmd(r) <= af.to);
   const hits = since.filter(match);
   const openFix = f.st && f.st !== 'open' && f.st !== 'all' ? [] : hits.filter(r => r.status === 'open');
   const doneFix = f.st === 'open' ? []
     : f.st === 'all' ? hits.filter(r => r.status !== 'open')
     : f.st ? hits.filter(r => stOf(r) === f.st)
     : hits.filter(r => r.status !== 'open').slice(0, 8);
-  const filtered = !!(f.st || f.who || f.clock || q || f.from || f.to);
+  const filtered = !!(f.st || f.clock || q);
   const fxBar = `<div class="rfbar">
       <select class="rptf" data-scope="cfx" data-f="st">
         ${[['', 'Open + recently handled'], ['open', 'Open only'], ['resolved', 'Resolved'], ['duplicate', 'Duplicates'], ['all', 'All requests']]
           .map(([v, t]) => `<option value="${v}" ${f.st === v ? 'selected' : ''}>${t}</option>`).join('')}</select>
-      <select class="rptf" data-scope="cfx" data-f="who"><option value="">All team members</option>
-        ${whos.map(w => `<option ${f.who === w ? 'selected' : ''}>${esc(w)}</option>`).join('')}</select>
       <select class="rptf" data-scope="cfx" data-f="clock">
         ${[['', 'Both clocks'], ['day', 'Day clock'], ['piano', 'Piano clock']]
           .map(([v, t]) => `<option value="${v}" ${f.clock === v ? 'selected' : ''}>${t}</option>`).join('')}</select>
       <input type="text" class="rptf" data-scope="cfx" data-f="q" placeholder="🔍 note, serial, name…" value="${esc(f.q)}">
-      <label class="rfd">from <input type="date" class="rptf" data-scope="cfx" data-f="from" value="${esc(f.from)}"></label>
-      <label class="rfd">to <input type="date" class="rptf" data-scope="cfx" data-f="to" value="${esc(f.to)}"></label>
       <span class="lite" style="font-size:11.5px;white-space:nowrap">${openFix.length + doneFix.length} of ${since.length}${filtered ? ' <button class="cfxclear" type="button">clear filters</button>' : ''}</span>
     </div>`;
   // same person + same wording as another request (open or already handled)
@@ -13615,7 +13623,7 @@ function clockAdjustTable() {
     const payMins = rows.reduce((a, r) => a + (String(r.voided || '') ? 0 : (r.minutes || 0)), 0);
     const payWho = af.who ? esc(af.who) : 'everyone shown';
     pay = `<h4 class="bfhd">Payroll day punches${adjFiltered ? '' : ' — last 14 days'} (owners, Melissa & Mark)</h4>
-      ${adjBar(rows.length + ' punch' + (rows.length === 1 ? '' : 'es'))}
+      <div class="lite" style="font-size:11.5px;margin:-2px 0 6px">${rows.length} punch${rows.length === 1 ? '' : 'es'} — filtered by the bar at the top</div>
       ${rows.length ? `<div class="lite" style="font-size:12.5px;margin:-2px 0 8px"><b>${fmtHM(payMins)}</b> (${hDec(payMins)} h) — ${payWho}${adjFiltered ? ' · ' + (af.from || 'start') + ' → ' + (af.to || 'today') : ''}. Voided rows excluded.</div>` : ''}
       ${autoBand}
       <div class="stickytbl"><table><tr><th>DATE</th><th>TEAM MEMBER</th><th>IN → OUT</th><th>HOURS</th><th></th></tr>
@@ -13721,7 +13729,7 @@ function clockAdjustTable() {
       <button class="adjsecbtn" type="button" aria-expanded="${open}"><span class="chev">${open ? '▾' : '▸'}</span><b>${label}</b>${sub ? `<small>${sub}</small>` : ''}</button>
       <div class="adjsecbody" ${open ? '' : 'hidden'}>${inner}</div></section>`;
   };
-  return techList + payAdd + tlAdd
+  return adjTopBar + techList + payAdd + tlAdd
     + adjSec('fix', 'Time fix requests', fixes)
     + adjSec('day', 'Day clock punches', pay)
     + adjSec('piano', 'Piano clock punches', tl)
