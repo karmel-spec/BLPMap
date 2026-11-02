@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-11-02.6';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-11-02.7';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -6115,7 +6115,14 @@ function setRequestStatus_(req) {
   if (STATUSES.indexOf(String(req.status)) < 0) return {error: 'bad status'};
   var sh = requestsSheet_();
   var vals = sh.getDataRange().getValues();
-  for (var i = 1; i < vals.length; i++) {
+  // an exact row wins when given and still holds this id (Mark 11/2: three
+  // copies of 082726larson02 — by id alone only the first ever changed)
+  var want = Number(req.row) || 0;
+  var order = [];
+  if (want >= 2 && want <= vals.length && String(vals[want - 1][0]) === String(req.id)) order.push(want - 1);
+  for (var k = 1; k < vals.length; k++) if (order.indexOf(k) < 0) order.push(k);
+  for (var oi = 0; oi < order.length; oi++) {
+    var i = order[oi];
     if (String(vals[i][0]) === String(req.id)) {
       var wasLive = String(vals[i][7] || '') === 'Live';
       sh.getRange(i + 1, 8, 1, 3).setValues([[String(req.status),
@@ -6186,13 +6193,16 @@ function requestsList_(app) {
   var span = want ? 3000 : 500;
   var out = [];
   if (last >= 2) {
-    var vals = sh.getRange(Math.max(2, last - span + 1), 1, Math.min(span, last - 1), 11).getValues();
+    var first = Math.max(2, last - span + 1);
+    var vals = sh.getRange(first, 1, Math.min(span, last - 1), 11).getValues();
     for (var i = vals.length - 1; i >= 0; i--) {
       var v = vals[i];
       if (!v[0]) continue;
       var a = appOfRequest_(v[10], v[5]);
       if (want && a !== want) continue;
-      out.push({id: String(v[0]), date: String(v[1]), who: String(v[2]), type: String(v[3]),
+      // row: the sheet row — a few August requests share an id (re-sent the
+      // same second), so the list keys and status changes by row (Mark 11/2)
+      out.push({id: String(v[0]), row: first + i, date: String(v[1]), who: String(v[2]), type: String(v[3]),
                 text: String(v[4]), context: String(v[5]), screenshot: String(v[6]),
                 status: String(v[7]) || 'Requested', statusBy: String(v[8]), statusAt: String(v[9]),
                 app: a});

@@ -18229,6 +18229,9 @@ async function admFetchRequests() {
   } catch (e) { ADMDASH.req = ADMDASH.req || []; }
   renderAdmDash();
 }
+// one key per request card: the sheet row (a few August requests share an id —
+// selecting one ticked all its copies, Mark 11/2); the id on an older feed
+const reqKey = r => r.row ? 'row:' + r.row : String(r.id);
 function admRequestsHTML() {
   if (!ADMDASH.req) { admFetchRequests(); return '<div class="empty">Loading app requests…</div>'; }
   const isHb = r => r.type === 'handbook';
@@ -18266,12 +18269,12 @@ function admRequestsHTML() {
         ${apps.map(a => `<option ${f.app === a ? 'selected' : ''}>${esc(a)}</option>`).join('')}</select>
       <input type="text" class="reqf" data-f="q" placeholder="🔍 words, name, or request id…" value="${esc(f.q)}">
       <span class="lite" style="font-size:11.5px;white-space:nowrap">${hits.length} of ${ADMDASH.req.length}${filtered ? ' <button class="cfxclear reqfclear" type="button">clear filters</button>' : ''}</span>
-      <label class="reqselall"><input type="checkbox" class="reqselallbox" ${hits.length && hits.every(r => sel.has(r.id)) ? 'checked' : ''}> select all shown</label>
+      <label class="reqselall"><input type="checkbox" class="reqselallbox" ${hits.length && hits.every(r => sel.has(reqKey(r))) ? 'checked' : ''}> select all shown</label>
     </div>`;
   /* ☐ select several + one status for all (Mark 11/2): Live / Duplicate /
    * Declined / In progress in one go. Live is SILENT unless "text the
    * requesters" is ticked — the single dropdown still texts on Live. */
-  const selHere = hits.filter(r => sel.has(r.id));
+  const selHere = hits.filter(r => sel.has(reqKey(r)));
   const bulkBar = sel.size ? `<div class="reqbulk">
       <b>${sel.size} selected</b>${selHere.length !== sel.size ? ` <small>(${sel.size - selHere.length} hidden by the filters)</small>` : ''}
       <button class="csvbtn reqbulkgo" data-st="Live">Mark Live</button>
@@ -18283,11 +18286,11 @@ function admRequestsHTML() {
       <span class="reqbulkmsg"></span></div>` : '';
   const label = f.st === 'open' ? 'Open' : f.st === 'all' ? 'All requests' : f.st;
   const row = r => `<div class="admreq${isHb(r) ? ' admreqhb' : ''}">
-      <div class="admreqtop"><input type="checkbox" class="reqselbox" data-id="${esc(r.id)}" ${sel.has(r.id) ? 'checked' : ''} title="select for a bulk status change"><b>${esc(r.who)}</b>
+      <div class="admreqtop"><input type="checkbox" class="reqselbox" data-k="${esc(reqKey(r))}" ${sel.has(reqKey(r)) ? 'checked' : ''} title="select for a bulk status change"><b>${esc(r.who)}</b>
         <span class="chip ${r.type === 'bug' ? 'c-due' : r.type === 'idea' ? 'c-from' : isHb(r) ? 'c-hb' : 'c-piano'}">${esc(r.type || 'edit')}</span>
         ${r.app && r.app !== 'Store Map' ? `<span class="chip c-app">${esc(r.app)}</span>` : ''}
         <small>${esc(String(r.date).slice(0, 10))} · ${esc(r.id)}</small>
-        <select class="reqst" data-id="${esc(r.id)}">
+        <select class="reqst" data-id="${esc(r.id)}" data-row="${r.row || ''}">
           ${REQ_STATES.map(st => `<option ${r.status === st ? 'selected' : ''}>${st}</option>`).join('')}
         </select></div>
       <div class="admreqtext">${esc(r.text)}</div>
@@ -18440,12 +18443,12 @@ function renderAdmDash() {
   // ☐ bulk select (Mark 11/2)
   const rsel = ADMDASH.sel || (ADMDASH.sel = new Set());
   el.querySelectorAll('.reqselbox').forEach(cb => cb.onchange = () => {
-    if (cb.checked) rsel.add(cb.dataset.id); else rsel.delete(cb.dataset.id);
+    if (cb.checked) rsel.add(cb.dataset.k); else rsel.delete(cb.dataset.k);
     const keep = el.querySelector('#admdashPane').scrollTop; renderAdmDash(); const pane = $('#admdashPane'); if (pane) pane.scrollTop = keep;
   });
   const sall = el.querySelector('.reqselallbox');
   if (sall) sall.onchange = () => {
-    el.querySelectorAll('.reqselbox').forEach(cb => { if (sall.checked) rsel.add(cb.dataset.id); else rsel.delete(cb.dataset.id); });
+    el.querySelectorAll('.reqselbox').forEach(cb => { if (sall.checked) rsel.add(cb.dataset.k); else rsel.delete(cb.dataset.k); });
     renderAdmDash();
   };
   const bclear = el.querySelector('.reqbulkclear');
@@ -18453,22 +18456,24 @@ function renderAdmDash() {
   el.querySelectorAll('.reqbulkgo').forEach(b => b.onclick = async () => {
     const wa = writeAuth();
     if (!wa.ok) { alert('Sign in with Google first.'); return; }
-    const st = b.dataset.st, ids = [...rsel];
+    const st = b.dataset.st, ids = [...rsel];   // keys: "row:N" (or the id on an old feed)
     const texting = st === 'Live' && !!(el.querySelector('.reqbulktextbox') || {}).checked;
     if (!confirm(`Mark ${ids.length} request${ids.length === 1 ? '' : 's'} ${st}?${st === 'Live' ? (texting ? ' Each requester gets a text.' : ' No texts go out.') : ''}`)) return;
     el.querySelectorAll('.reqbulkgo').forEach(x => x.disabled = true);
     const msg = el.querySelector('.reqbulkmsg'), failed = [];
     let done = 0, texted = 0;
-    for (const id of ids) {
+    for (const k of ids) {
       if (msg) msg.textContent = `${done + failed.length + 1} of ${ids.length}…`;
+      const x = (ADMDASH.req || []).find(q => reqKey(q) === k);
+      const id = x ? x.id : k;
       try {
         const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow', headers: {'content-type': 'text/plain;charset=utf-8'},
-          body: JSON.stringify({pin: wa.pin, action: 'requeststatus', id, status: st, quiet: !texting, ...authFields()})});
+          body: JSON.stringify({pin: wa.pin, action: 'requeststatus', id, row: x && x.row, status: st, quiet: !texting, ...authFields()})});
         const j = await r.json();
         if (!j.ok) throw new Error(j.error || 'failed');
-        const x = (ADMDASH.req || []).find(q => q.id === id); if (x) x.status = st;
+        if (x) x.status = st;
         if (j.texted) texted++;
-        done++; rsel.delete(id);
+        done++; rsel.delete(k);
       } catch (e) { failed.push(id + ' (' + (e && e.message || e) + ')'); }
     }
     cfxToast(`✓ ${done} marked ${st}${texted ? ` · ${texted} texted` : st === 'Live' ? ' · no texts' : ''}${failed.length ? ` · ${failed.length} failed` : ''}`);
@@ -18483,11 +18488,11 @@ function renderAdmDash() {
     try {
       const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
         headers: {'content-type': 'text/plain;charset=utf-8'},
-        body: JSON.stringify({pin: wa.pin, action: 'requeststatus', id: sel.dataset.id,
+        body: JSON.stringify({pin: wa.pin, action: 'requeststatus', id: sel.dataset.id, row: +sel.dataset.row || undefined,
           status: sel.value, ...authFields()})});
       const j = await r.json();
       if (!j.ok) throw new Error(j.error || 'failed');
-      const req = ADMDASH.req.find(x => x.id === sel.dataset.id);
+      const req = ADMDASH.req.find(x => sel.dataset.row ? x.row === +sel.dataset.row : x.id === sel.dataset.id);
       if (req) req.status = sel.value;
       if (j.texted) cfxToast(`✓ Live — ${(j.who || 'the requester').split(' ')[0]} has been texted`);
       renderAdmDash();
