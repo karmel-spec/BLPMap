@@ -13484,9 +13484,19 @@ function adjNewestDayFirst(a, b) {
 function onDateSettled(el, fn) {
   const ok = () => !el.value || Number(el.value.slice(0, 4)) >= 2000;
   const last = () => el.dataset.applied === undefined ? el.defaultValue : el.dataset.applied;
-  const run = () => { if (el.value === last()) return; el.dataset.applied = el.value; fn(); };
-  el.onchange = () => { if (ok()) run(); };
+  const run = () => { clearTimeout(el._dt); if (el.value === last()) return; el.dataset.applied = el.value; fn(); };
+  // while the box still has the cursor, a complete date is not the end of the
+  // typing (Mark 11/2: "15" in the day — the "1" made Oct 1 a valid date, the
+  // report redrew, and the "5" was lost): wait 1.5 s after the last keystroke,
+  // or apply at once on Enter / leaving the box. A picker pick (no cursor) applies now.
+  el.onchange = () => {
+    if (!ok()) return;
+    clearTimeout(el._dt);
+    if (document.activeElement === el) el._dt = setTimeout(() => { if (ok()) run(); }, 1500);
+    else run();
+  };
   el.onblur = () => { if (ok()) run(); };
+  el.onkeydown = e => { if (e.key === 'Enter' && ok()) { e.preventDefault(); run(); } };
 }
 function clockAdjustTable() {
   if (!S.payRows || !S.tlRows) return '<div class="empty">Loading clocks…</div>';
