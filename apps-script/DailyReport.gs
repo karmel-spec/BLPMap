@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-11-02.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-11-02.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -7638,6 +7638,16 @@ function applyScheduleLocked_(req) {
         if (!tk.serial) return;
         var hit = bookedTunes.filter(function (x) { return x.key.serial === tk.serial && x.key.kind === tk.kind && isMine_(x); })[0];
         if (!hit || hit.start.getTime() === d1.getTime()) return;
+        // the new slot must be free (Mark 11/2): the move never checked, so the
+        // Irmler 63270 was moved onto Wed 9:30 on top of the Schafer #155 Melissa
+        // had typed onto the tuning calendar the day before. The event stays
+        // where it is and the clash is reported, like a new block's slotTaken.
+        var mvClash = bookedTunes.filter(function (x) { return x !== hit && x.start < d2 && x.end > d1 && isMine_(x); })[0];
+        if (mvClash) {
+          slotTaken.push(Utilities.formatDate(d1, 'America/Denver', 'EEE h:mm a') + ' ' + String(b[3] || '').slice(0, 40)
+            + ' — NOT moved there from ' + hit.when + ': the slot holds ' + mvClash.title.slice(0, 50));
+          return;
+        }
         try {
           var from = hit.when;
           hit.ev.setTime(d1, d2);
