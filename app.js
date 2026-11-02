@@ -13484,15 +13484,18 @@ function adjNewestDayFirst(a, b) {
 function onDateSettled(el, fn) {
   const ok = () => !el.value || Number(el.value.slice(0, 4)) >= 2000;
   const last = () => el.dataset.applied === undefined ? el.defaultValue : el.dataset.applied;
-  const run = () => { clearTimeout(el._dt); if (el.value === last()) return; el.dataset.applied = el.value; fn(); };
+  // while it waits, the box says so ("⏳ updating…") — a silent 1.5 s pause read as "not working" (Mark 11/2)
+  const wait = on => { const w = el.closest('label') || el.parentElement; if (w) { if (on) w.setAttribute('data-wait', '⏳ updating…'); else w.removeAttribute('data-wait'); } };
+  const run = () => { clearTimeout(el._dt); wait(false); if (el.value === last()) return; el.dataset.applied = el.value; fn(); };
   // while the box still has the cursor, a complete date is not the end of the
   // typing (Mark 11/2: "15" in the day — the "1" made Oct 1 a valid date, the
   // report redrew, and the "5" was lost): wait 1.5 s after the last keystroke,
   // or apply at once on Enter / leaving the box. A picker pick (no cursor) applies now.
+  // 0.8 s, not 1.5 s (Mark 11/2: long enough for the second digit, short enough not to look stuck)
   el.onchange = () => {
     if (!ok()) return;
     clearTimeout(el._dt);
-    if (document.activeElement === el) el._dt = setTimeout(() => { if (ok()) run(); }, 1500);
+    if (document.activeElement === el) { wait(el.value !== last()); el._dt = setTimeout(() => { if (ok()) run(); }, 800); }
     else run();
   };
   el.onblur = () => { if (ok()) run(); };
