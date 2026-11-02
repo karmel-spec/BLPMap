@@ -936,6 +936,9 @@ async function loadProposal(box){
         +(x.alreadyBooked&&x.alreadyBooked.length?` <span style="color:#8a6a00">· not re-created (already booked): ${x.alreadyBooked.map(esc).join("; ")}</span>`:"")
         +(x.alreadyOnCalendar&&x.alreadyOnCalendar.length?` <span style="color:#8a6a00">· already on the calendar, not added again: ${x.alreadyOnCalendar.map(esc).join("; ")}</span>`:"")
         +(x.plateNotReady&&x.plateNotReady.length?` <span style="color:#a33">· restring held — plate not ready (rule 94): ${x.plateNotReady.map(esc).join("; ")}</span>`:"")
+        // tuning moves and clashes (Mark 11/2): the Irmler was moved onto a slot Melissa's Schafer held and nothing on screen said so
+        +(x.movedOnTuningCal&&x.movedOnTuningCal.length?` <span style="color:#2c5d96">· tuning moved to the plan's slot: ${x.movedOnTuningCal.map(esc).join("; ")}</span>`:"")
+        +(x.slotTaken&&x.slotTaken.length?` <span style="color:#a33;font-weight:700">· ⚠ slot already taken — not placed, fix by hand: ${x.slotTaken.map(esc).join("; ")}</span>`:"")
         +(x.offDays&&x.offDays.length?` <span style="color:#9e2020">· skipped ${x.offDays.map(o=>esc(o.day)).join(", ")} — calendar says “${esc(x.offDays[0].why)}”</span>`:"")).join(" · ");
       if(j.applied){ ab.textContent="✓ Applied to calendars"; }
       else { ab.disabled=false; ab.textContent="✅ Approve — apply to live tech calendars"; }
