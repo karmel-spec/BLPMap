@@ -36,9 +36,10 @@ was written literally over the calendar: Monday and Tuesday 8:00 went out double
 and Wednesday went out empty.)
 
 **Korban's Hardware Buffing Queue (Mark 2026-10-19, Scheduling Rules row 90):** one
-block per day, 11:00-15:00 — **Monday 11:00-14:30**, because his weekly "Vacuum
-maintenance: clean filters, empty buckets" is a standing 2:30-3:00 event on his own
-calendar (Approve also cuts Monday's block at 2:30). Do NOT write job lists in the
+block per day, 11:00-15:00 — **Monday 11:00-14:30**, followed by a **"Vacuum
+maintenance: clean filters, empty buckets" block 14:30-15:00 every Monday** that the
+plan schedules itself (Mark 2026-11-02: the standing recurring event on his calendar
+was deleted, so the Planner now owns it — use that exact title). Do NOT write job lists in the
 block's note: Approve fills the event from the live buffing list. Only a rule-10
 `DEADLINE:` line may go in the note.
 
