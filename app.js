@@ -15424,6 +15424,8 @@ function renderDash() {
     <div class="dlockers">
       <!-- My Week, Piano Card Audit and My Calendar removed from the dashboard (Mark 10/20: not used) -->
       <div class="dlocker" data-h="#report"><span class="ic">📝</span><b>Weekly Report</b><span>due Thursday 6pm</span></div>
+      <!-- 🏖 time off as a big tile beside Weekly Report (Mark 11/2, 110226hales69) — the same form as Request ▸ Time off -->
+      <div class="dlocker" data-timeoff="1"><span class="ic">🏖</span><b>Request Time Off</b><span>days off · partial days</span></div>
       <div class="dlocker" data-pay="1"><span class="ic">💵</span><b>Paylogics ↗</b><span>paystubs · time off</span></div>
       <div class="dlocker" data-reimb="1"><span class="ic">💸</span><b>Reimbursement</b><span>mileage · gas · supplies</span></div>
     </div>
@@ -15530,8 +15532,7 @@ function renderDash() {
     <div class="dbench db-timeoff">
       <h4>🏖 Time off</h4>
       ${myTimeOffLines()}
-      <!-- request it right here (Mark 10/21, app request 102126hales58) — the same form as Request ▸ Time off -->
-      <button class="paybtn" data-timeoff="1">🏖 Request time off</button>
+      <!-- the request button moved up to the 🏖 tile (Mark 11/2); this card keeps your requests and their status -->
     </div>
     <div class="dbench db-bench">
       <h4>⏱ On the bench right now</h4>
@@ -15722,8 +15723,7 @@ function renderDash() {
   });
   const pay = body.querySelector('[data-pay]');
   if (pay) pay.onclick = () => window.open('https://identity.myisolved.com', '_blank', 'noopener');
-  const toff = body.querySelector('[data-timeoff]');
-  if (toff) toff.onclick = () => timeOffModal();
+  body.querySelectorAll('[data-timeoff]').forEach(el => el.onclick = () => timeOffModal());
   const rmb = body.querySelector('[data-reimb]');
   if (rmb) rmb.onclick = () => reimbModal();
   const aud = body.querySelector('[data-audit]');
