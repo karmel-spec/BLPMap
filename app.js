@@ -2264,6 +2264,25 @@ function parseShotStage(s) {
   const m = /^(Before|After)[ \-_]?S(\d{2})/i.exec(String(s || '').trim());
   return m ? {kind: m[1].toLowerCase(), idx: parseInt(m[2], 10) - 1} : null;
 }
+/* 🪑 the latest bench photo as a small thumbnail on the card's Bench row
+ * (Melissa 10/24, 102426terry04) — from the photo log (stage "Bench photo");
+ * tap it for the full photo. Cached per piano for 5 minutes. */
+const BENCH_SHOT = {};
+async function benchThumb(p, pop) {
+  const box = pop && pop.querySelector('.bnthumb');
+  if (!box || !p.serial) return;
+  let c = BENCH_SHOT[p.serial];
+  if (!c || Date.now() - c.at > 300000) {
+    const rows = await fetchShots(p.serial);
+    const b = rows.filter(r => /^bench photo$/i.test(String(r.stage || '').trim()) && r.id).pop();
+    c = BENCH_SHOT[p.serial] = {id: b ? b.id : '', at: Date.now()};
+  }
+  if (!pop.isConnected || !(c.id || c.local)) { box.innerHTML = ''; return; }
+  const src = c.local || `https://drive.google.com/thumbnail?id=${encodeURIComponent(c.id)}&sz=w160`;
+  box.innerHTML = c.id
+    ? `<a href="https://drive.google.com/file/d/${encodeURIComponent(c.id)}/view" target="_blank" rel="noopener" title="the bench — tap for the full photo"><img src="${src}" alt="bench photo"></a>`
+    : `<img src="${src}" alt="bench photo" title="the bench">`;
+}
 async function fetchShots(serial) {
   try {
     const r = await fetch(BRIDGE_URL + '?fn=shots&serial=' + encodeURIComponent(serial),
@@ -6829,11 +6848,11 @@ function popHTML(p) {
       <span class="platehwmsg phmsg"></span></div>` : ''}
     ${p.serial && (p.plateTemp || '').trim() ? `<div class="row rowflex"><span>⚙️ Plate temp spot</span>
       <b style="font-size:12.5px">${esc(p.plateTemp)}</b></div>` : ''}
-    ${p.serial ? `<div class="row rowflex"><span>🪑 Bench</span><b class="benchloc">${esc(p.benchLoc || '—')}</b></div>
+    ${p.serial ? `<div class="row rowflex"><span>🪑 Bench</span><span class="bnright"><span class="bnthumb"></span><b class="benchloc">${esc(p.benchLoc || '—')}</b></span></div>
     <div class="movebox benchbox">
         <input class="bnin" placeholder="bench location — spot #, shelf…" maxlength="40"
           value="${esc(p.benchLoc || '')}">
-        <button class="mvgo bnshot" title="photo of the bench → Tech folder">📸</button>
+        <button class="mvgo bnshot" title="photo of the bench → this piano's Tech folder, named Bench (not shop progress)">📸 Photo</button>
         <button class="mvgo benchtag" title="printable bench tag">🖨</button>
       </div><div class="bnmsg phmsg"></div>
       <input type="file" class="bnfile" accept="image/*" hidden>` : ''}
@@ -8000,9 +8019,12 @@ function wirePop(p) {
             row: p.row, stage: 'Bench photo', ...authFields()}, dataUrl);
         if (!j.saved) throw new Error(j.error || 'upload failed');
         msg.textContent = '✓ bench photo filed to the Tech folder';
+        BENCH_SHOT[p.serial] = {id: j.id || '', at: Date.now(), local: dataUrl};
+        benchThumb(p, pop);
       } catch (e) { msg.textContent = '✗ ' + e.message; }
     };
   }
+  benchThumb(p, pop);
   const pws = pop.querySelector('.pwscan');
   if (pws) pws.onclick = ev => { ev.stopPropagation(); popPinned = true; scanPaperwork(p, pop); };
   // 📷 photograph a paperwork sheet → piano's Paperwork Drive folder, then
