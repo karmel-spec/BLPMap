@@ -14375,15 +14375,36 @@ function renderReport() {
       const pre = {start: m.times.in ? day + 'T' + m.times.in : '',
         end: !live && !backwards && m.times.out ? day + 'T' + m.times.out : ''};
       const filled = [pre.start && 'start', pre.end && 'end'].filter(Boolean);
-      // a prefilled start after this punch's own clock-out means the note is
-      // about a different punch — say so instead of offering a backwards edit
+      // a prefilled start after this punch's own clock-out (or a whole range
+      // ending before it starts) means the note is about a DIFFERENT punch —
+      // a second one that day. Until 11/2 this still opened the existing punch
+      // for editing with the new times filled in, and Save overwrote it:
+      // McKinly's 10/30 afternoon vanished under his evening recital set-up
+      // (Melissa 10/31, 103126terry14). Now it goes to "+ missed punch" instead.
       const after = pre.start && !live && m.pick.end && new Date(pre.start) >= new Date(m.pick.end);
+      const before = pre.start && pre.end && new Date(pre.end) <= new Date(m.pick.start);
       const others = unvoided(m.clock === 'pay' ? S.payRows : S.tlRows)
         .filter(r => r.row !== m.pick.row && denverDay(r.start) === day && techName(r.tech) === techName(m.pick.tech))
         .map(r => `${fmtT(r.start)}–${r.end ? fmtT(r.end) : 'open'}`);
+      if (after || before) {
+        const have = [`${fmtT(m.pick.start)}–${m.pick.end ? fmtT(m.pick.end) : 'open'}`].concat(others).join(', ');
+        S.adjEdit = null;
+        renderReport();
+        setTimeout(() => {
+          const bar = document.querySelector(`.rpt[data-r="clockadjust"] .adjaddbar[data-clock="${m.clock}"]`);
+          if (!bar) { alert('This looks like a second punch that day, and you do not have the add-punch permission for this clock.'); return; }
+          const set = (c, v) => { const el = bar.querySelector(c); if (el && v) el.value = v; };
+          bar.dataset.fromfix = fx.row;   // Add will also resolve this request
+          set('.a-tech', m.who.replace(/\s*\(.*$/, '').trim()); set('.a-serial', m.serial);   // "(session expired — unverified)" off the name
+          set('.a-start', pre.start); set('.a-end', pre.end);
+          const msg = bar.querySelector('.adjmsg');
+          if (msg) { msg.className = 'adjmsg phmsg'; msg.textContent = `second punch that day — ${m.who.split(/\s+/)[0]} already has ${have}; this one is ADDED alongside, nothing is overwritten. Check, then Add. ${req}`; }
+          focus(bar);
+        }, 0);
+        return;
+      }
       S.adjEdit = {clock: m.clock, row: m.pick.row, pre, fromFix: fx.row,
         hint: (m.exact ? '' : 'nearest punch (no punch on the day named) — ')
-          + (after ? `⚠ that start is after this punch's clock-out (${fmtT(m.pick.end)}) — probably a different punch${others.length ? ' (also that day: ' + others.join(', ') + ')' : ''}. ` : '')
           + (live ? 'still clocked in — leave end blank. ' : '')
           + (filled.length ? `${filled.join(' + ')} prefilled from the note — check, then Save. ` : '') + req};
       renderReport();
