@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-11-02.4';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-11-02.5';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -10915,7 +10915,65 @@ function timeOffStatus_(req, who) {
       try { cache.put(tkey, '1', 3600); } catch (eP) {}
     } catch (eN) { /* text best-effort */ }
   }
-  return {ok: true, tech: tech, span: span, status: stamp, texted: texted, archived: archived};
+  // 📅 "<Name> out" on their own calendar (Mark 11/2, 110226hales70)
+  var calRes = null;
+  if (status === 'approved') {
+    try { calRes = timeOffCalEvent_(tech, d(v[2]), d(v[3]) || d(v[2]), String(v[4] || ''), first); }
+    catch (eCal) { calRes = {error: String(eCal && eCal.message || eCal)}; }
+  }
+  return {ok: true, tech: tech, span: span, status: stamp, texted: texted, archived: archived, calendar: calRes};
+}
+/* Approved time off → an event on the person's OWN calendar (Mark 11/2,
+ * 110226hales70): a whole day (or days) is an all-day "Mark out"; a partial
+ * day whose Times read as a clean range ("2-3:30", "8-noon", "1:00–3:00 PM")
+ * is a timed "Mark out 2:00–3:30 PM"; any other Times text ("get off at
+ * 4pm", "I will work 7 am - 12:30 pm") is all-day with the words in the
+ * title, so nothing is guessed. Only calendars on the Tech Calendars tab;
+ * the same title on the same day is never made twice. The request's note is
+ * private and stays off the event. */
+function timeOffCalEvent_(tech, startYmd, endYmd, times, approver) {
+  var map = techCalMap_();
+  var key = String(tech || '').toLowerCase().trim(), firstKey = key.split(/\s+/)[0];
+  var calId = map[key] || map[firstKey];
+  if (!calId) return {skipped: 'no calendar for ' + tech + ' on the Tech Calendars tab'};
+  var cal = calById_(calId);
+  if (!cal) return {skipped: 'no access to ' + calId};
+  var firstName = String(tech).trim().split(/\s+/)[0];
+  firstName = firstName.charAt(0).toUpperCase() + firstName.slice(1);
+  var desc = 'Approved time off (' + startYmd + (endYmd !== startYmd ? ' → ' + endYmd : '') + ')'
+    + (times ? ' · ' + times : '') + ' · approved by ' + approver + ' via the Store Map';
+  var day = function (ymd) { return new Date(ymd + 'T00:00:00'); };
+  var exists = function (title, from, to) {
+    try { return cal.getEvents(from, to).some(function (ev) { return String(ev.getTitle() || '') === title; }); } catch (e) { return false; }
+  };
+  var t = String(times || '').trim();
+  // a clean clock range, and not a description of hours WORKED
+  var rng = t && !/\bwork/i.test(t) ? /^\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*(?:-|–|—|to)\s*(noon|\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*$/i.exec(t) : null;
+  if (rng && startYmd === endYmd) {
+    var hr = function (h, mm, ap, other) {
+      if (String(h).toLowerCase() === 'noon') return {h: 12, m: 0};
+      h = Number(h); mm = Number(mm || 0); ap = (ap || other || '').toLowerCase();
+      if (ap === 'pm' && h < 12) h += 12; else if (ap === 'am' && h === 12) h = 0;
+      else if (!ap && h >= 1 && h <= 6) h += 12;   // shop hours: a bare 2 is 2 PM
+      return {h: h, m: mm};
+    };
+    var a1 = hr(rng[1], rng[2], rng[3], rng[6]), a2 = hr(rng[4], rng[5], rng[6], '');
+    if (a2.h * 60 + a2.m > a1.h * 60 + a1.m) {
+      var s1 = day(startYmd); s1.setHours(a1.h, a1.m, 0, 0);
+      var s2 = day(startYmd); s2.setHours(a2.h, a2.m, 0, 0);
+      var lbl = Utilities.formatDate(s1, 'America/Denver', 'h:mm') + '–' + Utilities.formatDate(s2, 'America/Denver', 'h:mm a');
+      var title = firstName + ' out ' + lbl;
+      if (exists(title, day(startYmd), new Date(day(startYmd).getTime() + 86400000))) return {ok: true, already: true, title: title, cal: calId};
+      cal.createEvent(title, s1, s2, {description: desc});
+      return {ok: true, title: title, cal: calId};
+    }
+  }
+  var titleAll = firstName + ' out' + (t ? ' (' + t.slice(0, 40) + ')' : '');
+  var endExcl = new Date(day(endYmd).getTime() + 86400000);
+  if (exists(titleAll, day(startYmd), endExcl)) return {ok: true, already: true, title: titleAll, cal: calId};
+  if (startYmd === endYmd) cal.createAllDayEvent(titleAll, day(startYmd), {description: desc});
+  else cal.createAllDayEvent(titleAll, day(startYmd), endExcl, {description: desc});
+  return {ok: true, title: titleAll, cal: calId};
 }
 /* Same people as the map's canApproveTimeOff(): owners, Mark, Melissa. */
 function timeOffApprover_(g) {

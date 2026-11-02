@@ -14465,8 +14465,10 @@ function renderReport() {
     if (b.dataset.st !== 'duplicate' && !extra) extra = await toArchiveSiblings(+b.dataset.row);
     if (b.dataset.st !== 'duplicate') {
       const first = String(j.tech || '').split(' ')[0];
+      const cal = j.calendar;   // 📅 "<Name> out" on their own calendar (Mark 11/2)
       cfxToast((j.already ? `✓ already decided — no new text` : j.texted === false ? `✓ ${b.dataset.st} — ${first} was already texted about this one` : `✓ ${b.dataset.st} — ${first} has been texted`)
-        + (extra ? ` · ${extra} re-sent cop${extra === 1 ? 'y' : 'ies'} archived` : ''));
+        + (extra ? ` · ${extra} re-sent cop${extra === 1 ? 'y' : 'ies'} archived` : '')
+        + (cal ? (cal.ok ? ` · 📅 “${cal.title}”${cal.already ? ' already' : ''} on their calendar` : cal.skipped ? ` · 📅 not on a calendar — ${cal.skipped}` : ` · 📅 calendar event failed: ${cal.error}`) : ''));
     }
     TO.rows = null; loadTimeOff();
   });
