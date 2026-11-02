@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-11-02.5';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-11-02.6';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -1740,6 +1740,24 @@ function doPost(e) {
       var shu = shareUpdates_(req, who);
       if (shu.ok) logAct_(who, 'App updates texted', shu.audience, shu.updates + ' updates to ' + shu.sent + ' people');
       return json_(shu);
+    }
+    // one-time: "<Name> out" events for time off approved BEFORE 11/2 (Mark 11/2) —
+    // every approved request ending today or later; dry:true lists them only
+    if (req.action === 'timeoffcalbackfill') {
+      var tb = timeOffSheet_(), tbLast = tb.getLastRow(), tbOut = [];
+      var tbToday = Utilities.formatDate(new Date(), 'America/Denver', 'yyyy-MM-dd');
+      var tbD = function (x) { return (x instanceof Date) ? Utilities.formatDate(x, 'America/Denver', 'yyyy-MM-dd') : String(x || ''); };
+      if (tbLast >= 2) tb.getRange(2, 1, tbLast - 1, 7).getValues().forEach(function (v, i) {
+        if (!v[1] || !/^approved/i.test(String(v[6] || ''))) return;
+        var s0 = tbD(v[2]), e0 = tbD(v[3]) || s0;
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(s0) || e0 < tbToday) return;
+        var by = (/approved by (\S+)/i.exec(String(v[6])) || [])[1] || 'a manager';
+        var item = {row: i + 2, who: String(v[1]), start: s0, end: e0, times: String(v[4] || '')};
+        if (!req.dry) { try { item.result = timeOffCalEvent_(String(v[1]), s0, e0, String(v[4] || ''), by); } catch (eB) { item.result = {error: String(eB && eB.message || eB)}; } }
+        tbOut.push(item);
+      });
+      if (!req.dry) logAct_(who, 'Time off calendar back-fill', '', tbOut.length + ' approved request(s)');
+      return json_({ok: true, dry: !!req.dry, items: tbOut});
     }
     if (req.action === 'timeoffstatus') {
       var tos = timeOffStatus_(req, who);
