@@ -18236,6 +18236,7 @@ function admRequestsHTML() {
   // that went Live leaves the working list, but stays one filter or search
   // away (status, team member, type, free text) for later reference.
   const f = ADMDASH.reqF || (ADMDASH.reqF = {st: 'open', who: '', type: '', app: '', q: ''});
+  const sel = ADMDASH.sel || (ADMDASH.sel = new Set());
   // Resolved / Archived: legacy statuses from the Shop Manager era — closed too
   const isOpen = r => !['Live', 'Tested', 'Declined', 'Duplicate', 'Resolved', 'Archived'].includes(r.status);
   const stOk = r => f.st === 'open' ? isOpen(r) : f.st === 'all' ? true : r.status === f.st;
@@ -18265,10 +18266,24 @@ function admRequestsHTML() {
         ${apps.map(a => `<option ${f.app === a ? 'selected' : ''}>${esc(a)}</option>`).join('')}</select>
       <input type="text" class="reqf" data-f="q" placeholder="🔍 words, name, or request id…" value="${esc(f.q)}">
       <span class="lite" style="font-size:11.5px;white-space:nowrap">${hits.length} of ${ADMDASH.req.length}${filtered ? ' <button class="cfxclear reqfclear" type="button">clear filters</button>' : ''}</span>
+      <label class="reqselall"><input type="checkbox" class="reqselallbox" ${hits.length && hits.every(r => sel.has(r.id)) ? 'checked' : ''}> select all shown</label>
     </div>`;
+  /* ☐ select several + one status for all (Mark 11/2): Live / Duplicate /
+   * Declined / In progress in one go. Live is SILENT unless "text the
+   * requesters" is ticked — the single dropdown still texts on Live. */
+  const selHere = hits.filter(r => sel.has(r.id));
+  const bulkBar = sel.size ? `<div class="reqbulk">
+      <b>${sel.size} selected</b>${selHere.length !== sel.size ? ` <small>(${sel.size - selHere.length} hidden by the filters)</small>` : ''}
+      <button class="csvbtn reqbulkgo" data-st="Live">Mark Live</button>
+      <button class="csvbtn reqbulkgo" data-st="Duplicate" style="background:#6b7280">Duplicate</button>
+      <button class="csvbtn reqbulkgo" data-st="Declined" style="background:#6b7280">Declined</button>
+      <button class="csvbtn reqbulkgo" data-st="In progress" style="background:#2c5d96">In progress</button>
+      <label class="reqbulktext"><input type="checkbox" class="reqbulktextbox"> text the requesters (Live only)</label>
+      <button class="cfxclear reqbulkclear" type="button">clear</button>
+      <span class="reqbulkmsg"></span></div>` : '';
   const label = f.st === 'open' ? 'Open' : f.st === 'all' ? 'All requests' : f.st;
   const row = r => `<div class="admreq${isHb(r) ? ' admreqhb' : ''}">
-      <div class="admreqtop"><b>${esc(r.who)}</b>
+      <div class="admreqtop"><input type="checkbox" class="reqselbox" data-id="${esc(r.id)}" ${sel.has(r.id) ? 'checked' : ''} title="select for a bulk status change"><b>${esc(r.who)}</b>
         <span class="chip ${r.type === 'bug' ? 'c-due' : r.type === 'idea' ? 'c-from' : isHb(r) ? 'c-hb' : 'c-piano'}">${esc(r.type || 'edit')}</span>
         ${r.app && r.app !== 'Store Map' ? `<span class="chip c-app">${esc(r.app)}</span>` : ''}
         <small>${esc(String(r.date).slice(0, 10))} · ${esc(r.id)}</small>
@@ -18298,7 +18313,7 @@ function admRequestsHTML() {
     </div>`;
   // Brigham's queue goes first — it is short and the 100+ app requests
   // below it would bury it
-  return `${bar}
+  return `${bar}${bulkBar}
     <h4 class="tmsec">📖 Handbook suggestions — Brigham reviews before the handbook changes <span class="pc">${hbOpen.length}</span></h4>
     <div class="lite" style="font-size:11.5px;margin:-4px 0 8px">Requested = awaiting Brigham · In progress = approved, edit under way · Live = handbook updated · Declined = not adopting</div>
     ${hbOpen.map(row).join('') || `<div class="empty">${filtered ? 'No handbook suggestions match these filters.' : 'No handbook suggestions waiting.'}</div>`}
@@ -18422,6 +18437,44 @@ function renderAdmDash() {
     else inp.oninput = () => { clearTimeout(inp._t); inp._t = setTimeout(apply, 300); };
   });
   el.querySelectorAll('.reqfclear').forEach(b => b.onclick = () => { ADMDASH.reqF = null; renderAdmDash(); });
+  // ☐ bulk select (Mark 11/2)
+  const rsel = ADMDASH.sel || (ADMDASH.sel = new Set());
+  el.querySelectorAll('.reqselbox').forEach(cb => cb.onchange = () => {
+    if (cb.checked) rsel.add(cb.dataset.id); else rsel.delete(cb.dataset.id);
+    const keep = el.querySelector('#admdashPane').scrollTop; renderAdmDash(); const pane = $('#admdashPane'); if (pane) pane.scrollTop = keep;
+  });
+  const sall = el.querySelector('.reqselallbox');
+  if (sall) sall.onchange = () => {
+    el.querySelectorAll('.reqselbox').forEach(cb => { if (sall.checked) rsel.add(cb.dataset.id); else rsel.delete(cb.dataset.id); });
+    renderAdmDash();
+  };
+  const bclear = el.querySelector('.reqbulkclear');
+  if (bclear) bclear.onclick = () => { rsel.clear(); renderAdmDash(); };
+  el.querySelectorAll('.reqbulkgo').forEach(b => b.onclick = async () => {
+    const wa = writeAuth();
+    if (!wa.ok) { alert('Sign in with Google first.'); return; }
+    const st = b.dataset.st, ids = [...rsel];
+    const texting = st === 'Live' && !!(el.querySelector('.reqbulktextbox') || {}).checked;
+    if (!confirm(`Mark ${ids.length} request${ids.length === 1 ? '' : 's'} ${st}?${st === 'Live' ? (texting ? ' Each requester gets a text.' : ' No texts go out.') : ''}`)) return;
+    el.querySelectorAll('.reqbulkgo').forEach(x => x.disabled = true);
+    const msg = el.querySelector('.reqbulkmsg'), failed = [];
+    let done = 0, texted = 0;
+    for (const id of ids) {
+      if (msg) msg.textContent = `${done + failed.length + 1} of ${ids.length}…`;
+      try {
+        const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow', headers: {'content-type': 'text/plain;charset=utf-8'},
+          body: JSON.stringify({pin: wa.pin, action: 'requeststatus', id, status: st, quiet: !texting, ...authFields()})});
+        const j = await r.json();
+        if (!j.ok) throw new Error(j.error || 'failed');
+        const x = (ADMDASH.req || []).find(q => q.id === id); if (x) x.status = st;
+        if (j.texted) texted++;
+        done++; rsel.delete(id);
+      } catch (e) { failed.push(id + ' (' + (e && e.message || e) + ')'); }
+    }
+    cfxToast(`✓ ${done} marked ${st}${texted ? ` · ${texted} texted` : st === 'Live' ? ' · no texts' : ''}${failed.length ? ` · ${failed.length} failed` : ''}`);
+    renderAdmDash();
+    if (failed.length) { const m2 = $('#admdashPane .reqbulkmsg'); if (m2) m2.textContent = '⚠ not changed: ' + failed.join('; '); }
+  });
   // requests: status dropdown writes through the bridge (Google-verified)
   el.querySelectorAll('.reqst').forEach(sel => sel.onchange = async () => {
     const wa = writeAuth();
