@@ -2483,6 +2483,7 @@ table.tchktbl td.chk .tcasap input{width:15px;height:15px}
 /* day clock in the ☰ drawer (Alex 10/31) */
 .dayclocknav{padding:6px 12px 10px;border-bottom:1px solid #2a2a2e;margin-bottom:6px}
 .dayclocknav .dcn-btn{width:100%;font-size:14px;padding:10px 12px}
+.dayclocknav .dcn-btn:disabled{color:#fff;opacity:1;background:#3a3a40;border-color:#55555c}   /* "checking the day clock…" readable on the dark drawer (Mark 11/2) */
 .dayclocknav .dcn-sub{font-size:11.5px;color:#a8a39b;margin-top:5px;padding-left:2px}
 .dayclocknav .dcn-msg{font-size:12px;margin-top:5px;line-height:1.35}
 .dayclocknav .dcn-msg:empty{display:none}
