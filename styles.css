@@ -2524,3 +2524,25 @@ table.tchktbl td.chk .tcasap input{width:15px;height:15px}
 /* a date filter waiting for the second digit says so (Mark 11/2) */
 [data-wait]{position:relative}
 [data-wait]::after{content:attr(data-wait);position:absolute;left:0;top:100%;margin-top:2px;font-size:10.5px;font-weight:700;color:#8a6a00;white-space:nowrap;pointer-events:none}
+
+/* 💰 payment tracker (Melissa 10/24) */
+.pmtbl th{white-space:nowrap}
+.pmtbl td{vertical-align:top}
+.pmtbl .pm-status{min-width:168px}
+.pmtbl .pm-status .chip{white-space:normal;display:inline-block;line-height:1.3;padding:3px 8px}
+.pmtbl .pm-cell{min-width:118px;font-size:12px;line-height:1.3;border-left:1px solid #f0ece5}
+.pmtbl .pm-cell small{display:block;font-size:10px;color:#8a929a}
+.pmtbl .pm-amt{font-weight:700;color:#1c1c1c;margin-bottom:2px}
+.pmtbl .pm-paid{color:#2f7d4f}
+.pmtbl .pm-req{color:#8a6a00}
+.pmtbl .pm-due{color:#9e2020}
+.pmtbl .is-paid{background:#f1f8f3}
+.pmtbl .is-req{background:#fdf8ea}
+.pmtbl .is-due{background:#fdf1f1}
+.pmtbl .pm-btns{display:flex;flex-direction:column;gap:3px;margin-top:5px}
+.pmtbl .pm-btn{border:1px solid #cfd6dc;background:#fff;border-radius:6px;padding:3px 7px;font:600 11px 'Assistant',sans-serif;cursor:pointer;color:#333;white-space:nowrap}
+.pmtbl .pm-btn.pm-pay{background:#2f7d4f;border-color:#2f7d4f;color:#fff}
+.pmtbl .pm-btn.pm-undo{color:#8a929a;border-style:dashed}
+.pmtbl .pm-btn:hover{filter:brightness(.95)}
+.pmtbl .pm-install{width:92px;border:1px solid #cfd6dc;border-radius:6px;padding:4px 6px;font:600 12px 'Assistant',sans-serif}
+.pmtbl .pm-rem b{color:#1c1c1c}

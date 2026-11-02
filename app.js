@@ -8736,25 +8736,77 @@ function payMilestoneRows(all) {
     })
     .sort((a, b) => (b.billNow - a.billNow) || ((b.pending ? 1 : 0) - (a.pending ? 1 : 0)) || ((a.toGo || 99) - (b.toGo || 99)) || b.pct - a.pct);
 }
+/* 💰 Payment tracker (Melissa 10/24, 102426terry06 — replaces her
+ * "Restoration Progress Payment Customers" sheet): per piano, the client,
+ * the installment amount, and each 25 / 50 / 75 / 100 mark with its state —
+ * reached (by shop progress) · requested <date> · paid <date> — set with two
+ * buttons per mark. LOCAL PREVIEW: marks and amounts are kept in this
+ * browser (blpPayTrack) until the Piano Log columns + bridge actions land. */
+const PAY_TRACK_KEY = 'blpPayTrack';
+const PAY_TRACK_LOCAL = true;   // preview build — flip once the bridge has paymark / payinstall
+function payTrack() { try { return JSON.parse(lsGet(PAY_TRACK_KEY) || '{}'); } catch (e) { return {}; } }
+function payTrackOf(p) { const all = payTrack(); return all[p.serial] || {install: '', n: 0, marks: {}}; }
+function payTrackSet(p, rec) { const all = payTrack(); all[p.serial] = rec; lsSet(PAY_TRACK_KEY, JSON.stringify(all)); }
+const money = n => n ? '$' + (Math.abs(n - Math.round(n)) < 0.005 ? Math.round(n).toLocaleString('en-US') : Number(n).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})) : '';
+const today = () => new Date().toLocaleDateString('en-CA');
+const shortD = ymd => ymd ? new Date(ymd + 'T12:00').toLocaleDateString('en-US', {month: 'numeric', day: 'numeric'}) : '';
 function payMilestoneTable() {
   const all = !!S.pmAll;
   const rows = payMilestoneRows(all);
   const chip = r => r.billNow ? `<span class="chip" style="background:#9e2020;color:#fff">BILL NOW — ${r.upcoming}% at the next phase</span>`
-    : r.pending ? `<span class="chip" style="background:#fdf3ec;color:#8a6a00">${r.pending}% reached — email goes out with the next morning sweep</span>`
     : r.upcoming ? `<span class="chip" style="background:#eef4ff;color:#2b5fa8">${r.toGo} phase${r.toGo === 1 ? '' : 's'} to ${r.upcoming}%</span>`
-    : `<span class="chip" style="background:#eaf5ec;color:#2f7d4f">all milestones reached</span>`;
-  return `<div class="rfbar" style="margin-bottom:8px"><label style="font-size:12.5px"><input type="checkbox" ${all ? 'checked' : ''} onchange="S.pmAll=this.checked;renderReport()"> show every payment plan, not just progress payments</label></div>
-    <table><tr><th>PIANO</th><th>PLAN</th><th>PHASE</th><th>SHOP PROGRESS</th><th>STATUS</th><th>LAST EMAILED</th></tr>
-    ${rows.map(r => `<tr class="mrow" data-row="${r.p.row}">
-      <td>${esc(pianoName(r.p).slice(0, 36))}<br><span class="lite" style="color:#8a929a;font-size:11px">${esc(r.p.serial)}</span></td>
-      <td>${esc(r.plan)}</td>
-      <td>${esc(r.phase || '—')}</td>
-      <td style="min-width:150px"><b>${r.pct}%</b> <span class="lite" style="font-size:11px">of ${r.phases} phases</span>
+    : `<span class="chip" style="background:#eaf5ec;color:#2f7d4f">all marks reached</span>`;
+  const cell = (r, m, t, marks) => {
+    const st = (t.marks || {})[m] || {};
+    const reached = r.pct >= m;
+    const amt = t.install ? money(Number(t.install)) : '';
+    const emailed = r.last >= m;
+    const state = st.paid ? `<b class="pm-paid">✓ paid ${esc(shortD(st.paid))}</b>${st.by ? `<small>${esc(st.by)}</small>` : ''}`
+      : st.req ? `<b class="pm-req">requested ${esc(shortD(st.req))}</b>${emailed ? '<small>emailed</small>' : ''}`
+      : reached ? `<b class="pm-due">reached${emailed ? ' · emailed' : ''}</b>`
+      : `<span class="lite">—</span>`;
+    const btns = st.paid
+      ? `<button class="pm-btn pm-undo" data-m="${m}" data-op="unpaid" title="undo — marked paid by mistake">undo</button>`
+      : `${st.req ? '' : `<button class="pm-btn" data-m="${m}" data-op="req" title="an invoice / request went out (email, phone, QB)">mark requested</button>`}<button class="pm-btn pm-pay" data-m="${m}" data-op="paid" title="payment received (QB tendered)">mark paid</button>`;
+    return `<td class="pm-cell ${st.paid ? 'is-paid' : st.req ? 'is-req' : reached ? 'is-due' : ''}">${amt ? `<div class="pm-amt">${amt}</div>` : ''}${state}<div class="pm-btns">${btns}</div></td>`;
+  };
+  return `<div class="rfbar" style="margin-bottom:8px"><label style="font-size:12.5px"><input type="checkbox" ${all ? 'checked' : ''} onchange="S.pmAll=this.checked;renderReport()"> show every payment plan, not just progress payments</label>
+      ${PAY_TRACK_LOCAL ? '<span class="chip" style="background:#fff4d6;color:#7a5a00">PREVIEW — marks and amounts are saved in this browser only</span>' : ''}</div>
+    <div class="stickytbl"><table class="pmtbl"><tr><th>PIANO</th><th>CLIENT</th><th>PHASE · PROGRESS</th><th>STATUS</th><th>INSTALLMENT</th><th>25%</th><th>50%</th><th>75%</th><th>100%</th><th>REMAINING</th></tr>
+    ${rows.map(r => {
+      const t = payTrackOf(r.p);
+      const marks = [25, 50, 75, 100];
+      const paidN = marks.filter(m => (t.marks || {})[m] && t.marks[m].paid).length;
+      const inst = Number(t.install) || 0;
+      const remaining = inst ? (4 - paidN) * inst : 0;   // like the sheet's "Remaining balance" — installments still owed
+      return `<tr class="mrow" data-row="${r.p.row}">
+      <td>${esc(pianoName(r.p).slice(0, 34))}<br><span class="lite" style="color:#8a929a;font-size:11px">${esc(r.p.serial)}</span></td>
+      <td>${esc(ownerNameOf(r.p) || '—')}</td>
+      <td style="min-width:140px"><span class="lite" style="font-size:11px">${esc(r.phase || '—')}</span><br><b>${r.pct}%</b>
         <div class="pbar"><i style="width:${r.pct}%"></i><s style="left:25%"></s><s style="left:50%"></s><s style="left:75%"></s></div></td>
-      <td>${chip(r)}</td>
-      <td>${r.last ? r.last + '%' : '<span class="lite">never</span>'}</td></tr>`).join('')
-      || `<tr><td colspan="6" class="empty">No shop pianos on ${all ? 'a payment plan' : 'a progress-payment plan'}.</td></tr>`}
-    </table>`;
+      <td class="pm-status">${chip(r)}${r.last ? `<div class="lite" style="font-size:10.5px;margin-top:3px">last emailed ${r.last}%</div>` : ''}</td>
+      <td class="pm-inst"><input class="pm-install" inputmode="decimal" placeholder="$ per payment" value="${esc(t.install ? money(Number(t.install)).replace('$', '') : '')}" title="the amount of each progress payment — type it once per piano"></td>
+      ${marks.map(m => cell(r, m, t, marks)).join('')}
+      <td class="pm-rem">${remaining ? `<b>${money(remaining)}</b>` : '<span class="lite">—</span>'}${paidN ? `<div class="lite" style="font-size:10.5px">${paidN} of 4 paid</div>` : ''}</td></tr>`;
+    }).join('') || `<tr><td colspan="10" class="empty">No shop pianos on ${all ? 'a payment plan' : 'a progress-payment plan'}.</td></tr>`}
+    </table></div>`;
+}
+function wirePayTracker(body) {
+  const who = (clockName() || 'you').split(/\s+/)[0];
+  body.querySelectorAll('.pmtbl .pm-btn').forEach(b => b.onclick = ev => {
+    ev.stopPropagation();
+    const tr = b.closest('tr'); const p = S.data.pianos.find(x => x.row === +tr.dataset.row); if (!p) return;
+    const t = payTrackOf(p); t.marks = t.marks || {}; const m = b.dataset.m; const st = t.marks[m] || {};
+    if (b.dataset.op === 'req') st.req = today();
+    if (b.dataset.op === 'paid') { if (!st.req) st.req = today(); st.paid = today(); st.by = who; }
+    if (b.dataset.op === 'unpaid') { delete st.paid; delete st.by; }
+    t.marks[m] = st; payTrackSet(p, t); renderReport();
+  });
+  body.querySelectorAll('.pmtbl .pm-install').forEach(inp => {
+    inp.onclick = ev => ev.stopPropagation();
+    inp.onchange = ev => { ev.stopPropagation(); const tr = inp.closest('tr'); const p = S.data.pianos.find(x => x.row === +tr.dataset.row); if (!p) return;
+      const t = payTrackOf(p); t.install = String(inp.value).replace(/[^0-9.]/g, ''); payTrackSet(p, t); renderReport(); };
+  });
 }
 /* ---- Admin section: shop progress %, payment plan, admin steps, milestones ---- */
 // % of this piano's own track phases complete (explicit Done checks plus
@@ -14921,6 +14973,7 @@ function renderReport() {
     const p = S.data.pianos.find(x => x.row === +tr.dataset.row);
     if (p) focusPiano(p);
   });
+  wirePayTracker(body);   // 💰 payment tracker buttons / installment box
   body.querySelectorAll('.qcopen').forEach(b => b.onclick = ev => { ev.stopPropagation(); openQcRail(+b.dataset.id); });
   const qcr = body.querySelector('.qcrefresh');
   if (qcr) qcr.onclick = () => { QCQ.rows = null; QCQ.at = 0; loadQcQueue(); renderReport(); };
