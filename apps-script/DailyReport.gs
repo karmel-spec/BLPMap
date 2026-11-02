@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-11-02.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-11-02.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -7694,7 +7694,19 @@ function applyScheduleLocked_(req) {
         try {
           var evTitle = String(b[3] || 'Shop work');   // as written — a [CAL: …] in a title stays there (Mark 10/30: Garrett's DHRT titles are on purpose)
           var ck = calKey_(evTitle, d1);
-          if (onCal[ck]) {
+          // …or a standing event of the tech's own that starts at the same time
+          // and says the same thing in longer / shorter words (Mark 11/2): the plan's
+          // "Off - orchestra rehearsal" next to McKinly's own "McKinly Off (Orchestra
+          // rehearsal)", and "Vacuum maintenance" next to Korban's "Vacuum
+          // maintenance: clean filters, empty buckets" both went out twice — the
+          // exact-title match missed them. Containment of 8+ letters, same start.
+          var bNorm = String(calBaseTitle_(evTitle)).toLowerCase().replace(/[^a-z0-9]+/g, '');
+          var twin = bNorm.length >= 8 && standing.filter(function (x) {
+            if (x.s.getTime() !== d1.getTime()) return false;
+            var xNorm = String(calBaseTitle_(x.t)).toLowerCase().replace(/[^a-z0-9]+/g, '');
+            return xNorm.length >= 8 && (xNorm.indexOf(bNorm) >= 0 || bNorm.indexOf(xNorm) >= 0);
+          })[0];
+          if (onCal[ck] || twin) {
             alreadyOn.push(Utilities.formatDate(d1, 'America/Denver', 'EEE h:mm a') + ' ' + evTitle.slice(0, 40));
             return;
           }
