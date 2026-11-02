@@ -5906,6 +5906,7 @@ async function fetchPayroll(force) {
       .sort((a, b) => new Date(b.start) - new Date(a.start))[0] || null;
     PAY.today = (j.today || []).filter(t => (t.tech || '').toLowerCase() === me);
     if (S.view === 'dash') renderDash();
+    try { renderDayClockNav(); } catch (e) {}
   } catch (e) { /* offline — keep last */ }
 }
 // soft geofence: grab the phone's location for the punch (6s budget) — the
@@ -18908,7 +18909,65 @@ function loadTranslator() {
   if (btn) btn.onclick = () => { list.hidden = !list.hidden; };
 })();
 
-function openNav() { $('#side').classList.add('open'); $('#scrim').classList.add('show'); }
+/* Day clock in the ☰ drawer (Alex 10/31, 103126martin05): the ▶ Clock in /
+ * ■ Clock out button without opening My Dashboard and waiting for it to load.
+ * Same rules and same punch flow as the dashboard's button — sign-in with a
+ * name, geofence (outside the fence → the time-fix request), mover checklist
+ * on the way out, day-out closes the piano clock. Reads the clock state the
+ * app already has; "checking…" until the payroll feed has answered once. */
+function renderDayClockNav() {
+  const box = document.getElementById('dayClockNav');
+  if (!box) return;
+  const name = clockName();
+  if (!name) { box.hidden = true; box.innerHTML = ''; return; }
+  box.hidden = false;
+  if (box.dataset.busy) return;   // a punch is in flight — leave the button alone
+  const po = PAY.open;
+  const known = PAY.at > 0;
+  box.innerHTML = !known
+    ? `<button class="paybtn dcn-btn" disabled>${tr('checking the day clock…', 'revisando el reloj…')}</button>`
+    : po
+      ? `<button class="paybtn dcn-btn payout">■ ${tr('Clock out for the day', 'Salida del día')}</button>
+         <div class="dcn-sub">${tr('on the clock since', 'en el reloj desde')} <b>${fmtT(po.start)}</b> · <span class="cctime" data-start="${esc(po.start)}">${clockElapsed(po.start)}</span></div>`
+      : `<button class="paybtn dcn-btn payin">▶ ${tr('Clock in for the day', 'Entrada del día')}</button>
+         <div class="dcn-sub">${PAY.today.length ? tr('clocked out — ', 'salida registrada — ') + fmtHM(payMins()) + tr(' today', ' hoy') : tr('not clocked in for the day yet', 'todavía sin entrada hoy')}</div>`;
+  box.insertAdjacentHTML('beforeend', '<div class="dcn-msg"></div>');
+  const pb = box.querySelector('.dcn-btn:not([disabled])');
+  if (!pb) return;
+  pb.onclick = async () => {
+    const dir = pb.classList.contains('payin') ? 'in' : 'out';
+    if (dir === 'out' && await moverChecklistNeeded() && !(await moverChecklist())) return;
+    box.dataset.busy = '1';
+    pb.disabled = true; pb.textContent = clockingText(dir);
+    const slow = punchSlow(pb, dir);
+    const j = await dayPunch(dir === 'in' ? 'dayin' : 'dayout');
+    clearTimeout(slow);
+    delete box.dataset.busy;
+    const msg = box.querySelector('.dcn-msg');
+    if (j && j.error === 'geofence') {
+      renderDayClockNav();
+      const m2 = box.querySelector('.dcn-msg');
+      m2.className = 'dcn-msg err';
+      m2.innerHTML = `📍 ${esc(String(j.awayMiles))} mi ${tr('from the shop — you need to be at work to clock', 'de la tienda — tienes que estar en el trabajo para marcar')} ${dir}. <a href="#" class="geo-fix">${tr('Request a manager time adjustment ›', 'Pedir un ajuste al gerente ›')}</a>`;
+      m2.querySelector('.geo-fix').onclick = e => { e.preventDefault(); closeNav();
+        clockFixModal(`Tried to clock ${dir} at ` + new Date().toLocaleTimeString('en-US', {hour: 'numeric', minute: '2-digit'}) + ` from ${j.awayMiles} mi away (geofence) — correct time entered above.`); };
+      return;
+    }
+    if (j && j.error) { renderDayClockNav(); const m3 = box.querySelector('.dcn-msg'); m3.className = 'dcn-msg err'; m3.textContent = j.error; return; }
+    if (j && j.ok) {
+      renderDayClockNav();
+      const m4 = box.querySelector('.dcn-msg'); m4.className = 'dcn-msg ok';
+      m4.textContent = (dir === 'in' ? tr('✓ clocked in ', '✓ entrada ') : tr('✓ clocked out ', '✓ salida ')) + new Date().toLocaleTimeString('en-US', {hour: 'numeric', minute: '2-digit'}) + (j.verified ? tr(' — confirmed on the payroll sheet', ' — confirmada en la hoja de nómina') : '');
+      if (S.view === 'dash') renderDash();
+      return;
+    }
+    renderDayClockNav();
+    const m5 = box.querySelector('.dcn-msg'); m5.className = 'dcn-msg err';
+    m5.textContent = tr('No confirmation from the Google bridge — open My Dashboard to check; tap again if it still shows you out.', 'Sin confirmación de Google — abre Mi Panel para revisar; toca otra vez si aún te muestra fuera.');
+    fetchPayroll(true);
+  };
+}
+function openNav() { $('#side').classList.add('open'); $('#scrim').classList.add('show'); renderDayClockNav(); fetchPayroll(); }
 function closeNav() { $('#side').classList.remove('open'); $('#scrim').classList.remove('show'); }
 $('#menuBtn').onclick = () =>
   $('#side').classList.contains('open') ? closeNav() : openNav();

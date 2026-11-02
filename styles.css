@@ -2479,3 +2479,13 @@ table.tchktbl td.chk .tcasap input{width:15px;height:15px}
 .namepick{flex-basis:100%;display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 4px;max-height:168px;overflow-y:auto}
 .namepick button{border:1px solid #cfd6dc;background:#f7f8f9;border-radius:999px;padding:7px 12px;font:600 13px Helvetica,Arial;color:#20242a;cursor:pointer}
 .namepick button:active{background:#e8ebee}
+
+/* day clock in the ☰ drawer (Alex 10/31) */
+.dayclocknav{padding:6px 12px 10px;border-bottom:1px solid #2a2a2e;margin-bottom:6px}
+.dayclocknav .dcn-btn{width:100%;font-size:14px;padding:10px 12px}
+.dayclocknav .dcn-sub{font-size:11.5px;color:#a8a39b;margin-top:5px;padding-left:2px}
+.dayclocknav .dcn-msg{font-size:12px;margin-top:5px;line-height:1.35}
+.dayclocknav .dcn-msg:empty{display:none}
+.dayclocknav .dcn-msg.ok{color:#8fd19e}
+.dayclocknav .dcn-msg.err{color:#f0a0a0}
+.dayclocknav .dcn-msg a{color:#fff;font-weight:700}
