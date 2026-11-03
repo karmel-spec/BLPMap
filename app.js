@@ -1793,7 +1793,7 @@ function preloadReport(id) {
 }
 function tryReportLink() {
   const m = /[#&]report=([a-z]+)/.exec(location.hash || '');
-  // the old ⏰ TIME CLOCK — PAYROLL link opens the merged 🛠 TIME CLOCK (retired 11/3)
+  // the old TIME CLOCK — PAYROLL link opens the merged ⏰ TIME CLOCK (retired 11/3)
   if (m && m[1] === 'paytime') m[1] = 'clockadjust';
   if (!m || !REPORT_DEFS().some(r => r.id === m[1])) return;
   S.openReport = m[1];
@@ -6321,7 +6321,7 @@ async function loadTimeOff() {
   if (S.view === 'dash') renderDash();
   if (S.view === 'report') renderReport();
 }
-// "my clock is wrong" request — any team member; lands on the 🛠 Time Clock
+// "my clock is wrong" request — any team member; lands on the ⏰ Time Clock
 // Adjustments list for Melissa / the shop managers to correct
 /* Mark 9/8 (request 090826hales36): the team picks the day and types the
  * CORRECT clock-in / clock-out times instead of describing them. The
@@ -6493,7 +6493,7 @@ function clockFixModal(prefill) {
     const slowTimer = setInterval(() => {
       const secs = Math.round((Date.now() - t0) / 1000);
       msg.textContent = secs < 25 ? tr('still sending — Google is slow, keep this open…', 'todavía enviando — Google está lento, no cierres esto…')
-        : tr(`still working (${secs}s) — if this closes, check 🛠 Time Clock; it's usually already on the list`, `todavía trabajando (${secs}s) — si se cierra, revisa 🛠 Reloj; normalmente ya está en la lista`);
+        : tr(`still working (${secs}s) — if this closes, check ⏰ Time Clock; it's usually already on the list`, `todavía trabajando (${secs}s) — si se cierra, revisa ⏰ Reloj; normalmente ya está en la lista`);
     }, 8000);
     // file it in the language the app is set to, so the "your clock is fixed"
     // text comes back in that language without anyone maintaining a list
@@ -6509,7 +6509,7 @@ function clockFixModal(prefill) {
       setTimeout(() => ov.remove(), 2600);
       return;
     }
-    if (!j || j.error) { msg.textContent = (j && j.error) || 'no reply from the bridge — check 🛠 Time Clock before sending again'; sendBtn.disabled = false; sendBtn.textContent = sendWas; return; }
+    if (!j || j.error) { msg.textContent = (j && j.error) || 'no reply from the bridge — check ⏰ Time Clock before sending again'; sendBtn.disabled = false; sendBtn.textContent = sendWas; return; }
     if (false) { msg.textContent = j.error; sendBtn.disabled = false; sendBtn.textContent = sendWas; return; }
     ov.querySelector('.dsheet').innerHTML = j.duplicate
       ? '<h3>✅ Already on the list</h3><div class="dssub">You had already sent this one — it hasn’t been filed twice. The fix will show on your dashboard once it’s made.</div>'
@@ -12760,7 +12760,7 @@ function payTimeTable(scopeIn) {
   // plus a category filter for those sessions.
   /* scope 'adj' (Mark 10/20, the payroll-report merge, 092126terry47): the
    * same totals, groupings, category / piano hours and CSVs render at the
-   * foot of 🛠 Time Clock (was Time Clock Adjustments), driven by THAT page's person / date
+   * foot of ⏰ Time Clock (was Time Clock Adjustments), driven by THAT page's person / date
    * filters (S.adjF). There the editable punch tables already show the daily
    * punches and every session, so the daily table and the session list are
    * left out and the grouping starts at weekly. */
@@ -12783,12 +12783,12 @@ function payTimeTable(scopeIn) {
   const cats = [...new Set(tlAll.map(r => r.phase || '(no phase)'))].sort();
   const tl = f.cat ? tlAll.filter(r => (r.phase || '(no phase)') === f.cat) : tlAll;
   const showTl = f.detail === 'all';
-  // the person + date pickers sit in this bar on BOTH pages: on 🛠 Time Clock
+  // the person + date pickers sit in this bar on BOTH pages: on ⏰ Time Clock
   // they are the same filters as the punch tables (S.adjF), repeated here
   // because those tables are usually collapsed — "Pay period: no date range
   // set" and nowhere to set it (Melissa 10/24, 102426terry05)
   const bar = filterBar(scope, [
-    // on 🛠 Time Clock the person + dates come from the report's one top bar (Melissa 10/31)
+    // on ⏰ Time Clock the person + dates come from the report's one top bar (Melissa 10/31)
     adj ? '' : fSel(scope, 'who', f.who, techs, 'All team members'),
     adj ? '' : fDate(scope, 'from', f.from, 'from'), adj ? '' : fDate(scope, 'to', f.to, 'to'),
     `<select class="rptf" data-scope="${scope}" data-f="group">
@@ -13029,7 +13029,7 @@ function jobCostTable() {
      || `<tr><td colspan="${PR ? 4 : 3}" class="empty">No work-clock sessions match these filters.</td></tr>`}</table>`;
 }
 
-/* ---------- 🛠 time clock adjustments (permission-gated edit surface) ------ */
+/* ---------- ⏰ time clock adjustments (permission-gated edit surface) ------ */
 async function loadClockFixes() {
   try {   // fast feed first (see loadPayroll) — the bridge's fn=clockfixes was the last 7–25 s wait on the adjustments report
     const f = await clockFeed();
@@ -14252,7 +14252,7 @@ const REPORT_DEFS = () => [
   {id: 'adminbriefs', sec: 'admin', icon: '💼', title: 'ADMIN DAILY BRIEF', count: null,
    desc: 'The nightly Admin briefing, archived as Google Docs — payments, media and delivery logistics. Each row has its own ↗ share button.',
    html: () => briefsTable('admin')},
-  {id: 'clockadjust', sec: 'admin', show: () => isPayrollAdmin() || isTimelogAdmin() || permHas('payroll_report') === true, icon: '🛠', title: 'TIME CLOCK', count: (() => {
+  {id: 'clockadjust', sec: 'admin', show: () => isPayrollAdmin() || isTimelogAdmin() || permHas('payroll_report') === true, icon: '⏰', title: 'TIME CLOCK', count: (() => {
      try { return S.fixRows ? S.fixRows.filter(r => cfxSinceLaunch(r) && r.status === 'open').length : null; } catch (e) { return null; } })(),
    desc: 'Fix mistakes and forgotten punches. Team fix requests land here; payroll day punches are editable by owners & Melissa, piano Work Clock sessions by owners & the shop managers (Mark, Matthew, Jacob). Every adjustment is stamped with who changed it.',
    html: clockAdjustTable},
