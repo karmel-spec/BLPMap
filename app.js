@@ -14018,7 +14018,7 @@ function appUpdatesTable() {
   const unshared = S.auRows.filter(r => !r.sharedAt);
   const shared = S.auRows.filter(r => r.sharedAt);
   const lastShare = shared.length ? shared[0].sharedAt.slice(0, 10) : null;
-  const AUD = [['team', '👥 Everyone (Tech Phones list)'], ['managers', '🔧 Managers (Mark · Matthew · Jacob)'], ['admins', '🗂 Admins (Melissa · Lisa)']];
+  const AUD = [['team', '👥 Everyone (Tech Phones list)'], ['managers', '🔧 Managers (Mark · Matthew · Jacob)'], ['admins', '🗂 Admins (Melissa)']];
   return `<div class="rfbar">
       <input type="text" class="auin" maxlength="400" placeholder="write an update the team should hear about…" style="flex:1">
       <button class="csvbtn auadd">＋ Add</button></div>
