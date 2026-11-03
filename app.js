@@ -15448,7 +15448,7 @@ function renderDash() {
       <div class="dlocker" data-h="#report"><span class="ic">📝</span><b>Weekly Report</b><span>due Thursday 6pm</span></div>
       <!-- 🏖 time off as a big tile beside Weekly Report (Mark 11/2, 110226hales69) — the same form as Request ▸ Time off -->
       <div class="dlocker" data-timeoff="1"><span class="ic">🏖</span><b>Request Time Off</b><span>days off · partial days</span></div>
-      <div class="dlocker" data-pay="1"><span class="ic">💵</span><b>Paylogics ↗</b><span>paystubs · time off</span></div>
+      <div class="dlocker" data-pay="1"><span class="ic">💵</span><b>Paylogics ↗</b><span>paystubs</span></div>
       <div class="dlocker" data-reimb="1"><span class="ic">💸</span><b>Reimbursement</b><span>mileage · gas · supplies</span></div>
     </div>
     ${isTimelogAdmin() ? (() => {
