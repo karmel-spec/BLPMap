@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-11-03.6';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-11-03.7';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -5812,7 +5812,7 @@ function clockFixRequest_(req, who) {
     var whoName = String(who || '').replace(/\s*[(<].*$/, '').trim();
     notifyTeam_([roleSide_(whoName) === 'admin' ? 'Melissa' : 'Mark Hales'],
       '🛠 Clock fix request — ' + whoName + ': ' + note.slice(0, 120)
-      + ' (approve in Store Map → Reports → ⏰ Time Clock)');
+      + ' (approve in Store Map → Reports → ⏰ Day/Piano Clocks and Payroll)');
   } catch (eN) { /* text best-effort */ }
   return {ok: true};
 }
@@ -8860,14 +8860,14 @@ function shopManagerHtml_(R) {
     var openFix = clockFixRows_().rows.filter(function (r) { return r.status === 'open'; });
     if (nudges.length || openFix.length) {
       sec('⏰', 'Clock follow-ups', nudges.length + openFix.length,
-        'Last evening\'s 6pm sweep texted anyone still clocked in (movers excepted); their correction requests land under ⏰ Time Clock.');
+        'Last evening\'s 6pm sweep texted anyone still clocked in (movers excepted); their correction requests land under ⏰ Day/Piano Clocks and Payroll.');
       var cf = [];
       nudges.forEach(function (n) {
         cf.push('📱 texted <b>' + n.who + '</b> — still on ' + withSer(n.detail));
       });
       if (openFix.length) cf.push('<b style="color:#9e2020">' + openFix.length
         + ' time-clock fix' + (openFix.length === 1 ? '' : 'es')
-        + ' waiting for approval</b> — Store Map → Reports → ⏰ Time Clock');
+        + ' waiting for approval</b> — Store Map → Reports → ⏰ Day/Piano Clocks and Payroll');
       ul(cf);
     }
   } catch (eN) { /* best-effort */ }
@@ -9393,7 +9393,7 @@ function adminBriefHtml_(R) {
     var cfx = clockFixRows_().rows.filter(function (r) { return r.status === 'open'; });
     if (cfx.length) {
       sec('🛠', 'Time-clock fixes waiting', cfx.length,
-        'Fix the punch on Store Map → Reports → ⏰ Time Clock, then mark it Resolved to clear it from this brief.');
+        'Fix the punch on Store Map → Reports → ⏰ Day/Piano Clocks and Payroll, then mark it Resolved to clear it from this brief.');
       ul(cfx.slice(0, 12).map(function (r) {
         return '<b>' + String(r.who || '').replace(/<[^>]*>/g, '') + '</b> · ' + r.clock
           + (r.serial ? ' #' + r.serial : '') + ' — ' + String(r.note || '').slice(0, 140)

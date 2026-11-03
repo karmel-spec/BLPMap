@@ -6493,7 +6493,7 @@ function clockFixModal(prefill) {
     const slowTimer = setInterval(() => {
       const secs = Math.round((Date.now() - t0) / 1000);
       msg.textContent = secs < 25 ? tr('still sending — Google is slow, keep this open…', 'todavía enviando — Google está lento, no cierres esto…')
-        : tr(`still working (${secs}s) — if this closes, check ⏰ Time Clock; it's usually already on the list`, `todavía trabajando (${secs}s) — si se cierra, revisa ⏰ Reloj; normalmente ya está en la lista`);
+        : tr(`still working (${secs}s) — if this closes, check ⏰ Day/Piano Clocks and Payroll; it's usually already on the list`, `todavía trabajando (${secs}s) — si se cierra, revisa ⏰ Relojes de día/piano y nómina; normalmente ya está en la lista`);
     }, 8000);
     // file it in the language the app is set to, so the "your clock is fixed"
     // text comes back in that language without anyone maintaining a list
@@ -6509,7 +6509,7 @@ function clockFixModal(prefill) {
       setTimeout(() => ov.remove(), 2600);
       return;
     }
-    if (!j || j.error) { msg.textContent = (j && j.error) || 'no reply from the bridge — check ⏰ Time Clock before sending again'; sendBtn.disabled = false; sendBtn.textContent = sendWas; return; }
+    if (!j || j.error) { msg.textContent = (j && j.error) || 'no reply from the bridge — check ⏰ Day/Piano Clocks and Payroll before sending again'; sendBtn.disabled = false; sendBtn.textContent = sendWas; return; }
     if (false) { msg.textContent = j.error; sendBtn.disabled = false; sendBtn.textContent = sendWas; return; }
     ov.querySelector('.dsheet').innerHTML = j.duplicate
       ? '<h3>✅ Already on the list</h3><div class="dssub">You had already sent this one — it hasn’t been filed twice. The fix will show on your dashboard once it’s made.</div>'
@@ -14252,7 +14252,7 @@ const REPORT_DEFS = () => [
   {id: 'adminbriefs', sec: 'admin', icon: '💼', title: 'ADMIN DAILY BRIEF', count: null,
    desc: 'The nightly Admin briefing, archived as Google Docs — payments, media and delivery logistics. Each row has its own ↗ share button.',
    html: () => briefsTable('admin')},
-  {id: 'clockadjust', sec: 'admin', show: () => isPayrollAdmin() || isTimelogAdmin() || permHas('payroll_report') === true, icon: '⏰', title: 'TIME CLOCK', count: (() => {
+  {id: 'clockadjust', sec: 'admin', show: () => isPayrollAdmin() || isTimelogAdmin() || permHas('payroll_report') === true, icon: '⏰', title: 'DAY/PIANO CLOCKS AND PAYROLL', count: (() => {
      try { return S.fixRows ? S.fixRows.filter(r => cfxSinceLaunch(r) && r.status === 'open').length : null; } catch (e) { return null; } })(),
    desc: 'Fix mistakes and forgotten punches. Team fix requests land here; payroll day punches are editable by owners & Melissa, piano Work Clock sessions by owners & the shop managers (Mark, Matthew, Jacob). Every adjustment is stamped with who changed it.',
    html: clockAdjustTable},
@@ -18696,7 +18696,7 @@ const PERM_KEYS = [
   ['manager_console', 'Manager console (scorecard)'],
   ['job_costing', 'Job costing report'],
   ['admin_dash', 'Admin dashboard & app requests'],
-  ['payroll_report', 'Time Clock totals & exports (payroll)'],
+  ['payroll_report', 'Day/Piano Clocks and Payroll — totals & exports'],
   ['roster_edit', 'Add / remove team members'],
   ['settings', 'This Settings page'],
 ];
