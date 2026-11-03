@@ -10995,10 +10995,9 @@ const PAYROLL_ADMIN_EMAILS = OWNER_EMAILS.concat(['melissa@brighamlarsonpianos.c
 const TIMELOG_ADMIN_EMAILS = OWNER_EMAILS.concat(
   ['markhales.blp@gmail.com', 'matthewwessman.blp@gmail.com', 'jacobmower.blp@gmail.com']);
 function userEmail() { const u = authUser(); return u && u.email ? String(u.email).toLowerCase() : ''; }
-// 🎓 Admin Training app access — Lisa, Melissa & the owners for now (Brigham 9/4)
+// 🎓 Admin Training app access — Melissa & the owners (Brigham 9/4; Lisa left, Mark 11/3)
 function adminTrainingOk() {
-  return OWNER_EMAILS.concat(['melissa@brighamlarsonpianos.com',
-    'lisa@brighamlarsonpianos.com']).includes(userEmail());
+  return OWNER_EMAILS.concat(['melissa@brighamlarsonpianos.com']).includes(userEmail());
 }
 /* ⚙️ Settings feed + permission engine (Brigham 9/4, Design C).
  * Sheet-driven grants override the hardcoded lists for anyone with an
@@ -11053,8 +11052,9 @@ function isSettingsAdmin() {
 function isOwner() { return OWNER_EMAILS.includes(userEmail()); }
 function isAdminUser() { return ADMIN_EMAILS.includes(userEmail()); }
 function isPayrollAdmin() { return gateOr(PAYROLL_ADMIN_EMAILS.includes(userEmail()), 'payroll_edit'); }
-// 📜 contract links: payroll admins + Lisa (Lisa 9/23, 092326litton07) — no payroll rights come with it
-function isContractViewer() { return isPayrollAdmin() || isOwner() || gateOr(['lisa@brighamlarsonpianos.com'].includes(userEmail()), 'contracts_view'); }
+// 📜 contract links: payroll admins + owners, or a role with contracts_view
+// (Lisa's 9/23 email grant removed when she left, Mark 11/3) — no payroll rights come with it
+function isContractViewer() { return isPayrollAdmin() || isOwner() || gateOr(false, 'contracts_view'); }
 function isTimelogAdmin() { return gateOr(TIMELOG_ADMIN_EMAILS.includes(userEmail()), 'tl_edit'); }
 // 📊 Manager console — the owners and the Lead Manager only (Brigham 9/1)
 function isManagerConsole() { return isOwner() || gateOr(userEmail() === 'markhales.blp@gmail.com', 'manager_console'); }
