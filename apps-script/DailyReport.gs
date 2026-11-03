@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-11-03.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-11-03.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -6847,7 +6847,37 @@ function smYesterdayActivity_() {
   return out;
 }
 
-/* ---- concurrent tasks that must finish before the NEXT phase starts ---- */
+/* ---- concurrent tasks that must finish before the NEXT phase starts ----
+ * Done-ness comes from the card's ⚙ Shop Progress statuses (Mark 11/3, option
+ * A): the per-track Done checklist left the card 10/21, so nothing could clear
+ * the old Task Status stamps any more and the list only grew. An old Done stamp
+ * still counts. Tasks with no Shop Progress status (order parts, pinblock,
+ * soundboard) are not listed at all.
+ *   key service          → Keytops "Done", or Keys "No key service"
+ *   plate refinishing    → Plate "Plate storage — AFTER" / "Back in piano"
+ *   plate bolts/screws   → Plate hardware "Buffed" / "Installed"
+ *   pedals/cabinetry hardware electroplating → off Korban's Hardware Queue
+ *                          (Prepped for shipping / Buffed / Already done)
+ *   order decal          → Decals Received / In Stock / Installed / Not needed */
+var SM_TASK_NO_STATUS = ['order parts', 'pinblock', 'soundboard'];
+function smTaskDoneByStatus_(p, id, rows) {
+  var stamp = function (name) {
+    var n = smTaskId_(name);
+    return rows.some(function (x) { return smTaskId_(x.task) === n && !x.part && (x.step1At || x.step2At); });
+  };
+  if (id === 'key service')
+    return /^done\b/i.test(String(p.keytopStatus || '').trim())
+      || /^no key service$/i.test(String(p.keytopMaterial || '').trim());
+  if (id === 'plate refinishing')
+    return /after|back in piano/i.test(String(p.plateStatus || ''));
+  if (id === 'plate bolts/screws buffing')
+    return /^(buffed|installed)$/i.test(String(p.plateHwStatus || '').trim()) || stamp('plate screws (buffing list)');
+  if (id.indexOf('electroplating') >= 0)
+    return stamp('pedals/cabinetry hardware electroplating and polishing') || stamp('visible hardware (buffing list)');
+  if (id === 'order decal')
+    return /received|in stock|installed|not needed|completed/i.test(String((p.tasks || {}).decals || ''));
+  return false;
+}
 function smBlockedByTasks_(pianos, defs) {
   if (!defs || !defs.tracks) return [];
   var live = pianos.filter(function (p) {
@@ -6875,6 +6905,8 @@ function smBlockedByTasks_(pianos, defs) {
         var endIdx = smPhaseIdx_(smNormPhase_(tasks[t].endPhase));
         if (endIdx < 0 || endIdx > curIdx) continue;      // not due yet
         var id = smTaskId_(tasks[t].name);
+        if (SM_TASK_NO_STATUS.indexOf(id) >= 0) continue;   // no Shop Progress status to read
+        if (smTaskDoneByStatus_(p, id, rows)) continue;
         var row = null;
         for (var r = 0; r < rows.length; r++) {
           if (smTaskId_(rows[r].task) === id && !rows[r].part) { row = rows[r]; break; }
@@ -8957,7 +8989,7 @@ function shopManagerHtml_(R) {
 
   if (R.blocked.length) {
     sec('⛔', 'Blocked — concurrent work not finished', R.blocked.length,
-      'These pianos are at or past the phase where the task below was due.');
+      'These pianos are at or past the phase where the task below was due. Set it on the card under ⚙ Shop Progress (Plate, Plate hardware, Keytops, Decals) or on Korban\u2019s Hardware Queue to clear it.');
     topUl(R.blocked.map(function (b) {
       return ref(b.p) + '<br>' + pill('IN ' + (b.p.phase || '—'), '#fdf3ec', '#8a6a00')
         + ' <span style="font-size:12px;color:#9e2020">outstanding: ' + b.tasks.join(', ') + '</span>';
