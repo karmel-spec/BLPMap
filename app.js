@@ -6792,6 +6792,8 @@ function popHTML(p) {
         ${(isAdminUser() || userRole()) ? `<button data-req="tempspot">📍 Temp map spot</button>` : ''}
         <button data-req="dup" class="reqdanger">🗑 Mark as Duplicate</button>
       </div>` : ''}
+    ${scopeSec}
+
     ${p.serial ? (() => {
       const mine = CLOCK.open;
       const onThis = mine && mine.serial === p.serial;
@@ -6833,6 +6835,25 @@ function popHTML(p) {
         <button class="clkbtn clkin off">▶ ${mine ? 'Switch here' : 'Clock in'}</button>
         <div class="clkmsg phmsg"></div>`);
     })() : ''}
+    ${(body => p.serial ? secWrap('shop', '🔨 Shop Progress', body) : body)(`
+    ${p.serial ? `<button class="photobtn">📸 Add progress photo</button><div class="photomsg"></div>` : ''}
+    ${p.serial && effPh === 'Post Sale QC' ? `<div style="background:#eef6ef;border:1.5px solid #7fc48f;border-radius:10px;padding:9px 11px;margin:6px 0">
+      <b style="font-size:12.5px">💲 Pre-delivery final QC</b>
+      <div class="lite" style="font-size:11.5px;margin:2px 0 7px">This piano already passed its showroom QC — run the full worksheet once more so it leaves perfect. Checks here start fresh; the original QC record stays untouched.</div>
+      <button class="tagbtn psqcbtn" style="background:#2f7d4f;color:#fff;border-color:#2f7d4f">📋 Open the QC worksheet</button></div>` : ''}
+    ${p.serial ? '' : tracker}
+    ${phaser}
+    ${tasksBox(p)}
+    ${wbCardRow(p)}
+    ${(p.phase || '').startsWith('Waiting') ? `<div class="row waitnote">Waiting on
+        <b>${esc(p.waitNote || p.phase.replace('Waiting on ', ''))}</b>
+        ${p.checkBack ? `<span class="wncb">· check back <b class="snzcur">${esc(p.checkBack)}</b></span>` : ''}
+      </div>
+      ${p.serial ? `<div class="row rowflex snzrow"><span class="snzlbl">${p.checkBack ? 'Re-snooze' : 'Check back in'}</span>
+        <span class="snzbtns"><button class="snz" data-d="3">+3d</button><button class="snz" data-d="7">+1w</button><button class="snz" data-d="14">+2w</button><button class="snz" data-d="30">+1m</button></span>
+      </div><div class="snzmsg phmsg"></div>` : ''}` : ''}
+    ${p.serial ? `<div class="tagbtns histbtns"><button class="tagbtn rreports">📄 Tech Reports History</button></div>` : ''}`)}
+
     ${secWrap('loc', '📍 Locations', `
     <div class="row rowflex"><span>Map #</span><b class="mapnum">${esc(p.location || '—')}</b></div>
     ${p.queuePos ? `<div class="row rowflex"><span>Queue #</span>${queueChip}</div>` : ''}
@@ -6857,27 +6878,6 @@ function popHTML(p) {
       </div><div class="bnmsg phmsg"></div>
       <input type="file" class="bnfile" accept="image/*" hidden>` : ''}
     ${p.serial ? `<button class="lhbtn">🕘 Location history</button><div class="lhout"></div>` : ''}`)}
-
-    ${scopeSec}
-
-    ${(body => p.serial ? secWrap('shop', '🔨 Shop Progress', body) : body)(`
-    ${p.serial ? `<button class="photobtn">📸 Add progress photo</button><div class="photomsg"></div>` : ''}
-    ${p.serial && effPh === 'Post Sale QC' ? `<div style="background:#eef6ef;border:1.5px solid #7fc48f;border-radius:10px;padding:9px 11px;margin:6px 0">
-      <b style="font-size:12.5px">💲 Pre-delivery final QC</b>
-      <div class="lite" style="font-size:11.5px;margin:2px 0 7px">This piano already passed its showroom QC — run the full worksheet once more so it leaves perfect. Checks here start fresh; the original QC record stays untouched.</div>
-      <button class="tagbtn psqcbtn" style="background:#2f7d4f;color:#fff;border-color:#2f7d4f">📋 Open the QC worksheet</button></div>` : ''}
-    ${p.serial ? '' : tracker}
-    ${phaser}
-    ${tasksBox(p)}
-    ${wbCardRow(p)}
-    ${(p.phase || '').startsWith('Waiting') ? `<div class="row waitnote">Waiting on
-        <b>${esc(p.waitNote || p.phase.replace('Waiting on ', ''))}</b>
-        ${p.checkBack ? `<span class="wncb">· check back <b class="snzcur">${esc(p.checkBack)}</b></span>` : ''}
-      </div>
-      ${p.serial ? `<div class="row rowflex snzrow"><span class="snzlbl">${p.checkBack ? 'Re-snooze' : 'Check back in'}</span>
-        <span class="snzbtns"><button class="snz" data-d="3">+3d</button><button class="snz" data-d="7">+1w</button><button class="snz" data-d="14">+2w</button><button class="snz" data-d="30">+1m</button></span>
-      </div><div class="snzmsg phmsg"></div>` : ''}` : ''}
-    ${p.serial ? `<div class="tagbtns histbtns"><button class="tagbtn rreports">📄 Tech Reports History</button></div>` : ''}`)}
 
     ${p.serial ? secWrap('pw', '📁 Paperwork', paperworkCard(p)) : ''}
 
