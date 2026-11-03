@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-11-03.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-11-03.4';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -6860,23 +6860,29 @@ function smYesterdayActivity_() {
  *                          (Prepped for shipping / Buffed / Already done)
  *   order decal          → Decals Received / In Stock / Installed / Not needed */
 var SM_TASK_NO_STATUS = ['order parts', 'pinblock', 'soundboard'];
+// → {done, why}: why names the Shop Progress status a manager sets to clear it
 function smTaskDoneByStatus_(p, id, rows) {
   var stamp = function (name) {
     var n = smTaskId_(name);
     return rows.some(function (x) { return smTaskId_(x.task) === n && !x.part && (x.step1At || x.step2At); });
   };
+  var shown = function (label, v) { v = String(v || '').trim(); return label + ' ' + (v ? '“' + v + '”' : 'not set'); };
   if (id === 'key service')
-    return /^done\b/i.test(String(p.keytopStatus || '').trim())
-      || /^no key service$/i.test(String(p.keytopMaterial || '').trim());
+    return {done: /^done\b/i.test(String(p.keytopStatus || '').trim())
+      || /^no key service$/i.test(String(p.keytopMaterial || '').trim()), why: shown('Keytops', p.keytopStatus)};
   if (id === 'plate refinishing')
-    return /after|back in piano/i.test(String(p.plateStatus || ''));
+    return {done: /after|back in piano/i.test(String(p.plateStatus || '')), why: shown('Plate', p.plateStatus)};
   if (id === 'plate bolts/screws buffing')
-    return /^(buffed|installed)$/i.test(String(p.plateHwStatus || '').trim()) || stamp('plate screws (buffing list)');
+    return {done: /^(buffed|installed)$/i.test(String(p.plateHwStatus || '').trim()) || stamp('plate screws (buffing list)'),
+      why: shown('Plate hardware', p.plateHwStatus)};
   if (id.indexOf('electroplating') >= 0)
-    return stamp('pedals/cabinetry hardware electroplating and polishing') || stamp('visible hardware (buffing list)');
+    // past Refinishing the piano has left Korban's Hardware Queue (PRSB..Refinishing)
+    return {done: stamp('pedals/cabinetry hardware electroplating and polishing') || stamp('visible hardware (buffing list)')
+      || smPhaseIdx_(p.phase) > smPhaseIdx_('Refinishing'), why: 'not marked on the Hardware Queue'};
   if (id === 'order decal')
-    return /received|in stock|installed|not needed|completed/i.test(String((p.tasks || {}).decals || ''));
-  return false;
+    return {done: /received|in stock|installed|not needed|completed/i.test(String((p.tasks || {}).decals || '')),
+      why: shown('Decals', (p.tasks || {}).decals)};
+  return null;
 }
 function smBlockedByTasks_(pianos, defs) {
   if (!defs || !defs.tracks) return [];
@@ -6906,7 +6912,9 @@ function smBlockedByTasks_(pianos, defs) {
         if (endIdx < 0 || endIdx > curIdx) continue;      // not due yet
         var id = smTaskId_(tasks[t].name);
         if (SM_TASK_NO_STATUS.indexOf(id) >= 0) continue;   // no Shop Progress status to read
-        if (smTaskDoneByStatus_(p, id, rows)) continue;
+        var st = smTaskDoneByStatus_(p, id, rows);
+        if (st && st.done) continue;
+        var label = String(tasks[t].name).replace(/\s*\(if applicable\)/i, '') + (st ? ' (' + st.why + ')' : '');
         var row = null;
         for (var r = 0; r < rows.length; r++) {
           if (smTaskId_(rows[r].task) === id && !rows[r].part) { row = rows[r]; break; }
@@ -6915,7 +6923,7 @@ function smBlockedByTasks_(pianos, defs) {
         var doneAll = parts.length
           ? parts.every(function (x) { return x.step2At; })
           : !!(row && row.step2At);
-        if (!doneAll && late.indexOf(tasks[t].name) < 0) late.push(tasks[t].name);
+        if (!doneAll && late.indexOf(label) < 0) late.push(label);
       }
     }
     if (late.length) out.push({p: p, tasks: late});
