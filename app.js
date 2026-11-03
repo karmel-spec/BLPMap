@@ -1779,7 +1779,6 @@ function tryDeepLink() {
 function preloadReport(id) {
   if (id === 'activity' && !S.activityRows) loadActivity();
   if ((id === 'briefs' || id === 'adminbriefs') && !S.briefRows) loadBriefs();
-  if (id === 'paytime' && !S.payRows) loadPayroll();
   if (id === 'jobcost' && !S.tlRows) loadTimeLog();
   if ((id === 'queue' || id === 'stalled') && !S.tlRows) loadTimeLog();   // ASSIGNED TO / RECENT WORK columns
   if (id === 'appupdates' && !S.auRows) loadAppUpdates();
@@ -1794,6 +1793,8 @@ function preloadReport(id) {
 }
 function tryReportLink() {
   const m = /[#&]report=([a-z]+)/.exec(location.hash || '');
+  // the old ⏰ TIME CLOCK — PAYROLL link opens the merged 🛠 TIME CLOCK (retired 11/3)
+  if (m && m[1] === 'paytime') m[1] = 'clockadjust';
   if (!m || !REPORT_DEFS().some(r => r.id === m[1])) return;
   S.openReport = m[1];
   preloadReport(m[1]);
@@ -13837,7 +13838,10 @@ function clockAdjustTable() {
   // 📊 the payroll report's totals, groupings, category / piano hours and CSV
   // exports live here too now (Mark 10/20, merge step 2) — same person and
   // date filters as the punch tables above
-  const totals = canPay ? `<h4 class="bfhd" style="margin-top:22px">📊 Totals &amp; exports — weekly / monthly / regular-overtime, hours by category and by piano, CSVs · ${adjFiltered ? 'same person and dates as above' : 'everything loaded (190 days of day clock, 365 of piano clock) — set a person or dates above to narrow it'}</h4>
+  // the retired ⏰ TIME CLOCK — PAYROLL card's audience (the payroll_report
+  // role key) still sees the totals & CSVs here, without any edit rights
+  const canTotals = canPay || permHas('payroll_report') === true;
+  const totals = canTotals ? `<h4 class="bfhd" style="margin-top:22px">📊 Totals &amp; exports — weekly / monthly / regular-overtime, hours by category and by piano, CSVs · ${adjFiltered ? 'same person and dates as above' : 'everything loaded (190 days of day clock, 365 of piano clock) — set a person or dates above to narrow it'}</h4>
     <div class="adjtotals">${payTimeTable('adj')}</div>` : '';
   // 🔵 big section buttons (Melissa 10/22, 102226terry01): each section collapses
   // and expands under one blue bar named like the section; the old heading
@@ -14248,13 +14252,7 @@ const REPORT_DEFS = () => [
   {id: 'adminbriefs', sec: 'admin', icon: '💼', title: 'ADMIN DAILY BRIEF', count: null,
    desc: 'The nightly Admin briefing, archived as Google Docs — payments, media and delivery logistics. Each row has its own ↗ share button.',
    html: () => briefsTable('admin')},
-  // Brigham 9/8: Mark (lead manager) sees the payroll time clock too — his
-  // role already carries the payroll_report key; it just was never wired
-  {id: 'paytime', sec: 'admin', show: () => isPayrollAdmin() || gateOr(userEmail() === 'markhales.blp@gmail.com', 'payroll_report'),
-   icon: '⏰', title: 'TIME CLOCK — PAYROLL', count: null,
-   desc: 'Team clock-in / clock-out for payroll: every arrival-and-exit punch from the dashboard Payroll Clock, filterable by team member and date, with daily punches or weekly/monthly totals, plus that member\u2019s hours by piano and by category of work from the piano Work Clock. Red rows were auto-closed (forgot to clock out) — review before running payroll. The CSV buttons export spreadsheets.',
-   html: payTimeTable},
-  {id: 'clockadjust', sec: 'admin', show: () => isPayrollAdmin() || isTimelogAdmin(), icon: '🛠', title: 'TIME CLOCK', count: (() => {
+  {id: 'clockadjust', sec: 'admin', show: () => isPayrollAdmin() || isTimelogAdmin() || permHas('payroll_report') === true, icon: '🛠', title: 'TIME CLOCK', count: (() => {
      try { return S.fixRows ? S.fixRows.filter(r => cfxSinceLaunch(r) && r.status === 'open').length : null; } catch (e) { return null; } })(),
    desc: 'Fix mistakes and forgotten punches. Team fix requests land here; payroll day punches are editable by owners & Melissa, piano Work Clock sessions by owners & the shop managers (Mark, Matthew, Jacob). Every adjustment is stamped with who changed it.',
    html: clockAdjustTable},
@@ -15022,7 +15020,7 @@ function renderReport() {
     ev.stopPropagation();
     const def = REPORT_DEFS().find(r => r.id === b.dataset.r);
     let html = def.print ? def.print() : def.html();   // paper layout where a report has one
-    if (['activity', 'tasks', 'queue', 'paytime', 'jobcost'].includes(def.id)) {
+    if (['activity', 'tasks', 'queue', 'jobcost'].includes(def.id)) {
       const i = html.indexOf('<table');
       if (i > 0) html = html.slice(i);   // drop the filter bar from print
     }
@@ -18698,7 +18696,7 @@ const PERM_KEYS = [
   ['manager_console', 'Manager console (scorecard)'],
   ['job_costing', 'Job costing report'],
   ['admin_dash', 'Admin dashboard & app requests'],
-  ['payroll_report', 'Payroll report'],
+  ['payroll_report', 'Time Clock totals & exports (payroll)'],
   ['roster_edit', 'Add / remove team members'],
   ['settings', 'This Settings page'],
 ];
