@@ -287,8 +287,8 @@ the report sheet's Tech Calendars tab. Calendars answer by DIRECT ID
 (firstlast.blp@gmail.com) even though they never appear in karmel's
 calendarList — probe by ID, don't trust list calls. Lupita = 
 **lupitachavoya.blp** (not guadalupe...); Garrett = garrett**taylor**.blp
-(Vickery is the mover). Hunter Rawlings has NO calendar yet — wire it when
-someone creates hunterrawlings.blp@gmail.com. Brigham's added rules
+(Vickery is the mover). Hunter Rawlings' calendar is
+hunterrawlings.blp@gmail.com ("16-Hunter Rawlings", readable as of 11/4). Brigham's added rules
 (2026-08-09, in Scheduling Rules tab): chip tuning 2-5 days after
 restringing completion; chip tunings before showroom tunings (loose);
 parts dependencies get deadline appointments on Korban's calendar (he
