@@ -45,6 +45,12 @@ Nov 9. Never put either meeting in the plan (no block, so Approve writes no even
 Treat that hour as taken on each attendee's calendar and schedule their other work
 around it, like a pre-booked tuning.
 
+**Korban's monthly HVAC filter check (Mark 2026-11-04, Scheduling Rules row 113):**
+on the **first Wednesday of every month**, a **"BLDG: HVAC filter check"** block
+2:30-3:00 (exact title); that day his Hardware Buffing Queue ends at 2:30. If he is
+out that Wednesday, put it on his next shop day that week, same time. No calendar
+note. The Planner owns it (no recurring Google event) — first one Wed 12/2/2026.
+
 **Korban's Hardware Buffing Queue (Mark 2026-10-19, Scheduling Rules row 90):** one
 block per day, 11:00-15:00 — **Monday 11:00-14:30**, followed by a **"Vacuum
 maintenance: clean filters, empty buckets" block 14:30-15:00 every Monday** that the
