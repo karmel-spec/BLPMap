@@ -2562,3 +2562,11 @@ table.tchktbl td.chk .tcasap input{width:15px;height:15px}
 .benchbox{flex-wrap:wrap}
 .benchbox .bnin{flex:1 1 130px;min-width:0}
 .benchbox .bnshot{white-space:nowrap}
+/* 🗂 photo gates: pick from the Tech folder on a computer (110426hales71) */
+.pg-pick{background:#fff!important;color:#2b2f33!important;border:1px solid #cfd6dc!important;cursor:pointer}
+.pg-grid{margin:-4px 0 12px;border:1px solid #e2ddd2;border-radius:10px;padding:8px;background:#faf8f4}
+.pg-thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px;max-height:300px;overflow:auto;margin-bottom:8px}
+.pg-th{border:2px solid transparent;border-radius:8px;padding:2px;background:#fff;cursor:pointer;display:flex;flex-direction:column;align-items:stretch;gap:2px;font:500 11px/1.2 inherit;font-family:inherit;color:#6f6a63}
+.pg-th img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:6px;background:#eee;display:block}
+.pg-th.on{border-color:#2e7d4f;box-shadow:0 0 0 2px rgba(46,125,79,.25)}
+.pg-grid .rfbar{margin:0}

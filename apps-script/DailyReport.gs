@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-11-03.7';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-11-04.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -1896,6 +1896,15 @@ function doPost(e) {
       return json_(pw.error ? {ok: false, error: pw.error} : {ok: true, cached: pw.cached, summary: pw.summary});
     }
     if (req.action === 'photosession') return json_(photoSession_(req, who));
+    // 🗂 computer photo gates (Mark 11/4, 110426hales71): list the piano's Tech
+    // folder photos, then file the one picked against the step — no copy made
+    if (req.action === 'techphotos') return json_(techPhotos_(req));
+    if (req.action === 'photopick') {
+      var pk = photoPick_(req, who);
+      if (pk.saved) logAct_(who, 'Progress photo', pk.summary || req.serial,
+        (req.stage || '(no phase)') + ' → ' + pk.name + ' (picked from the Tech folder)');
+      return json_(pk);
+    }
     if (req.action === 'photodone') {
       var pd = photoDone_(req, who);
       if (pd.saved) logAct_(who,
@@ -2062,6 +2071,36 @@ function photoTarget_(req) {
   if (!folder) return {error: 'no Drive folder found for this piano — add its link to the Main Folder column in the Piano Log'};
   if (serial) { try { cache.put(ck, JSON.stringify({id: folder.getId(), summary: found.summary || '', row: found.row}), 21600); } catch (eP) {} }
   return {folder: folder, summary: found.summary || '', row: found.row, location: found.location || '', serial: serial, kind: kind, cached: false};
+}
+/* 🗂 Pick a gate photo from the Tech folder (Mark 11/4, 110426hales71): on a
+ * computer the keytop and phase-advance photo gates can use a photo already
+ * in the piano's Tech folder (shot on a phone earlier). Any age (Mark: "B").
+ * techPhotos_ lists the images newest first; photoPick_ only accepts a file
+ * that really sits in THIS piano's Tech folder, then logs it through
+ * photoDone_ like a fresh upload (PHOTO LOG row with the step's stage). */
+function techPhotos_(req) {
+  var tg = photoTarget_({serial: req.serial, row: req.row, kind: 'tech'});
+  if (tg.error) return {error: tg.error};
+  var out = [], it = tg.folder.getFiles();
+  while (it.hasNext()) {
+    var f = it.next();
+    if (String(f.getMimeType()).indexOf('image/') !== 0) continue;
+    out.push({id: f.getId(), name: f.getName(), when: f.getDateCreated().toISOString()});
+  }
+  out.sort(function (a, b) { return a.when < b.when ? 1 : a.when > b.when ? -1 : 0; });
+  return {ok: true, folderUrl: tg.folder.getUrl(), total: out.length, photos: out.slice(0, 150)};
+}
+function photoPick_(req, who) {
+  var tg = photoTarget_({serial: req.serial, row: req.row, kind: 'tech'});
+  if (tg.error) return {error: tg.error};
+  var file;
+  try { file = DriveApp.getFileById(String(req.fileId || '')); } catch (e) { return {error: 'photo not found in Drive'}; }
+  if (String(file.getMimeType()).indexOf('image/') !== 0) return {error: 'that file is not a photo'};
+  var inFolder = false, ps = file.getParents(), fid = tg.folder.getId();
+  while (ps.hasNext()) { if (ps.next().getId() === fid) { inFolder = true; break; } }
+  if (!inFolder) return {error: 'that photo is not in this piano\u2019s Tech folder'};
+  return photoDone_({serial: tg.serial, row: tg.row, summary: tg.summary, kind: 'progress',
+                     stage: String(req.stage || '').slice(0, 80), fileId: file.getId(), folderId: fid}, who);
 }
 /* ⚡ Direct-to-Drive photo (Mark 10/5, 100526hales48): like videos, the phone
  * uploads the JPEG bytes to Google itself. photosession picks the folder and

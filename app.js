@@ -2292,6 +2292,76 @@ async function fetchShots(serial) {
     return j.rows || [];
   } catch (e) { return []; }
 }
+/* 🗂 Photo gates on a computer (Mark 11/4, 110426hales71): the laptop camera
+ * button only ever opened Finder, so on a computer the gate says "Upload from
+ * this computer" and adds "Pick from the Tech folder" — a grid of the photos
+ * already in the piano's Tech folder (any age, newest first). The pick is
+ * filed against the step on the bridge (PHOTO LOG row, no copy made); the
+ * bridge only accepts a photo that sits in THIS piano's Tech folder.
+ * Phones and iPads keep the single camera button. */
+function gateShotButtons(phoneLabel) {
+  if (!ctOnComputer()) return `<label class="csvbtn" style="cursor:pointer">${phoneLabel}
+        <input type="file" accept="image/*" hidden class="pg-file"></label>`;
+  return `<label class="csvbtn" style="cursor:pointer">💻 Upload from this computer
+        <input type="file" accept="image/*" hidden class="pg-file"></label>
+      <button type="button" class="csvbtn pg-pick">🗂 Pick from the Tech folder</button>`;
+}
+function wireTechPick(ov, p, stage, shotMsg, onFiled) {
+  const btn = ov.querySelector('.pg-pick');
+  if (!btn) return;
+  const grid = document.createElement('div');
+  grid.className = 'pg-grid';
+  grid.hidden = true;
+  btn.closest('.rfbar').after(grid);
+  let photos = null, chosen = '';
+  const post = body => fetchT(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+    headers: {'content-type': 'text/plain;charset=utf-8'}, body: JSON.stringify(body)}, 60000).then(r => r.json());
+  const day = w => { const d = new Date(w); return isNaN(d) ? '' : d.toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'}); };
+  btn.onclick = async () => {
+    if (!grid.hidden) { grid.hidden = true; return; }
+    grid.hidden = false;
+    const wa = writeAuth();
+    if (!wa.ok) { grid.innerHTML = '<div class="phmsg err">Sign in first.</div>'; return; }
+    if (!photos) {
+      grid.innerHTML = '<div class="phmsg">Opening the Tech folder…</div>';
+      try {
+        const j = await post({pin: wa.pin, action: 'techphotos', serial: p.serial, row: p.row, ...authFields()});
+        if (j.error) throw new Error(j.error);
+        photos = j.photos || [];
+      } catch (e) { grid.innerHTML = `<div class="phmsg err">✗ ${esc(e.message)}</div>`; return; }
+    }
+    if (!photos.length) { grid.innerHTML = '<div class="phmsg">No photos in this piano’s Tech folder yet.</div>'; return; }
+    grid.innerHTML = `<div class="pg-thumbs">${photos.map(ph => `<button type="button" class="pg-th" data-id="${esc(ph.id)}" title="${esc(ph.name)}">
+        <img loading="lazy" src="https://drive.google.com/thumbnail?id=${encodeURIComponent(ph.id)}&sz=w240" alt="${esc(ph.name)}">
+        <span>${esc(day(ph.when))}</span></button>`).join('')}</div>
+      <div class="rfbar"><button type="button" class="csvbtn pg-use" disabled>Use this photo</button>
+        <span class="phmsg pg-usemsg">${photos.length} photo${photos.length === 1 ? '' : 's'} · newest first</span></div>`;
+    const use = grid.querySelector('.pg-use'), umsg = grid.querySelector('.pg-usemsg');
+    grid.querySelectorAll('.pg-th').forEach(b => {
+      b.onclick = () => {
+        grid.querySelectorAll('.pg-th.on').forEach(x => x.classList.remove('on'));
+        b.classList.add('on');
+        chosen = b.dataset.id;
+        use.disabled = false;
+      };
+    });
+    use.onclick = async () => {
+      if (!chosen) return;
+      const wa2 = writeAuth();
+      if (!wa2.ok) { umsg.className = 'phmsg pg-usemsg err'; umsg.textContent = 'Sign in first.'; return; }
+      use.disabled = true;
+      umsg.className = 'phmsg pg-usemsg'; umsg.textContent = 'Filing…';
+      try {
+        const j = await post({pin: wa2.pin, action: 'photopick', serial: p.serial, row: p.row,
+          fileId: chosen, stage, ...authFields()});
+        if (!j.saved) throw new Error(j.error || 'could not file the photo');
+        grid.hidden = true;
+        shotMsg.className = 'pg-shot phmsg ok'; shotMsg.textContent = '✓ photo filed (from the Tech folder)';
+        if (onFiled) onFiled();
+      } catch (e) { use.disabled = false; umsg.className = 'phmsg pg-usemsg err'; umsg.textContent = '✗ ' + e.message; }
+    };
+  };
+}
 /* 📸 keytop photo gate (Brigham 8/28): marking keytops Done needs a progress
  * photo first, and the first keys/keytops clock-in on a piano needs a BEFORE
  * photo of the keytops. Photos file to the Tech folder + PHOTO LOG. */
@@ -2303,8 +2373,7 @@ function keytopPhotoGate(p, o) {
     <h3>${o.title}</h3>
     <div class="dssub">${o.sub}</div>
     <div class="rfbar">
-      <label class="csvbtn" style="cursor:pointer">📷 Take the keytop photo
-        <input type="file" accept="image/*" hidden class="pg-file"></label>
+      ${gateShotButtons('📷 Take the keytop photo')}
       <span class="pg-shot phmsg">photo required</span></div>
     <div class="rfbar">
       <button class="csvbtn pg-go" disabled>${o.goLabel}</button>
@@ -2318,6 +2387,7 @@ function keytopPhotoGate(p, o) {
   if (pc) pc.onclick = close;
   const shotMsg = ov.querySelector('.pg-shot'), go = ov.querySelector('.pg-go');
   photoWarm(p, 'tech');   // the gate photo files to the Tech folder
+  wireTechPick(ov, p, o.stage, shotMsg, () => { go.disabled = false; });
   ov.querySelector('.pg-file').onchange = async ev => {
     const f = ev.target.files && ev.target.files[0];
     if (!f) return;
@@ -8086,8 +8156,7 @@ function openPhaseGateModal(p, phase, was, pop) {
       <b>Quality Control</b>, <b>marketing content</b>, and the <b>progress emails the
       piano's owner receives</b>.</div>
     <div class="rfbar">
-      <label class="csvbtn" style="cursor:pointer">📷 Take / attach the photo
-        <input type="file" accept="image/*" hidden class="pg-file"></label>
+      ${gateShotButtons('📷 Take / attach the photo')}
       <span class="pg-shot phmsg">${photoOptional ? 'optional for ' + esc(was) : 'required before advancing'}</span></div>
     <div class="rfbar pg-qc" style="gap:14px;align-items:center">
       <!-- not a mini-QC (Mark 10/23): these phases advance on the tech's own
@@ -8114,6 +8183,7 @@ function openPhaseGateModal(p, phase, was, pop) {
   ov.querySelector('.pg-cancel').onclick = close;
   const shotMsg = ov.querySelector('.pg-shot'), go = ov.querySelector('.pg-go');
   photoWarm(p, 'tech');   // the gate photo files to the Tech folder
+  wireTechPick(ov, p, was || 'progress', shotMsg, () => { go.disabled = false; });
   ov.querySelector('.pg-file').onchange = async ev => {
     const f = ev.target.files && ev.target.files[0];
     if (!f) return;
