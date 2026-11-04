@@ -35,6 +35,16 @@ and refuses to stack a tuning on a slot another piano still holds. (On 10/16 the
 was written literally over the calendar: Monday and Tuesday 8:00 went out double-booked
 and Wednesday went out empty.)
 
+**Standing meetings come from Google Calendar, not the plan (Mark 2026-11-04,
+Scheduling Rules row 105; replaces the 10/23 rows 105–106):** **Manager Meeting**
+(Tuesdays 10:30–11:30: Brigham, Karmel, Mark, Jacob, Matthew) and **Tuning
+Training** (Thursdays 10:30–11:30: Brigham, Karmel, Mark, Jacob, Sadie, Hunter)
+are recurring Google Calendar events with everyone invited, from the week of
+Nov 9. Never put either meeting in the plan (no block, so Approve writes no event
+— Brigham and Karmel have no tech calendar, so plan blocks never reached them).
+Treat that hour as taken on each attendee's calendar and schedule their other work
+around it, like a pre-booked tuning.
+
 **Korban's Hardware Buffing Queue (Mark 2026-10-19, Scheduling Rules row 90):** one
 block per day, 11:00-15:00 — **Monday 11:00-14:30**, followed by a **"Vacuum
 maintenance: clean filters, empty buckets" block 14:30-15:00 every Monday** that the
