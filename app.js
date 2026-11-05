@@ -2403,7 +2403,22 @@ function keytopPhotoGate(p, o) {
       go.disabled = false;
     } catch (e) { shotMsg.className = 'pg-shot phmsg err'; shotMsg.textContent = '✗ ' + e.message; }
   };
-  go.onclick = () => { ov.remove(); if (o.onGo) o.onGo(); };
+  // the gate stays open until the save answers, and shows a failure here —
+  // the card behind it may have redrawn and lost its own message line
+  go.onclick = async () => {
+    if (!o.onGo) { ov.remove(); return; }
+    const pm = ov.querySelector('.pg-msg'), was = go.textContent;
+    go.disabled = true; go.textContent = 'Saving…';
+    pm.className = 'pg-msg phmsg'; pm.textContent = '';
+    let r;
+    try { r = await o.onGo(); } catch (e) { r = {error: e.message}; }
+    if (r && r.error) {
+      go.disabled = false; go.textContent = was;
+      pm.className = 'pg-msg phmsg err'; pm.textContent = '✗ not saved — ' + r.error + ' (the photo is filed; try again)';
+      return;
+    }
+    ov.remove();
+  };
 }
 // first keys clock-in on this piano → require the keytop BEFORE photo
 async function keytopBeforeGate(p) {
@@ -7222,15 +7237,22 @@ function wirePop(p) {
   const ksel = pop.querySelector('.keystatsel');
   const knum = pop.querySelector('.keyqnum');
   if (ksel) {
-    const saveKeytop = async () => {
-      const msg = pop.querySelector('.keystatmsg');
+    // forced: the value to save (the photo gate passes 'Done'). The card can
+    // redraw under an open gate (live refresh), so the save never reads the
+    // old dropdown — it updates whatever dropdown is on the card now, and
+    // returns {ok} / {error} so the gate can show the result (Mark 11/5:
+    // 185231's photo filed but its Done never saved, with no error seen).
+    const saveKeytop = async forced => {
+      const live = () => pop.querySelector('.keystatsel');
+      const msg = pop.querySelector('.keystatmsg') || {};
       const {pin, ok} = writeAuth();
-      if (!ok) { msg.textContent = 'Sign in with Google (menu) first.'; return; }
+      if (!ok) { msg.textContent = 'Sign in with Google (menu) first.'; return {error: 'Sign in with Google (menu) first.'}; }
       const n = knum && !knum.hidden ? String(knum.value || '').trim() : '';
-      const val = ksel.value === 'In Key Queue'
-        ? 'In Key Queue' + (n ? ' #' + n : '') : ksel.value;
+      const pick = typeof forced === 'string' ? forced : ksel.value;
+      const val = pick === 'In Key Queue' ? 'In Key Queue' + (n ? ' #' + n : '') : pick;
       msg.textContent = 'saving…';
       ksel.disabled = true;
+      let res;
       try {
         const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
           headers: {'content-type': 'text/plain;charset=utf-8'},
@@ -7238,12 +7260,21 @@ function wirePop(p) {
             value: val, ...authFields()})});
         const j = await r.json();
         if (j.error) throw new Error(j.error);
+        if (!j.ok) throw new Error('the bridge did not confirm the save — try again');
         p.keytopStatus = val;
         const ke = pendingEdits.get(p.row) || {}; ke.keytopStatus = val; pendingEdits.set(p.row, ke);
-        msg.textContent = '✓ saved';
-        setTimeout(() => { if (msg.isConnected) msg.textContent = ''; }, 1800);
-      } catch (e) { msg.textContent = '✗ ' + e.message; }
+        const m2 = pop.querySelector('.keystatmsg') || msg;
+        m2.textContent = '✓ saved';
+        setTimeout(() => { if (m2.isConnected) m2.textContent = ''; }, 1800);
+        res = {ok: true};
+      } catch (e) {
+        (pop.querySelector('.keystatmsg') || msg).textContent = '✗ ' + e.message;
+        res = {error: e.message};
+      }
       ksel.disabled = false;
+      const sel2 = live();
+      if (sel2) { sel2.disabled = false; sel2.value = keytopParts(p).state || ''; }
+      return res;
     };
     ksel.onclick = ev => ev.stopPropagation();
     ksel.onchange = () => {
@@ -7261,8 +7292,8 @@ function wirePop(p) {
           stage: 'Keytops done',
           goLabel: 'Mark keytops Done ✓',
           cancelLabel: 'Cancel',
-          onGo: saveKeytop,
-          onCancel: () => { ksel.value = keytopParts(p).state || ''; },
+          onGo: () => saveKeytop('Done'),
+          onCancel: () => { const sl = pop.querySelector('.keystatsel') || ksel; sl.value = keytopParts(p).state || ''; },
         });
         return;
       }
