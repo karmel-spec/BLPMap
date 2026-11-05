@@ -2316,6 +2316,25 @@ function wireTechPick(ov, p, stage, shotMsg, onFiled) {
   let photos = null, chosen = '';
   const post = body => fetchT(BRIDGE_URL, {method: 'POST', redirect: 'follow',
     headers: {'content-type': 'text/plain;charset=utf-8'}, body: JSON.stringify(body)}, 60000).then(r => r.json());
+  // ⚡ (Mark 11/5) start loading the folder the moment the gate opens, so the
+  // grid is usually ready by the time the button is clicked; a list loaded
+  // in the last 5 minutes for this piano is reused
+  const memo = wireTechPick.memo || (wireTechPick.memo = {});
+  const hit = memo[p.serial];
+  let listP = null;
+  const load = () => {
+    if (listP) return listP;
+    const wa0 = writeAuth();
+    if (!wa0.ok) return Promise.reject(new Error('Sign in first.'));
+    listP = post({pin: wa0.pin, action: 'techphotos', serial: p.serial, row: p.row, ...authFields()})
+      .then(j => { if (j.error) throw new Error(j.error); memo[p.serial] = {at: Date.now(), photos: j.photos || []}; return j.photos || []; })
+      .catch(e => { listP = null; throw e; });
+    return listP;
+  };
+  const fileIn = ov.querySelector('.pg-file');   // a fresh upload adds a file — reload next time
+  if (fileIn) fileIn.addEventListener('change', () => { delete memo[p.serial]; });
+  if (hit && Date.now() - hit.at < 300000) listP = Promise.resolve(hit.photos);
+  else if (writeAuth().ok) load().catch(() => {});
   const day = w => { const d = new Date(w); return isNaN(d) ? '' : d.toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'}); };
   btn.onclick = async () => {
     if (!grid.hidden) { grid.hidden = true; return; }
@@ -2324,11 +2343,8 @@ function wireTechPick(ov, p, stage, shotMsg, onFiled) {
     if (!wa.ok) { grid.innerHTML = '<div class="phmsg err">Sign in first.</div>'; return; }
     if (!photos) {
       grid.innerHTML = '<div class="phmsg">Opening the Tech folder…</div>';
-      try {
-        const j = await post({pin: wa.pin, action: 'techphotos', serial: p.serial, row: p.row, ...authFields()});
-        if (j.error) throw new Error(j.error);
-        photos = j.photos || [];
-      } catch (e) { grid.innerHTML = `<div class="phmsg err">✗ ${esc(e.message)}</div>`; return; }
+      try { photos = await load(); }
+      catch (e) { grid.innerHTML = `<div class="phmsg err">✗ ${esc(e.message)}</div>`; return; }
     }
     if (!photos.length) { grid.innerHTML = '<div class="phmsg">No photos in this piano’s Tech folder yet.</div>'; return; }
     grid.innerHTML = `<div class="pg-thumbs">${photos.map(ph => `<button type="button" class="pg-th" data-id="${esc(ph.id)}" title="${esc(ph.name)}">

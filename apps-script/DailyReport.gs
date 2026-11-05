@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-11-04.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-11-05.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -2063,6 +2063,31 @@ function photoTarget_(req) {
       } catch (eC) { /* folder gone — fall through and look again */ }
     }
   }
+  // ⚡ Tech folders (Mark 11/5): the first lookup of a piano's Tech folder
+  // opens the whole Piano Log and searches Drive (~8 s); the 6-hour cache
+  // above made that the norm for the first photo of every piano every day.
+  // The folder id is also kept 30 days in User Properties (tech/progress
+  // only — the folder never moves; trashed or expired → look again). NOT
+  // Script Properties: every request loads all of those at boot.
+  var techKind = (kind === 'tech' || kind === 'progress');
+  var props = null, pk = 'pf_tech_' + serial;
+  if (serial && techKind) {
+    try {
+      props = PropertiesService.getUserProperties();   // web app runs as the deployer → one shared store
+      var ph = props.getProperty(pk);
+      if (ph) {
+        var pv = JSON.parse(ph);
+        if (Date.now() - (pv.at || 0) < 30 * 86400000) {
+          var fp = DriveApp.getFolderById(pv.id);
+          if (!fp.isTrashed()) {
+            var prow = Number(req.row) || pv.row || null;
+            try { cache.put(ck, JSON.stringify({id: pv.id, summary: pv.summary || '', row: prow}), 21600); } catch (eP0) {}
+            return {folder: fp, summary: pv.summary || '', row: prow, serial: serial, kind: kind, cached: true};
+          }
+        }
+      }
+    } catch (eK) { /* look it up the long way */ }
+  }
   var ss = SpreadsheetApp.openById(PIANO_LOG_ID);
   var sh = pianoSheet_(ss);
   var found = findPiano_(sh, req.serial, req.row);
@@ -2070,6 +2095,7 @@ function photoTarget_(req) {
   var folder = photoFolderFor_(sh, found.row, serial, kind);
   if (!folder) return {error: 'no Drive folder found for this piano — add its link to the Main Folder column in the Piano Log'};
   if (serial) { try { cache.put(ck, JSON.stringify({id: folder.getId(), summary: found.summary || '', row: found.row}), 21600); } catch (eP) {} }
+  if (props) { try { props.setProperty(pk, JSON.stringify({id: folder.getId(), summary: String(found.summary || '').slice(0, 80), row: found.row, at: Date.now()})); } catch (eS) {} }
   return {folder: folder, summary: found.summary || '', row: found.row, location: found.location || '', serial: serial, kind: kind, cached: false};
 }
 /* 🗂 Pick a gate photo from the Tech folder (Mark 11/4, 110426hales71): on a
