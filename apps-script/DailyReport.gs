@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-11-05.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-11-05.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -1899,6 +1899,7 @@ function doPost(e) {
     // 🗂 computer photo gates (Mark 11/4, 110426hales71): list the piano's Tech
     // folder photos, then file the one picked against the step — no copy made
     if (req.action === 'techphotos') return json_(techPhotos_(req));
+    if (req.action === 'techwarm') return json_(techWarm_(req));
     if (req.action === 'photopick') {
       var pk = photoPick_(req, who);
       if (pk.saved) logAct_(who, 'Progress photo', pk.summary || req.serial,
@@ -2053,7 +2054,7 @@ function photoTarget_(req) {
   var kind = String(req.kind || 'tech').toLowerCase();
   var cache = CacheService.getScriptCache();
   var ck = 'pfold_' + kind + '_' + serial;
-  if (serial) {
+  if (serial && !req.noCache) {
     var hit = cache.get(ck);
     if (hit) {
       try {
@@ -2115,6 +2116,23 @@ function techPhotos_(req) {
   }
   out.sort(function (a, b) { return a.when < b.when ? 1 : a.when > b.when ? -1 : 0; });
   return {ok: true, folderUrl: tg.folder.getUrl(), total: out.length, photos: out.slice(0, 150)};
+}
+/* ⚡ one-time warm-up (Mark 11/5): resolve the Tech folder of each listed
+ * piano so its 30-day memory is filled before anyone clicks. Skips the
+ * 6-hour cache so the 30-day entry really gets written. Stops at ~4.5 min
+ * and returns what is left for the next call. */
+function techWarm_(req) {
+  var items = (req.items || []).slice(0, 400), t0 = Date.now(), done = [], errors = [], i = 0;
+  for (; i < items.length; i++) {
+    if (Date.now() - t0 > 270000) break;
+    var it = items[i] || {};
+    try {
+      var tg = photoTarget_({serial: String(it.serial || ''), row: it.row, kind: 'tech', noCache: true});
+      if (tg.error) errors.push({serial: it.serial, error: String(tg.error).slice(0, 120)});
+      else done.push(String(it.serial));
+    } catch (e) { errors.push({serial: it.serial, error: String(e).slice(0, 120)}); }
+  }
+  return {ok: true, done: done.length, errors: errors, left: items.slice(i)};
 }
 function photoPick_(req, who) {
   var tg = photoTarget_({serial: req.serial, row: req.row, kind: 'tech'});
