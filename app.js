@@ -13888,6 +13888,13 @@ function clockAdjustTable() {
     // "Save clock out", people with no punch that day in grey with a + add.
     const todayYmd = new Date().toLocaleDateString('en-CA', {timeZone: 'America/Denver'});
     if (!S.payDay) S.payDay = todayYmd;
+    // the Day view follows the top bar's dates (Mark 11/6: one filter for the
+    // whole report): it opens on the range's last day and the ◀ ▶ arrows and
+    // the date box can't leave the range
+    const dayMin = af.from || '', dayMax = af.to && af.to < todayYmd ? af.to : todayYmd;
+    if (dayMin && S.payDay < dayMin) S.payDay = dayMin;
+    if (S.payDay > dayMax) S.payDay = dayMax;
+    if (af.to && af.to < S.payDay) S.payDay = af.to;
     const isPast = S.payDay < todayYmd;
     // the top bar's team member applies here too (Mark 11/6: filtered to
     // himself, the Day view still listed everyone's day punches)
@@ -13915,10 +13922,10 @@ function clockAdjustTable() {
     };
     const dayLabel = new Date(S.payDay + 'T12:00:00').toLocaleDateString('en-US', {weekday: 'long', month: 'short', day: 'numeric', year: 'numeric'});
     const dayHtml = `<div class="rfbar daynav">
-        <button class="cfxclear paydaynav" data-d="-1" title="previous day">◀</button>
-        <input type="date" class="paydaydate" value="${esc(S.payDay)}" max="${todayYmd}">
-        <button class="cfxclear paydaynav" data-d="1" title="next day" ${S.payDay >= todayYmd ? 'disabled' : ''}>▶</button>
-        <b>${esc(dayLabel)}</b>
+        <button class="cfxclear paydaynav" data-d="-1" title="previous day" ${dayMin && S.payDay <= dayMin ? 'disabled' : ''}>◀</button>
+        <input type="date" class="paydaydate" value="${esc(S.payDay)}" ${dayMin ? `min="${esc(dayMin)}"` : ''} max="${esc(dayMax)}">
+        <button class="cfxclear paydaynav" data-d="1" title="next day" ${S.payDay >= dayMax ? 'disabled' : ''}>▶</button>
+        <b>${esc(dayLabel)}</b>${adjFiltered && (af.from || af.to) ? `<span class="lite" style="font-size:12px"> · within ${esc(af.from || 'start')} → ${esc(af.to || 'today')}</span>` : ''}
         <span class="${dayIssues.length ? 'dayissue' : 'dayok'}">${dayIssues.length ? `⚠ ${dayIssues.length} issue${dayIssues.length === 1 ? '' : 's'} to resolve` : (isPast ? '✓ no issues' : 'today — open punches are normal')}</span></div>
       <div class="stickytbl"><table><tr><th>TEAM MEMBER</th><th>IN → OUT</th><th>HOURS</th><th>ISSUE</th><th></th></tr>
       ${dayList.map(dayRow).join('') || '<tr><td colspan="5" class="empty">No day punches on this date.</td></tr>'}
@@ -13931,7 +13938,7 @@ function clockAdjustTable() {
     const openBand = openPast.length ? `<div class="autoband openband">🔴 <b>${openPast.length}</b> day punch${openPast.length === 1 ? '' : 'es'} from a previous day ${openPast.length === 1 ? 'is' : 'are'} still open — no clock out recorded:
         ${openPast.map(r => `<button class="cfxclear dayjump" data-day="${esc(r.date)}">${esc(String(r.tech).split(' ')[0])} · ${esc(r.date.slice(5))}</button>`).join(' ')}</div>` : '';
     const viewTog = `<div class="rfbar payviews"><span class="lite">View:</span>
-        <button class="payviewtog ${S.payDayView ? '' : 'on'}" data-v="list">List — last 14 days</button>
+        <button class="payviewtog ${S.payDayView ? '' : 'on'}" data-v="list">List${adjFiltered ? '' : ' — last 14 days'}</button>
         <button class="payviewtog ${S.payDayView ? 'on' : ''}" data-v="day">📅 Day view</button></div>`;
     pay = `<h4 class="bfhd">Payroll day punches (owners, Melissa & Mark)</h4>${openBand}${viewTog}`
       + (S.payDayView ? dayHtml : pay.replace(/^<h4[^>]*>[^<]*<\/h4>/, ''));
@@ -14698,7 +14705,11 @@ function renderReport() {
   body.querySelectorAll('.payviewtog').forEach(b => b.onclick = () => { S.payDayView = b.dataset.v === 'day'; renderReport(); });
   body.querySelectorAll('.paydaynav').forEach(b => b.onclick = () => {
     const d = new Date((S.payDay || new Date().toLocaleDateString('en-CA', {timeZone: 'America/Denver'})) + 'T12:00:00');
-    d.setDate(d.getDate() + (+b.dataset.d)); S.payDay = d.toLocaleDateString('en-CA'); renderReport();
+    d.setDate(d.getDate() + (+b.dataset.d)); S.payDay = d.toLocaleDateString('en-CA');
+    const af0 = S.adjF || {};
+    if (af0.from && S.payDay < af0.from) S.payDay = af0.from;
+    if (af0.to && S.payDay > af0.to) S.payDay = af0.to;
+    renderReport();
   });
   const pdd = body.querySelector('.paydaydate'); if (pdd) onDateSettled(pdd, () => { if (pdd.value) { S.payDay = pdd.value; renderReport(); } });
   body.querySelectorAll('.dayjump').forEach(b => b.onclick = () => { S.payDay = b.dataset.day; S.payDayView = true; renderReport(); });
