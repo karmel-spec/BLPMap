@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-11-06.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-11-06.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -6524,8 +6524,10 @@ function wonScope_(req) {
 
 /* 🎨 Refinishing on the card (Mark 10/21): "Refinishing?" Yes / No lives in a
  * header-created REFINISHING column (blank = go by PROJECT CATEGORY, col X);
- * the instructions under it are the Piano Log's own FINISH (col K) and SHEEN
- * (col L) cells, editable from the card. {serial, row, refinishing?, finish?, sheen?} */
+ * the instructions under it are the Piano Log's REQUESTED FINISH / REQUESTED
+ * SHEEN cells (AJ/AK, admin columns — Mark 11/6; until then FINISH / SHEEN,
+ * K/L, which the Shopify sync publishes as website tags — never write there).
+ * Found by header name. {serial, row, refinishing?, finish?, sheen?} */
 function setRefinish_(req, who) {
   var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
   var found = findPiano_(sh, req.serial, req.row);
@@ -6545,12 +6547,12 @@ function setRefinish_(req, who) {
     out.refinishing = rv; did.push('Refinishing? ' + (rv || '(cleared — goes by the project category)'));
   }
   if (req.finish != null) {
-    var fc = colOf('FINISH', false); if (fc < 1) return {error: 'FINISH column missing'};
+    var fc = colOf('REQUESTED FINISH', false); if (fc < 1) return {error: 'REQUESTED FINISH column missing from the Piano Log'};
     var fv = String(req.finish).trim().slice(0, 200);
     sh.getRange(found.row, fc).setValue(fv); out.finish = fv; did.push('Finish: ' + (fv || '(cleared)'));
   }
   if (req.sheen != null) {
-    var sc = colOf('SHEEN', false); if (sc < 1) return {error: 'SHEEN column missing'};
+    var sc = colOf('REQUESTED SHEEN', false); if (sc < 1) return {error: 'REQUESTED SHEEN column missing from the Piano Log'};
     var sv = String(req.sheen).trim().slice(0, 200);
     sh.getRange(found.row, sc).setValue(sv); out.sheen = sv; did.push('Sheen: ' + (sv || '(cleared)'));
   }

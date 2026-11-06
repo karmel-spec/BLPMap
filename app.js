@@ -1388,7 +1388,7 @@ function applyPending() {
     if ('logExtras' in edit) {
       const le = p.logExtras || (p.logExtras = {});
       let keep = false;
-      for (const k of ['REFINISHING', 'FINISH', 'SHEEN']) {
+      for (const k of ['REFINISHING', 'REQUESTED FINISH', 'REQUESTED SHEEN']) {
         if (!(k in edit.logExtras)) continue;
         if ((le[k] || '') === (edit.logExtras[k] || '')) delete edit.logExtras[k];
         else { le[k] = edit.logExtras[k]; keep = true; }
@@ -6696,7 +6696,10 @@ function popHTML(p) {
   // Colors → "Refinishing?" Yes / No + instructions (Mark 10/21). The answer
   // comes from the Piano Log's PROJECT CATEGORY (col X) until someone taps
   // Yes or No on the card (header-created REFINISHING column); the
-  // instructions are the log's own FINISH (col K) and SHEEN (col L) cells.
+  // instructions are the log's REQUESTED FINISH / REQUESTED SHEEN cells
+  // (AJ/AK, admin columns — Mark 11/6). They used to be FINISH / SHEEN (K/L),
+  // which Brigham's Shopify sync publishes as website tags; the card must
+  // never write there again. Read by header name, not column letter.
   // The first-pick / FINAL color inputs came off the card; their columns stay.
   const colors = p.serial
     ? (() => {
@@ -6709,9 +6712,9 @@ function popHTML(p) {
         ${rf.value && rf.derived ? `<div class="ktplan">↳ from the project category: “${esc(rf.plan)}” — tap to confirm or change</div>` : ''}
         <div class="rfmsg phmsg"></div>
         ${rf.value === 'Yes' ? `<div class="rfbox">
-          <div class="rfhd">Refinishing instructions <small>— the Piano Log's Finish and Sheen</small></div>
-          <div class="row phrow">Finish <input class="rfin" data-k="finish" maxlength="200" placeholder="wood finish, color, match original…" value="${esc(le.FINISH || '')}"></div>
-          <div class="row phrow">Sheen <input class="rfin" data-k="sheen" maxlength="200" placeholder="satin, semi-gloss, high gloss…" value="${esc(le.SHEEN || '')}"></div>
+          <div class="rfhd">Refinishing instructions <small>— the Piano Log's Requested Finish and Requested Sheen</small></div>
+          <div class="row phrow">Finish <input class="rfin" data-k="finish" maxlength="200" placeholder="wood finish, color, match original…" value="${esc(le['REQUESTED FINISH'] || '')}"></div>
+          <div class="row phrow">Sheen <input class="rfin" data-k="sheen" maxlength="200" placeholder="satin, semi-gloss, high gloss…" value="${esc(le['REQUESTED SHEEN'] || '')}"></div>
           <div class="rfinmsg phmsg"></div></div>` : ''}`;
       })()
     : '';
@@ -7136,10 +7139,9 @@ function wirePop(p) {
       const j = await r.json();
       if (!j.ok) throw new Error(j.error || 'save failed');
       p.logExtras = p.logExtras || {};
-      if ('refinishing' in fields) p.logExtras.REFINISHING = fields.refinishing;
-      if ('finish' in fields) p.logExtras.FINISH = fields.finish;
-      if ('sheen' in fields) p.logExtras.SHEEN = fields.sheen;
-      const le = pendingEdits.get(p.row) || {}; le.logExtras = {...(le.logExtras || {}), ...Object.fromEntries(Object.entries(fields).map(([k, v]) => [k.toUpperCase(), v]))}; pendingEdits.set(p.row, le);
+      const RF_HDR = {refinishing: 'REFINISHING', finish: 'REQUESTED FINISH', sheen: 'REQUESTED SHEEN'};   // the Piano Log headers (AJ/AK since 11/6)
+      for (const [k, v] of Object.entries(fields)) if (RF_HDR[k]) p.logExtras[RF_HDR[k]] = v;
+      const le = pendingEdits.get(p.row) || {}; le.logExtras = {...(le.logExtras || {}), ...Object.fromEntries(Object.entries(fields).filter(([k]) => RF_HDR[k]).map(([k, v]) => [RF_HDR[k], v]))}; pendingEdits.set(p.row, le);
       if (msg) { msg.className = msgSel.slice(1) + ' phmsg ok'; msg.textContent = '✓ saved'; setTimeout(() => { if (msg.isConnected) msg.textContent = ''; }, 1600); }
       return true;
     } catch (e) { if (msg) { msg.className = msgSel.slice(1) + ' phmsg err'; msg.textContent = '✗ ' + e.message; } return false; }
