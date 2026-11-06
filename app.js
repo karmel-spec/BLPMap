@@ -19579,8 +19579,12 @@ function pickSuggest(i) {
   const p = acList[i];
   if (!p) return;
   $('#searchac').hidden = true;
-  $('#search').value = p.summary || p.serial || '';
-  S.search = $('#search').value;
+  // the picked piano is highlighted (focusRow) and its card opens; the box
+  // empties so the rest of the map isn't left grayed out by its name
+  // (Mark 11/6: "why does the map keep graying out all the pianos?")
+  $('#search').value = '';
+  S.search = '';
+  $('#search').blur();
   syncSearchClear();
   if (p.archived) { openArchived(p); return; }
   renderMap();
