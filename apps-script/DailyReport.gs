@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-11-05.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-11-06.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -6959,9 +6959,10 @@ function smTaskDoneByStatus_(p, id, rows) {
     return {done: /^(buffed|installed)$/i.test(String(p.plateHwStatus || '').trim()) || stamp('plate screws (buffing list)'),
       why: shown('Plate hardware', p.plateHwStatus)};
   if (id.indexOf('electroplating') >= 0)
-    // past Refinishing the piano has left Korban's Hardware Queue (PRSB..Refinishing)
+    // past QC & Assembly the piano has left Korban's Hardware Queue (PRSB..QC &
+    // Assembly since Mark 11/6 — 189150 reached QC with its hardware unbuffed)
     return {done: stamp('pedals/cabinetry hardware electroplating and polishing') || stamp('visible hardware (buffing list)')
-      || smPhaseIdx_(p.phase) > smPhaseIdx_('Refinishing'), why: 'not marked on the Hardware Queue'};
+      || smPhaseIdx_(p.phase) > smPhaseIdx_('QC & Assembly'), why: 'not marked on the Hardware Queue'};
   if (id === 'order decal')
     return {done: /received|in stock|installed|not needed|completed/i.test(String((p.tasks || {}).decals || '')),
       why: shown('Decals', (p.tasks || {}).decals)};

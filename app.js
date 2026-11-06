@@ -14405,7 +14405,7 @@ const REPORT_DEFS = () => [
    html: taskQueuesTable},
   {id: 'buffing', sec: 'shop', icon: '✨', title: 'HARDWARE QUEUE', count: (() => {
      try { return BUF.data ? BUF.data.plates.filter(p => !p.done).length + BUF.data.hardware.filter(h => !h.done).length : null; } catch (e) { return null; } })(),
-   desc: 'Korban\u2019s hardware queue. Plate screws come from Curtis\u2019s sheet in his priority order; a piano\u2019s visible hardware joins the list when it moves past CAP, furthest along first. Anyone can mark a row done, and every tap can be undone the same day. Korban gets the top of both lists by text at 11 AM every Monday.',
+   desc: 'Korban\u2019s hardware queue. Plate screws come from Curtis\u2019s sheet in his priority order; a piano\u2019s visible hardware joins the list when it moves past CAP and stays through QC & Assembly until it is marked, furthest along first. Anyone can mark a row done, and every tap can be undone the same day. Korban gets the top of both lists by text at 11 AM every Monday.',
    html: () => '<div id="buffingBody"><div class="empty">Building the list…</div></div>'},
   {id: 'stalled', sec: 'shop', icon: '🐢', title: 'SITTING TOO LONG', count: (() => {
      try { return stalledPianos().length; } catch (e) { return null; } })(),
