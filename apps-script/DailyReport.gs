@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-11-06.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-11-06.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -6858,6 +6858,12 @@ function smIsShopwork_(p) {
   return String(p.section || '').trim().toUpperCase() === 'CUSTOM SHOPWORK';
 }
 function smPhaseIdx_(ph) { return PHASE_VALUES.indexOf(ph); }
+// no replating when every track token is Refurbish or Player Rebuild (Mark 11/6)
+function smNoReplating_(p) {
+  var t = String((p && p.track) || '').split(',').map(function (x) { return x.trim(); }).filter(String)
+    .map(function (x) { return /^(old\s*)?player(\s*rebuild)?$/i.test(x) ? 'Player Rebuild' : x; });
+  return t.length > 0 && t.every(function (x) { return /^(refurbish|player rebuild)$/i.test(x); });
+}
 function smIsWorkPhase_(ph) {
   var i = smPhaseIdx_(ph);
   return i >= 0 && i <= 12;   // New Arrival .. Exit Prep
@@ -6962,8 +6968,10 @@ function smTaskDoneByStatus_(p, id, rows) {
       why: shown('Plate hardware', p.plateHwStatus)};
   if (id.indexOf('electroplating') >= 0)
     // past QC & Assembly the piano has left Korban's Hardware Queue (PRSB..QC &
-    // Assembly since Mark 11/6 — 189150 reached QC with its hardware unbuffed)
-    return {done: stamp('pedals/cabinetry hardware electroplating and polishing') || stamp('visible hardware (buffing list)')
+    // Assembly since Mark 11/6 — 189150 reached QC with its hardware unbuffed).
+    // Refurb-only / player-only pianos get no replating at all (Mark 11/6);
+    // Refurbish + Refinish (133299) still does.
+    return {done: smNoReplating_(p) || stamp('pedals/cabinetry hardware electroplating and polishing') || stamp('visible hardware (buffing list)')
       || smPhaseIdx_(p.phase) > smPhaseIdx_('QC & Assembly'), why: 'not marked on the Hardware Queue'};
   if (id === 'order decal')
     return {done: /received|in stock|installed|not needed|completed/i.test(String((p.tasks || {}).decals || '')),
@@ -11625,10 +11633,15 @@ var PLATE_HW_STATUSES = ['', 'Needs buffing', 'In buffing queue', 'Buffing', 'Bu
 // color the plating shop should do (Korban orders by it) and the keytop
 // material Marcelo should fit. Header-created Piano Log columns.
 var CARD_FIELDS = {
-  plateFinish:    {header: 'PLATE HARDWARE FINISH', values: ['', 'Brass', 'Nickel', 'Copper', 'No electroplating'], label: 'Plate hardware finish'},
+  // AL REQUESTED TRIM COLOR is the one admin source for the plating finish
+  // (Mark 11/6: 'trim is the same thing as hardware finish'); the old
+  // card-only PLATE HARDWARE FINISH column stays in the sheet, unused.
+  // noCreate: if the header is ever renamed, refuse rather than add a stray column.
+  plateFinish:    {header: 'REQUESTED TRIM COLOR', noCreate: true, values: ['', 'Brass', 'Nickel', 'Copper', 'No electroplating'], label: 'Plating finish (Requested trim color)'},
   // two ivory choices (Melissa 9/25, 092526terry62); plain 'Ivory' stays valid
   // for the rows saved before the split
-  keytopMaterial: {header: 'KEYTOP MATERIAL', values: ['', 'White Acrylic', 'Off-white Acrylic', 'Ivory - clean & leave as is', 'Ivory - replace damaged keys', 'Ivory', 'No key service'], label: 'Keytop material'}
+  // AM REQUESTED WHITE KEYTOP PLAN is the one admin source for the keys pick (Mark 11/6); KEYTOP MATERIAL stays unused
+  keytopMaterial: {header: 'REQUESTED WHITE KEYTOP PLAN', noCreate: true, values: ['', 'White Acrylic', 'Off-white Acrylic', 'Ivory - clean & leave as is', 'Ivory - replace damaged keys', 'Ivory', 'No key service'], label: 'Keytop material'}
 };
 function setCardField_(req) {
   var def = CARD_FIELDS[String(req.field || '')];
@@ -11647,6 +11660,7 @@ function setCardField_(req) {
   for (var c = 0; c < hdr.length; c++) {
     if (String(hdr[c] || '').trim().toUpperCase() === def.header) { col = c + 1; break; }
   }
+  if (col < 0 && def.noCreate) return {error: def.header + ' column missing from the Piano Log'};
   if (col < 0) { sh.getRange(2, last + 1).setValue(def.header); col = last + 1; }
   sh.getRange(found.row, col).setValue(val);
   return {ok: true, row: found.row, summary: found.summary, field: String(req.field), value: val, label: def.label};

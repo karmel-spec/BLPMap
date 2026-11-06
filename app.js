@@ -6739,9 +6739,14 @@ function popHTML(p) {
           <button class="cfothersave">Save</button>${typed ? '<button class="cfotherclear">Clear</button>' : ''}<button class="cfothercancel">Cancel</button></div>
         ${cfSuggest(p, f)}<div class="cfmsg-${f} phmsg"></div>`;
   };
+  // Plating finish reads/saves the Piano Log's REQUESTED TRIM COLOR (AL, the
+  // one admin source — Mark 11/6). A refurb-only or player-only piano gets
+  // no replating, so its row says so instead of offering pills.
   const keysRow = p.serial
     ? cfPills('keytopMaterial', 'Keys', 'what Marcelo should fit — tap one; tap again to clear')
-      + cfPills('plateFinish', 'Plating<br>finish', 'the finish the plating shop should do — Korban orders by this')
+      + (noReplating(p)
+        ? `<div class="row trkrow" title="refurb-only and player-rebuild-only pianos get no replating (Mark 11/6)">Plating<br>finish <span class="lite" style="margin-left:8px">No replating — ${esc(String(p.track || '').trim())} only</span></div>`
+        : cfPills('plateFinish', 'Plating<br>finish', 'the finish the plating shop should do (the Piano Log\u2019s Requested trim color) — Korban orders by this'))
     : '';
   const scopeSec = p.serial ? secWrap('scope', '🧾 Scope of Work', `
     ${tracker}
@@ -12274,6 +12279,12 @@ function plateHwStageLabel(v) {
 }
 // 🎨 finish choices (Melissa 9/16, request 091626terry44) — mirrors CARD_FIELDS in the bridge
 // keytops: two ivory choices (Melissa 9/25, 092526terry62) — what Marcelo does differs
+// no replating when every track token is Refurbish or Player Rebuild (Mark 11/6)
+function noReplating(p) {
+  const t = String((p && p.track) || '').split(',').map(x => x.trim()).filter(Boolean)
+    .map(x => /^(old\s*)?player(\s*rebuild)?$/i.test(x) ? 'Player Rebuild' : x);
+  return t.length > 0 && t.every(x => /^(refurbish|player rebuild)$/i.test(x));
+}
 const CARD_FIELD_OPTS = {plateFinish: ['Brass', 'Nickel', 'Copper', 'No electroplating'], keytopMaterial: ['White Acrylic', 'Off-white Acrylic', 'Ivory - clean & leave as is', 'Ivory - replace damaged keys', 'No key service']};   // No key service: Melissa 10/13 (101326terry91) — refurbs, minor repairs, refinishing-only
 const CARD_FIELD_OLD = {keytopMaterial: ['Ivory']};   // saved before the 9/25 ivory split — shown as (old), not as a typed Other
 const CARD_FIELD_LABEL = {plateFinish: 'Plating finish', keytopMaterial: 'Keytop material'};
