@@ -13876,9 +13876,12 @@ function clockAdjustTable() {
     const todayYmd = new Date().toLocaleDateString('en-CA', {timeZone: 'America/Denver'});
     if (!S.payDay) S.payDay = todayYmd;
     const isPast = S.payDay < todayYmd;
-    const dayList = S.payRows.filter(r => r.date === S.payDay)
+    // the top bar's team member applies here too (Mark 11/6: filtered to
+    // himself, the Day view still listed everyone's day punches)
+    const dayWho = r => !af.who || adjName(r.tech) === af.who;
+    const dayList = S.payRows.filter(r => r.date === S.payDay && dayWho(r))
       .sort((x, y) => String(x.tech).localeCompare(String(y.tech)) || new Date(x.start) - new Date(y.start));
-    const knownTechs = [...new Set(unvoided(S.payRows).filter(r => new Date(r.start) >= Date.now() - 30 * 86400000).map(r => r.tech))].sort();
+    const knownTechs = [...new Set(unvoided(S.payRows).filter(r => new Date(r.start) >= Date.now() - 30 * 86400000 && dayWho(r)).map(r => r.tech))].sort();
     const punched = new Set(dayList.map(r => r.tech));
     const noPunch = knownTechs.filter(t => !punched.has(t));
     const dayIssues = dayList.filter(r => !String(r.voided || '') && ((!r.end && isPast) || adjAutoClosed(r)));
