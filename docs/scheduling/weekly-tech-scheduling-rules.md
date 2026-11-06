@@ -113,6 +113,19 @@ A Piano Log note like "we are putting a QRS on" means the QRS is NOT on yet.
 have its QRS installed; the draft read it as a delivery and booked a 30-minute
 "pre-delivery QC" the day before — Melissa, 102626terry10.)
 
+**A tune or QC already booked satisfies the delivery obligation (Mark
+2026-11-06).** Before adding a pre-delivery tuning or QC for a piano that
+delivers in the plan week, check the 20-QC & Showroom Repairs calendar
+(qualitycontrol.blp@gmail.com), the 03-In Store Tuning calendar and the tech
+calendars for that piano's serial from TODAY through the delivery date — not
+just the plan week. An event already there (any tech, any day before the
+delivery) IS the obligation met: don't propose another, and say in the lane's
+who-line who has it and when. Only when nothing is booked does the draft add
+the tune-then-QC. (Schafer & Sons HIJG0085, week of 11/9: Melissa had booked
+McKinly's "QC for delivery" for Fri 11/6 2:00 on the QC calendar; the draft
+saw only the Monday 6:45 PM rental delivery and gave Jake a second QC Monday
+morning.)
+
 **AFTER plates go to Lupita (Mark 2026-10-30).** When a piano's card PLATE
 STATUS reads **Plate storage — AFTER** (refinished plate back from Curtis
 Harper), its restringing is **Lupita's next restringing assignment** —
