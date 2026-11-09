@@ -11699,8 +11699,10 @@ function openSlotPop(id) {
       const mk = (label, val) => `<button class="platecond" data-row="${x.row}" data-val="${esc(val)}"
         style="border:1.5px solid ${st9 === val ? '#2f7d4f' : '#cfc9bf'};background:${st9 === val ? '#2f7d4f' : 'none'};
         color:${st9 === val ? '#fff' : '#57524b'};border-radius:8px;padding:2px 8px;font-size:11px;font-weight:700">${label}</button>`;
-      return `<span style="display:inline-flex;gap:5px;margin-left:6px">
-        ${mk('BEFORE refinishing', 'Plate storage — BEFORE')}${mk('AFTER ✨', 'Plate storage — AFTER')}</span>`;
+      // At Curtis Harper (Mark 11/9): same save as the card's Plate dropdown —
+      // the bridge frees this slat and sets the phase to Waiting on Curtis Harper
+      return `<span style="display:inline-flex;gap:5px;margin-left:6px;flex-wrap:wrap">
+        ${mk('BEFORE refinishing', 'Plate storage — BEFORE')}${mk('AFTER ✨', 'Plate storage — AFTER')}${mk('🚚 At Curtis Harper', 'At Curtis Harper').replace('#cfc9bf', '#b89ae0').replace('color:#57524b', 'color:#6b3fa0')}</span>`;
     };
     pop.innerHTML = `<span class="x">✕</span>
       <span class="tag">PLATE SPOT ${esc(id)}</span>
@@ -11742,6 +11744,14 @@ function openSlotPop(id) {
             notePlateEdit(px, val);          // survives the next data poll (the relay may still be applying it)
             plateBackHome(px, val);
             delete pop.dataset.plateBusy;
+            if (val === 'At Curtis Harper') {
+              // the plate has left this slat: say what happened, then repaint (empty slat)
+              if (j.phaseSet) { px.phase = j.phaseSet; const pe = pendingEdits.get(px.row) || {}; pe.phase = j.phaseSet; pendingEdits.set(px.row, pe); }
+              renderMap();
+              if (msg) { msg.className = 'pcmsg phmsg ok'; msg.textContent = '✓ plate to Curtis Harper — slat ' + id.toUpperCase() + ' freed' + (j.phaseSet ? ', phase ' + j.phaseSet : j.phaseNote ? ' · ' + j.phaseNote : ''); }
+              setTimeout(() => { if (pop.isConnected && !pop.hidden) openSlotPop(id); }, 2600);
+              return;
+            }
             openSlotPop(id);   // repaint with the new selection
             renderMap();       // rack lettering colour follows
             const m2 = pop.querySelector(`.pcmsg[data-row="${px.row}"]`);
