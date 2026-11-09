@@ -2751,6 +2751,7 @@ function armTechLink(a, url) {
 function prepTechLink(a) {
   const serial = a.dataset.serial;
   if (!serial) return;
+  if (techFolderCache.get(serial)) { armTechLink(a, techFolderCache.get(serial)); return; }   // known: ready right away
   techFolderUrl(serial).then(u => {
     if (!a.isConnected) return;
     if (u) {
