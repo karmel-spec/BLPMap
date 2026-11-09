@@ -8056,15 +8056,25 @@ function wirePop(p) {
             owner: p.owner || '', ...authFields()})});
         const j = await r.json();
         if (j.error) throw new Error(j.error);
-        const sl2 = j.selections;
+        const sl2 = j.selections, fl = j.folders || [];
         const line = (label, v) => v && String(v).trim()
           ? `<div class="row" style="font-size:12px"><span style="min-width:96px">${label}</span><b>${esc(String(v).slice(0, 140))}</b></div>` : '';
+        // the client's own folder in Drive › AGREEMENTS holds the SIGNED copy
+        // (Melissa 11/8); the form's generated doc is the unsigned original,
+        // shown only when the client has no folder yet
+        const how = sl2 && sl2.matchedBy && sl2.matchedBy !== 'serial' ? ` · matched by ${esc(sl2.matchedBy)}` : '';
+        const docs = sl2 ? (sl2.docs || []).filter(d => /^https?:\/\//i.test(d[0])) : [];
+        const folderHtml = fl.length
+          ? fl.map(f2 => `<div style="font-size:12px;margin-top:4px">📁 Signed contracts folder: <a class="dlink" target="_blank" rel="noopener" href="${esc(f2.url)}">${esc(f2.name)} ↗</a></div>`).join('')
+          : `<div class="lite" style="font-size:11px;margin-top:4px">${j.folderErr ? 'Could not look in the Agreements folders (' + esc(j.folderErr) + ').' : 'No client folder found in Drive › AGREEMENTS yet.'}${docs.length ? ' Unsigned original from the form:' : ''}</div>`
+            + docs.map(d => `<a class="dlink" style="margin-right:10px;font-size:12px" target="_blank" rel="noopener" href="${esc(d[0])}">${esc(d[1])} ↗</a>`).join('');
         out.innerHTML = (sl2 ? `<div class="ctrbox">
-            <div class="lite" style="font-size:11px">form reply ${esc(sl2.when)} — ${esc(sl2.name)} · ${esc(sl2.piano)} ${sl2.serial ? '#' + esc(sl2.serial) : ''}</div>
+            <div class="lite" style="font-size:11px">form reply ${esc(sl2.when)} — ${esc(sl2.name)} · ${esc(sl2.piano)} ${sl2.serial ? '#' + esc(sl2.serial) : ''}${how}</div>
             ${line('Refinishing', sl2.refinish)}
             ${line('Internal work', sl2.internal)}
             ${line('Color choice', sl2.color)}
             ${line('Hardware', sl2.hardware)}
+            ${line('Keytops', sl2.keytops)}
             ${line('Decal', sl2.decal)}
             ${line('Bench', sl2.bench)}
             ${line('Bench details', sl2.benchDesc)}
@@ -8072,10 +8082,8 @@ function wirePop(p) {
             ${line('Tuning add-on', sl2.tuningAddon)}
             ${line('Pay plan', sl2.payPlan)}
             ${line('Owner notes', sl2.notes)}
-            ${(sl2.docs || []).map(d => `<a class="dlink" style="margin-right:10px" target="_blank" rel="noopener" href="${esc(d[0])}">${esc(d[1])} ↗</a>`).join('')}
-          </div>` : '<div class="lite">No form reply matched this piano (by serial or owner name).</div>')
-          + ((j.files || []).length ? `<div class="lite" style="font-size:11px;margin-top:5px">Signed contracts folder:</div>
-             ${j.files.map(f2 => `<div style="font-size:12px">📎 <a class="dlink" target="_blank" rel="noopener" href="${esc(f2.url)}">${esc(f2.name)}</a></div>`).join('')}` : '');
+          </div>` : '<div class="lite">No form reply matched this piano (by serial, e-mail, phone or name).</div>')
+          + folderHtml;
         cb.remove();
       } catch (e) {
         out.innerHTML = `<div class="phmsg err">✗ ${esc(e.message)}</div>`;

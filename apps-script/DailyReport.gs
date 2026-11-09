@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-11-09.4';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-11-09.5';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -270,6 +270,13 @@ function doGet(e) {
   if (e && e.parameter && e.parameter.fn === 'editqueue') {
     if (String(e.parameter.key || '') !== 'pianoman' && e.parameter.key !== TEAM_PIN) return json_({error: 'unauthorized'});
     try { return json_(editQueue_(e.parameter.hours, e.parameter.retry === '1')); } catch (errQ) { return json_({error: String(errQ)}); }
+  }
+  if (e && e.parameter && e.parameter.fn === 'agreementfolder') {
+    // which AGREEMENTS folder a client name lands on — folder names only
+    var ak = String(e.parameter.key || '');
+    if (ak !== TEAM_PIN && ak.toLowerCase() !== 'pianoman') return json_({error: 'unauthorized'});
+    try { return json_(clientFolders_([String(e.parameter.q || '')], '')); }
+    catch (errA) { return json_({error: String(errA).slice(0, 200)}); }
   }
   if (e && e.parameter && e.parameter.fn === 'techfolder') {
     try {
@@ -1505,59 +1512,13 @@ function doPost(e) {
       catch (eCS) { return json_({error: String(eCS).slice(0, 200)}); }
     }
     if (req.action === 'contracts') {
-      // 📜 owner's form selections + contract files (Brigham 9/4).
-      // OWNERS + LEAD ADMIN ONLY — the response row also holds payment
-      // details; those columns are NEVER read or returned here.
+      // 📜 owner's form selections + the client's signed-contracts folder
+      // (Brigham 9/4; Melissa 11/8). OWNERS + LEAD ADMIN ONLY — the response
+      // row also holds payment details; those columns are NEVER read or
+      // returned here.
       if (!contractViewer_(req._g)) return json_({error: 'Contracts are for owners and the lead admin only.'});
-      var ctSerial = String(req.serial || '').replace(/\D/g, '');
-      var ctOwner = String(req.owner || '').toLowerCase();
-      var ctSh = SpreadsheetApp.openById(PIANO_LOG_ID).getSheetByName('Restoration Contracts');
-      var ctV = ctSh ? ctSh.getDataRange().getValues() : [];
-      var hit = null;
-      for (var ci = 1; ci < ctV.length; ci++) {
-        var rs = String(ctV[ci][18] || '').replace(/\D/g, '');
-        if (ctSerial && rs && rs === ctSerial) { hit = ctV[ci]; break; }
-      }
-      if (!hit && ctOwner) {
-        for (var cj = 1; cj < ctV.length; cj++) {
-          var nm = String(ctV[cj][3] || '').trim().toLowerCase();
-          var lastN = nm.split(/\s+/).pop();
-          if (lastN && lastN.length > 2 && ctOwner.indexOf(lastN) >= 0) { hit = ctV[cj]; break; }
-        }
-      }
-      var sel = null;
-      if (hit) {
-        var docLink = function (a2, b2) { return String(hit[a2] || hit[b2] || '').trim(); };
-        sel = {when: String(hit[0] || '').split(' ')[0], name: String(hit[3] || ''),
-          piano: [hit[15], hit[16]].map(String).filter(function (x) { return x.trim(); }).join(' '),
-          type: String(hit[17] || ''), serial: String(hit[18] || ''),
-          finishNow: String(hit[19] || ''), refinish: String(hit[25] || ''),
-          internal: String(hit[26] || hit[32] || ''), color: String(hit[27] || ''),
-          decal: String(hit[30] || ''), hardware: String(hit[40] || ''),
-          bench: String(hit[21] || ''), benchDesc: String(hit[22] || ''),
-          sentimental: String(hit[23] || ''), tuningAddon: String(hit[33] || ''),
-          payPlan: String(hit[44] || ''),
-          notes: [hit[14], hit[38], hit[59]].map(function (x) { return String(x || '').trim(); })
-            .filter(String).join(' · ').slice(0, 400),
-          docs: [[docLink(61, 62), 'Restoration Contract'], [docLink(65, 66), 'Shopwork Agreement'],
-                 [docLink(69, 70), 'Contract']].filter(function (d) { return d[0]; })};
-      }
-      var files = [];
-      try {
-        var last2 = ((sel && sel.name) || ctOwner).toLowerCase().split(/\s+/).pop();
-        if (last2 && last2.length > 2) {
-          var fold = DriveApp.getFolderById('1nIm0v5nbounf8AhzfgEfU9uK7ccqhxhb');
-          var fit = fold.getFiles(), scanned = 0;
-          while (fit.hasNext() && scanned < 300 && files.length < 6) {
-            var cf = fit.next();
-            if (cf.getName().toLowerCase().indexOf(last2) >= 0) {
-              files.push({name: cf.getName().slice(0, 90), url: cf.getUrl()});
-            }
-            scanned++;
-          }
-        }
-      } catch (eCt) {}
-      return json_({ok: true, found: !!sel, selections: sel, files: files});
+      try { return json_(ownerContracts_(req)); }
+      catch (eOC) { return json_({error: String(eOC).slice(0, 200)}); }
     }
     if (req.action === 'wonscope') return json_(wonScope_(req));
     if (req.action === 'setscopenote') {
@@ -11365,6 +11326,175 @@ function phaseNote_(req, who) {
   sh.getRange(found.row, col).setValue(prev ? line + '\n' + prev : line);
   return {ok: true, row: found.row, summary: found.summary};
 }
+/* ── Restoration Contracts tab: read by HEADER TEXT, match by the CLIENT ──
+ * (Melissa 11/8, 110726terry17). Two things went wrong on David Brown's card:
+ *  1. the form reply was matched by "any last name that appears anywhere in
+ *     the owner cell" — his cell says "Pickup @ parents' house", so Chris
+ *     HOUSE's contract came up. Matching is now serial → e-mail → phone →
+ *     first AND last name, and names are only looked for on the cell's name
+ *     lines (never in a pickup / delivery / address line).
+ *  2. every column was a fixed number, and the form has since gained
+ *     questions, so "Hardware" and "Pay plan" were showing initials from the
+ *     neighbouring columns. Columns are now found by their header text; a
+ *     renamed header shows as blank instead of as the wrong answer.
+ * The bank / card columns are never looked up, so they can never be read. */
+function rcCols_(hdr) {
+  var H = (hdr || []).map(function (x) { return String(x == null ? '' : x).replace(/\s+/g, ' ').trim(); });
+  var at = function (re) { for (var i = 0; i < H.length; i++) { if (re.test(H[i])) return i; } return -1; };
+  return {
+    email: at(/^email address$/i), name: at(/^first and last name/i), phone: at(/^phone number$/i),
+    notes0: at(/^any other information that blp should know/i),
+    make: at(/^what is the piano.s make/i), model: at(/^what is the piano.s model/i),
+    type: at(/^what type of piano/i), serial: at(/^what is the piano.s serial number/i),
+    finishNow: at(/^what is the piano.s finish right now/i),
+    bench: at(/^bench:/i), benchDesc: at(/^if the piano.s bench/i),
+    sentimental: at(/^sentimental components$/i),
+    refinish: at(/^scope of work\W+refinishing/i), internal: at(/^what type of internal work/i),
+    color: at(/^what color would you like your piano/i), decal: at(/^decal$/i),
+    interior: at(/^scope of work\W+internal restoration/i),
+    tuning: at(/^would you like to add a piano tuning/i),
+    notes1: at(/^\(optional\) do you have any other notes/i),
+    hardware: at(/^desired hardware color/i), keytops: at(/^desired plan for white keytops/i),
+    payPlan1: at(/^choose payment plan/i), payPlan2: at(/^what payment plan would you like/i),
+    notes2: at(/^\(optional\) would you like to share any other notes/i),
+    docs: [
+      ['Restoration Contract', at(/^merged doc url\W+restoration contract generator/i), at(/^link to merged doc\W+restoration contract generator/i)],
+      ['Shopwork Agreement', at(/^merged doc url\W+shopwork agreement generator/i), at(/^link to merged doc\W+shopwork agreement generator/i)],
+      ['Contract', at(/^merged doc url\W+restoration contracts$/i), at(/^link to merged doc\W+restoration contracts$/i)]]
+  };
+}
+function rcV_(row, i) { return (i >= 0 && row && row[i] != null) ? String(row[i]).trim() : ''; }
+var RC_NAME_STOP = {and: 1, the: 1, rebuild: 1, agreement: 1, agreements: 1, contract: 1, contracts: 1,
+  refinish: 1, refinishing: 1, player: 1, square: 1, grand: 1, upright: 1, piano: 1, shopwork: 1, restoration: 1};
+function rcWords_(s) {
+  return String(s || '').toLowerCase().replace(/[’'`]/g, '').split(/[^a-zà-ɏ]+/)
+    .filter(function (w) { return w.length > 1 && !RC_NAME_STOP[w]; });
+}
+/* The words on the owner cell's NAME lines. A pickup / delivery / address
+ * line is skipped whole; on any other line only the text before the first
+ * digit counts, and an e-mail address is never split into "words". */
+function rcOwnerWords_(ownerCell) {
+  var out = {};
+  String(ownerCell || '').split(/\r?\n/).forEach(function (ln) {
+    if (/^\s*(pick\s*-?\s*up|deliver|address|ship)/i.test(ln)) return;
+    ln = ln.replace(/\S*@\S*/g, ' ').replace(/\d[\s\S]*$/, '');
+    rcWords_(ln).forEach(function (w) { out[w] = 1; });
+  });
+  return out;
+}
+/* Is this person (a form name, or an Agreements folder name like
+ * "Ray & Ruth Little - rebuild") named in that set of words? The last name
+ * must be there as a whole word AND one of the other names must be too
+ * (Chris ↔ Christopher counts). */
+function rcNameIn_(name, words) {
+  var t = rcWords_(name);
+  if (t.length < 2) return false;
+  var last = t[t.length - 1];
+  if (!words[last]) return false;
+  for (var i = 0; i < t.length - 1; i++) {
+    var f = t[i];
+    for (var w in words) {
+      if (w === last && f !== last) continue;
+      if (w === f || (w.length >= 3 && f.length >= 3 && (w.indexOf(f) === 0 || f.indexOf(w) === 0))) return true;
+    }
+  }
+  return false;
+}
+function rcOwnerEmails_(cell) {
+  return String(cell || '').toLowerCase().match(/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/g) || [];
+}
+function rcOwnerPhones_(cell) {
+  return (String(cell || '').match(/(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}/g) || [])
+    .map(function (p) { return p.replace(/\D/g, '').slice(-10); });
+}
+/* The form reply for one card: serial first, then the client's e-mail,
+ * phone, name. Newest reply wins within a kind (a re-submitted form). A
+ * reply that names a DIFFERENT serial is only used when nothing else fits,
+ * and says so. */
+function rcFindRow_(v, C, serialDigits, ownerCell) {
+  var em = rcOwnerEmails_(ownerCell), ph = rcOwnerPhones_(ownerCell), words = rcOwnerWords_(ownerCell);
+  var best = null, bestRank = 99, how = '';
+  for (var i = v.length - 1; i >= 1; i--) {
+    var row = v[i], rank = 99, h = '';
+    var rs = rcV_(row, C.serial).replace(/\D/g, '');
+    if (serialDigits && rs && rs === serialDigits) { rank = 1; h = 'serial'; }
+    else {
+      var re = rcV_(row, C.email).toLowerCase();
+      var rp = rcV_(row, C.phone).replace(/\D/g, '').slice(-10);
+      if (re && em.indexOf(re) >= 0) { rank = 2; h = 'e-mail'; }
+      else if (rp.length === 10 && ph.indexOf(rp) >= 0) { rank = 3; h = 'phone'; }
+      else if (rcNameIn_(rcV_(row, C.name), words)) { rank = 4; h = 'name'; }
+      if (rank < 99 && serialDigits.length >= 4 && rs.length >= 4) { rank += 10; h += ', but the form names serial ' + rs; }
+    }
+    if (rank < bestRank) { best = row; bestRank = rank; how = h; }
+  }
+  return best ? {row: best, how: how} : null;
+}
+/* The client's own folder in the admin Drive's AGREEMENTS (Melissa 11/8):
+ * that is where the SIGNED copy lives, next to a shortcut to the original.
+ * Folder names are the client's name plus an optional word ("David Brown
+ * agreement", "Sharon Allen rebuild"). The list is remembered for 15
+ * minutes; a miss re-reads it once, so a folder made a minute ago is found. */
+var AGREEMENT_PARENTS = ['1Kd1GujS-TkekfkF5RNOTkEtqbK7NENVN',    // Agreements: Rebuild
+                         '1vCnMkTHL3tWxQWwc0v9c8GlLBw0ZHdcQ'];   // Agreements: Refinishing
+function agreementFolders_(fresh) {
+  var cc = CacheService.getScriptCache(), hit = null;
+  if (!fresh) { try { hit = JSON.parse(cc.get('agrFolders') || 'null'); } catch (eG) {} }
+  if (hit && hit.list) return hit;
+  var list = [], errs = [];
+  AGREEMENT_PARENTS.forEach(function (pid) {
+    try {
+      var it = DriveApp.getFolderById(pid).getFolders(), n = 0;
+      while (it.hasNext() && n < 700) { var f = it.next(); list.push([f.getId(), String(f.getName()).slice(0, 80)]); n++; }
+    } catch (eF) { errs.push(String(eF).slice(0, 90)); }
+  });
+  var out = {t: Date.now(), list: list, errs: errs};
+  try { if (list.length) cc.put('agrFolders', JSON.stringify(out), 900); } catch (eP) {}
+  return out;
+}
+function clientFolders_(names, ownerCell) {
+  var words = rcOwnerWords_(ownerCell);
+  (names || []).forEach(function (n) { rcWords_(n).forEach(function (w) { words[w] = 1; }); });
+  var pick = function (af) { return af.list.filter(function (f) { return rcNameIn_(f[1], words); }); };
+  var af = agreementFolders_(false), got = pick(af);
+  if (!got.length && Date.now() - Number(af.t || 0) > 60000) { af = agreementFolders_(true); got = pick(af); }
+  return {folders: got.slice(0, 4).map(function (f) {
+            return {name: f[1], url: 'https://drive.google.com/drive/folders/' + f[0]}; }),
+          scanned: af.list.length, errs: af.errs || []};
+}
+function ownerContracts_(req) {
+  var ss = SpreadsheetApp.openById(PIANO_LOG_ID);
+  var ctSerial = String(req.serial || '').replace(/\D/g, '');
+  var ownerCell = String(req.owner || '');   // the card's owner cell — name, phone, e-mail lines
+  var ctSh = ss.getSheetByName('Restoration Contracts');
+  var ctV = ctSh ? ctSh.getDataRange().getValues() : [];
+  var C = rcCols_(ctV[0] || []);
+  var m = (C.name >= 0 && ctV.length > 1) ? rcFindRow_(ctV, C, ctSerial, ownerCell) : null;
+  var sel = null;
+  if (m) {
+    var hit = m.row, V = function (i) { return rcV_(hit, i); };
+    var when0 = hit[0];
+    sel = {when: (when0 instanceof Date) ? Utilities.formatDate(when0, 'America/Denver', 'M/d/yyyy')
+                                         : String(when0 || '').split(' ')[0],
+      name: V(C.name), matchedBy: m.how,
+      piano: [V(C.make), V(C.model)].filter(String).join(' '),
+      type: V(C.type), serial: V(C.serial), finishNow: V(C.finishNow),
+      refinish: V(C.refinish), internal: V(C.internal) || V(C.interior), color: V(C.color),
+      decal: V(C.decal), hardware: V(C.hardware), keytops: V(C.keytops),
+      bench: V(C.bench), benchDesc: V(C.benchDesc), sentimental: V(C.sentimental),
+      tuningAddon: V(C.tuning), payPlan: V(C.payPlan1) || V(C.payPlan2),
+      notes: [V(C.notes0), V(C.notes1), V(C.notes2)].filter(String).join(' · ').slice(0, 400),
+      docs: C.docs.map(function (d) {
+        var u = V(d[1]) || V(d[2]);
+        return [/^https?:\/\//i.test(u) ? u : '', d[0]];
+      }).filter(function (d) { return d[0]; })};
+  }
+  var cf = {folders: [], scanned: 0, errs: []};
+  try { cf = clientFolders_(sel ? [sel.name] : [], ownerCell); } catch (eCf) { cf.errs = [String(eCf).slice(0, 90)]; }
+  // files: [] stays for app copies older than v685, which list it
+  return {ok: true, found: !!sel, selections: sel, folders: cf.folders, folderErr: (cf.errs || []).join(' · '), files: []};
+}
+
 /* 📜→🧾 CONTRACT SYNC (Brigham 9/4): every new Shopwork Agreement form
  * response (Restoration Contracts tab) auto-fills the matching piano's
  * Scope of Work — the whole shop sees the contractual scope on the card.
@@ -11389,6 +11519,9 @@ function contractSyncLocked_(refresh) {
   if (!cs) return {error: 'no Restoration Contracts tab'};
   var v = cs.getDataRange().getValues();
   var hdr = v[0] || [];
+  // columns by header text — the form's column numbers moved (11/9)
+  var C = rcCols_(hdr);
+  if (C.serial < 0 || C.name < 0) return {error: 'Restoration Contracts tab: the serial / name question was not found by its header'};
   var mCol = -1;
   for (var c = 0; c < hdr.length; c++) {
     if (String(hdr[c] || '').trim() === 'Synced to card') { mCol = c + 1; break; }
@@ -11425,14 +11558,14 @@ function contractSyncLocked_(refresh) {
   var synced = [], skipped = 0;
   for (var r = 1; r < v.length; r++) {
     if (!refresh && String(v[r][mCol - 1] || '').trim()) { skipped++; continue; }
-    var digits = String(v[r][18] || '').replace(/\D/g, '');
+    var digits = rcV_(v[r], C.serial).replace(/\D/g, '');
     if (digits.length < 3) { continue; }              // no usable serial — retry forever, harmless
     var f = byDigits[digits] || null;
     if (!f) continue;                                 // piano not in log yet — retry next run
-    var S9 = function (i) { return String(v[r][i] == null ? '' : v[r][i]).trim(); };
-    var refin = S9(25), color = S9(27), hardware = S9(40), interior = S9(32) || S9(26);
-    var bench = S9(21), benchD = S9(22), senti = S9(23), tune = S9(33);
-    var oNotes = [S9(14), S9(38), S9(59)].filter(String).join(' · ');
+    var S9 = function (i) { return rcV_(v[r], i); };
+    var refin = S9(C.refinish), color = S9(C.color), hardware = S9(C.hardware), interior = S9(C.interior) || S9(C.internal);
+    var bench = S9(C.bench), benchD = S9(C.benchDesc), senti = S9(C.sentimental), tune = S9(C.tuning);
+    var oNotes = [S9(C.notes0), S9(C.notes1), S9(C.notes2)].filter(String).join(' · ');
     // color → COLOR FIRST PICK (seed only; the shop refines from here)
     if (colorCol > 0 && color && !String(sh.getRange(f.row, colorCol).getValue() || '').trim()) {
       sh.getRange(f.row, colorCol).setValue(color.slice(0, 80));
@@ -11451,7 +11584,7 @@ function contractSyncLocked_(refresh) {
       val = String(val || '').replace(/\s*\n+\s*/g, ' ').trim();
       return val ? (label + ': ' + val.slice(0, 300)) : '';
     };
-    var decal9 = S9(30), finishNow9 = S9(19);
+    var decal9 = S9(C.decal), finishNow9 = S9(C.finishNow);
     var L = [line('Refinishing', refin), line('Internal work', interior),
       line('Current finish', finishNow9), line('Color', color),
       line('Hardware', hardware), line('Decals', decal9),
@@ -11462,7 +11595,7 @@ function contractSyncLocked_(refresh) {
     var whenStr = (when0 instanceof Date)
       ? Utilities.formatDate(when0, 'America/Denver', 'M/d/yy')
       : String(when0 || '').split(' ')[0];
-    var block = '📜 Contract ' + whenStr + ' — ' + S9(3) + '\n📜 ' + L.join('\n📜 ');
+    var block = '📜 Contract ' + whenStr + ' — ' + S9(C.name) + '\n📜 ' + L.join('\n📜 ');
     var prevScope = String(sh.getRange(f.row, scopeCol).getValue() || '').trim();
     var hadBlock = prevScope.indexOf('📜') >= 0;
     if (!hadBlock || refresh) {
