@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-11-09.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-11-09.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -11751,13 +11751,31 @@ function setPlateStatus_(req) {
   // the plate is out, whatever else (keytops, screws) got done meanwhile.
   // Never on a For Sale / Sale Pending / Sold / Delivered / Post Sale QC
   // piano. _fromPhase: called by setPhase_ (Rule B) — no echo back.
-  if (!req._fromPhase && (val === 'At Curtis Harper' || ((val === 'Plate storage — AFTER' || val === 'Back in piano') && /^at curtis/i.test(prevPlate)))) {
+  // D (Mark 11/9): leaving Curtis for BEFORE storage or blank = the plate never
+  // went / came back unrefinished — the phase goes back to the one the waiting
+  // note recorded ("… — was X"); no record → left alone, said on the card.
+  // In piano after Curtis can only mean it's back → Restringing, like C.
+  var fromCurtis = /^at curtis/i.test(prevPlate) && val !== 'At Curtis Harper';
+  if (!req._fromPhase && (val === 'At Curtis Harper' || fromCurtis)) {
     try {
       var pcol = phaseCol_(sh);
       var curPh = String(sh.getRange(found.row, pcol).getValue() || '').trim();
       if (!/^(for sale|sale pending|sold|delivered|post sale qc)$/i.test(curPh)) {
-        var toPh = val === 'At Curtis Harper' ? 'Waiting on Curtis Harper' : 'Restringing';
-        if (curPh !== toPh) {
+        var toPh = '';
+        if (val === 'At Curtis Harper') toPh = 'Waiting on Curtis Harper';
+        else if (val === 'Plate storage — AFTER' || val === 'Back in piano' || val === 'In piano') toPh = 'Restringing';
+        else if (curPh === 'Waiting on Curtis Harper') {
+          // BEFORE storage / blank: back to the phase it left, if the note says
+          var wn = '', wcol = -1, hdrW = sh.getRange(2, 1, 1, sh.getLastColumn()).getValues()[0];
+          for (var cw = 0; cw < hdrW.length; cw++) if (String(hdrW[cw] || '').trim().toUpperCase() === 'WAITING NOTE') { wcol = cw + 1; break; }
+          if (wcol > 0) wn = String(sh.getRange(found.row, wcol).getValue() || '');
+          var mWas = /—\s*was\s+(.+?)\s*$/i.exec(wn);
+          var was = mWas ? String(mWas[1]).trim() : '';
+          if (was && PHASE_MIGRATE[was]) was = PHASE_MIGRATE[was];
+          if (was && PHASE_VALUES.indexOf(was) >= 0) toPh = was;
+          else out.phaseNote = 'phase left as Waiting on Curtis Harper — no record of the phase before; set it by hand';
+        }
+        if (toPh && curPh !== toPh) {
           var r2 = setPhase_({serial: req.serial, row: found.row, phase: toPh, _fromPlate: true, _g: req._g, who: req.who,
             note: toPh === 'Waiting on Curtis Harper' ? ('Plate at Curtis Harper' + (curPh ? ' — was ' + curPh : '')) : ''});
           if (r2.ok) {
