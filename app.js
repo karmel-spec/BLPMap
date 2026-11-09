@@ -1259,6 +1259,14 @@ const PHASE_TO_AREA = {
 // team-wide recent Time Log (fast feed) so cards can show who actually has
 // the piano — assigned/working beats the generic specialist list (Brigham 9/3)
 const TEAMTL = {at: 0, last: null, loading: false};
+// a serial the Time Log can be matched on — "?" / blank / "unknown" are shared
+// by many pianos, so a session on one of them must never show on the others
+// (Mark 11/9: #54 Square Grand said "recent: Alex Martin" from Alex's 1-minute
+// punch on the Marshall & Wendell, another "?" piano)
+function knownSerial(s) {
+  s = String(s || '').trim();
+  return !!s && !/^\?+$/.test(s) && !/^(n\/?a|unknown|none|tbd|no serial)$/i.test(s);
+}
 function loadTeamTl(p) {
   if (TEAMTL.loading || (TEAMTL.last && Date.now() - TEAMTL.at < 300000)) return;
   TEAMTL.loading = true;
@@ -1267,7 +1275,7 @@ function loadTeamTl(p) {
       const m = new Map();
       (j.tl || []).forEach(r => {
         const k = String(r.serial || '');
-        if (!k) return;
+        if (!knownSerial(k)) return;
         const prev = m.get(k);
         if (!prev || new Date(r.start) > new Date(prev.start)) m.set(k, r);
       });
@@ -1278,14 +1286,14 @@ function loadTeamTl(p) {
 }
 function gotoLine(p, effPh) {
   // 1 · someone is clocked in on this piano RIGHT NOW
-  const live = (CLOCK.all || []).find(o => o.serial === p.serial);
+  const live = knownSerial(p.serial) && (CLOCK.all || []).find(o => o.serial === p.serial);
   if (live) {
     const first = (live.tech || '').split(/\s+/)[0] || live.tech;
     return `<div class="gotoline" style="color:#2f7d4f"><b>● On it now: ${esc(first)}</b> — ${esc(live.phase || 'working')}</div>`;
   }
   // 2 · the most recent tech in the Time Log has it (assigned in practice)
   if (!TEAMTL.last) loadTeamTl(p);
-  const last = TEAMTL.last && TEAMTL.last.get(String(p.serial));
+  const last = knownSerial(p.serial) && TEAMTL.last && TEAMTL.last.get(String(p.serial));
   if (last) {
     const first = (last.tech || '').split(/\s+/)[0] || last.tech;
     const when = new Date(last.start).toLocaleDateString('en-US', {weekday: 'short', month: 'short', day: 'numeric'});
@@ -12719,6 +12727,7 @@ function stalledPianos() {
 // report opens — "…" until then). Shared by the Shop Queue's ASSIGNED TO and
 // Sitting Too Long's RECENT WORK (Mark 10/20), which also shows the last date.
 function recentWorkCell(p, withDate) {
+  if (!knownSerial(p.serial)) return '<td>—</td>';
   const live = (CLOCK.all || []).find(o => o.serial === p.serial);
   if (live) return `<td><span class="qulive">● ${esc((live.tech || '').split(/\s+/)[0] || live.tech)} now</span></td>`;
   if (!S.tlRows) return '<td>…</td>';
