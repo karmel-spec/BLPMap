@@ -1362,6 +1362,14 @@ function applyPending() {
       if ((p.track || '') === edit.track) delete edit.track;
       else { p.track = edit.track; stillPending = true; }
     }
+    if ('taskCells' in edit) {   // 🏷 Decals / 🎼 Bass strings (Mark 11/9: a refresh hid the pick, so it got tapped 4–6 times)
+      p.tasks = p.tasks || {};
+      for (const [k, v] of Object.entries(edit.taskCells || {})) {
+        if ((p.tasks[k] || '') === v) delete edit.taskCells[k];
+        else { p.tasks[k] = v; stillPending = true; }
+      }
+      if (!Object.keys(edit.taskCells || {}).length) delete edit.taskCells;
+    }
     if ('phasesDone' in edit) {
       if ((p.phasesDone || '') === edit.phasesDone) delete edit.phasesDone;
       else { p.phasesDone = edit.phasesDone; stillPending = true; }
@@ -7390,6 +7398,7 @@ function wirePop(p) {
       const j = await r.json();
       if (!j.ok) throw new Error(j.error || 'failed');
       p.tasks = p.tasks || {}; p.tasks[key] = val;
+      { const te = pendingEdits.get(p.row) || {}; te.taskCells = {...(te.taskCells || {}), [key]: val}; pendingEdits.set(p.row, te); }
       openPop(p.row, S.popAnchor, true);
     } catch (e) { msg.textContent = '✗ ' + e.message; }
   };
@@ -7427,6 +7436,7 @@ function wirePop(p) {
       const j = await r.json();
       if (!j.ok) throw new Error(j.error || 'failed');
       p.tasks = p.tasks || {}; p.tasks[key] = val;
+      { const te = pendingEdits.get(p.row) || {}; te.taskCells = {...(te.taskCells || {}), [key]: val}; pendingEdits.set(p.row, te); }
       openPop(p.row, S.popAnchor, true);
     } catch (e) { msg.textContent = '✗ ' + e.message; }
   };

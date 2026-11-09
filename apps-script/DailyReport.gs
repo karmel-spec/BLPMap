@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-11-09.8';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-11-09.9';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -881,7 +881,11 @@ function addPiano_(req) {
     try {
       var folder = DriveApp.getFolderById(PHOTOS_ROOT_ID)
         .createFolder((summary + ' ' + serial).slice(0, 90));
-      sh.getRange(row, 69).setValue(folder.getUrl());   // Main Folder col
+      // MAIN FOLDER by header (was fixed column 69 — that is OPTIONS since the 11/6 column inserts)
+      var mfHdr = sh.getRange(2, 1, 1, sh.getLastColumn()).getValues()[0];
+      for (var mfc = 0; mfc < mfHdr.length; mfc++) {
+        if (String(mfHdr[mfc] || '').trim().toUpperCase() === 'MAIN FOLDER') { sh.getRange(row, mfc + 1).setValue(folder.getUrl()); break; }
+      }
     } catch (eF) {}
   }
   return {ok: true, added: true, row: row, section: slot.section, summary: summary,
@@ -11709,12 +11713,19 @@ function setKeyStatus_(req, who) {
 }
 /* Ordered/Received date marks for bass strings + decals (Brigham 8/27) —
  * written into the SAME fixed cells the Concurrent Work report reads. */
-var TASK_CELL_COLS = {bass: 39, decals: 40};   // 1-based: AM bass order, AN decals
+// by HEADER (Mark 11/9): these were fixed columns AM / AN; a column deleted
+// before 11/5 and four inserted after it sent the 11/5 Decals picks into
+// PARTS NEEDED and left the card reading a blank column. Never create —
+// a renamed header refuses the save instead of writing somewhere else.
+var TASK_CELL_HEADERS = {bass: 'BASS STRINGS', decals: 'DECALS'};
 function setTaskCell_(req, who) {
-  var col = TASK_CELL_COLS[String(req.which || '')];
-  if (!col) return {error: 'bad task cell: ' + req.which};
+  var hname = TASK_CELL_HEADERS[String(req.which || '')];
+  if (!hname) return {error: 'bad task cell: ' + req.which};
   var val = String(req.value == null ? '' : req.value).trim().slice(0, 200);
   var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+  var thdr = sh.getRange(2, 1, 1, sh.getLastColumn()).getValues()[0], col = -1;
+  for (var tc = 0; tc < thdr.length; tc++) { if (String(thdr[tc] || '').trim().toUpperCase() === hname) { col = tc + 1; break; } }
+  if (col < 0) return {error: 'Piano Log column "' + hname + '" not found — nothing saved'};
   var found = findPiano_(sh, req.serial, req.row);
   if (found.error) return found;
   sh.getRange(found.row, col).setValue(val);
