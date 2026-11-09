@@ -5043,8 +5043,8 @@ async function clFetch(serial, phase, force) {
     const done = new Set((j.checks || []).filter(c => !c.skipped).map(c => c.step));
     const skips = new Map((j.checks || []).filter(c => c.skipped).map(c => [c.step, c.note || '']));
     const notes = new Map((j.checks || []).filter(c => !c.skipped && (c.note || '').trim()).map(c => [c.step, c.note]));
-    CL.cache[k] = {at: Date.now(), items: j.items || [], done, skips, notes, request: j.request || null};
-  } catch (e) { CL.cache[k] = CL.cache[k] || {at: 0, items: [], done: new Set(), skips: new Map(), notes: new Map(), request: null}; }
+    CL.cache[k] = {at: Date.now(), items: j.items || [], done, skips, notes, request: j.request || null, offline: !!j.checksUnavailable};
+  } catch (e) { CL.cache[k] = CL.cache[k] || {at: 0, items: [], done: new Set(), skips: new Map(), notes: new Map(), request: null, failed: true}; }
   return CL.cache[k];
 }
 /* 📖 tap-to-learn glossary (Brigham 9/3): terms from the Glossary sheet tab
@@ -5122,7 +5122,9 @@ async function updateClPill() {
     document.body.appendChild(pill);
   }
   pill.hidden = false;
-  pill.textContent = `📋 ${active} checklist · ${doneN}/${work.length}`;
+  pill.textContent = st.failed && !work.length ? `📋 ${active} checklist · couldn\u2019t load \u2014 tap to retry`
+    : st.offline ? `📋 ${active} checklist · ${work.length} steps (ticks offline)`
+    : `📋 ${active} checklist · ${doneN}/${work.length}`;
   pill.onclick = () => openWorkChecklist(o.serial, active);
   placeClPill();
 }
@@ -5296,6 +5298,7 @@ async function openWorkChecklist(serial, phase) {
       ov.innerHTML = `<div class="dsheet" style="max-height:82vh;overflow:auto"><button class="dsx">✕</button>
         <h3>📋 ${esc(phase)} — ${esc(p.summary || '#' + serial)}</h3>
         <div class="dssub">${doneN}/${work.length} steps · shared with the whole team · from the Restoration Handbook</div>
+        ${st.offline ? `<div class="phmsg err" style="margin:4px 0">\u26a0 Check-offs can\u2019t be read or saved right now (the checklist database is down) \u2014 the steps are all here to follow, but ticks won\u2019t stick until it\u2019s back.</div>` : ''}
         <div style="height:8px;background:#efece6;border-radius:4px;overflow:hidden;margin:6px 0 10px">
           <div style="height:100%;width:${work.length ? doneN / work.length * 100 : 0}%;background:linear-gradient(90deg,#c9a227,#2f7d4f)"></div></div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 10px">
