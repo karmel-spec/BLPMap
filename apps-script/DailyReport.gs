@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-11-09.9';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-11-09.10';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -11717,7 +11717,7 @@ function setKeyStatus_(req, who) {
 // before 11/5 and four inserted after it sent the 11/5 Decals picks into
 // PARTS NEEDED and left the card reading a blank column. Never create —
 // a renamed header refuses the save instead of writing somewhere else.
-var TASK_CELL_HEADERS = {bass: 'BASS STRINGS', decals: 'DECALS'};
+var TASK_CELL_HEADERS = {bass: 'BASS STRINGS', decals: 'DECALS', parts: 'PARTS NEEDED'};   // parts: 11/9 repair of the 11/5 Decals picks
 function setTaskCell_(req, who) {
   var hname = TASK_CELL_HEADERS[String(req.which || '')];
   if (!hname) return {error: 'bad task cell: ' + req.which};
@@ -11729,7 +11729,7 @@ function setTaskCell_(req, who) {
   var found = findPiano_(sh, req.serial, req.row);
   if (found.error) return found;
   sh.getRange(found.row, col).setValue(val);
-  logAct_(who, req.which === 'decals' ? 'Decals' : 'Bass strings',
+  logAct_(who, req.which === 'decals' ? 'Decals' : req.which === 'parts' ? 'Parts needed' : 'Bass strings',
     found.summary || req.serial, val || '(cleared)');
   return {ok: true, row: found.row, summary: found.summary, value: val};
 }
