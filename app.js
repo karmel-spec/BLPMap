@@ -12287,7 +12287,8 @@ function activityTable(rows) {
 /* Plate lifecycle (mirrors the bridge's PLATE_STATUSES) — plates leave for
  * Curtis Harper's shop and come back; tracked in the Piano Log's
  * PLATE STATUS column, set from the card's Shop Progress section. */
-const PLATE_STAGES = ['In piano', 'Removed', 'Plate storage — BEFORE',
+// 'Removed' retired (Mark 11/9): a plate off the piano is in storage or at Curtis Harper
+const PLATE_STAGES = ['In piano', 'Plate storage — BEFORE',
                       'At Curtis Harper', 'Plate storage — AFTER', 'Back in piano'];
 // plate bolts / screws / hardware buffing (Korban 9/11, request 091126greenhalgh06) —
 // mirrors the bridge's PLATE_HW_STATUSES; stored in PLATE HARDWARE STATUS
@@ -12534,7 +12535,7 @@ const TQ_DEFS = [
    pool: () => S.data.pianos.filter(p => p.active && p.serial && (p.queuePos || p.phase)
      && (p.phase || '') !== 'For Sale' && (p.phase || '') !== 'Delivered' && !offTaskQueues(p)).sort(keytopOrder)},
   {key: 'plates', icon: '⚙️', title: 'PLATES TO CURTIS HARPER',
-   need: p => ['Removed', 'Plate storage — BEFORE'].includes((p.plateStatus || '').trim()),
+   need: p => (p.plateStatus || '').trim() === 'Plate storage — BEFORE',
    note: p => p.plateStatus},
   {key: 'refin', icon: '🎨', title: 'REFINISHING — ON DECK',
    need: refinPending,

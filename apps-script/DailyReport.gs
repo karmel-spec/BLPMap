@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-11-09.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-11-09.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -11305,7 +11305,8 @@ function shopRosterSet_(tech, status) {
 /* Plate lifecycle per piano ('PLATE STATUS' col, header row 2): plates leave
  * for Curtis Harper's shop and come back — the Concurrent Work report's
  * plating view shows where each plate is. */
-var PLATE_STATUSES = ['', 'In piano', 'Removed', 'Plate storage — BEFORE',
+// 'Removed' retired (Mark 11/9): off the piano = in storage or at Curtis Harper
+var PLATE_STATUSES = ['', 'In piano', 'Plate storage — BEFORE',
                       'At Curtis Harper', 'Plate storage — AFTER', 'Back in piano'];
 /* Color selections (Brigham 8/26): admin-entered refinish/plating color+sheen —
  * a first pick, then the FINAL after the client approves. Header-created cols. */
