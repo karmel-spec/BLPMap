@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-11-09.6';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-11-09.7';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -6656,6 +6656,14 @@ function payMilestone_(req) {
   var prev = parseInt(String(sh.getRange(found.row, col).getValue() || '').replace(/\D/g, ''), 10) || 0;
   var ms = parseInt(req.milestone, 10) || 0;
   if (ms <= prev) return {ok: true, row: found.row, milestone: prev, skipped: 'already emailed'};
+  // a mark already requested / paid by hand on the 💰 tracker is handled —
+  // read from the SHEET, not the caller's copy: on 11/9 the sweep's feed came
+  // from the Supabase mirror, whose parser dropped PAY TRACK, and two handled
+  // marks were emailed anyway (Conover 25%, Steinway B 75%)
+  try {
+    var hdl = payTrackHandled_(sh.getRange(found.row, pianoCol_(sh, 'PAY TRACK')).getValue());
+    if (ms <= hdl) return {ok: true, row: found.row, milestone: prev, skipped: 'handled by hand on the payment tracker (' + hdl + '%)'};
+  } catch (eH) {}
   var tech = null;
   try { tech = techFolderFor_(sh, found.row, req.serial); } catch (e) {}
   var subject = '💰 ' + ms + '% payment milestone — ' + (req.summary || req.serial)
