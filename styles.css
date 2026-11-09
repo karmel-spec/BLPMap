@@ -2539,6 +2539,8 @@ table.tchktbl td.chk .tcasap input{width:15px;height:15px}
 .pmtbl .is-paid{background:#f1f8f3}
 .pmtbl .is-req{background:#fdf8ea}
 .pmtbl .is-due{background:#fdf1f1}
+.pmtbl .is-off{background:#f4f2ee;color:#8a929a}
+.pmtbl .pm-stray{margin-top:4px;color:#8a6a00;font-weight:700}
 .pmtbl .pm-btns{display:flex;flex-direction:column;gap:3px;margin-top:5px}
 .pmtbl .pm-btn{border:1px solid #cfd6dc;background:#fff;border-radius:6px;padding:3px 7px;font:600 11px 'Assistant',sans-serif;cursor:pointer;color:#333;white-space:nowrap}
 .pmtbl .pm-btn.pm-pay{background:#2f7d4f;border-color:#2f7d4f;color:#fff}

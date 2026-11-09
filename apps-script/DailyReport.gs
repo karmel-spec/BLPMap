@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-11-09.5';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-11-09.6';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -6620,6 +6620,13 @@ function payTrack_(req) {
   var m = String(req.mark || '');
   if (m) {
     if (PAY_TRACK_MARKS.indexOf(Number(m)) < 0) return {error: 'bad mark'};
+    // 2 Progress Payments = payments at 50% and 100% only (Melissa 11/7,
+    // 110726terry16) — 25 / 75 can be cleared, never requested or paid
+    if ((req.op === 'req' || req.op === 'paid') && (m === '25' || m === '75')) {
+      var planNow = '';
+      try { planNow = String(sh.getRange(f.row, pianoCol_(sh, 'PAYMENT PLAN')).getValue() || '').trim(); } catch (ePl) {}
+      if (planNow === '2 Progress Payments') return {error: 'This piano is on 2 Progress Payments — its payments are at 50% and 100%, not ' + m + '%.'};
+    }
     var st = t.marks[m] || {};
     if (req.op === 'req') { st.req = when || st.req || today; st.by = first; what = m + '% requested ' + st.req; }
     else if (req.op === 'paid') { st.paid = when || today; if (!st.req || st.req > st.paid) st.req = st.paid; st.by = first; what = m + '% paid ' + st.paid; }

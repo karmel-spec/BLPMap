@@ -59,6 +59,10 @@ function refinishOnly(p) {
 }
 const payAutoDone = new Set();
 const PAY_MILESTONES = [25, 50, 75, 100];
+// the marks where a PAYMENT falls due — a 2 Progress Payments client pays at
+// 50% and 100% only (Melissa 11/7, 110726terry16); 25 / 75 stay progress
+// updates for them, never a payment
+function payMarksFor(plan) { return String(plan || '').trim() === '2 Progress Payments' ? [50, 100] : [25, 50, 75, 100]; }
 // Welcome Email before Selections Made — the order Melissa works in (10/7, 100726terry84)
 const ADMIN_STEPS = ['$1000 Queue Payment', 'Welcome Email', 'Selections Made (Google Form)',
   'Before Photos', 'Plan Entered to Shop Tag & Printed',
@@ -6793,10 +6797,11 @@ function popHTML(p) {
   const ownerLine = [ownerNameOf(p), ownerCityStateOf(p)].filter(Boolean).join(' — ') || '—';
   const pct = shopProgressPct(p);
   const payBar = (p.serial && inShopwork(p)) ? (() => {
-    const next = PAY_MILESTONES.find(m => pct < m);
+    const pm = payMarksFor(p.payPlan), two = pm.length === 2;
+    const next = pm.find(m => pct < m);
     return `<div class="row rowflex"><span>Shop progress</span><b>${pct}%</b></div>
-      <div class="pbar"><i style="width:${pct}%"></i><s style="left:25%"></s><s style="left:50%"></s><s style="left:75%"></s></div>
-      <div class="pbarlbl">${next ? `next payment milestone at ${next}%` : 'all payment milestones reached'}${+p.payMilestone ? ` · last emailed at ${esc(p.payMilestone)}%` : ''}</div>`;
+      <div class="pbar"><i style="width:${pct}%"></i>${pm.filter(m => m < 100).map(m => `<s style="left:${m}%"></s>`).join('')}</div>
+      <div class="pbarlbl">${next ? `next payment ${two ? '' : 'milestone '}at ${next}%${two ? ' (2-payment plan: 50% & 100%)' : ''}` : 'all payment milestones reached'}${+p.payMilestone ? ` · last emailed at ${esc(p.payMilestone)}%` : ''}</div>`;
   })() : '';
   const asDone = adminStepsOf(p), asSkipped = adminSkippedOf(p);
   const contractBlock = p.serial && isContractViewer()
@@ -6826,7 +6831,7 @@ function popHTML(p) {
     ${(() => { const t = payTrackOf(p); const any = t.install || Object.keys(t.marks).length; if (!any) return '';
         const cellTxt = m => { const st = t.marks[m]; return st && st.paid ? `<b style="color:#2f7d4f">${m}% ✓ ${esc(shortD(st.paid))}</b>` : st && st.req ? `<b style="color:#8a6a00">${m}% requested ${esc(shortD(st.req))}</b>` : `<span class="lite">${m}% —</span>`; };
         return `<div class="row rowflex" title="from the 💰 Payment Milestones report — mark requested / paid there"><span>💳 Payments${t.install ? ' · ' + esc(money(Number(t.install))) + ' each' : ''}</span>
-          <span style="font-size:11.5px;display:flex;gap:8px;flex-wrap:wrap">${PAY_TRACK_MARKS.map(cellTxt).join('')}</span></div>`; })()}
+          <span style="font-size:11.5px;display:flex;gap:8px;flex-wrap:wrap">${PAY_TRACK_MARKS.filter(m => payMarksFor(p.payPlan).includes(m) || t.marks[m]).map(m => payMarksFor(p.payPlan).includes(m) ? cellTxt(m) : `<span class="lite" title="not a payment on this plan — clear it on the 💰 report">⚠ ${cellTxt(m).replace(/<[^>]+>/g, '')}</span>`).join('')}</span></div>`; })()}
     <div class="paymsg phmsg"></div>
     <div class="row" title="the client's admin journey — tap a step to mark it done, or skip it">Admin steps
       <b>${asDone.length}/${ADMIN_STEPS.length}</b> <small class="lite">done${asSkipped.length ? ` · ${asSkipped.length} skipped` : ''}</small></div>
@@ -8896,7 +8901,6 @@ async function setTypeOverride(p, type, pop) {
  * one list instead of opening cards one at a time. Same % as the card
  * (shopProgressPct); the bridge's morning sweep sends the milestone emails. */
 function payMilestoneRows(all) {
-  const marksFor = plan => plan === '2 Progress Payments' ? [50, 100] : [25, 50, 75, 100];
   return S.data.pianos.filter(p => p.active && p.serial && String(p.serial).trim() !== '?' && inShopwork(p)
       && (p.payPlan || '').trim() && (all || /progress payments/i.test(p.payPlan)))
     .map(p => {
@@ -8905,7 +8909,7 @@ function payMilestoneRows(all) {
       const effIdx = list.indexOf(effectivePhase(p));
       let done = 0; list.forEach((ph, i) => { if (dl.includes(ph) || (effIdx >= 0 && i < effIdx)) done++; });
       const pct = shopProgressPct(p);
-      const plan = p.payPlan.trim(), marks = marksFor(plan);
+      const plan = p.payPlan.trim(), marks = payMarksFor(plan);
       const last = +String(p.payMilestone || '').replace(/\D/g, '') || 0;
       const pending = Math.max(0, ...PAY_MILESTONES.filter(m => pct >= m && m > last));   // crossed, not yet emailed
       const upcoming = marks.find(m => pct < m) || 0;
@@ -8999,6 +9003,15 @@ function payMilestoneTable() {
     : `<span class="chip" style="background:#eaf5ec;color:#2f7d4f">all marks reached</span>`;
   const cell = (r, m, t, marks) => {
     const st = (t.marks || {})[m] || {};
+    // not a payment on this plan (2 Progress Payments: 25 / 75) — grayed out;
+    // a mark stamped there by mistake stays visible with an undo
+    if (!marks.includes(m)) {
+      const stray = st.paid ? `paid ${esc(shortD(st.paid))}` : st.req ? `requested ${esc(shortD(st.req))}` : '';
+      return `<td class="pm-cell is-off"><span class="lite">no payment<small>${esc(String(marks.length))}-payment plan</small></span>`
+        + (stray ? `<div class="pm-stray">⚠ ${stray}<small>stamped here before — this plan pays at ${marks.map(x => x + '%').join(' & ')}</small></div>`
+          + `<div class="pm-btns"><button class="pm-btn pm-undo" data-m="${m}" data-op="unreq" title="clear this mark — not a payment on this plan">clear</button></div>` : '')
+        + `</td>`;
+    }
     const reached = r.pct >= m;
     const amt = t.install ? money(Number(t.install)) : '';
     const emailed = r.last >= m;
@@ -9009,7 +9022,7 @@ function payMilestoneTable() {
       : `<span class="lite">—</span>`;
     const btns = st.paid
       ? `<button class="pm-btn pm-undo" data-m="${m}" data-op="unpaid" title="undo — marked paid by mistake">undo</button>`
-      : `${st.req ? '' : `<button class="pm-btn" data-m="${m}" data-op="req" title="an invoice / request went out (email, phone, QB)">mark requested</button>`}<button class="pm-btn pm-pay" data-m="${m}" data-op="paid" title="payment received (QB tendered)">mark paid</button>`;
+      : `${st.req ? '' : `<button class="pm-btn" data-m="${m}" data-op="req" title="an invoice / request went out (email, phone, QB)">mark requested</button>`}<button class="pm-btn pm-pay" data-m="${m}" data-op="paid" title="payment received (QB tendered)">mark paid</button>${st.req ? `<button class="pm-btn pm-undo" data-m="${m}" data-op="unreq" title="undo — marked requested by mistake">undo</button>` : ''}`;
     return `<td class="pm-cell ${st.paid ? 'is-paid' : st.req ? 'is-req' : reached ? 'is-due' : ''}">${amt ? `<div class="pm-amt">${amt}</div>` : ''}${state}<div class="pm-btns">${btns}</div></td>`;
   };
   return `<div class="rfbar" style="margin-bottom:8px"><label style="font-size:12.5px"><input type="checkbox" ${all ? 'checked' : ''} onchange="S.pmAll=this.checked;renderReport()"> show every payment plan, not just progress payments</label>
@@ -9017,19 +9030,19 @@ function payMilestoneTable() {
     <div class="stickytbl"><table class="pmtbl"><tr><th>PIANO</th><th>CLIENT</th><th>PHASE · PROGRESS</th><th>STATUS</th><th>INSTALLMENT</th><th>25%</th><th>50%</th><th>75%</th><th>100%</th><th>REMAINING</th></tr>
     ${rows.map(r => {
       const t = payTrackOf(r.p);
-      const marks = [25, 50, 75, 100];
+      const marks = payMarksFor(r.plan);
       const paidN = marks.filter(m => (t.marks || {})[m] && t.marks[m].paid).length;
       const inst = Number(t.install) || 0;
-      const remaining = inst ? (4 - paidN) * inst : 0;   // like the sheet's "Remaining balance" — installments still owed
+      const remaining = inst ? (marks.length - paidN) * inst : 0;   // like the sheet's "Remaining balance" — installments still owed
       return `<tr class="mrow" data-row="${r.p.row}">
       <td>${esc(pianoName(r.p).slice(0, 34))}<br><span class="lite" style="color:#8a929a;font-size:11px">${esc(r.p.serial)}</span></td>
       <td>${esc(ownerNameOf(r.p) || '—')}</td>
       <td style="min-width:140px"><span class="lite" style="font-size:11px">${esc(r.phase || '—')}</span><br><b>${r.pct}%</b>
-        <div class="pbar"><i style="width:${r.pct}%"></i><s style="left:25%"></s><s style="left:50%"></s><s style="left:75%"></s></div></td>
+        <div class="pbar"><i style="width:${r.pct}%"></i>${marks.filter(m => m < 100).map(m => `<s style="left:${m}%"></s>`).join('')}</div></td>
       <td class="pm-status">${chip(r)}${r.last ? `<div class="lite" style="font-size:10.5px;margin-top:3px">last emailed ${r.last}%</div>` : ''}</td>
       <td class="pm-inst"><input class="pm-install" inputmode="decimal" placeholder="$ per payment" value="${esc(t.install ? money(Number(t.install)).replace('$', '') : '')}" title="the amount of each progress payment — type it once per piano"></td>
-      ${marks.map(m => cell(r, m, t, marks)).join('')}
-      <td class="pm-rem">${remaining ? `<b>${money(remaining)}</b>` : '<span class="lite">—</span>'}${paidN ? `<div class="lite" style="font-size:10.5px">${paidN} of 4 paid</div>` : ''}</td></tr>`;
+      ${PAY_TRACK_MARKS.map(m => cell(r, m, t, marks)).join('')}
+      <td class="pm-rem">${remaining ? `<b>${money(remaining)}</b>` : '<span class="lite">—</span>'}${paidN ? `<div class="lite" style="font-size:10.5px">${paidN} of ${marks.length} paid</div>` : ''}</td></tr>`;
     }).join('') || `<tr><td colspan="10" class="empty">No shop pianos on ${all ? 'a payment plan' : 'a progress-payment plan'}.</td></tr>`}
     </table></div>`;
 }
@@ -9038,6 +9051,7 @@ function wirePayTracker(body) {
     ev.stopPropagation();
     const tr = b.closest('tr'); const p = S.data.pianos.find(x => x.row === +tr.dataset.row); if (!p) return;
     if (b.dataset.op === 'unpaid' && !confirm(`Undo the ${b.dataset.m}% payment on ${pianoName(p)}?`)) return;
+    if (b.dataset.op === 'unreq' && !confirm(`Clear the ${b.dataset.m}% request on ${pianoName(p)}?`)) return;
     // mark requested / mark paid ask for the real date first (Melissa 11/7, 110726terry15)
     if (b.dataset.op === 'req' || b.dataset.op === 'paid') { openPayDateModal(p, b.dataset.m, b.dataset.op); return; }
     b.disabled = true; b.textContent = '…';
