@@ -7179,7 +7179,15 @@ function wirePop(p) {
       notePlateEdit(p, plsel.value);
       plateBackHome(p, plsel.value);
       msg.textContent = (j.freedSlats && j.freedSlats.length) ? '✓ saved — slat ' + j.freedSlats.join(', ') + ' freed' : '✓ saved';
-      setTimeout(() => { if (msg.isConnected) msg.textContent = ''; }, 1800);
+      // plate ↔ phase (Mark 11/9): At Curtis Harper ⇒ Waiting on Curtis Harper; back from Curtis ⇒ Restringing
+      if (j.phaseSet) {
+        p.phase = j.phaseSet; const pe = pendingEdits.get(p.row) || {}; pe.phase = j.phaseSet; pendingEdits.set(p.row, pe);
+        if (j.phaseSet === 'Restringing') { p.waitNote = ''; p.checkBack = ''; }
+        msg.textContent += ' — phase set to ' + j.phaseSet;
+        renderMap();
+        setTimeout(() => openPop(p.row, S.popAnchor, true), 1400);   // repaint the phase row
+      } else if (j.phaseNote) msg.textContent += ' · ' + j.phaseNote;
+      setTimeout(() => { if (msg.isConnected) msg.textContent = ''; }, j.phaseSet ? 3200 : 1800);
       // into storage → ask where the plate went (slat or wall) — Jacob 10/1
       if (/^Plate storage — (BEFORE|AFTER)$/.test(plsel.value)) openPlateWhereModal(p, plsel.value);
     } catch (e) { msg.textContent = '✗ ' + e.message; }
@@ -8547,6 +8555,8 @@ async function setPhase(p, phase, pop, extra) {
         body: JSON.stringify({key: 'pianoman', op: 'withdraw', serial: p.serial, by: clockName() || 'delivery'})}).then(() => loadQcQueue()).catch(() => {});
       msg.className = 'phmsg ok';
       msg.textContent = p.phase ? `✓ Saved — ${p.phase}` : '✓ Phase cleared';
+      // Rule B (Mark 11/9): Waiting on Curtis Harper also moved the plate to Curtis
+      if (j.plateSet) { p.plateStatus = j.plateSet; notePlateEdit(p, j.plateSet); plateBackHome(p, j.plateSet); msg.textContent += ' · plate set to At Curtis Harper'; }
       renderMap();
       if (p.phase === 'For Sale') openPriceModal(p);
       if (j.note != null) p.waitNote = j.note;

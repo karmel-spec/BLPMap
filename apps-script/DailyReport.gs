@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-11-06.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-11-09.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -3538,6 +3538,20 @@ function setPhase_(req) {
       sh.getRange(found.row, cbcol).setValue('');
     }
   }
+  // Rule B (Mark 11/9): Waiting on Curtis Harper ⇒ plate At Curtis Harper
+  // (which also frees its rack slat / temp spot). _fromPlate = Rule A/C
+  // calling in — no echo back. Only when the plate isn't there already.
+  var plateSet = '';
+  if (phase === 'Waiting on Curtis Harper' && !req._fromPlate) {
+    try {
+      var pr = setPlateStatus_({serial: req.serial, row: found.row, plateStatus: 'At Curtis Harper', _fromPhase: true, _g: req._g, who: req.who});
+      if (pr.ok && pr.previousPlate !== 'At Curtis Harper') {
+        plateSet = 'At Curtis Harper';
+        logAct_(String((req._g && (req._g.name || req._g.email)) || req.who || 'Store Map'), 'Plate status', found.summary || req.serial,
+          'At Curtis Harper — set with the Waiting on Curtis Harper phase' + (pr.freedSlats && pr.freedSlats.length ? ' (slat ' + pr.freedSlats.join(', ') + ' freed)' : ''));
+      }
+    } catch (ePl) { /* the phase still saved */ }
+  }
   var movedTo = null;
   // Delivered pianos exit the map: physically relocate the row into the
   // SOLD section (right after the divider) so the parsers' soldZone skip
@@ -3577,7 +3591,7 @@ function setPhase_(req) {
       }
     } catch (e) { /* automation is a convenience — never fail the phase write */ }
   }
-  return {ok: true, row: movedTo || found.row, summary: found.summary,
+  return {ok: true, plateSet: plateSet, row: movedTo || found.row, summary: found.summary,
           previous: prev, phase: phase, note: note, checkBack: cb,
           movedToSold: !!movedTo, done: autoDone, autoCompleted: !!autoDone};
 }
@@ -11696,8 +11710,9 @@ function setPlateStatus_(req) {
     if (String(hdr[c] || '').trim().toUpperCase() === 'PLATE STATUS') { col = c + 1; break; }
   }
   if (col < 0) { sh.getRange(2, last + 1).setValue('PLATE STATUS'); col = last + 1; }
+  var prevPlate = String(sh.getRange(found.row, col).getValue() || '').trim();
   sh.getRange(found.row, col).setValue(val);
-  var out = {ok: true, row: found.row, summary: found.summary, plateStatus: val};
+  var out = {ok: true, row: found.row, summary: found.summary, plateStatus: val, previousPlate: prevPlate};
   // Back in piano ⇒ the plate has left storage (Walter 9/28): free its rack
   // slat (the "12p" token on the CABINETRY cell) and clear any written-in temp
   // spot, so the rack and the Plate Queue stop showing a plate that is gone.
@@ -11727,6 +11742,31 @@ function setPlateStatus_(req) {
           (freed.length ? 'slat ' + freed.join(', ') : '') + (freed.length && tempCleared ? ' + ' : '') + (tempCleared ? 'temp spot' : '') + (val === 'At Curtis Harper' ? ' — plate went to Curtis Harper' : ' — plate back in piano'));
       }
     } catch (ePS) { out.storageNote = 'plate storage not cleared: ' + String(ePS).slice(0, 120); }
+  }
+  // Plate ↔ phase (Mark 11/9). A: At Curtis Harper ⇒ phase Waiting on Curtis
+  // Harper (waiting note remembers the phase it left). C: the plate coming
+  // BACK from Curtis (AFTER / Back in piano) ⇒ phase Restringing, always —
+  // nothing on a restoration can physically advance past restringing while
+  // the plate is out, whatever else (keytops, screws) got done meanwhile.
+  // Never on a For Sale / Sale Pending / Sold / Delivered / Post Sale QC
+  // piano. _fromPhase: called by setPhase_ (Rule B) — no echo back.
+  if (!req._fromPhase && (val === 'At Curtis Harper' || ((val === 'Plate storage — AFTER' || val === 'Back in piano') && /^at curtis/i.test(prevPlate)))) {
+    try {
+      var pcol = phaseCol_(sh);
+      var curPh = String(sh.getRange(found.row, pcol).getValue() || '').trim();
+      if (!/^(for sale|sale pending|sold|delivered|post sale qc)$/i.test(curPh)) {
+        var toPh = val === 'At Curtis Harper' ? 'Waiting on Curtis Harper' : 'Restringing';
+        if (curPh !== toPh) {
+          var r2 = setPhase_({serial: req.serial, row: found.row, phase: toPh, _fromPlate: true, _g: req._g, who: req.who,
+            note: toPh === 'Waiting on Curtis Harper' ? ('Plate at Curtis Harper' + (curPh ? ' — was ' + curPh : '')) : ''});
+          if (r2.ok) {
+            out.phaseSet = toPh; out.phaseWas = curPh;
+            logAct_(String((req._g && (req._g.name || req._g.email)) || req.who || 'Store Map'), 'Phase change', found.summary || req.serial,
+              (curPh || '(none)') + ' → ' + toPh + (val === 'At Curtis Harper' ? ' — plate went to Curtis Harper' : ' — plate back from Curtis Harper'));
+          } else out.phaseNote = 'phase not changed: ' + String(r2.error || '').slice(0, 120);
+        }
+      } else out.phaseNote = 'phase left as ' + curPh;
+    } catch (ePh) { out.phaseNote = 'phase not changed: ' + String(ePh).slice(0, 120); }
   }
   return out;
 }
