@@ -1370,6 +1370,13 @@ function applyPending() {
       if ((p.checkBack || '') === edit.checkBack) delete edit.checkBack;
       else { p.checkBack = edit.checkBack; stillPending = true; }
     }
+    // Keys / Plating finish pills (Melissa 11/9): a pick flipped back on the
+    // next poll while the mirror still held the old value — looked unsaved
+    for (const cf of ['keytopMaterial', 'plateFinish']) {
+      if (!(cf in edit)) continue;
+      if ((p[cf] || '') === (edit[cf] || '')) delete edit[cf];
+      else { p[cf] = edit[cf]; stillPending = true; }
+    }
     // keytop status (Mark 10/1): "Done" flipped back to "In Progress" on the
     // next 2.5-min poll because the 2-min /api/data copy hadn't caught up
     if ('keytopStatus' in edit) {
