@@ -126,6 +126,21 @@ McKinly's "QC for delivery" for Fri 11/6 2:00 on the QC calendar; the draft
 saw only the Monday 6:45 PM rental delivery and gave Jake a second QC Monday
 morning.)
 
+**Plate status and the Waiting on Curtis Harper phase are one fact (Mark
+2026-11-09, Store Map rules A–D).** The card keeps them in step: plate → At
+Curtis Harper sets the phase to Waiting on Curtis Harper (the waiting note
+records the phase it left); phase → Waiting on Curtis Harper sets the plate
+to At Curtis Harper; a plate back from Curtis (AFTER storage, Back in piano,
+In piano) sets the phase to Restringing, always; a plate leaving Curtis for
+BEFORE storage or blank puts the phase back to the one the note recorded.
+"Removed" is no longer a plate status. So: treat **Waiting on Curtis
+Harper** as "plate is out — hold restringing" without reading the plate
+column; treat **Restringing + Plate storage — AFTER** as "just back from
+Curtis" — Lupita's next restring per the rule below. A phase past
+Restringing with the plate still on AFTER, or Waiting on Curtis Harper with
+the plate anywhere but At Curtis Harper, can only come from a hand edit in
+the Piano Log — still flag it as a stale-status bottleneck, it is just rare now.
+
 **AFTER plates go to Lupita (Mark 2026-10-30).** When a piano's card PLATE
 STATUS reads **Plate storage — AFTER** (refinished plate back from Curtis
 Harper), its restringing is **Lupita's next restringing assignment** —
