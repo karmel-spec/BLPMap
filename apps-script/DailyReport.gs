@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-11-09.7';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-11-09.8';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -279,12 +279,12 @@ function doGet(e) {
     catch (errA) { return json_({error: String(errA).slice(0, 200)}); }
   }
   if (e && e.parameter && e.parameter.fn === 'techfolder') {
+    // the same 6-hour / 30-day folder memory the photo uploads use (Mark 11/9,
+    // 110926hales74: the card's Tech photos link took 8–11 s every time)
     try {
-      var tsh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
-      var tf = findPiano_(tsh, e.parameter.serial, e.parameter.row);
-      if (tf.error) return json_({error: tf.error, url: ''});
-      var fold = techFolderFor_(tsh, tf.row, String(e.parameter.serial || ''));
-      return json_({url: fold ? fold.getUrl() : '', name: fold ? fold.getName() : ''});
+      var tg0 = photoTarget_({serial: String(e.parameter.serial || ''), row: e.parameter.row, kind: 'tech'});
+      if (tg0.error) return json_({error: tg0.error, url: ''});
+      return json_({url: tg0.folder ? tg0.folder.getUrl() : '', name: tg0.folder ? tg0.folder.getName() : '', cached: !!tg0.cached});
     } catch (err) { return json_({error: String(err), url: ''}); }
   }
   // Work clock: all OPEN sessions + today's closed minutes per tech.

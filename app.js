@@ -2726,28 +2726,48 @@ function openShotWizard(p, kind) {
     render();
   });
 }
-const techFolderCache = new Map();
+const techFolderCache = new Map(), techFolderAsk = new Map();
 // The Tech subfolder has no link in the sheet — the bridge knows where it is
 // (it is where progress photos get uploaded), so resolve it on demand.
-async function openTechFolder(serial, a) {
-  if (techFolderCache.has(serial)) {
-    const u = techFolderCache.get(serial);
-    if (u) window.open(u, '_blank', 'noopener');
-    return;
-  }
-  const was = a.textContent;
-  a.textContent = 'opening\u2026';
-  try {
-    const r = await fetch(BRIDGE_URL + '?fn=techfolder&serial=' + encodeURIComponent(serial),
-      {redirect: 'follow'});
-    const j = await r.json();
-    techFolderCache.set(serial, j.url || '');
-    a.textContent = was;
-    if (j.url) window.open(j.url, '_blank', 'noopener');
-    else a.textContent = '\ud83d\udd27 no Tech folder yet';
-  } catch (e) {
-    a.textContent = '\ud83d\udd27 Tech folder unavailable';
-  }
+// Phones only open a new tab straight from a tap: the old link waited for the
+// bridge (8–11 s) and then called window.open, which iOS blocked — "opening…"
+// and nothing until a second tap (Mark 11/9, 110926hales74). Now the card asks
+// as soon as it opens and turns the link into a real Drive link, so the tap
+// itself opens the folder; a tap that beats the answer gets a "ready — tap
+// again" link instead of a silent nothing.
+function techFolderUrl(serial) {
+  if (techFolderCache.has(serial)) return Promise.resolve(techFolderCache.get(serial));
+  if (techFolderAsk.has(serial)) return techFolderAsk.get(serial);
+  const ask = fetch(BRIDGE_URL + '?fn=techfolder&serial=' + encodeURIComponent(serial), {redirect: 'follow'})
+    .then(r => r.json())
+    .then(j => { techFolderCache.set(serial, j.url || ''); return j.url || ''; })
+    .finally(() => techFolderAsk.delete(serial));
+  techFolderAsk.set(serial, ask);
+  return ask;
+}
+function armTechLink(a, url) {
+  a.href = url; a.target = '_blank'; a.rel = 'noopener'; a.dataset.ready = '1';
+}
+function prepTechLink(a) {
+  const serial = a.dataset.serial;
+  if (!serial) return;
+  techFolderUrl(serial).then(u => {
+    if (!a.isConnected) return;
+    if (u) {
+      armTechLink(a, u);
+      if (a.dataset.waiting) { delete a.dataset.waiting; a.textContent = '\ud83d\udd27 Tech photos ready \u2014 tap to open \u2197'; }
+    } else if (a.dataset.waiting) a.textContent = '\ud83d\udd27 no Tech folder yet';
+  }).catch(() => { if (a.isConnected && a.dataset.waiting) a.textContent = '\ud83d\udd27 Tech folder unavailable \u2014 tap to retry'; });
+}
+function openTechFolder(serial, a, ev) {
+  // armed: let the tap be a plain link (the browser opens it — never blocked)
+  if (a.dataset.ready === '1' && a.href && !/#$/.test(a.getAttribute('href') || '#')) return;
+  if (ev) ev.preventDefault();
+  const known = techFolderCache.get(serial);
+  if (known) { armTechLink(a, known); window.open(known, '_blank', 'noopener'); return; }
+  a.dataset.waiting = '1';
+  a.textContent = 'finding the Tech folder\u2026';
+  prepTechLink(a);
 }
 /* Paperwork — the physical sheets that travel with a piano, attached as
  * Drive links: QC checklist scans (auto-findable — they live in one shared
@@ -5804,7 +5824,7 @@ async function openQcRail(id) {
       { const _ns = ov.querySelector('.dsheet'); if (_ns && _keep) _ns.scrollTop = _keep; }
       if (_focus) { const _el = ov.querySelector(_focus); if (_el) { _el.focus({preventScroll: true}); if (_caret) try { _el.setSelectionRange(_caret[0], _caret[1]); } catch (e) {} } }
     ov.querySelector('.dsx').onclick = close;
-    ov.querySelectorAll('.qctech').forEach(t => t.onclick = ev => { ev.preventDefault(); openTechFolder(t.dataset.serial, t); });
+    ov.querySelectorAll('.qctech').forEach(t => { t.onclick = ev => openTechFolder(t.dataset.serial, t, ev); prepTechLink(t); });
     ov.querySelectorAll('.qcpw').forEach(t => t.onclick = ev => {
       ev.preventDefault();
       const pp = S.data.pianos.find(x => String(x.row) === String(t.dataset.row));
@@ -7725,7 +7745,12 @@ function wirePop(p) {
     logTagPrint(p, 'bench', (p.benchNote || '').trim());
   });
   const dt = pop.querySelector('.dtech');
-  if (dt) dt.onclick = ev => { ev.preventDefault(); ev.stopPropagation(); openTechFolder(dt.dataset.serial, dt); };
+  if (dt) {
+    dt.onclick = ev => { ev.stopPropagation(); openTechFolder(dt.dataset.serial, dt, ev); };
+    // ask as soon as the 📷 Media section is open (it starts closed — cards
+    // opened for anything else cost the bridge nothing), so the tap is a real link
+    if (!dt.closest('.secbody.closed')) prepTechLink(dt);
+  }
   const tt = pop.querySelector('.tagthumb');
   if (tt) tt.onclick = ev => { ev.stopPropagation(); openTagSnapshot(p); };
   (() => {   // Work Clock wiring: phase is mandatory, "Other" allows write-in
@@ -7853,6 +7878,7 @@ function wirePop(p) {
       const ar = h.querySelector('.secarrow');
       if (ar) ar.textContent = closed ? '▸' : '▾';
       lsSet('sec_' + h.dataset.sec, closed ? 'closed' : 'open');
+      if (!closed) body.querySelectorAll('.dtech').forEach(prepTechLink);   // Media opened → find the Tech folder now
       const st = pop.scrollTop;
       place(pop, S.popAnchor);   // card grew/shrank: slide it up to fit
       pop.scrollTop = st;
