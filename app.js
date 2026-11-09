@@ -8946,6 +8946,40 @@ async function payTrackPost(p, body) {
     return j;
   } catch (e) { alert('Not saved — ' + (e && e.message || e)); return null; }
 }
+/* 💰 date picker for a payment mark (Melissa 11/7, 110726terry15): "mark paid"
+ * used to stamp the day it was clicked. Now: pick the day the payment (or the
+ * request) really happened — defaults to today, never a future date — and a
+ * stamped date can be tapped and changed. op: 'req' | 'paid' | 'setdate' */
+function openPayDateModal(p, m, op, which, cur) {
+  const todayYmd = new Date().toLocaleDateString('en-CA', {timeZone: 'America/Denver'});
+  const isPaid = op === 'paid' || (op === 'setdate' && which === 'paid');
+  const title = op === 'setdate' ? `Change the ${isPaid ? 'paid' : 'requested'} date` : isPaid ? 'Payment received' : 'Payment requested';
+  const ov = modalShell('paydatemodal', `
+    <span class="x">✕</span>
+    <h3>💰 ${esc(title)} — ${m}%</h3>
+    <p class="pd"><b>${esc(pianoName(p))}</b>${ownerNameOf(p) ? ' · ' + esc(ownerNameOf(p)) : ''}</p>
+    <label>${isPaid ? 'Date the payment came in' : 'Date the request went out'}</label>
+    <input type="date" class="pdin" value="${esc(cur || todayYmd)}" max="${todayYmd}">
+    <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+      <button class="tmgo pdgo">${op === 'setdate' ? 'Save the date' : isPaid ? 'Mark paid' : 'Mark requested'}</button>
+      <button class="tmgo pdcancel" style="background:none;border:1px solid #cfc9bf;color:inherit">Cancel</button></div>
+    <div class="tmmsg pdmsg"></div>`);
+  const inp = ov.querySelector('.pdin'), go = ov.querySelector('.pdgo'), msg = ov.querySelector('.pdmsg');
+  ov.querySelector('.pdcancel').onclick = () => { ov.hidden = true; };
+  go.onclick = async () => {
+    const d = String(inp.value || '').trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) { msg.textContent = 'Pick a date.'; return; }
+    if (d > todayYmd) { msg.textContent = 'That date is in the future.'; return; }
+    go.disabled = true; msg.textContent = 'Saving…';
+    const body = op === 'setdate' ? {mark: m, op: 'setdate', which, date: d} : {mark: m, op, date: d};
+    const j = await payTrackPost(p, body);
+    go.disabled = false;
+    if (!j) { msg.textContent = ''; return; }   // payTrackPost already explained
+    ov.hidden = true;
+    renderReport();
+  };
+  setTimeout(() => { try { inp.focus(); } catch (e) {} }, 50);
+}
 const money = n => n ? '$' + (Math.abs(n - Math.round(n)) < 0.005 ? Math.round(n).toLocaleString('en-US') : Number(n).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})) : '';
 const today = () => new Date().toLocaleDateString('en-CA');
 const shortD = ymd => ymd ? new Date(ymd + 'T12:00').toLocaleDateString('en-US', {month: 'numeric', day: 'numeric'}) : '';
@@ -8960,8 +8994,9 @@ function payMilestoneTable() {
     const reached = r.pct >= m;
     const amt = t.install ? money(Number(t.install)) : '';
     const emailed = r.last >= m;
-    const state = st.paid ? `<b class="pm-paid">✓ paid ${esc(shortD(st.paid))}</b>${st.by ? `<small>${esc(st.by)}</small>` : ''}`
-      : st.req ? `<b class="pm-req">requested ${esc(shortD(st.req))}</b>${emailed ? '<small>emailed</small>' : ''}`
+    // the date is tappable — change it when the stamp isn't the real day (Melissa 11/7)
+    const state = st.paid ? `<b class="pm-paid pm-date" data-m="${m}" data-which="paid" title="tap to change the paid date">✓ paid ${esc(shortD(st.paid))}</b>${st.by ? `<small>${esc(st.by)}</small>` : ''}`
+      : st.req ? `<b class="pm-req pm-date" data-m="${m}" data-which="req" title="tap to change the requested date">requested ${esc(shortD(st.req))}</b>${emailed ? '<small>emailed</small>' : ''}`
       : reached ? `<b class="pm-due">reached${emailed ? ' · emailed' : ''}</b>`
       : `<span class="lite">—</span>`;
     const btns = st.paid
@@ -8995,10 +9030,19 @@ function wirePayTracker(body) {
     ev.stopPropagation();
     const tr = b.closest('tr'); const p = S.data.pianos.find(x => x.row === +tr.dataset.row); if (!p) return;
     if (b.dataset.op === 'unpaid' && !confirm(`Undo the ${b.dataset.m}% payment on ${pianoName(p)}?`)) return;
+    // mark requested / mark paid ask for the real date first (Melissa 11/7, 110726terry15)
+    if (b.dataset.op === 'req' || b.dataset.op === 'paid') { openPayDateModal(p, b.dataset.m, b.dataset.op); return; }
     b.disabled = true; b.textContent = '…';
     await payTrackPost(p, {mark: b.dataset.m, op: b.dataset.op});
     renderReport();
   });
+  // tap a stamped date to change it
+  body.querySelectorAll('.pmtbl .pm-date').forEach(d => { d.style.cursor = 'pointer'; d.onclick = ev => {
+    ev.stopPropagation();
+    const tr = d.closest('tr'); const p = S.data.pianos.find(x => x.row === +tr.dataset.row); if (!p) return;
+    const st = (payTrackOf(p).marks || {})[d.dataset.m] || {};
+    openPayDateModal(p, d.dataset.m, 'setdate', d.dataset.which, st[d.dataset.which] || '');
+  }; });
   body.querySelectorAll('.pmtbl .pm-install').forEach(inp => {
     inp.onclick = ev => ev.stopPropagation();
     inp.onchange = async ev => { ev.stopPropagation(); const tr = inp.closest('tr'); const p = S.data.pianos.find(x => x.row === +tr.dataset.row); if (!p) return;

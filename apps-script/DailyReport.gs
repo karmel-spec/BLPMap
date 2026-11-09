@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-11-09.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-11-09.4';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -6642,6 +6642,14 @@ function payTrack_(req) {
   var t = payTrackParse_(cell.getValue());
   var first = String(g.name || email).split(/\s+/)[0];
   var today = Utilities.formatDate(new Date(), 'America/Denver', 'yyyy-MM-dd');
+  // the real date (Melissa 11/7, 110726terry15): the card's picker sends
+  // date=YYYY-MM-DD — the day the payment / request actually happened; blank
+  // = today as before. Never in the future.
+  var when = String(req.date || '').trim();
+  if (when) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(when) || isNaN(new Date(when + 'T12:00:00').getTime())) return {error: 'bad date: ' + when};
+    if (when > today) return {error: 'that date is in the future'};
+  }
   var what = '';
   if (req.install != null) {
     var amt = String(req.install).replace(/[^0-9.]/g, '');
@@ -6652,8 +6660,17 @@ function payTrack_(req) {
   if (m) {
     if (PAY_TRACK_MARKS.indexOf(Number(m)) < 0) return {error: 'bad mark'};
     var st = t.marks[m] || {};
-    if (req.op === 'req') { st.req = st.req || today; st.by = first; what = m + '% requested'; }
-    else if (req.op === 'paid') { if (!st.req) st.req = today; st.paid = today; st.by = first; what = m + '% paid'; }
+    if (req.op === 'req') { st.req = when || st.req || today; st.by = first; what = m + '% requested ' + st.req; }
+    else if (req.op === 'paid') { st.paid = when || today; if (!st.req || st.req > st.paid) st.req = st.paid; st.by = first; what = m + '% paid ' + st.paid; }
+    else if (req.op === 'setdate') {   // change a date already stamped (the date on the cell is tappable)
+      var which = req.which === 'req' ? 'req' : 'paid';
+      if (!st[which]) return {error: 'nothing to re-date — that mark is not ' + (which === 'req' ? 'requested' : 'paid') + ' yet'};
+      if (!when) return {error: 'date required'};
+      st[which] = when;
+      if (which === 'paid' && st.req && st.req > when) st.req = when;
+      if (which === 'req' && st.paid && st.paid < when) return {error: 'the request date can\u2019t be after the paid date (' + st.paid + ')'};
+      what = m + '% ' + (which === 'req' ? 'requested' : 'paid') + ' date changed to ' + when;
+    }
     else if (req.op === 'unpaid') { delete st.paid; what = m + '% paid — undone'; }
     else if (req.op === 'unreq') { delete st.req; delete st.paid; what = m + '% request — undone'; }
     else return {error: 'bad op'};
