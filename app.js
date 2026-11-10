@@ -1810,7 +1810,7 @@ function preloadReport(id) {
   if (id === 'activity' && !S.activityRows) loadActivity();
   if ((id === 'briefs' || id === 'adminbriefs') && !S.briefRows) loadBriefs();
   if (id === 'jobcost' && !S.tlRows) loadTimeLog();
-  if ((id === 'queue' || id === 'stalled') && !S.tlRows) loadTimeLog();   // ASSIGNED TO / RECENT WORK columns
+  if ((id === 'queue' || id === 'stalled' || id === 'playerqueue') && !S.tlRows) loadTimeLog();   // ASSIGNED TO / RECENT WORK columns
   if (id === 'appupdates' && !S.auRows) loadAppUpdates();
   if (id === 'spotlight' && !S.spotData) loadSpotlight();
   if (id === 'tuningcheck') tchkLoad().then(() => { if (S.openReport === 'tuningcheck') renderReport(); });
@@ -12876,6 +12876,48 @@ function queueMembers() {
   return S.data.pianos.filter(p => p.active && p.queuePos > 0)
     .sort((a, b) => a.queuePos - b.queuePos);
 }
+/* 🎼 Player Rebuild Queue (Mark 11/10): the shop queue narrowed to player
+ * pianos being rebuilt — the Player Rebuild track (trackCanon also reads the
+ * old "Old Player" / "Player" spellings). Queued pianos with "player" in the
+ * name but no Player Rebuild track are listed below to check, since a
+ * "Former Player" or a refinish-only player is not player work. */
+function playerRebuilds() {
+  return S.data.pianos.filter(p => p.active && trackParts(p.track).list.includes('Player Rebuild'))
+    .sort((a, b) => (a.queuePos || 1e6) - (b.queuePos || 1e6) || String(a.serial).localeCompare(String(b.serial)));
+}
+function playerQueueTable() {
+  const rows = playerRebuilds();
+  const name = p => esc(((p.year ? p.year + ' ' : '') + ([p.make, p.model].filter(Boolean).join(' ') || p.summary)).slice(0, 40));
+  const scope = p => {
+    const other = trackParts(p.track).list.filter(t => t !== 'Player Rebuild');
+    return other.length ? 'with ' + esc(other.join(' · ')) : '<b>player only</b>';
+  };
+  const check = S.data.pianos.filter(p => p.active && p.queuePos > 0
+    && !trackParts(p.track).list.includes('Player Rebuild')
+    && /\bplayer\b|duo-?art|ampico|pianola|welte/i.test(p.summary || '')
+    && !/former(ly)?\s+(a\s+)?player/i.test(p.summary || ''))
+    .sort((a, b) => a.queuePos - b.queuePos);
+  const row = p => {
+    const ph = effectivePhase(p) || '';
+    return `<tr class="mrow" data-row="${p.row}">
+      <td style="font-weight:800;white-space:nowrap">${p.queuePos ? '#' + p.queuePos : '<span class="lite">not queued</span>'}</td>
+      <td>${name(p)}<br><span class="lite" style="color:#8a929a;font-size:11px">${esc(p.serial)}</span></td>
+      <td>${scope(p)}</td>
+      <td>${ph === 'Player Piano Work' ? '🎼 <b>Player Piano Work</b>' : esc((ph || '—').slice(0, 24))}</td>
+      ${recentWorkCell(p, false)}
+      <td>${esc(String(p.location || '—').slice(0, 14))}</td></tr>`;
+  };
+  return `<div class="actbar"><span class="actcount">${rows.length} player piano${rows.length === 1 ? '' : 's'} being rebuilt</span></div>
+    <table><tr><th>SHOP QUEUE</th><th>PIANO</th><th>SCOPE</th><th>CURRENT PHASE</th><th>ASSIGNED TO</th><th>SPOT</th></tr>
+    ${rows.map(row).join('') || '<tr><td colspan="6" class="empty">No pianos on the Player Rebuild track.</td></tr>'}
+    </table>
+    ${check.length ? `<p class="pd" style="margin:14px 0 6px">❔ <b>Player in the name, but no Player Rebuild track</b> — add the track on the card if the player system is being rebuilt:</p>
+      <table><tr><th>SHOP QUEUE</th><th>PIANO</th><th>TRACK</th><th>SPOT</th></tr>
+      ${check.map(p => `<tr class="mrow" data-row="${p.row}"><td style="white-space:nowrap">#${p.queuePos}</td>
+        <td>${name(p)} <span class="lite" style="color:#8a929a;font-size:11px">${esc(p.serial)}</span></td>
+        <td>${esc(trackParts(p.track).list.join(' · ') || '—')}</td>
+        <td>${esc(String(p.location || '—').slice(0, 14))}</td></tr>`).join('')}</table>` : ''}`;
+}
 function queueTable() {
   const f = S.quF || (S.quF = {q: ''});
   const all = queueMembers();
@@ -14632,6 +14674,10 @@ const REPORT_DEFS = () => [
      try { return queueMembers().length; } catch (e) { return null; } })(),
    desc: 'Every piano in the Custom Shop Work queue, in order — #1 is next up. Click a row to jump to that piano on the map. Pre-Queue pianos (deposit not received) are listed below the queue; they don’t hold a place until approved.',
    html: queueTable},
+  {id: 'playerqueue', sec: 'shop', icon: '🎼', title: 'PLAYER REBUILD QUEUE', count: (() => {
+     try { return playerRebuilds().length; } catch (e) { return null; } })(),
+   desc: 'Just the player pianos being rebuilt — every active piano on the Player Rebuild track, in Custom Shop Work queue order (#1 is next up). Player only = player parts only; with Rebuild = a full shop job plus the player system. Click a row to jump to that piano.',
+   html: playerQueueTable},
   {id: 'tasks', sec: 'shop', icon: '🧩', title: 'CONCURRENT WORK', count: (() => {
      try { const f = S.tkF || {cat: 'keys'}; return S.data.pianos.filter(p =>
        p.active && p.serial && (p.queuePos || p.phase) && !taskAutoDone(p, f.cat)
