@@ -12897,8 +12897,9 @@ function queueMembers() {
 /* 🎼 Player Rebuild Queue (Mark 11/10): the shop queue narrowed to player
  * pianos being rebuilt — the Player Rebuild track (trackCanon also reads the
  * old "Old Player" / "Player" spellings). Queued pianos with "player" in the
- * name but no Player Rebuild track are listed below to check, since a
- * "Former Player" or a refinish-only player is not player work. */
+ * name and NO track yet are listed below to check; a piano whose tracks are
+ * set without Player Rebuild had its scope decided (113288, refinish only)
+ * and a "Former Player" is not player work. */
 function playerRebuilds() {
   return S.data.pianos.filter(p => p.active && trackParts(p.track).list.includes('Player Rebuild'))
     .sort((a, b) => (a.queuePos || 1e6) - (b.queuePos || 1e6) || String(a.serial).localeCompare(String(b.serial)));
@@ -12911,7 +12912,7 @@ function playerQueueTable() {
     return other.length ? 'with ' + esc(other.join(' · ')) : '<b>player only</b>';
   };
   const check = S.data.pianos.filter(p => p.active && p.queuePos > 0
-    && !trackParts(p.track).list.includes('Player Rebuild')
+    && !trackParts(p.track).list.length   // tracks set without Player Rebuild = scope decided (Mark 11/10: 113288's player is not being rebuilt)
     && /\bplayer\b|duo-?art|ampico|pianola|welte/i.test(p.summary || '')
     && !/former(ly)?\s+(a\s+)?player/i.test(p.summary || ''))
     .sort((a, b) => a.queuePos - b.queuePos);
@@ -12929,11 +12930,10 @@ function playerQueueTable() {
     <table><tr><th>SHOP QUEUE</th><th>PIANO</th><th>SCOPE</th><th>CURRENT PHASE</th><th>ASSIGNED TO</th><th>SPOT</th></tr>
     ${rows.map(row).join('') || '<tr><td colspan="6" class="empty">No pianos on the Player Rebuild track.</td></tr>'}
     </table>
-    ${check.length ? `<p class="pd" style="margin:14px 0 6px">❔ <b>Player in the name, but no Player Rebuild track</b> — add the track on the card if the player system is being rebuilt:</p>
-      <table><tr><th>SHOP QUEUE</th><th>PIANO</th><th>TRACK</th><th>SPOT</th></tr>
+    ${check.length ? `<p class="pd" style="margin:14px 0 6px">❔ <b>Player in the name, but no track set yet</b> — add Player Rebuild on the card if the player system is being rebuilt:</p>
+      <table><tr><th>SHOP QUEUE</th><th>PIANO</th><th>SPOT</th></tr>
       ${check.map(p => `<tr class="mrow" data-row="${p.row}"><td style="white-space:nowrap">#${p.queuePos}</td>
         <td>${name(p)} <span class="lite" style="color:#8a929a;font-size:11px">${esc(p.serial)}</span></td>
-        <td>${esc(trackParts(p.track).list.join(' · ') || '—')}</td>
         <td>${esc(String(p.location || '—').slice(0, 14))}</td></tr>`).join('')}</table>` : ''}`;
 }
 function queueTable() {
