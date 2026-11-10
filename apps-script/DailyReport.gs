@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-11-10.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-11-10.4';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -1848,6 +1848,9 @@ function doPost(e) {
       return json_(cardMedia_(req, who));
     }
     if (req.action === 'handbookpatch') return json_(handbookPatch_(req, who));
+    // open (or create) the piano's Before / After / Progress / Social Video folder — the
+    // video buttons on a computer, where there is no camera to record with (Brigham 11/10)
+    if (req.action === 'videofolder') return json_(videoFolder_(req));
     if (req.action === 'videosession') return json_(videoSession_(req, who));
     if (req.action === 'videodone') return json_(videoDone_(req, who));
     if (req.action === 'videothumb') return json_(videoThumb_(req, who));
@@ -2647,7 +2650,7 @@ function handbookPatch_(req, who) {
   logAct_(who, 'Handbook patched', 'Restoration Handbook', (start >= 0 ? 'replaced from "' + marker.slice(0, 40) + '"' : 'appended') + ' — ' + blocks.length + ' paragraphs');
   return {ok: true, deletedFrom: start, inserted: full.length, paragraphs: blocks.length, requests: reqs.length};
 }
-function videoFolderFor_(sh, row, serial, kind) {
+function videoFolderFor_(sh, row, serial, kind, noMark) {
   // before/after live in the BEFORE/AFTER VIDEO media columns; progress videos
   // (Brigham 9/18) get their own PROGRESS VIDEO column, created on first use
   var field = kind === 'before' ? 'bvideo' : kind === 'after' ? 'avideo' : '';
@@ -2672,10 +2675,19 @@ function videoFolderFor_(sh, row, serial, kind) {
   // "✓ uploaded <date>" (raw footage, = "✓ have" on the card) → "done" (edited cut in Drive, set by the
   // Marketing app) → the YouTube link once it's public (also the Marketing app, which then embeds it
   // on the website). So only an EMPTY cell gets the stamp here; the folder is found by name next time.
-  if (col) {
+  if (col && !noMark) {   // noMark: just opening the folder must not flip the card to "✓ have" (Brigham 11/10)
     try { if (!cell.trim()) sh.getRange(row, col).setValue('✓ uploaded ' + Utilities.formatDate(new Date(), 'America/Denver', 'MMM d, yyyy')); } catch (e2) {}
   }
   return folder;
+}
+function videoFolder_(req) {
+  var kind = videoKind_(req.kind);
+  var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+  var found = findPiano_(sh, req.serial, req.row);
+  if (found.error) return found;
+  var folder = videoFolderFor_(sh, found.row, req.serial, kind, true);
+  if (!folder) return {error: 'no Drive folder for this piano yet — add its main folder link to the Piano Log first'};
+  return {ok: true, kind: kind, folderId: folder.getId(), folderUrl: folder.getUrl(), name: folder.getName(), summary: found.summary};
 }
 function videoSession_(req, who) {
   var kind = videoKind_(req.kind);

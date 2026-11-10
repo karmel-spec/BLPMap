@@ -2238,7 +2238,7 @@ function mediaCard(p) {
       <input type="file" class="socroll" accept="image/*" multiple hidden>
     </div>
     <div class="phchoose" hidden></div>
-    <div class="lite" style="font-size:11px;margin-top:2px">Videos open the camera and file the clip in this piano’s Before / After / Progress / Social Video folder (before / after / progress then ask for 5 YouTube-size thumbnails). Saved clip instead:
+    <div class="lite" style="font-size:11px;margin-top:2px">On a phone, videos open the camera and file the clip in this piano’s Before / After / Progress / Social Video folder; on a computer the buttons open that folder in Drive (before / after / progress then ask for 5 YouTube-size thumbnails). Saved clip instead:
       <a href="#" class="vidpicklink" data-kind="before">before</a> · <a href="#" class="vidpicklink" data-kind="after">after</a> · <a href="#" class="vidpicklink" data-kind="progress">progress</a> · <a href="#" class="vidpicklink" data-kind="social">social</a>.</div>` : ''}
     <div class="mdmsg"></div>
   </div>`;
@@ -8005,8 +8005,16 @@ function wirePop(p) {
     const cam = pop.querySelector('.vidin'), pick = pop.querySelector('.vidpick');
     if (!cam || !pick) return;
     let vkind = 'before';
+    // on a computer there is no camera to record with, so the video buttons
+    // open the piano's Before / After / Progress / Social Video folder in Drive
+    // (Brigham 11/10) — created on the spot if the piano has none yet. A saved
+    // clip still uploads from the "Saved clip instead" links below. Phones and
+    // tablets record, as before.
+    const touchy = matchMedia('(hover: none)').matches || navigator.maxTouchPoints > 1;
     pop.querySelectorAll('.vidbtn').forEach(b => b.onclick = ev => {
-      ev.stopPropagation(); popPinned = true; vkind = b.dataset.kind; cam.value = ''; cam.click();
+      ev.stopPropagation(); popPinned = true; vkind = b.dataset.kind;
+      if (!touchy) { openVideoFolder(p, vkind, pop); return; }
+      cam.value = ''; cam.click();
     });
     pop.querySelectorAll('.vidpicklink').forEach(a => a.onclick = ev => {
       ev.preventDefault(); ev.stopPropagation(); popPinned = true; vkind = a.dataset.kind; pick.value = '';
@@ -10959,6 +10967,30 @@ async function uploadSocialPhotos(p, files, note, pop) {
   }
   const box = pop.querySelector('.phchoose'); if (box) box.hidden = true;
   if (msg) { msg.className = 'mdmsg ok'; msg.innerHTML = `✓ ${done} social photo${done > 1 ? 's' : ''} filed — marketing has been told${link ? ` — <a href="${esc(link)}" target="_blank" rel="noopener">open in Drive ↗</a>` : ''}`; }
+}
+async function openVideoFolder(p, kind, pop) {
+  const say = (cls, t) => { const m = pop.querySelector('.mdmsg'); if (m) { m.className = 'mdmsg ' + cls; m.textContent = t; } };
+  const field = kind === 'before' ? 'bvideoUrl' : kind === 'after' ? 'avideoUrl' : kind === 'progress' ? 'pvideoUrl' : 'svideoUrl';
+  if (p[field] && /folders\//.test(p[field])) { window.open(p[field], '_blank'); return; }
+  const {pin, ok} = writeAuth();
+  if (!ok) { say('err', 'Sign in with Google (☰ menu) first.'); return; }
+  // the tab is opened on the click itself so the browser allows it, then
+  // pointed at the folder once the bridge has found or made it
+  const w = window.open('', '_blank');
+  try { if (w) w.document.write('<p style="font:16px Helvetica,Arial;padding:24px">Opening the ' + kind + ' video folder…</p>'); } catch (e) {}
+  say('', `Opening the ${kind} video folder…`);
+  try {
+    const r = await fetchT(BRIDGE_URL, {method: 'POST', redirect: 'follow', headers: {'content-type': 'text/plain;charset=utf-8'},
+      body: JSON.stringify({pin, action: 'videofolder', serial: p.serial, row: p.row, kind, ...authFields()})}, 45000);
+    const j = await r.json();
+    if (!j.ok || !j.folderUrl) throw new Error(j.error || 'could not find the folder');
+    p[field] = j.folderUrl;
+    if (w && !w.closed) w.location = j.folderUrl; else window.open(j.folderUrl, '_blank');
+    say('ok', `✓ ${j.name || kind + ' video folder'} opened in a new tab`);
+  } catch (e) {
+    try { if (w) w.close(); } catch (e2) {}
+    say('err', '✗ ' + (e && e.message || e));
+  }
 }
 async function uploadVideo(p, kind, f, pop, note) {
   if (!f) return;
