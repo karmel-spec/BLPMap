@@ -1677,9 +1677,26 @@ function ownerClass(p) {
   if (!o || o.includes('blp') || o.includes('reno') || o.includes('brigham')) return 'blp';
   return 'client';
 }
+/* Search is forgiving (Melissa via Brianna 11/10, 111026allen02): "Linda
+ * Lasater" finds "Linda & Brian Lasater". The exact phrase still matches as
+ * before; otherwise EVERY word typed has to appear somewhere on the piano
+ * (name, serial, make, model, year, spot, owner), in any order, with
+ * punctuation, "&" / "and" and accents ignored. */
+const searchHayCache = new WeakMap();
+const searchNorm = t => String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  .replace(/[^a-z0-9#.']+/g, ' ').replace(/\s+/g, ' ').trim();
+function searchHay(p) {
+  let h = searchHayCache.get(p);
+  const raw = p.summary + ' ' + p.serial + ' ' + p.make + ' ' + p.model + ' ' + p.year + ' ' + p.location + ' ' + (p.owner || '');
+  if (!h || h.raw !== raw) { h = {raw, low: raw.toLowerCase(), norm: ' ' + searchNorm(raw) + ' '}; searchHayCache.set(p, h); }
+  return h;
+}
+function searchWords(q) { return searchNorm(q).split(' ').filter(w => w && w !== 'and'); }
 function matches(p, q) {
-  return (p.summary + ' ' + p.serial + ' ' + p.make + ' ' + p.model + ' '
-          + p.year + ' ' + p.location + ' ' + (p.owner || '')).toLowerCase().includes(q);
+  const h = searchHay(p);
+  if (h.low.includes(q)) return true;
+  const words = searchWords(q);
+  return words.length > 1 && words.every(w => h.norm.includes(w));
 }
 function logLink(p) {
   // ?q= is the Piano Log's deep link: it pre-filters the list and, when the
@@ -19925,6 +19942,7 @@ function searchRank(p, q) {
   if (String(p.summary || '').toLowerCase().includes(q)) return 7;
   if (String(p.owner || '').toLowerCase().includes(q)) return 7.5;   // owner first/last name
   if (spot.startsWith(q)) return 8;
+  if (matches(p, q)) return 9;   // every word is on the piano somewhere ("linda lasater" → Linda & Brian Lasater)
   return 99;
 }
 let acList = [], acIdx = -1;
@@ -19950,6 +19968,7 @@ function renderSuggest(q) {
   box.innerHTML = acList.map((p, i) => `<div class="acrow" data-i="${i}">
       <span class="acname">${hl(p.summary || [p.year, p.make, p.model].filter(Boolean).join(' '))}</span>
       <span class="acmeta">${p.serial ? '#' + hl(p.serial) : ''}
+        ${searchRank(p, q) >= 7.5 && p.owner ? `<i>${esc(String(p.owner).replace(/\s+/g, ' ').slice(0, 34))}</i>` : ''}
         <i>${p.archived ? '📦 delivered' : 'map ' + esc(p.location || '—')}</i></span>
     </div>`).join('');
   box.hidden = false;
@@ -20525,7 +20544,7 @@ async function renderBuffing(force) {
                : `<button class="bufgo" data-k="${k}" data-op="screws" ${busy ? 'disabled' : ''}>${busy ? '…' : 'Screws done'}</button>`}</div>`;
   };
   const pill = h => h.kind === 'ship' ? `<span class="bufpill bufship">${esc(h.finish)}</span>`
-    : h.kind === 'buff' ? '<span class="bufpill">No plating · buff only</span>' : '<span class="bufpill bufunset">Finish not set</span>';
+    : h.kind === 'buff' ? `<span class="bufpill">${h.refurb ? 'Refurb · buff only, no electroplating' : 'No plating · buff only'}</span>` : '<span class="bufpill bufunset">Finish not set</span>';
   const hwRow = (h, i) => {
     const k = 'h' + i, busy = BUF.busy.has(k);
     const main = h.kind === 'ship' ? ['prepped', 'Prepped for Shipping'] : h.kind === 'buff' ? ['buffed', 'Buffed'] : null;
@@ -20548,7 +20567,8 @@ async function renderBuffing(force) {
     <h3 class="bufh">Visible hardware · furthest along first</h3>
     <div class="buflist">${d.hardware.map(hwRow).join('') || '<div class="bufrow"><div class="buft"><div class="bufs">Nothing waiting 🎉</div></div></div>'}</div>
     <p class="pd">"Already done" takes a piano off the list without recording new work — for hardware that was
-      finished or shipped before this list existed. Pianos already in QC &amp; Assembly or later aren't listed.</p>`;
+      finished or shipped before this list existed. Pianos already in QC &amp; Assembly or later aren't listed.
+      Refurbish-only pianos are listed while they are in their refurb phases: their hardware is buffed here, never sent for electroplating.</p>`;
   el.querySelector('.bufreload').onclick = () => renderBuffing(true);
   const post = async (k, body) => {
     BUF.busy.add(k); delete BUF.err[k]; renderBuffing();
