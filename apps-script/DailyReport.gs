@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-11-10.4';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-11-10.5';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -5711,6 +5711,19 @@ function addPunchRemember_(reqId, row) {
   try { CacheService.getScriptCache().put(('addpunch:' + reqId).slice(0, 240), String(row), 21600); } catch (e) {}
 }
 
+/* "(was 9:25 AM–5:02 PM)" on a punch whose times an edit changes (Mark 11/10):
+ * Alisa's 11/9 punch got its end set to 1:00 PM from her lunch request and the
+ * evening clock-out it replaced was gone — no other copy of a day punch exists.
+ * The Store Map reads the last "was …–…" back to prefill the afternoon punch. */
+function clockWas_(oldStart, oldEnd, start, end) {
+  var iso = function (v) { if (!v) return ''; var d = v instanceof Date ? v : new Date(v); return isNaN(d) ? '' : d.toISOString(); };
+  var os = iso(oldStart), oe = iso(oldEnd), ns = start.toISOString(), ne = end ? end.toISOString() : '';
+  var sameMin = function (a, b) { return (!a && !b) || (a && b && Math.abs(new Date(a) - new Date(b)) < 60000); };
+  if (!os || (sameMin(os, ns) && sameMin(oe, ne))) return '';
+  var f = function (x) { return Utilities.formatDate(new Date(x), 'America/Denver', 'h:mm a'); };
+  return ' (was ' + f(os) + '\u2013' + (oe ? f(oe) : 'open') + ')';
+}
+
 function adjustClock_(req) {
   return withClockLock_(function () {
     var g = req._g;
@@ -5764,7 +5777,8 @@ function adjustClock_(req) {
       var rng = sh.getRange(row, 1, 1, 7), cur = rng.getValues()[0];   // one read, one write
       var oldNote = String(cur[6] || '');
       rng.setValues([[cur[0], Utilities.formatDate(start, 'America/Denver', 'yyyy-MM-dd'),
-        start.toISOString(), end ? end.toISOString() : '', mins, cur[5], (oldNote ? oldNote + ' · ' : '') + stamp]]);
+        start.toISOString(), end ? end.toISOString() : '', mins, cur[5],
+        (oldNote ? oldNote + ' · ' : '') + stamp + (req.confirm ? '' : clockWas_(cur[2], cur[3], start, end))]]);
       return {ok: true, tech: String(cur[0] || '')};
     }
     var tsh = timeLogSheet_();
@@ -5824,8 +5838,9 @@ function adjustClock_(req) {
       moved += ' · phase was ' + (String(tcur[3] || '') || '—');
       tcur[3] = String(req.phase).trim();
     }
+    var wasT = req.confirm ? '' : clockWas_(tcur[4], tcur[5], start, end);
     tcur[4] = start.toISOString(); tcur[5] = end ? end.toISOString() : ''; tcur[6] = mins;
-    tcur[8] = (oldBy ? oldBy + ' · ' : '') + stamp + moved;
+    tcur[8] = (oldBy ? oldBy + ' · ' : '') + stamp + wasT + moved;
     trng.setValues([tcur]);
     return {ok: true, tech: String(tcur[0] || ''), piano: String(tcur[2] || ''),
             serial: String(tcur[1] || ''), phase: String(tcur[3] || '')};

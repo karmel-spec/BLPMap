@@ -14874,8 +14874,33 @@ function renderReport() {
       // for editing with the new times filled in, and Save overwrote it:
       // McKinly's 10/30 afternoon vanished under his evening recital set-up
       // (Melissa 10/31, 103126terry14). Now it goes to "+ missed punch" instead.
-      const after = pre.start && !live && m.pick.end && new Date(pre.start) >= new Date(m.pick.end);
+      let after = pre.start && !live && m.pick.end && new Date(pre.start) >= new Date(m.pick.end);
       const before = pre.start && pre.end && new Date(pre.end) <= new Date(m.pick.start);
+      /* a lunch split filed as two requests (Mark 11/10, Alisa 11/9: "clock out
+       * 1:00 PM" + "clock in 1:28 PM", sent before she left for the day). The
+       * clock-in half has no end — her real end is the punch's own clock-out:
+       *  - not split yet: a clock-in INSIDE the punch, with a sibling clock-out
+       *    request for the same day → add 1:28 → the punch's current end
+       *  - already split: the out-half's edit left "(was 9:25 AM–5:02 PM)" in
+       *    the note → add 1:28 → that old end */
+      let splitHint = '';
+      if (pre.start && !pre.end && !m.times.out && !live && m.pick.end) {
+        const inside = new Date(pre.start) > new Date(m.pick.start) && new Date(pre.start) < new Date(m.pick.end);
+        const sib = inside && (S.fixRows || []).find(o => o.row !== fx.row && !/resolved/i.test(o.status || '')
+          && cfxMatch(o).who === m.who && cfxMatch(o).date === m.date
+          && cfxTimes(o.note).out && cfxTimes(o.note).out <= m.times.in);
+        if (sib) {
+          pre.end = dayLocal(m.pick.end); after = true;
+          splitHint = ` End prefilled with this punch's own clock-out (${fmtT(m.pick.end)}) — apply the “clock out ${fmtT(day + 'T' + cfxTimes(sib.note).out)}” request FIRST so the morning ends there (Add before that warns about the overlap).`;
+        } else if (after) {
+          const was = [...String(m.pick.note || '').matchAll(/\(was (\d{1,2}:\d{2} [AP]M)\u2013(\d{1,2}:\d{2} [AP]M)\)/g)].pop();
+          const oldEnd = was && cfxTimes('until ' + was[2].toLowerCase()).out;
+          if (oldEnd && oldEnd > m.times.in) {
+            pre.end = day + 'T' + oldEnd;
+            splitHint = ` End prefilled with the clock-out this punch had before it was edited (${was[2]}).`;
+          }
+        }
+      }
       const others = unvoided(m.clock === 'pay' ? S.payRows : S.tlRows)
         .filter(r => r.row !== m.pick.row && denverDay(r.start) === day && techName(r.tech) === techName(m.pick.tech))
         .map(r => `${fmtT(r.start)}–${r.end ? fmtT(r.end) : 'open'}`);
@@ -14891,7 +14916,7 @@ function renderReport() {
           set('.a-tech', m.who.replace(/\s*\(.*$/, '').trim()); set('.a-serial', m.serial);   // "(session expired — unverified)" off the name
           set('.a-start', pre.start); set('.a-end', pre.end);
           const msg = bar.querySelector('.adjmsg');
-          if (msg) { msg.className = 'adjmsg phmsg'; msg.textContent = `second punch that day — ${m.who.split(/\s+/)[0]} already has ${have}; this one is ADDED alongside, nothing is overwritten. Check, then Add. ${req}`; }
+          if (msg) { msg.className = 'adjmsg phmsg'; msg.textContent = `second punch that day — ${m.who.split(/\s+/)[0]} already has ${have}; this one is ADDED alongside, nothing is overwritten.${splitHint} Check, then Add. ${req}`; }
           focus(bar);
         }, 0);
         return;
