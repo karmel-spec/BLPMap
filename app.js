@@ -8733,8 +8733,7 @@ async function setPhase(p, phase, pop, extra) {
         body: JSON.stringify({key: 'pianoman', op: 'withdraw', serial: p.serial, by: clockName() || 'delivery'})}).then(() => loadQcQueue()).catch(() => {});
       msg.className = 'phmsg ok';
       msg.textContent = p.phase ? `✓ Saved — ${p.phase}` : '✓ Phase cleared';
-      // Rule B (Mark 11/9): Waiting on Curtis Harper also moved the plate to Curtis
-      if (j.plateSet) { p.plateStatus = j.plateSet; notePlateEdit(p, j.plateSet); plateBackHome(p, j.plateSet); msg.textContent += ' · plate set to At Curtis Harper'; }
+      // (Rule B retired 11/10, 111026hales81: Waiting on Curtis Harper no longer moves the plate)
       // 🏠 Out on Rental (Mark 11/10): the bridge moved the spot to "Rented — was at …" → rented zone
       if (j.spotSet) {
         p.location = j.spotSet; p.isSlot = false;

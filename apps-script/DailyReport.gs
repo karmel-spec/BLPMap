@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-11-10.5';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-11-10.6';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -3517,20 +3517,12 @@ function setPhase_(req) {
       sh.getRange(found.row, cbcol).setValue('');
     }
   }
-  // Rule B (Mark 11/9): Waiting on Curtis Harper ⇒ plate At Curtis Harper
-  // (which also frees its rack slat / temp spot). _fromPlate = Rule A/C
-  // calling in — no echo back. Only when the plate isn't there already.
+  // Rule B RETIRED (Mark 11/10, 111026hales81): Waiting on Curtis Harper used
+  // to set the plate to At Curtis Harper and free its rack slat — "too
+  // grabby": the plate can sit in plate storage while the piano waits on
+  // Curtis (1922 Steinway 211935 lost slat 2P that way). The phase no longer
+  // touches the plate. Rules A / C / D (plate status ⇒ phase) are unchanged.
   var plateSet = '';
-  if (phase === 'Waiting on Curtis Harper' && !req._fromPlate) {
-    try {
-      var pr = setPlateStatus_({serial: req.serial, row: found.row, plateStatus: 'At Curtis Harper', _fromPhase: true, _g: req._g, who: req.who});
-      if (pr.ok && pr.previousPlate !== 'At Curtis Harper') {
-        plateSet = 'At Curtis Harper';
-        logAct_(String((req._g && (req._g.name || req._g.email)) || req.who || 'Store Map'), 'Plate status', found.summary || req.serial,
-          'At Curtis Harper — set with the Waiting on Curtis Harper phase' + (pr.freedSlats && pr.freedSlats.length ? ' (slat ' + pr.freedSlats.join(', ') + ' freed)' : ''));
-      }
-    } catch (ePl) { /* the phase still saved */ }
-  }
   // 🏠 Out on Rental (Mark 11/10): the piano is at the renter's home — its
   // spot becomes "Rented — was at <spot>" (the map's rented zone; the row
   // stays where it is, active, never below SOLD). A spot already saying
