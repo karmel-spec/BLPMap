@@ -12908,12 +12908,12 @@ function playerQueueTable() {
   const rows = playerRebuilds();
   const name = p => esc(((p.year ? p.year + ' ' : '') + ([p.make, p.model].filter(Boolean).join(' ') || p.summary)).slice(0, 40));
   const scope = p => {
-    // Mark 11/10: "Player Rebuild Only", or a bullet per track (Player
-    // Rebuild, Restoration, Refinish…) — the Rebuild track reads as Restoration here
+    // Mark 11/10: a bullet per track (Player Rebuild, Restoration,
+    // Refinish…) — the Rebuild track reads as Restoration here
     const other = trackParts(p.track).list.filter(t => t !== 'Player Rebuild').map(t => t === 'Rebuild' ? 'Restoration' : t);
     // one bullet per track (Mark 11/10), Player Rebuild first
-    const items = other.length ? ['Player Rebuild', ...other] : ['<b>Player Rebuild Only</b>'];
-    return `<ul style="margin:0;padding-left:16px;line-height:1.45">${items.map(t => `<li>${t.startsWith('<b>') ? t : esc(t)}</li>`).join('')}</ul>`;
+    // ("Only" dropped, Mark 11/10 — a lone Player Rebuild bullet says it)
+    return `<ul style="margin:0;padding-left:16px;line-height:1.45">${['Player Rebuild', ...other].map(t => `<li>${esc(t)}</li>`).join('')}</ul>`;
   };
   // pending players too (Mark 11/10): Pending Shopwork / pre-queue and the
   // Custom Shop Work follow-up list, flagged "not in queue yet"
@@ -14703,7 +14703,7 @@ const REPORT_DEFS = () => [
    html: queueTable},
   {id: 'playerqueue', sec: 'shop', icon: '🎼', title: 'PLAYER REBUILD QUEUE', count: (() => {
      try { return playerRebuilds().length; } catch (e) { return null; } })(),
-   desc: 'Just the player pianos being rebuilt — every active piano on the Player Rebuild track, in Custom Shop Work queue order (#1 is next up). Scope lists each track: Player Rebuild Only = player parts only; otherwise Player Rebuild plus the other shop work (Restoration, Refinish, …). Click a row to jump to that piano.',
+   desc: 'Just the player pianos being rebuilt — every active piano on the Player Rebuild track, in Custom Shop Work queue order (#1 is next up). Scope lists each track: Player Rebuild alone = player parts only; otherwise Player Rebuild plus the other shop work (Restoration, Refinish, …). Click a row to jump to that piano.',
    html: playerQueueTable},
   {id: 'tasks', sec: 'shop', icon: '🧩', title: 'CONCURRENT WORK', count: (() => {
      try { const f = S.tkF || {cat: 'keys'}; return S.data.pianos.filter(p =>
