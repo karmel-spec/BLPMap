@@ -35,6 +35,13 @@ and refuses to stack a tuning on a slot another piano still holds. (On 10/16 the
 was written literally over the calendar: Monday and Tuesday 8:00 went out double-booked
 and Wednesday went out empty.)
 
+**Rentals (Mark 2026-11-10):** phase **Out on Rental** = the piano is at a renter's home
+(spot "Rented — was at …", CURRENTLY RENTED section). It is NOT in the building: never
+schedule work, QC or a tuning for it, and never treat it as a for-sale floor piano. Phase
+**Rental Check-in** = a rental just came back and needs checking over before it goes back to
+For Sale — list it in the draft's changes as "rental check-in needed"; don't invent work for
+it beyond what its card says.
+
 **Standing meetings (Mark 2026-11-04, rewritten 2026-11-10 — Scheduling Rules row 104):**
 **Manager Meeting** (Tuesdays 10:30–11:30: Brigham, Karmel, Mark, Jacob, Matthew) is a
 recurring Google Calendar event. **Tuning Training is NOT recurring anymore** — Mark adds it
