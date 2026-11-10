@@ -3090,6 +3090,15 @@ function tagSplitNotes(raw) {
  * fix requests and piano notes, written by the Sales App instead of a task-
  * board card. Pinned like the 📜 contract lines — shown in full, never in the
  * editable box, and re-joined on save. */
+const CTR_OPEN = new Set();   // serials whose 📜 contract block is open on the card
+document.addEventListener('toggle', ev => {
+  const d = ev.target;
+  if (!(d instanceof HTMLDetailsElement) || !d.classList.contains('ctrfull')) return;
+  const k = String(d.dataset.serial || '');
+  if (d.open) CTR_OPEN.add(k); else CTR_OPEN.delete(k);
+  const hint = d.querySelector('summary .lite');
+  if (hint) hint.textContent = hint.textContent.replace(/tap to (open|close)/, 'tap to ' + (d.open ? 'close' : 'open'));
+}, true);
 const scPinned = l => /^\s*(📜|🏆)/u.test(l);
 function wonScopeBox(p) {
   const won = String(p.scopeNotes || '').split('\n').filter(l => l.trim().startsWith('🏆'))
@@ -6811,7 +6820,16 @@ function popHTML(p) {
       // textarea below only edits the shop's own added instructions
       const scLines = String(p.scopeNotes || '').split('\n');
       const ctr = scLines.filter(l => l.trim().startsWith('📜'));
-      return wonScopeBox(p) + (ctr.length ? `<div class="ctrfull" style="background:#fbf7ee;border:1px solid #e2d7bb;border-left:4px solid #9e2020;border-radius:0 10px 10px 0;padding:9px 11px;margin:4px 0 8px;font-size:13px;line-height:1.55;white-space:pre-wrap;word-break:break-word">${ctr.map(esc).join('\n')}</div>` : '');
+      // collapsed to its first line (Mark 11/10: "a lot of info to scroll
+      // through") — tap to open; stays open for that piano while the card
+      // re-renders (CTR_OPEN, this session only)
+      if (!ctr.length) return wonScopeBox(p);
+      const head = ctr[0].trim().replace(/^📜\s*/u, '');
+      const more = ctr.length - 1;
+      return wonScopeBox(p) + `<details class="ctrfull" data-serial="${esc(p.serial)}"${CTR_OPEN.has(String(p.serial)) ? ' open' : ''} style="background:#fbf7ee;border:1px solid #e2d7bb;border-left:4px solid #9e2020;border-radius:0 10px 10px 0;padding:9px 11px;margin:4px 0 8px;font-size:13px;line-height:1.55">
+        <summary style="cursor:pointer;font-weight:700;list-style-position:outside">📜 ${esc(head)}${more ? ` <span class="lite" style="font-weight:400;font-size:12px">· ${more} more line${more === 1 ? '' : 's'} — tap to ${CTR_OPEN.has(String(p.serial)) ? 'close' : 'open'}</span>` : ''}</summary>
+        ${more ? `<div style="white-space:pre-wrap;word-break:break-word;margin-top:4px">${ctr.slice(1).map(esc).join('\n')}</div>` : ''}
+      </details>`;
     })()}
     <div class="row" style="align-items:flex-start">Special<br>instructions
       <span style="flex:1;min-width:0;margin-left:8px">
