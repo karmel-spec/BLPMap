@@ -967,8 +967,8 @@ const qn = s => { const d = String(s || '').replace(/\D/g, ''); return d || Stri
 function qordLoad(force) {
   if (QORD.loading || (!force && QORD.data && Date.now() - QORD.at < 120000)) return Promise.resolve(QORD.data || {});
   QORD.loading = true;
-  return fetch(SB_URL + '/rest/v1/queue_order?select=queue,ord,manual',
-    {headers: {apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY}, cache: 'no-store'})
+  return fetchT(SB_URL + '/rest/v1/queue_order?select=queue,ord,manual',
+    {headers: {apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY}, cache: 'no-store'}, 8000)
     .then(r => r.ok ? r.json() : [])
     .then(rows => { const d = {}; rows.forEach(r => { d[r.queue] = {order: (r.ord || []).map(String), manual: r.manual || []}; });
       QORD.data = d; QORD.at = Date.now(); return d; })
@@ -16997,9 +16997,11 @@ const SB_URL = 'https://ismacawxfvvllfinibbf.supabase.co';
 const SB_KEY = 'sb_publishable_MamcjSX0CHTdYlpKDWSkmQ_-nbuQ1z-';   // publishable: safe in browser, read-only via RLS
 async function tbFetchSupabase() {
   const h = {apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY};
+  // 6 s cap (11/10): when the database stalls, a bare fetch hung for minutes
+  // and the board sat on "Loading…" instead of falling back to the sheet feed
   const [cr, kr] = await Promise.all([
-    fetch(SB_URL + '/rest/v1/tb_cards?select=*', {headers: h}),
-    fetch(SB_URL + '/rest/v1/tb_cols?select=*', {headers: h}),
+    fetchT(SB_URL + '/rest/v1/tb_cards?select=*', {headers: h}, 6000),
+    fetchT(SB_URL + '/rest/v1/tb_cols?select=*', {headers: h}, 6000),
   ]);
   if (!cr.ok || !kr.ok) throw new Error('supabase read failed');
   const cards = await cr.json();
@@ -17077,8 +17079,8 @@ async function tbFetch() {
     try { j = await tbFetchSupabase(); } catch (e0) { j = null; }
     if (!j) {
       try {
-        const rf = await fetch('https://blpsalesapp.netlify.app/.netlify/functions/storemap-taskboard?key='
-          + encodeURIComponent('pianoman'));
+        const rf = await fetchT('https://blpsalesapp.netlify.app/.netlify/functions/storemap-taskboard?key='
+          + encodeURIComponent('pianoman'), {}, 15000);
         if (rf.ok) j = await rf.json();
         if (j && j.error) j = null;
       } catch (e2) { j = null; }
@@ -18277,8 +18279,8 @@ const TCHK_STOPS = [
 function tchkLoad(force) {
   if (TCHK.loading || (!force && TCHK.data && Date.now() - TCHK.at < 60000)) return Promise.resolve(TCHK.data || {});
   TCHK.loading = true;
-  return fetch(SB_URL + '/rest/v1/tuning_check?select=serial,mark,note,priority,marked_by,marked_at',
-    {headers: {apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY}, cache: 'no-store'})
+  return fetchT(SB_URL + '/rest/v1/tuning_check?select=serial,mark,note,priority,marked_by,marked_at',
+    {headers: {apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY}, cache: 'no-store'}, 8000)
     .then(r => r.ok ? r.json() : [])
     .then(rows => { const d = {}; rows.forEach(r => { d[r.serial] = {mark: r.mark || '', note: r.note || '', asap: !!r.priority, by: r.marked_by || '', at: r.marked_at || ''}; });
       TCHK.data = d; TCHK.at = Date.now(); return d; })
