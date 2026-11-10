@@ -10988,6 +10988,13 @@ async function openVideoFolder(p, kind, pop) {
     if (w && !w.closed) w.location = j.folderUrl; else window.open(j.folderUrl, '_blank');
     say('ok', `✓ ${j.name || kind + ' video folder'} opened in a new tab`);
   } catch (e) {
+    // no answer, or a bridge that does not know this action yet: the piano's
+    // main Drive folder holds the video folders — open that rather than nothing
+    if (p.mainFolder) {
+      if (w && !w.closed) w.location = p.mainFolder; else window.open(p.mainFolder, '_blank');
+      say('', `Opened this piano’s main Drive folder — the ${kind} video folder is inside it.`);
+      return;
+    }
     try { if (w) w.close(); } catch (e2) {}
     say('err', '✗ ' + (e && e.message || e));
   }
