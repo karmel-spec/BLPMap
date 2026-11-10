@@ -6989,6 +6989,7 @@ function popHTML(p) {
             <option value="Moving">🚚 Moving</option>
             <option value="Buffing">🪞 Buffing</option>
             <option value="Rework">🔁 Rework — fixing earlier work</option>
+            ${inShopwork(p) ? '' : '<option value="Showroom Tuning">🎵 Showroom Tuning</option>'}
             <option value="" disabled>— shop phases —</option>
             ${opts.map(ph => `<option value="${esc(ph)}">${esc(ph)}</option>`).join('')}
           </select></div>
