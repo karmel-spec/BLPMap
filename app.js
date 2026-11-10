@@ -12911,11 +12911,16 @@ function playerQueueTable() {
     const other = trackParts(p.track).list.filter(t => t !== 'Player Rebuild');
     return other.length ? 'with ' + esc(other.join(' · ')) : '<b>player only</b>';
   };
-  const check = S.data.pianos.filter(p => p.active && p.queuePos > 0
+  // pending players too (Mark 11/10): Pending Shopwork / pre-queue and the
+  // Custom Shop Work follow-up list, flagged "not in queue yet"
+  const pendingShop = p => !(p.queuePos > 0) && (preQueue(p) || /custom shop\s*work/i.test(String(p.section || '')));
+  const check = S.data.pianos.filter(p => p.active && (p.queuePos > 0 || pendingShop(p))
     && !trackParts(p.track).list.length   // tracks set without Player Rebuild = scope decided (Mark 11/10: 113288's player is not being rebuilt)
     && /\bplayer\b|duo-?art|ampico|pianola|welte/i.test(p.summary || '')
     && !/former(ly)?\s+(a\s+)?player/i.test(p.summary || ''))
-    .sort((a, b) => a.queuePos - b.queuePos);
+    .sort((a, b) => (a.queuePos || 1e6) - (b.queuePos || 1e6));
+  const notYet = p => `<span style="color:#b26a00;font-weight:700">not in queue yet</span><br><span class="lite" style="font-size:11px">${
+    esc(preQueue(p) ? 'Pending Shopwork' : /follow/i.test(p.section || '') ? 'Follow-up list' : String(p.section || '').slice(0, 24))}</span>`;
   const row = p => {
     const ph = effectivePhase(p) || '';
     return `<tr class="mrow" data-row="${p.row}">
@@ -12932,7 +12937,7 @@ function playerQueueTable() {
     </table>
     ${check.length ? `<p class="pd" style="margin:14px 0 6px">❔ <b>Player in the name, but no track set yet</b> — add Player Rebuild on the card if the player system is being rebuilt:</p>
       <table><tr><th>SHOP QUEUE</th><th>PIANO</th><th>SPOT</th></tr>
-      ${check.map(p => `<tr class="mrow" data-row="${p.row}"><td style="white-space:nowrap">#${p.queuePos}</td>
+      ${check.map(p => `<tr class="mrow" data-row="${p.row}"><td style="white-space:nowrap">${p.queuePos ? '#' + p.queuePos : notYet(p)}</td>
         <td>${name(p)} <span class="lite" style="color:#8a929a;font-size:11px">${esc(p.serial)}</span></td>
         <td>${esc(String(p.location || '—').slice(0, 14))}</td></tr>`).join('')}</table>` : ''}`;
 }
