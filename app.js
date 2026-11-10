@@ -6134,6 +6134,24 @@ const slowText = dir => dir === 'in'
 function punchSlow(el, dir) {
   return setTimeout(() => { if (el && el.isConnected) el.textContent = slowText(dir); }, PUNCH_SLOW_MS);
 }
+/* Did a day punch land although the phone got no reply? (Alex 11/10,
+ * 111026martin06: Google recorded his clock-in in the first second, the reply
+ * never reached the phone, and the app sat out a 30 s timeout — 48 s in all.)
+ * Reads the Payroll Clock through the sales app's Sheets feed (~1 s, no
+ * bridge), so the answer does not wait on the same slow path. */
+async function dayPunchLanded(action, since) {
+  const r = await fetchT(CLOCK_FEED_URL.replace(/days=\d+/, 'days=2'), {}, 5000);
+  const j = await r.json();
+  if (!j || !j.ok || !Array.isArray(j.pay)) return null;
+  const me = clockName().toLowerCase();
+  const mine = j.pay.filter(x => String(x.tech || '').toLowerCase() === me && !x.voided);
+  if (action === 'dayin') {
+    const open = mine.filter(x => !x.end).sort((a, b) => new Date(b.start) - new Date(a.start))[0];
+    return open && new Date(open.start) >= since - 120000 ? {ok: true, open: {tech: open.tech, start: open.start}, verified: true} : null;
+  }
+  const closed = mine.find(x => x.end && new Date(x.end) >= since - 120000);
+  return closed && !mine.some(x => !x.end) ? {ok: true, closed: true, verified: true} : null;
+}
 async function dayPunch(action) {
   const tDay = Date.now();
   const {pin, ok} = writeAuth();
@@ -6153,7 +6171,7 @@ async function dayPunch(action) {
     if (left < 12000) break;   // an attempt plus its payroll check must fit inside the minute
     try {
       const r = await fetchT(BRIDGE_URL, {method: 'POST', redirect: 'follow',
-        headers: {'content-type': 'text/plain;charset=utf-8'}, body}, Math.min(30000, left - 7000));
+        headers: {'content-type': 'text/plain;charset=utf-8'}, body}, Math.min(a === 0 ? 10000 : 25000, left - 7000));   // first try 10 s (was 30): a lost reply is checked for sooner
       const jj = await r.json();
       if (jj && jj.service && !jj.error) {   // only the bridge's ping reply carries `service`
         lastErr = 'the bridge answered its ping instead of the punch';   // action never ran — try again
@@ -6163,12 +6181,18 @@ async function dayPunch(action) {
       j = jj;
     } catch (e) {
       lastErr = (e && e.name === 'AbortError') ? 'timed out' : 'no reply';
-      // the punch may well have landed — read the payroll sheet (8 s max) before retrying
-      try { await Promise.race([fetchPayroll(true), new Promise(res => setTimeout(res, 6000))]); } catch (e2) {}
-      if (PAY.at >= t0) {
-        if (action === 'dayin' && PAY.open) j = {ok: true, open: PAY.open, verified: true};
-        if (action === 'dayout' && !PAY.open) j = {ok: true, closed: true, verified: true};
-      }
+      // the punch may well have landed — ask the fast Sheets feed and the
+      // bridge's payroll read together; whichever confirms first wins (6 s max)
+      j = await new Promise(res => {
+        let n = 0;
+        const fin = v => { if (v) res(v); else if (++n === 2) res(null); };
+        dayPunchLanded(action, t0).then(fin, () => fin(null));
+        Promise.race([fetchPayroll(true), new Promise(r2 => setTimeout(r2, 6000))]).then(() => {
+          if (PAY.at < t0) return fin(null);
+          fin(action === 'dayin' ? (PAY.open ? {ok: true, open: PAY.open, verified: true} : null)
+            : (!PAY.open ? {ok: true, closed: true, verified: true} : null));
+        }, () => fin(null));
+      });
       if (!j && a < 2) await new Promise(res => setTimeout(res, 1000));
     }
   }
