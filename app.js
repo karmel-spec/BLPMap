@@ -7,6 +7,10 @@ const __mem = {};
 function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return k in __mem ? __mem[k] : null; } }
 function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) { __mem[k] = String(v); } }
 function lsDel(k) { try { localStorage.removeItem(k); } catch (e) { delete __mem[k]; } }
+// a #report=<id> link survives the Google sign-in bounce (which strips the
+// hash) — remembered for 10 minutes, like #card= (Mark 11/10: Brigham's link
+// to the 🎼 Player Rebuild Queue landed on the map when sign-in had lapsed)
+(() => { const m = /[#&]report=([a-z]+)/.exec(location.hash || ''); if (m) lsSet('blpRL', m[1] + '|' + Date.now()); })();
 const PIANOLOG_URL = 'https://pianologapp.netlify.app/';
 // Brigham priority list (Shop Manager "Brigham" tab) — task requests land there
 const BRIGHAM_API = 'https://blpsalesapp.netlify.app/.netlify/functions/brigham-tasks';
@@ -460,6 +464,7 @@ async function boot() {
     S.data = {...cached.data, stale: true};
     index(); renderAll();
     restoreViewState();   // the saved map is enough to reopen the page you were on
+    if (/[#&]report=/.test(location.hash || '') || lsGet('blpRL')) tryReportLink();   // a shared report link opens now, not after the fresh load (slow while Supabase is down)
   }
   // kick both requests off together, and draw the floor plan the moment
   // the geometry lands — pianos pop in as soon as their data arrives
@@ -1822,7 +1827,12 @@ function preloadReport(id) {
   }
 }
 function tryReportLink() {
-  const m = /[#&]report=([a-z]+)/.exec(location.hash || '');
+  let m = /[#&]report=([a-z]+)/.exec(location.hash || '');
+  if (!m) {   // back from the sign-in bounce without the hash
+    const st = (lsGet('blpRL') || '').split('|');
+    if (st[0] && Date.now() - (+st[1] || 0) < 600000) m = [null, st[0]];
+  }
+  lsDel('blpRL');
   // the old TIME CLOCK — PAYROLL link opens the merged ⏰ TIME CLOCK (retired 11/3)
   if (m && m[1] === 'paytime') m[1] = 'clockadjust';
   if (!m || !REPORT_DEFS().some(r => r.id === m[1])) return;
