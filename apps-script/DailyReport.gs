@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-11-10.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-11-10.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -7278,6 +7278,60 @@ function smDeliveryForecast_(pianos, events, refDate) {
   out.sort(function (a, b) { return (a.date + a.time) < (b.date + b.time) ? -1 : 1; });
   return {from: from, to: to, items: out};
 }
+/* 🏠 rental safety net (Mark 11/10): moving-calendar entries from the past
+ * 7 days that mention a rental. A rental DELIVERY whose piano isn't Out on
+ * Rental, or a rental PICKUP whose piano still is, gets listed. One-day
+ * rentals (events) and cancelled bookings are skipped. The piano is found by
+ * a serial in the booking (#SERIAL from the delivery form, or any serial on
+ * the Piano Log that appears in the text); none found → listed by title. */
+function smRentalCheck_(allPianos, refDate) {
+  var cal = calById_(MOVING_CAL);
+  if (!cal) return [];
+  var now = refDate || new Date();
+  var evs = cal.getEvents(new Date(now.getTime() - 7 * 86400000), now);
+  var bySerial = {};
+  (allPianos || []).forEach(function (p) {
+    var k = String(p.serial || '').trim().toLowerCase();
+    if (k.length >= 4 && k !== '?' && (!bySerial[k] || p.active)) bySerial[k] = p;
+  });
+  var out = [], seen = {};
+  evs.forEach(function (ev) {
+    var title = String(ev.getTitle() || '');
+    var desc = String(ev.getDescription() || '').replace(/<[^>]+>/g, ' ').replace(/&amp;?/g, '&').replace(/\\;/g, ';');
+    var text = title + ' ' + desc;
+    // a rental only when the TITLE or the form's Purpose line says so — a
+    // mention in the notes ("confirm it isn't out on rental") doesn't count
+    var pm = /purpose\s*:\s*([^\n]*?)\s+piano\s*:/i.exec(desc);
+    var purpose = pm ? pm[1] : '';
+    var RENT_RE = /\brent(al|ing|ed|er)?\b|\brent[- ]to[- ]own\b/i;   // whole words — "different" is not a rental
+    if (!RENT_RE.test(title) && !RENT_RE.test(purpose)) return;
+    if (/\b(1|one)[- ]day\b/i.test(title + ' ' + purpose) || /cancel/i.test(title)) return;
+    var pickup = /pick\s?-?up|pickup|end of rental/i.test(title) || /PIANO PICK/i.test(desc) || /end of rental/i.test(purpose);
+    var p = null, hm = /#\s*([A-Za-z0-9-]{4,})/.exec(text);
+    if (hm && bySerial[hm[1].toLowerCase()]) p = bySerial[hm[1].toLowerCase()];
+    if (!p) {
+      // only the title and the form's "Piano :" line — never addresses / phones / ZIPs
+      var pl = /piano\s*:\s*([\s\S]*?)\s+(bench|spot in shop|delivery address|pickup address|notes)\s*:/i.exec(desc);
+      var toks = (title + ' ' + (pl ? pl[1] : '')).match(/[A-Za-z0-9-]{4,}/g) || [];
+      for (var i = 0; i < toks.length && !p; i++) {
+        var tk = toks[i].toLowerCase();
+        if (/\d/.test(tk) && bySerial[tk]) p = bySerial[tk];
+      }
+    }
+    var when = Utilities.formatDate(ev.getStartTime(), 'America/Denver', 'EEE M/d');
+    var phase = p ? String(p.phase || '').trim() : '';
+    var key = (p ? p.serial : title) + '|' + (pickup ? 'u' : 'd');
+    if (seen[key]) return;
+    seen[key] = 1;
+    if (!pickup) {
+      if (p && phase === 'Out on Rental') return;
+      out.push({kind: 'delivery', when: when, title: title.replace(/^x\s+/i, '').slice(0, 80), p: p, phase: phase, belowSold: !!(p && !p.active)});
+    } else if (p && phase === 'Out on Rental') {
+      out.push({kind: 'pickup', when: when, title: title.replace(/^x\s+/i, '').slice(0, 80), p: p, phase: phase});
+    }
+  });
+  return out;
+}
 function smMissingArrivals_(pianos, events) {
   var out = [];
   (events || []).forEach(function (e) {
@@ -8858,6 +8912,7 @@ function buildShopManagerReport_(dayOffset) {
     return p.active && String(p.tempEntry || '').trim();
   });
   R.missingArrivals = smMissingArrivals_(pianos, data.events || []);
+  try { R.rentalCheck = smRentalCheck_(data.pianos || [], refDate); } catch (eRc) { R.rentalCheck = []; }
   try { R.forecast = smDeliveryForecast_(pianos, data.events || [], refDate); } catch (eFc) { R.forecast = null; }
   // 🏆 WON card notes waiting for Mark's review (Mark 10/21 — the first 10
   // shop handoffs from 10/21, so he can teach what the techs need to see)
@@ -9198,6 +9253,20 @@ function shopManagerHtml_(R) {
     sec('✓', 'Sold / completed — awaiting delivery', R.soldPending.length,
       'Gold ring on the map. Do not re-sell or re-price these.');
     topUl(R.soldPending.map(function (p) { return ref(p); }));
+  }
+
+  if ((R.rentalCheck || []).length) {
+    sec('\ud83c\udfe0', 'Rentals to check', R.rentalCheck.length,
+      'From the moving calendar, past 7 days (one-day rentals skipped). Set the phase on the card.');
+    topUl(R.rentalCheck.map(function (r) {
+      if (r.kind === 'pickup') return ref(r.p) + '<br><span style="font-size:12px;color:#8a6a00">picked up ' + r.when
+        + ' (end of rental) \u2014 card still says Out on Rental. Set it to <b>Rental Check-in</b>.</span>';
+      if (!r.p) return '<b>' + r.title + '</b> \u2014 ' + r.when
+        + '<br><span style="font-size:12px;color:#8a6a00">booked as a rental, but the booking names no serial \u2014 set that piano to <b>Out on Rental</b>.</span>';
+      return ref(r.p) + '<br><span style="font-size:12px;color:#9e2020">delivered as a rental ' + r.when + ' \u2014 card says '
+        + (r.phase || 'no phase') + '. Set it to <b>Out on Rental</b>'
+        + (r.belowSold ? ' (it was filed below SOLD as Delivered \u2014 move its row back up to CURRENTLY RENTED first)' : '') + '.</span>';
+    }));
   }
 
   if (R.missingArrivals.length) {

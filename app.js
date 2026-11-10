@@ -8401,6 +8401,28 @@ function openPhaseGateModal(p, phase, was, pop) {
 }
 /* 💰 Sale Pending / Sold (Karmel 9/3): optional buyer name — goes into the
  * WAITING NOTE column so it shows on the card's status strip and legend. */
+function openDeliveredModal(p, pop) {
+  const old = document.querySelector('.dsheetov'); if (old) old.remove();
+  const ov = document.createElement('div');
+  ov.className = 'dsheetov';
+  ov.innerHTML = `<div class="dsheet"><button class="dsx">\u2715</button>
+    <h3>\ud83d\ude9a Delivered \u2014 ${esc(p.summary || '#' + p.serial)}</h3>
+    <div class="dssub">Was it sold, or is it going out on a rental?</div>
+    <div class="rfbar" style="margin-top:12px;flex-direction:column;align-items:stretch;gap:8px">
+      <button class="csvbtn dlvsold">\ud83c\udf89 Sold \u2014 delivered to the buyer<br><small style="font-weight:500">files the piano below SOLD</small></button>
+      <button class="csvbtn dlvrent" style="background:#c46a1c;border-color:#c46a1c">\ud83c\udfe0 Out on rental<br><small style="font-weight:500">stays on the books in the Rented zone; comes back to Rental Check-in</small></button>
+      <button class="csvbtn dlvcancel" style="background:none;border:none;color:#8a847b">Cancel</button>
+    </div>
+    <div class="lite" style="font-size:11.5px;margin-top:8px">A one-day rental (an event) doesn\u2019t need a phase change at all.</div></div>`;
+  document.body.appendChild(ov);
+  const sel = pop.querySelector('.phsel');
+  const close = () => { ov.remove(); if (sel) sel.value = p.phase || ''; };
+  ov.querySelector('.dsx').onclick = close;
+  ov.querySelector('.dlvcancel').onclick = close;
+  ov.onclick = ev => { if (ev.target === ov) close(); };
+  ov.querySelector('.dlvsold').onclick = () => { ov.remove(); setPhase(p, 'Delivered', pop, {gated: true}); };
+  ov.querySelector('.dlvrent').onclick = () => { ov.remove(); if (sel) sel.value = 'Out on Rental'; setPhase(p, 'Out on Rental', pop, {gated: true}); };
+}
 function openBuyerModal(p, phase, pop) {
   const old = document.querySelector('.dsheetov'); if (old) old.remove();
   const ov = document.createElement('div');
@@ -8566,6 +8588,13 @@ async function setPhase(p, phase, pop, extra) {
   }
   if ((phase === 'Sale Pending' || phase === 'Sold') && extra == null) {
     openBuyerModal(p, phase, pop);      // who's it sold to / pending for? (optional)
+    return;
+  }
+  // 🏠 Delivered → sold or a rental? (Mark 11/10): a rental stays on the
+  // books as Out on Rental instead of being filed below SOLD. A customer's
+  // own shop-work piano going home is never a rental — no question for it.
+  if (phase === 'Delivered' && extra == null && !inShopwork(p)) {
+    openDeliveredModal(p, pop);
     return;
   }
   // 📸 phase-advance gate (Brigham 8/26): moving FORWARD in the sequence
