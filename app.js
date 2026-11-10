@@ -12931,7 +12931,7 @@ function playerQueueTable() {
       <td style="font-weight:800;white-space:nowrap">${p.queuePos ? '#' + p.queuePos : '<span class="lite">not queued</span>'}</td>
       <td>${name(p)}<br><span class="lite" style="color:#8a929a;font-size:11px">${esc(p.serial)}</span></td>
       <td>${scope(p)}</td>
-      <td>${ph === 'Player Piano Work' ? '🎼 <b>Player Piano Work</b>' : esc((ph || '—').slice(0, 24))}</td>
+      <td>${esc((ph || '—').slice(0, 24))}</td>
       ${recentWorkCell(p, false)}
       <td>${esc(String(p.location || '—').slice(0, 14))}</td></tr>`;
   };
