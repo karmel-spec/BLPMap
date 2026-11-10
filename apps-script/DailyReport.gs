@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-11-10.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-11-10.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -7332,6 +7332,31 @@ function smRentalCheck_(allPianos, refDate) {
   });
   return out;
 }
+/* 🏠 any doubt about a rental goes to Mark to confirm (Mark 11/10): a
+ * card that disagrees with itself — rented section / spot / status tag /
+ * owner cell say rented but the phase doesn't, or the phase says Out on
+ * Rental while the spot is a numbered floor spot. */
+function smRentalQuestions_(pianos) {
+  var RENT = /\brent(al|ing|ed|er)?\b|\brent[- ]to[- ]own\b/i, SLOT = /^\d+(?:\.\d)?[a-zA-Z]?$/;
+  var out = [];
+  (pianos || []).forEach(function (p) {
+    if (!p.active || p.coming) return;
+    var ph = String(p.phase || '').trim(), loc = String(p.location || '').trim();
+    var sec = String(p.section || '').trim().toUpperCase();
+    var own = String(p.owner || '').split('\n').slice(0, 2).join(' '), st = String(p.status || '');
+    var why = [];
+    if (ph === 'Out on Rental' || ph === 'Rental Check-in') {
+      if (ph === 'Out on Rental' && SLOT.test(loc)) why.push('card says Out on Rental but its spot is ' + loc + ' \u2014 is it back?');
+    } else {
+      if (sec === 'CURRENTLY RENTED') why.push('it\u2019s in the CURRENTLY RENTED section');
+      if (RENT.test(loc)) why.push('its spot says \u201c' + loc.slice(0, 40) + '\u201d');
+      if (/\brented\b/i.test(st)) why.push('its status tags say Rented');
+      if (RENT.test(own) && !/\bfor rent\b/i.test(own)) why.push('the owner cell says \u201c' + own.slice(0, 50) + '\u201d');
+    }
+    if (why.length) out.push({kind: 'question', p: p, phase: ph, why: why});
+  });
+  return out;
+}
 function smMissingArrivals_(pianos, events) {
   var out = [];
   (events || []).forEach(function (e) {
@@ -8913,6 +8938,11 @@ function buildShopManagerReport_(dayOffset) {
   });
   R.missingArrivals = smMissingArrivals_(pianos, data.events || []);
   try { R.rentalCheck = smRentalCheck_(data.pianos || [], refDate); } catch (eRc) { R.rentalCheck = []; }
+  try {
+    var rcSeen = {};
+    R.rentalCheck.forEach(function (r) { if (r.p) rcSeen[String(r.p.serial)] = 1; });
+    smRentalQuestions_(pianos).forEach(function (q) { if (!rcSeen[String(q.p.serial)]) R.rentalCheck.push(q); });
+  } catch (eRq) {}
   try { R.forecast = smDeliveryForecast_(pianos, data.events || [], refDate); } catch (eFc) { R.forecast = null; }
   // 🏆 WON card notes waiting for Mark's review (Mark 10/21 — the first 10
   // shop handoffs from 10/21, so he can teach what the techs need to see)
@@ -9257,8 +9287,12 @@ function shopManagerHtml_(R) {
 
   if ((R.rentalCheck || []).length) {
     sec('\ud83c\udfe0', 'Rentals to check', R.rentalCheck.length,
-      'From the moving calendar, past 7 days (one-day rentals skipped). Set the phase on the card.');
+      'Mark confirms each one. Bookings come from the moving calendar, past 7 days (one-day rentals skipped).');
     topUl(R.rentalCheck.map(function (r) {
+      if (r.kind === 'question') return ref(r.p) + '<br><span style="font-size:12px;color:#8a6a00"><b>Confirm \u2014 on rental?</b> '
+        + r.why.join('; ') + '. Card phase: ' + (r.phase || 'none') + '. If it\u2019s out, set <b>Out on Rental</b>'
+        + (r.phase === 'Out on Rental' ? ' is right \u2014 fix the spot; if it\u2019s back, set <b>Rental Check-in</b>.'
+          : '; if not, the rented wording on the card is stale (status tags are Melissa\u2019s / Alisa\u2019s to clear).') + '</span>';
       if (r.kind === 'pickup') return ref(r.p) + '<br><span style="font-size:12px;color:#8a6a00">picked up ' + r.when
         + ' (end of rental) \u2014 card still says Out on Rental. Set it to <b>Rental Check-in</b>.</span>';
       if (!r.p) return '<b>' + r.title + '</b> \u2014 ' + r.when
