@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-11-09.10';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-11-10.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -3030,6 +3030,8 @@ var PHASE_VALUES = ['New Arrival - Admin', 'Assessment', 'CAP',
   '2nd Tuning', 'Exit Prep - Admin', 'Delivered',
   'In Queue', 'Paused', 'Player Piano Work', 'For Sale', 'Sale Pending', 'Sold', 'Post Sale QC',
   'Waiting on Brigham', 'Waiting on Curtis Harper', 'Waiting on Customer', 'Waiting on OTHER',
+  // rentals (Mark 11/10): out at a renter's home, then a check-in step when it comes back
+  'Out on Rental', 'Rental Check-in',
   // track-sheet steps outside the master 14 (refurbishing/repair tracks) —
   // the app's normTrackPhase canonicalizes the Sequence-sheet wording to
   // these (082726hales17: "unknown phase" saving Key Servicing)
@@ -3517,6 +3519,24 @@ function setPhase_(req) {
       }
     } catch (ePl) { /* the phase still saved */ }
   }
+  // 🏠 Out on Rental (Mark 11/10): the piano is at the renter's home — its
+  // spot becomes "Rented — was at <spot>" (the map's rented zone; the row
+  // stays where it is, active, never below SOLD). A spot already saying
+  // rented is left alone. Rental Check-in leaves the spot to whoever places it.
+  var spotSet = '';
+  if (phase === 'Out on Rental' && prev !== 'Out on Rental') {
+    try {
+      var lcol = 21;   // U  LOCATION / STATUS
+      var lh = String(sh.getRange(2, lcol).getValue() || '').trim().toUpperCase();
+      if (lh.indexOf('LOCATION') === 0) {
+        var spotWas = String(sh.getRange(found.row, lcol).getValue() || '').trim();
+        if (!/rent/i.test(spotWas)) {
+          spotSet = 'Rented' + (spotWas ? ' \u2014 was at ' + spotWas : '');
+          sh.getRange(found.row, lcol).setValue(spotSet);
+        }
+      }
+    } catch (eR) { /* the phase still saved */ }
+  }
   var movedTo = null;
   // Delivered pianos exit the map: physically relocate the row into the
   // SOLD section (right after the divider) so the parsers' soldZone skip
@@ -3556,7 +3576,7 @@ function setPhase_(req) {
       }
     } catch (e) { /* automation is a convenience — never fail the phase write */ }
   }
-  return {ok: true, plateSet: plateSet, row: movedTo || found.row, summary: found.summary,
+  return {ok: true, plateSet: plateSet, spotSet: spotSet, row: movedTo || found.row, summary: found.summary,
           previous: prev, phase: phase, note: note, checkBack: cb,
           movedToSold: !!movedTo, done: autoDone, autoCompleted: !!autoDone};
 }

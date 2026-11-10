@@ -41,7 +41,8 @@ PHASE_NUMS['PRSBb - Plate In'] = PHASE_NUMS['PRSB - Notching and Pins'];
 // Player Piano Work (Mark 10/6, 100626hales49): player-system work lives
 // outside the numbered sequence, like Paused / Waiting on
 const PHASE_STATES = ['In Queue', 'Paused', 'Player Piano Work', 'For Sale', 'Sale Pending', 'Sold', 'Post Sale QC',
-  'Waiting on Brigham', 'Waiting on Curtis Harper', 'Waiting on Customer', 'Waiting on OTHER'];
+  'Waiting on Brigham', 'Waiting on Curtis Harper', 'Waiting on Customer', 'Waiting on OTHER',
+  'Out on Rental', 'Rental Check-in'];   // rentals (Mark 11/10): at the renter's home → check-in when it comes back
 // work tracks (multi-select, stored comma-separated in the TRACK column)
 const TRACKS = ['Rebuild', 'Hybrid', 'Refurbish', 'Refinish', 'Technology', 'Player Rebuild', 'Storage', 'Misc'];   // Player Rebuild (was Old Player, Mark 10/22): player parts only, no other shop work   // unnumbered states; For Sale turns the icon green
 // Admin section: client payment plans, the shop-progress milestones that
@@ -94,6 +95,8 @@ function phaseLabels(phase, p) {
   if (phase === 'Sale Pending') return {full: '$P', short: '$'};
   if (phase === 'Post Sale QC') return {full: '$QC', short: '$'};
   if (phase === 'Sold') return {full: '$', short: '$'};
+  if (phase === 'Out on Rental') return {full: 'R', short: 'R'};
+  if (phase === 'Rental Check-in') return {full: 'RC', short: 'R'};
   if (phase === 'Delivered' || phase === 'For Sale') return null;
   // a retired name (PRSBa/PRSBb) is no longer in PHASES but still has a
   // number, so a sheet cell that has not migrated yet keeps its icon (9/16)
@@ -8625,6 +8628,12 @@ async function setPhase(p, phase, pop, extra) {
       msg.textContent = p.phase ? `✓ Saved — ${p.phase}` : '✓ Phase cleared';
       // Rule B (Mark 11/9): Waiting on Curtis Harper also moved the plate to Curtis
       if (j.plateSet) { p.plateStatus = j.plateSet; notePlateEdit(p, j.plateSet); plateBackHome(p, j.plateSet); msg.textContent += ' · plate set to At Curtis Harper'; }
+      // 🏠 Out on Rental (Mark 11/10): the bridge moved the spot to "Rented — was at …" → rented zone
+      if (j.spotSet) {
+        p.location = j.spotSet; p.isSlot = false;
+        const le = pendingEdits.get(p.row) || {}; le.location = j.spotSet; pendingEdits.set(p.row, le);
+        msg.textContent += ' · spot set to \u201c' + j.spotSet + '\u201d';
+      }
       renderMap();
       if (p.phase === 'For Sale') openPriceModal(p);
       if (j.note != null) p.waitNote = j.note;
@@ -11937,7 +11946,7 @@ const PHASE_RENAMED = {'PRSBa - Pre-Plate': 'PRSB - Downbearing', 'PRSBb - Plate
 // (In Queue, New Arrival, CAP … Paused, Waiting on …) — must carry a track
 // (Mark 10/29: "everything should have a track"). Finished For Sale / sold
 // pianos outside the shop sections are left out.
-const IDLE_PHASES = ['For Sale', 'Sale Pending', 'Sold', 'Post Sale QC'];
+const IDLE_PHASES = ['For Sale', 'Sale Pending', 'Sold', 'Post Sale QC', 'Out on Rental'];
 function shopSection(p) { return /SHOP ?WORK/i.test(p.section || ''); }
 function needsTrack(p) {
   const ph = effectivePhase(p) || (p.queuePos ? 'In Queue' : '');
