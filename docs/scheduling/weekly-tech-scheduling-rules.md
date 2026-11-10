@@ -35,16 +35,16 @@ and refuses to stack a tuning on a slot another piano still holds. (On 10/16 the
 was written literally over the calendar: Monday and Tuesday 8:00 went out double-booked
 and Wednesday went out empty.)
 
-**Standing meetings come from Google Calendar, not the plan (Mark 2026-11-04,
-Scheduling Rules row 104; replaces the 10/23 rows 105–106):** **Manager Meeting**
-(Tuesdays 10:30–11:30: Brigham, Karmel, Mark, Jacob, Matthew) and **Tuning
-Training** (Thursdays 10:30–11:30: **Brigham, Karmel, Mark only** — Mark 2026-11-10
-removed Jacob, Sadie and Hunter; never block that hour or add a training block for
-them) are recurring Google Calendar events with the attendees invited, from the week of
-Nov 9. Never put either meeting in the plan (no block, so Approve writes no event
-— Brigham and Karmel have no tech calendar, so plan blocks never reached them).
-Treat that hour as taken on each attendee's calendar and schedule their other work
-around it, like a pre-booked tuning.
+**Standing meetings (Mark 2026-11-04, rewritten 2026-11-10 — Scheduling Rules row 104):**
+**Manager Meeting** (Tuesdays 10:30–11:30: Brigham, Karmel, Mark, Jacob, Matthew) is a
+recurring Google Calendar event. **Tuning Training is NOT recurring anymore** — Mark adds it
+to the calendar by hand when it happens — but **every Thursday 10:30–11:30 stays open for
+Brigham, Karmel and Mark** whether or not a Tuning Training event exists. Nobody else is held
+for it (Jacob, Sadie and Hunter removed 11/10 — never block that hour or add a training block
+for them). Never put either meeting in the plan (no block, so Approve writes no event —
+Brigham and Karmel have no tech calendar, so plan blocks never reached them). Treat those
+hours as taken on each attendee's calendar and schedule their other work around them, like a
+pre-booked tuning.
 
 **Korban's monthly HVAC filter check (Mark 2026-11-04, Scheduling Rules row 113):**
 on the **first Wednesday of every month**, a **"BLDG: HVAC filter check"** block
