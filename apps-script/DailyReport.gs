@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-11-11.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-11-11.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -1205,6 +1205,15 @@ function doPost(e) {
       var dsv = deleteService_(req);
       if (dsv.removed && !dsv.dryrun) logAct_(who, 'Service appointment removed', req.serial, dsv.title + ' · ' + dsv.when);
       return json_(dsv);
+    }
+    if (req.action === 'maintenance') {
+      // 🛠 building maintenance (Melissa 111126terry18, Mark 11/11): Korban,
+      // at the start of his next Hardware Buffing Queue block
+      var bm = scheduleMaintenance_(req, who);
+      if (bm.scheduled && !bm.dryrun) logAct_(who, 'Building maintenance requested', bm.room || 'building',
+        'Korban · ' + bm.date + ' ' + bm.time + '–' + bm.endTime + ' · ' + String(req.task || '').slice(0, 120)
+        + (bm.buffingNow ? ' · buffing block now starts ' + bm.buffingNow : ''));
+      return json_(bm);
     }
     if (req.action === 'cleaning') {
       // 🧹 cleaning request (Walter 9/28): Myrrhanda, two hours, next working day
@@ -4033,6 +4042,71 @@ function setCalDescs_(req) {
     out.push({title: it.title, start: it.start, status: req.dryrun ? 'would update' : 'updated'});
   });
   return {ok: true, dryrun: !!req.dryrun, updated: updated, results: out};
+}
+
+/* 🛠 Building maintenance (Melissa 111126terry18, Mark 11/11): a request from
+ * the Store Map's top Request menu goes on Korban's own calendar at the START
+ * of his next Hardware Buffing Queue block (normally 11:00), for as long as the
+ * requester estimated, and the buffing block then starts when it ends — its END
+ * stays put (3:00, 2:30 Mondays) for his building cleaning (Mark 11/11). Several
+ * requests on one day stack in order. A block must keep at least 30 minutes of
+ * buffing, else the next day's block is used. No buffing block on the calendar
+ * in the next 3 weeks (next week not approved yet) → the next open slot on his
+ * calendar; Approve later starts that day's buffing block after it.
+ * req: {task, room?, serial?, minutes 30–180, dryrun?} */
+var MAINT_TITLE = '\ud83d\udee0 Building maintenance';
+function scheduleMaintenance_(req, who) {
+  var tz = 'America/Denver';
+  var task = String(req.task || '').trim();
+  if (!task) return {error: 'say what needs doing'};
+  var room = String(req.room || '').trim().slice(0, 60);
+  var minutes = Math.max(30, Math.min(180, Math.round((Number(req.minutes) || 60) / 30) * 30));
+  var cal = calById_(TUNING_CAL);   // Korban's own calendar
+  if (!cal) return {error: "Korban's calendar is not shared with the bridge account"};
+  var pianoTxt = '';
+  if (String(req.serial || '').trim()) {
+    try {
+      var f = findPiano_(pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID)), req.serial, req.row);
+      if (!f.error) pianoTxt = (f.summary || '') + ' SN ' + req.serial + (f.location ? ' @ spot ' + f.location : '');
+    } catch (eP) {}
+  }
+  var short = task.replace(/\s+/g, ' ');
+  if (short.length > 60) short = short.slice(0, 58).trim() + '\u2026';
+  var title = MAINT_TITLE + ': ' + (room ? room + ' \u2014 ' : '') + short;
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    var now = new Date(), soonest = new Date(now.getTime() + 15 * 60000);
+    var blocks = cal.getEvents(soonest, new Date(now.getTime() + 21 * 86400000)).filter(function (ev) {
+      return !ev.isAllDayEvent() && /hardware buffing queue/i.test(ev.getTitle() || '') && ev.getStartTime() >= soonest;
+    }).sort(function (a, b) { return a.getStartTime() - b.getStartTime(); });
+    var pick = null;
+    for (var i = 0; i < blocks.length; i++) {
+      if (blocks[i].getEndTime() - blocks[i].getStartTime() >= (minutes + 30) * 60000) { pick = blocks[i]; break; }
+    }
+    var start, end, buffingNow = '', fallback = false;
+    if (pick) {
+      start = pick.getStartTime();
+      end = new Date(start.getTime() + minutes * 60000);
+    } else {
+      var slot = openGap_(cal, tz, 'Korban Greenhalgh', minutes);
+      if (!slot) return {error: 'no Hardware Buffing Queue block with room and no open ' + minutes + "-minute slot on Korban's calendar in the next 6 weeks"};
+      start = slot.start; end = slot.end; fallback = true;
+    }
+    var desc = 'Requested via BLP Store Map by ' + String(who || 'the team') + ' ('
+      + Utilities.formatDate(now, tz, 'MMM d, h:mm a') + ')'
+      + (room ? '\nWhere: ' + room : '') + (pianoTxt ? '\nPiano: ' + pianoTxt : '')
+      + '\nTime allotted: ' + minutes + ' minutes\n\n' + task
+      + (pick ? '\n\nBooked at the start of the Hardware Buffing Queue \u2014 buffing starts when this is done.' : '');
+    if (!req.dryrun) {
+      cal.createEvent(title, start, end, {description: desc, location: room});
+      if (pick) pick.setTime(end, pick.getEndTime());
+    }
+    if (pick) buffingNow = Utilities.formatDate(end, tz, 'h:mm a');
+    return {ok: true, scheduled: true, dryrun: !!req.dryrun, title: title, room: room, minutes: minutes,
+            date: Utilities.formatDate(start, tz, 'EEE, MMM d'), time: Utilities.formatDate(start, tz, 'h:mm a'),
+            endTime: Utilities.formatDate(end, tz, 'h:mm a'), buffingNow: buffingNow, fallback: fallback};
+  } finally { lock.releaseLock(); }
 }
 
 function refreshBuffing_(req) {
@@ -8096,6 +8170,14 @@ function applyScheduleLocked_(req) {
         if (/hardware buffing queue/i.test(String(b[3] || ''))) {
           var lastHour = new Date(d2.getTime() - 3600000);
           standing.forEach(function (x) { if (x.s >= lastHour && x.s > d1 && x.s < d2) d2 = new Date(x.s); });
+          // 🛠 building maintenance booked before this week was approved (Mark
+          // 11/11) sits at the block's start — buffing begins after it (stacked)
+          for (var mGuard = 0; mGuard < 8; mGuard++) {
+            var mx = standing.filter(function (x) { return /building maintenance/i.test(x.t) && x.s <= d1 && x.e > d1; })[0];
+            if (!mx) break;
+            d1 = new Date(mx.e);
+          }
+          if (d1 >= d2) return;   // maintenance fills the whole block
         }
         try {
           var evTitle = String(b[3] || 'Shop work');   // as written — a [CAL: …] in a title stays there (Mark 10/30: Garrett's DHRT titles are on purpose)

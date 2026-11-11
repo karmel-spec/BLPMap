@@ -143,7 +143,7 @@ function fetchT(url, opts, ms) {
 // resent on an ambiguous answer (Walter 10/2): Curtis's one tuning request
 // for Steinway 76197 booked Korban twice because the first run succeeded but
 // Google answered with its HTML page, and the retry booked the next free slot.
-const ONE_SHOT_ACTIONS = /^(tune|service|cleaning|timeoff|trainreq|teamreq|suggest|taskcard)$/;
+const ONE_SHOT_ACTIONS = /^(tune|service|cleaning|maintenance|timeoff|trainreq|teamreq|suggest|taskcard)$/;
 const ONE_SHOT_MSG = 'Google answered with an error page instead of a result, so this was NOT sent again — it may still have gone through. Check the calendar or list before trying again.';
 async function bridgeFetch(url, opts, budgetMs) {
   // budgetMs (optional): a total deadline for all attempts — the clock
@@ -10567,6 +10567,65 @@ function openCleaningModal(p) {
   };
 }
 
+/* ---------- 🛠 Building maintenance (Melissa 111126terry18, Mark 11/11) ----------
+ * Top Request menu → Korban's own calendar, at the start of his next Hardware
+ * Buffing Queue block for the time the requester estimates; the buffing block
+ * then starts when it ends (bridge scheduleMaintenance_). Where = a room from
+ * the map's labels (both floors) or anything typed; a piano is optional. */
+function maintRooms() {
+  const skip = /^(column|carpet squares|ramp|sink|counter|rags|stairs?\b|step to|mirror platform|scissor lift|sheet music|plate cart|clamps|glue|screws|drills|power tools|black tool chest|silver tool chest|card catalog|rebuilding line)/i;
+  const out = new Set();
+  (S.map && S.map.floors || []).forEach(f => (f.labels || []).forEach(l => {
+    const t = String(l.text || l.name || l.label || '').trim();
+    if (t && !skip.test(t)) out.add(t);
+  }));
+  return [...out].sort((a, b) => a.localeCompare(b, undefined, {numeric: true}));
+}
+function openMaintenanceModal() {
+  popPinned = false; $('#pop').hidden = true;
+  serialDatalist();
+  const durs = [30, 60, 90, 120, 150, 180].map(m =>
+    `<option value="${m}" ${m === 60 ? 'selected' : ''}>${m < 60 ? m + ' minutes' : (m / 60) + (m === 60 ? ' hour' : ' hours')}</option>`).join('');
+  const ov = modalShell('maintmodal', `
+    <span class="x">✕</span>
+    <h3>🛠 Building Maintenance</h3>
+    <p class="pd">Goes on <b>Korban\u2019s calendar</b> at the start of his next Hardware Buffing Queue block (usually 11:00) for the time you estimate \u2014 his buffing starts when it\u2019s done and still ends at 3:00, before his building cleaning.</p>
+    <label>What needs doing?</label>
+    <textarea class="mtask" rows="3" maxlength="600" placeholder="drinking fountain leaking, bulb out over the counter, door sticks…"></textarea>
+    <label>Where?</label>
+    <input class="mroom" maxlength="60" list="maintRoomList" placeholder="pick a room or type a place">
+    <datalist id="maintRoomList">${maintRooms().map(r => `<option value="${esc(r)}">`).join('')}</datalist>
+    <label>Piano <small>(optional)</small></label>
+    <input class="mpiano" maxlength="30" list="serialList" placeholder="serial — only if it\u2019s about one piano">
+    <label>How long will it take?</label>
+    <select class="mmins">${durs}</select>
+    <button class="tmgo mgo">Add to Korban\u2019s calendar</button>
+    <div class="tmmsg"></div>`);
+  attachSerialSuggest(ov.querySelector('.mpiano'));
+  ov.querySelector('.mgo').onclick = async () => {
+    const msg = ov.querySelector('.tmmsg'), btn = ov.querySelector('.mgo');
+    const task = ov.querySelector('.mtask').value.trim();
+    if (!task) { msg.className = 'tmmsg err'; msg.textContent = 'Say what needs doing.'; ov.querySelector('.mtask').focus(); return; }
+    const {pin, ok} = writeAuth();
+    if (!ok) { msg.className = 'tmmsg err'; msg.textContent = 'Sign in with Google (☰ menu) to make changes — actions are logged under your name.'; return; }
+    const serial = ov.querySelector('.mpiano').value.trim().split(/\s|—/)[0];
+    btn.disabled = true; msg.className = 'tmmsg'; msg.textContent = 'Booking it on Korban\u2019s calendar…';
+    try {
+      const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+        headers: {'content-type': 'text/plain;charset=utf-8'},
+        body: JSON.stringify({pin, action: 'maintenance', task, room: ov.querySelector('.mroom').value.trim(),
+          serial, minutes: Number(ov.querySelector('.mmins').value), ...authFields()})});
+      const j = await r.json();
+      if (j.error === 'unauthorized') { lsDel('blpPin'); throw new Error('Not authorized — sign in again from the ☰ menu.'); }
+      if (!j.scheduled) throw new Error(j.error || 'booking failed');
+      msg.className = 'tmmsg ok';
+      msg.textContent = `✓ Booked for Korban: ${j.date}, ${j.time}–${j.endTime}`
+        + (j.buffingNow ? ` · his buffing block now starts at ${j.buffingNow}` : j.fallback ? ' (next open slot — no buffing block on his calendar yet)' : '');
+      setTimeout(() => { ov.hidden = true; }, 6000);
+    } catch (e) { msg.className = 'tmmsg err'; msg.textContent = '✗ ' + e.message; btn.disabled = false; }
+  };
+}
+
 /* ---------- Curtis Harper request (work-orders spreadsheet) ---------- */
 function openCurtisModal(p) {
   popPinned = false; $('#pop').hidden = true;
@@ -20216,6 +20275,7 @@ if (topReqBtn) {
     else if (kind === 'timeoff') timeOffModal();
     else if (kind === 'trainreq') trainReqModal();
     else if (kind === 'addpiano') openAddModal(null);
+    else if (kind === 'maintenance') openMaintenanceModal();
   });
 }
 
