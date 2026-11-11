@@ -3925,7 +3925,8 @@ function renderMap() {
         const pfs2 = Math.max(7, Math.min(sl.h * 0.5, ((sl.w - numW - 8) * 1.7) / Math.max(pt.length, 4)));
         // lettering coloured by plate condition (Jacob 10/1, 100126mower22):
         // green = refinished (storage AFTER / back in piano), red = awaiting
-        // refinishing (storage BEFORE / removed), lilac = out at Curtis Harper
+        // refinishing (storage BEFORE / removed), lilac = out at Curtis Harper,
+        // purple = the piano is Waiting on Curtis Harper (Mark 11/11)
         s += `<text x="${sl.x + numW + (sl.w - numW) / 2}" y="${sl.y + sl.h / 2 + pfs2 * 0.36}"
               text-anchor="middle" class="phnum" font-size="${pfs2}">⚙ ${plates.map((px, i) => {
                 const c = plateInkColor(px);
@@ -12063,9 +12064,9 @@ function openSlotPop(id) {
     };
     pop.innerHTML = `<span class="x">✕</span>
       <span class="tag">PLATE SPOT ${esc(id)}</span>
-      ${holders.length ? `<h3>⚙️ ${holders.length === 1 ? esc(plateHeadline(holders[0])) : holders.length + ' plates stored here'}</h3><div class="lite" style="font-size:11px;margin:-4px 0 6px">On the map: <b style="color:#2f7d4f">green</b> = refinished · <b style="color:#a03030">red</b> = awaiting refinishing</div>` + holders.map(x =>
+      ${holders.length ? `<h3>⚙️ ${holders.length === 1 ? esc(plateHeadline(holders[0])) : holders.length + ' plates stored here'}</h3><div class="lite" style="font-size:11px;margin:-4px 0 6px">On the map: <b style="color:#2f7d4f">green</b> = refinished · <b style="color:#a03030">red</b> = awaiting refinishing · <b style="color:#7a3fc0">purple</b> = waiting on Curtis Harper</div>` + holders.map(x =>
           `<div class="row" style="display:block">${holders.length > 1 ? `• <b>${esc(plateIdLine(x))}</b>${x.location ? ' — ' : ''}` : ''}${x.location ? 'Piano at spot ' + esc(x.location) : ''}
-             ${/after|back in/i.test(x.plateStatus || '') ? ' <b style="color:#2f7d4f">✓ refinished</b>' : /before|removed/i.test(x.plateStatus || '') ? ' <b style="color:#a03030">awaiting refinishing</b>' : ''}
+             ${/after|back in/i.test(x.plateStatus || '') ? ' <b style="color:#2f7d4f">✓ refinished</b>' : plateWaitingOnCurtis(x) ? ' <b style="color:#7a3fc0">waiting on Curtis Harper</b>' : /before|removed/i.test(x.plateStatus || '') ? ' <b style="color:#a03030">awaiting refinishing</b>' : ''}
              <i class="platedel" data-row="${x.row}" style="cursor:pointer;color:#9e2020">✕ remove</i><br>
              <span class="lite" style="font-size:11px">plate condition:</span>${condBtns(x)}
              <span class="pcmsg phmsg" data-row="${x.row}" style="font-size:11px"></span></div>`).join('')
@@ -12736,8 +12737,14 @@ function notePlateEdit(p, val) {
   const e = pendingEdits.get(p.row) || {}; e.plateStatus = val; pendingEdits.set(p.row, e);
 }
 // map-rack lettering colour for a stored plate (on the dark slat tile)
+// Waiting on Curtis Harper (Mark 11/11): PRSB is done and the piano only
+// waits for Curtis to take the plate — the plate stays on the slat it got
+// in CAP, lettered purple. (The phase never moves or frees the plate — 11/10.)
+const PLATE_WAIT_INK = '#c58bff';
+const plateWaitingOnCurtis = p => effectivePhase(p || {}) === 'Waiting on Curtis Harper';
 function plateInkColor(p) {
   const st = String((p && p.plateStatus) || '').trim();
+  if (plateWaitingOnCurtis(p) && !/after|back in/i.test(st)) return PLATE_WAIT_INK;
   if (/after|back in/i.test(st)) return '#6fe09a';          // refinished
   if (/before|removed/i.test(st)) return '#ff7b7b';         // awaiting refinishing
   if (/curtis/i.test(st)) return '#d2b4f5';                 // out at the plating shop
