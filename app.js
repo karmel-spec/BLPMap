@@ -6140,6 +6140,24 @@ function punchGeo() {
       {enableHighAccuracy: false, timeout: 5500, maximumAge: 120000});
   });
 }
+/* Warm the location when the app opens or comes back to the screen (Mark
+ * 11/11): a punch from the ☰ menu or a fresh app open no longer waits for
+ * the phone to find itself. Only when location is ALREADY allowed for the
+ * Store Map — never pops the permission question at someone who just opened
+ * the map — and at most once every 100 s (same throttle as the dashboard). */
+function geoWarm() {
+  try {
+    if (!navigator.geolocation || !navigator.permissions || document.hidden) return;
+    if (Date.now() - (S.geoWarmAt || 0) <= 100000) return;
+    navigator.permissions.query({name: 'geolocation'}).then(p => {
+      if (p.state !== 'granted' || Date.now() - (S.geoWarmAt || 0) <= 100000) return;
+      S.geoWarmAt = Date.now();
+      punchGeo();
+    }, () => {});
+  } catch (e) {}
+}
+setTimeout(geoWarm, 800);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) geoWarm(); });
 /* Clock punch feedback in the tech's language (Mark 9/15): Spanish when the
  * app is set to Español, English otherwise. punchSlow() flips a button or
  * message to "Still clocking in — Google is slow, keep this open…" after
