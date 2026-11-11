@@ -3925,8 +3925,8 @@ function renderMap() {
         const pfs2 = Math.max(7, Math.min(sl.h * 0.5, ((sl.w - numW - 8) * 1.7) / Math.max(pt.length, 4)));
         // lettering coloured by plate condition (Jacob 10/1, 100126mower22):
         // green = refinished (storage AFTER / back in piano), red = awaiting
-        // refinishing (storage BEFORE / removed), lilac = out at Curtis Harper,
-        // purple = the piano is Waiting on Curtis Harper (Mark 11/11)
+        // refinishing (storage BEFORE / removed), purple = the piano is
+        // Waiting on Curtis Harper (Mark 11/11; lilac for At Curtis removed)
         s += `<text x="${sl.x + numW + (sl.w - numW) / 2}" y="${sl.y + sl.h / 2 + pfs2 * 0.36}"
               text-anchor="middle" class="phnum" font-size="${pfs2}">⚙ ${plates.map((px, i) => {
                 const c = plateInkColor(px);
@@ -12749,7 +12749,8 @@ function plateInkColor(p) {
   if (plateWaitingOnCurtis(p) && !/after|back in/i.test(st)) return PLATE_WAIT_INK;
   if (/after|back in/i.test(st)) return '#6fe09a';          // refinished
   if (/before|removed/i.test(st)) return '#ff7b7b';         // awaiting refinishing
-  if (/curtis/i.test(st)) return '#d2b4f5';                 // out at the plating shop
+  // lilac for At Curtis Harper removed (Mark 11/11): that status frees the slat, so a
+  // stored plate is never lilac — purple (Waiting on Curtis Harper) covers the Curtis case
   return '';
 }
 function plateBadge(v) {
