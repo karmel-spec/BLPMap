@@ -148,7 +148,11 @@ step before the plate can go back in — and the piano is ONLY waiting on Curtis
 Harper for its plate (Mark 2026-11-11)** — the plate stays on the rack slat it
 was given in CAP (it sits there all through PRSB and Lacquer Soundboard) and
 the map letters it purple. When the refinished plate is back (AFTER storage /
-Back in piano) the phase goes to Restringing. "Removed" is no longer a plate status. So: treat **Waiting on Curtis
+Back in piano) the phase goes to Restringing. **Restringing needs the plate
+(Mark 2026-11-11):** any move INTO Restringing while the plate still reads
+Plate storage — BEFORE or At Curtis Harper lands as Waiting on Curtis Harper
+instead (AFTER, Back in piano, In piano or blank → Restringing as asked; sale
+phases skipped). "Removed" is no longer a plate status. So: treat **Waiting on Curtis
 Harper** as "hold restringing" whether the plate reads At Curtis Harper or
 Plate storage — BEFORE — both are normal, neither is a bottleneck to flag;
 treat **Restringing + Plate storage — AFTER** as "just back from Curtis" —
