@@ -143,10 +143,12 @@ always; a plate leaving Curtis for BEFORE storage or blank puts the phase
 back to the one the note recorded. Setting the phase to Waiting on Curtis
 Harper does NOT change the plate (request 111026hales81): the plate can sit
 in **Plate storage — BEFORE** while the piano waits for Curtis to take it.
-**Waiting on Curtis Harper means PRSB is complete and the piano is ONLY
-waiting on Curtis Harper before DHRT (Mark 2026-11-11)** — the plate stays on
-the rack slat it was given in CAP (it sits there all through PRSB) and the
-map letters it purple. "Removed" is no longer a plate status. So: treat **Waiting on Curtis
+**Waiting on Curtis Harper means Lacquer Soundboard is complete — the last
+step before the plate can go back in — and the piano is ONLY waiting on Curtis
+Harper for its plate (Mark 2026-11-11)** — the plate stays on the rack slat it
+was given in CAP (it sits there all through PRSB and Lacquer Soundboard) and
+the map letters it purple. When the refinished plate is back (AFTER storage /
+Back in piano) the phase goes to Restringing. "Removed" is no longer a plate status. So: treat **Waiting on Curtis
 Harper** as "hold restringing" whether the plate reads At Curtis Harper or
 Plate storage — BEFORE — both are normal, neither is a bottleneck to flag;
 treat **Restringing + Plate storage — AFTER** as "just back from Curtis" —

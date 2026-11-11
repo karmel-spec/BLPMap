@@ -12737,9 +12737,11 @@ function notePlateEdit(p, val) {
   const e = pendingEdits.get(p.row) || {}; e.plateStatus = val; pendingEdits.set(p.row, e);
 }
 // map-rack lettering colour for a stored plate (on the dark slat tile)
-// Waiting on Curtis Harper (Mark 11/11): PRSB is done and the piano only
-// waits for Curtis to take the plate — the plate stays on the slat it got
-// in CAP, lettered purple. (The phase never moves or frees the plate — 11/10.)
+// Waiting on Curtis Harper (Mark 11/11): Lacquer Soundboard — the last step
+// before the plate can go back in — is done, and the piano only waits on
+// Curtis Harper for its plate. The plate stays on the slat it got in CAP
+// (there all through PRSB and Lacquer Soundboard), lettered purple. (The
+// phase never moves or frees the plate — 11/10.)
 const PLATE_WAIT_INK = '#c58bff';
 const plateWaitingOnCurtis = p => effectivePhase(p || {}) === 'Waiting on Curtis Harper';
 function plateInkColor(p) {
