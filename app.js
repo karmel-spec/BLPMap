@@ -1836,6 +1836,7 @@ function preloadReport(id) {
   if (id === 'appupdates' && !S.auRows) loadAppUpdates();
   if (id === 'spotlight' && !S.spotData) loadSpotlight();
   if (id === 'tuningcheck') tchkLoad().then(() => { if (S.openReport === 'tuningcheck') renderReport(); });
+  if (id === 'punchspeed' && !PSP.rows && !PSP.loading) loadPunchSpeed();
   if (id === 'buffing' && !BUF.data && !BUF.loading) loadBuffing().then(() => { if (S.openReport === 'buffing') renderBuffing(); }).catch(() => {});
   if (id === 'clockadjust') {
     if (!S.fixRows) loadClockFixes();
@@ -11498,6 +11499,8 @@ function isPayrollAdmin() { return gateOr(PAYROLL_ADMIN_EMAILS.includes(userEmai
 function isContractViewer() { return isPayrollAdmin() || isOwner() || gateOr(false, 'contracts_view'); }
 function isTimelogAdmin() { return gateOr(TIMELOG_ADMIN_EMAILS.includes(userEmail()), 'tl_edit'); }
 // 📊 Manager console — the owners and the Lead Manager only (Brigham 9/1)
+// ⏱ Punch Speed report (Mark 11/11): Mark, the admins and the owners only
+function isPunchSpeedViewer() { const e = userEmail(); return !!e && (ADMIN_EMAILS.includes(e) || e === 'markhales.blp@gmail.com'); }
 function isManagerConsole() { return isOwner() || gateOr(userEmail() === 'markhales.blp@gmail.com', 'manager_console'); }
 // only BLP accounts may sign in — a personal Gmail gets bounced back to
 // Google's account chooser instead of silently half-working
@@ -12983,6 +12986,101 @@ function stalledTable() {
 function queueMembers() {
   return S.data.pianos.filter(p => p.active && p.queuePos > 0)
     .sort((a, b) => a.queuePos - b.queuePos);
+}
+/* ⏱ PUNCH SPEED (Mark 11/11): the punch timing log (salesapp2 punch-timing →
+ * "Punch Timing" tab) summarized — typical / slow / worst per person, by hour
+ * of the day, and the slowest punches with how each ended. Read-only. */
+const PSP = {rows: null, loading: false, err: '', f: {days: 14, clock: '', who: ''}};
+async function loadPunchSpeed() {
+  PSP.loading = true; PSP.err = '';
+  try {
+    const r = await fetchT('https://blpsalesapp.netlify.app/.netlify/functions/punch-timing?key=pianoman&days=60', {}, 20000);
+    const j = await r.json();
+    if (!j || !j.ok) throw new Error((j && j.error) || 'no reply');
+    PSP.rows = j.rows || [];
+  } catch (e) { PSP.rows = null; PSP.err = String((e && e.message) || e); }
+  PSP.loading = false;
+  if (S.openReport === 'punchspeed') renderReport();
+}
+document.addEventListener('change', ev => {
+  const el = ev.target;
+  if (!el || !el.classList || !el.classList.contains('pspf')) return;
+  PSP.f[el.dataset.f] = el.dataset.f === 'days' ? Number(el.value) : el.value;
+  renderReport();
+});
+document.addEventListener('click', ev => {
+  const b = ev.target && ev.target.closest && ev.target.closest('.psprefresh');
+  if (!b) return;
+  PSP.rows = null; loadPunchSpeed(); renderReport();
+});
+function punchSpeedTable() {
+  if (PSP.loading && !PSP.rows) return '<div class="empty">Loading punch timings…</div>';
+  if (!PSP.rows) return `<div class="empty">Couldn't load the punch timings (${esc(PSP.err || 'no reply')}). <button class="psprefresh">Try again</button></div>`;
+  const f = PSP.f, cut = Date.now() - f.days * 86400000;
+  const all = PSP.rows.filter(r => new Date(r.at).getTime() >= cut && (!f.clock || r.clock === f.clock));
+  const people = [...new Set(all.map(r => r.who).filter(Boolean))].sort();
+  const rows = all.filter(r => !f.who || r.who === f.who);
+  // percentile with interpolation: the typical of 2.1 s and 48.3 s is 25.2 s, not 48.3 s
+  const q = (a, p) => { if (!a.length) return null; const b = a.slice().sort((x, y) => x - y); const pos = p * (b.length - 1), lo = Math.floor(pos), hi = Math.ceil(pos); return b[lo] + (b[hi] - b[lo]) * (pos - lo); };
+  const sec = v => v == null ? '—' : (Math.round(v * 10) / 10).toFixed(1) + ' s';
+  const SLOW = 10;   // seconds — Mark: a few seconds at most
+  const tone = v => v == null ? '' : v > 30 ? 'color:#b3261e;font-weight:700' : v > SLOW ? 'color:#a15c00;font-weight:700' : '';
+  const ok = rows.filter(r => /^ok|^already/.test(r.outcome || ''));
+  const secsOk = ok.map(r => r.secs);
+  const lost = rows.filter(r => /reply lost/.test(r.outcome || '')).length;
+  const failed = rows.filter(r => /^failed/.test(r.outcome || '')).length;
+  const refused = rows.filter(r => /^refused/.test(r.outcome || '')).length;
+  const over = secsOk.filter(v => v > SLOW).length;
+  const tile = (label, val, sub) => `<div style="border:1px solid #e3ddd3;border-radius:10px;padding:10px 12px;min-width:120px;flex:1">
+      <div class="lite" style="font-size:11px;letter-spacing:.06em;text-transform:uppercase">${label}</div>
+      <div style="font-size:22px;font-weight:800;font-variant-numeric:tabular-nums">${val}</div>${sub ? `<div class="lite" style="font-size:11.5px">${sub}</div>` : ''}</div>`;
+  const tiles = `<div style="display:flex;flex-wrap:wrap;gap:10px;margin:10px 0 14px">
+      ${tile('Punches', rows.length, (ok.length) + ' went through')}
+      ${tile('Typical', sec(q(secsOk, 0.5)), 'half are faster')}
+      ${tile('Slow end', sec(q(secsOk, 0.9)), '1 in 10 take this long or longer')}
+      ${tile('Worst', sec(secsOk.length ? Math.max(...secsOk) : null), '')}
+      ${tile('Over ' + SLOW + ' s', over + (secsOk.length ? ' (' + Math.round(over * 100 / secsOk.length) + '%)' : ''), '')}
+      ${tile('Problems', lost + failed + refused, `${lost} reply lost · ${failed} failed · ${refused} refused (distance)`)}
+    </div>`;
+  // by person
+  const byWho = {};
+  rows.forEach(r => { (byWho[r.who] = byWho[r.who] || []).push(r); });
+  const personRows = Object.entries(byWho).map(([who, list]) => {
+    const okS = list.filter(r => /^ok|^already/.test(r.outcome || '')).map(r => r.secs);
+    return {who, n: list.length, med: q(okS, 0.5), p90: q(okS, 0.9), max: okS.length ? Math.max(...okS) : null,
+      over: okS.filter(v => v > SLOW).length, prob: list.filter(r => !/^ok|^already/.test(r.outcome || '') || /reply lost/.test(r.outcome || '')).length};
+  }).sort((a, b) => (b.p90 || 0) - (a.p90 || 0));
+  // by hour (Mountain time)
+  const hourOf = r => Number(new Intl.DateTimeFormat('en-US', {timeZone: 'America/Denver', hour: 'numeric', hourCycle: 'h23'}).format(new Date(r.at)));
+  const byHour = {};
+  ok.forEach(r => { const h = hourOf(r); (byHour[h] = byHour[h] || []).push(r.secs); });
+  const hourLbl = h => `${((h + 11) % 12) + 1} ${h < 12 ? 'AM' : 'PM'}`;
+  const hours = Object.keys(byHour).map(Number).sort((a, b) => a - b);
+  const slowest = rows.slice().sort((a, b) => b.secs - a.secs).slice(0, 15);
+  const when = iso => new Date(iso).toLocaleString('en-US', {timeZone: 'America/Denver', month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit'});
+  const act = r => ({dayin: 'day in', dayout: 'day out', clockin: 'piano in', clockout: 'piano out'}[r.action] || r.action);
+  const opt = (v, cur, label) => `<option value="${esc(String(v))}"${String(v) === String(cur) ? ' selected' : ''}>${esc(label)}</option>`;
+  return `<div class="actbar" style="flex-wrap:wrap;gap:8px">
+      <select class="pspf" data-f="days" aria-label="Period">${[1, 7, 14, 30, 60].map(d => opt(d, f.days, d === 1 ? 'Last 24 hours' : 'Last ' + d + ' days')).join('')}</select>
+      <select class="pspf" data-f="clock" aria-label="Clock">${opt('', f.clock, 'Day + piano clock')}${opt('day', f.clock, 'Day clock only')}${opt('piano', f.clock, 'Piano clock only')}</select>
+      <select class="pspf" data-f="who" aria-label="Person">${opt('', f.who, 'Everyone')}${people.map(p => opt(p, f.who, p)).join('')}</select>
+      <button class="psprefresh">↻ Refresh</button>
+    </div>
+    ${!rows.length ? '<div class="empty">No punches logged in this period yet — timing started 11/11.</div>' : `
+    ${tiles}
+    <h4 style="margin:6px 0">By person <span class="lite" style="font-weight:400">— slowest first</span></h4>
+    <div style="overflow-x:auto"><table><tr><th>WHO</th><th>PUNCHES</th><th>TYPICAL</th><th>SLOW END</th><th>WORST</th><th>OVER ${SLOW} S</th><th>PROBLEMS</th></tr>
+    ${personRows.map(r => `<tr><td>${esc(r.who)}</td><td>${r.n}</td><td style="${tone(r.med)}">${sec(r.med)}</td><td style="${tone(r.p90)}">${sec(r.p90)}</td><td style="${tone(r.max)}">${sec(r.max)}</td><td>${r.over}</td><td>${r.prob || ''}</td></tr>`).join('')}
+    </table></div>
+    <h4 style="margin:14px 0 6px">By time of day</h4>
+    <div style="overflow-x:auto"><table><tr><th>HOUR</th><th>PUNCHES</th><th>TYPICAL</th><th>SLOW END</th></tr>
+    ${hours.map(h => `<tr><td>${hourLbl(h)}</td><td>${byHour[h].length}</td><td style="${tone(q(byHour[h], 0.5))}">${sec(q(byHour[h], 0.5))}</td><td style="${tone(q(byHour[h], 0.9))}">${sec(q(byHour[h], 0.9))}</td></tr>`).join('')}
+    </table></div>
+    <h4 style="margin:14px 0 6px">Slowest punches</h4>
+    <div style="overflow-x:auto"><table><tr><th>WHEN</th><th>WHO</th><th>PUNCH</th><th>TOOK</th><th>GOOGLE'S PART</th><th>TRIES</th><th>HOW IT ENDED</th><th>DEVICE</th></tr>
+    ${slowest.map(r => `<tr><td style="white-space:nowrap">${esc(when(r.at))}</td><td>${esc(r.who)}</td><td>${esc(act(r))}</td><td style="${tone(r.secs)}">${sec(r.secs)}</td><td>${sec(r.googleSecs)}</td><td>${r.tries || ''}</td><td>${esc(r.outcome || '')}</td><td>${esc(r.device || '')}${r.net ? ' · ' + esc(r.net) : ''}</td></tr>`).join('')}
+    </table></div>
+    <p class="lite" style="font-size:12px;margin-top:10px">Took = from the tap until the app showed the result. Google's part = time the Google bridge spent on it (blank when its reply never arrived). Typical and slow end count only punches that went through.</p>`}`;
 }
 /* 🎼 Player Rebuild Queue (Mark 11/10): the shop queue narrowed to player
  * pianos being rebuilt — the Player Rebuild track (trackCanon also reads the
@@ -14839,6 +14937,10 @@ const REPORT_DEFS = () => [
    count: (() => { try { return payMilestoneRows(false).filter(r => r.billNow).length; } catch (e) { return null; } })(),
    desc: 'Every shop piano on a progress-payment plan: its shop progress (the same % the card shows), the next 25 / 50 / 75 / 100% mark, and how many phases away it is. BILL NOW = the next phase change reaches the mark — Brigham wants the invoice out just before. A mark already reached that nobody has been emailed about goes out with the next morning sweep (7:45 AM).',
    html: payMilestoneTable},
+  {id: 'punchspeed', sec: 'admin', show: () => isPunchSpeedViewer(), icon: '⏱', title: 'PUNCH SPEED',
+   count: null,
+   desc: 'How long clocking in and out takes on each person\u2019s phone or computer — every day-clock and piano-clock punch since 11/11, with Google\u2019s part, retries and how it ended. Goal: a few seconds at most. Visible to Mark, the admins and the owners.',
+   html: punchSpeedTable},
   {id: 'timeoffrep', sec: 'admin', icon: '🏖', title: 'TIME OFF', count: (() => {
      try { const t = new Date().toLocaleDateString('en-CA');
        return TO.rows ? TO.rows.filter(r => r.end >= t && !/^duplicate/i.test(r.status || '')).length : null; } catch (e) { return null; } })(),
