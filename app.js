@@ -1837,6 +1837,7 @@ function preloadReport(id) {
   if (id === 'spotlight' && !S.spotData) loadSpotlight();
   if (id === 'tuningcheck') tchkLoad().then(() => { if (S.openReport === 'tuningcheck') renderReport(); });
   if (id === 'punchspeed' && !PSP.rows && !PSP.loading) loadPunchSpeed();
+  if (id === 'punchspeed' && !S.payRows) loadPayroll().then(() => { if (S.openReport === 'punchspeed') renderReport(); });
   if (id === 'buffing' && !BUF.data && !BUF.loading) loadBuffing().then(() => { if (S.openReport === 'buffing') renderBuffing(); }).catch(() => {});
   if (id === 'clockadjust') {
     if (!S.fixRows) loadClockFixes();
@@ -6176,6 +6177,35 @@ function punchLog(clock, action, t0, j, source) {
         device, net, source: source || '', app, at: new Date(t0).toISOString()})}).catch(() => {});
   } catch (e) { /* timing is best-effort */ }
 }
+/* Backfill (Mark 11/11): before the log existed, each phone kept only its own
+ * last 12 punch times (for the dashboard's "last punch took" line). Each
+ * phone sends those once, under the person signed in on it. Computers are
+ * skipped — shared shop computers can't say whose punch it was. Punches from
+ * after the log went live (8:44 AM 11/11) are already logged and are left out. */
+const PUNCH_LOG_LIVE = Date.parse('2026-11-11T15:44:00Z');
+let punchBackfillTries = 0;
+function punchBackfill() {
+  try {
+    if (lsGet('blpPunchBackfill')) return true;
+    const who = clockName();
+    if (!who || !authUser()) return false;   // not signed in yet — try again later
+    const phone = window.innerWidth <= 760 || /iphone|android.*mobile|ipad/i.test(navigator.userAgent);
+    const L = JSON.parse(lsGet('blpPunchMs') || '[]').filter(e => e && e.at < PUNCH_LOG_LIVE && e.ms > 0);
+    if (!phone || !L.length) { lsSet('blpPunchBackfill', 'skip ' + new Date().toISOString()); return true; }
+    const app = ((document.querySelector('script[src*="app.js?v="]') || {}).src || '').replace(/.*v=/, '');
+    fetch('https://blpsalesapp.netlify.app/.netlify/functions/punch-timing', {method: 'POST',
+      headers: {'content-type': 'text/plain;charset=utf-8'},
+      body: JSON.stringify({key: 'pianoman', who, device: 'phone', app,
+        batch: L.map(e => ({at: new Date(e.at).toISOString(), action: e.action, ms: e.ms, googleMs: e.bridge || null}))})})
+      .then(r => r.json()).then(j => { if (j && j.ok) lsSet('blpPunchBackfill', 'sent ' + (j.added || 0) + ' ' + new Date().toISOString()); })
+      .catch(() => {});
+    return true;
+  } catch (e) { return true; }
+}
+(function backfillWhenSignedIn() {
+  if (punchBackfill() || ++punchBackfillTries > 20) return;
+  setTimeout(backfillWhenSignedIn, 30000);
+})();
 async function dayPunch(action) {
   const t0 = Date.now(); PUNCH_TRY.n = 0;
   let j;
@@ -12990,7 +13020,7 @@ function queueMembers() {
 /* ⏱ PUNCH SPEED (Mark 11/11): the punch timing log (salesapp2 punch-timing →
  * "Punch Timing" tab) summarized — typical / slow / worst per person, by hour
  * of the day, and the slowest punches with how each ended. Read-only. */
-const PSP = {rows: null, loading: false, err: '', f: {days: 14, clock: '', who: ''}};
+const PSP = {rows: null, loading: false, err: '', f: {from: '', to: '', clock: '', who: ''}};
 async function loadPunchSpeed() {
   PSP.loading = true; PSP.err = '';
   try {
@@ -13005,10 +13035,11 @@ async function loadPunchSpeed() {
 document.addEventListener('change', ev => {
   const el = ev.target;
   if (!el || !el.classList || !el.classList.contains('pspf')) return;
-  PSP.f[el.dataset.f] = el.dataset.f === 'days' ? Number(el.value) : el.value;
+  PSP.f[el.dataset.f] = el.value;
   renderReport();
 });
 document.addEventListener('click', ev => {
+  if (ev.target && ev.target.closest && ev.target.closest('.pspclear')) { PSP.f = {from: '', to: '', clock: '', who: ''}; renderReport(); return; }
   const b = ev.target && ev.target.closest && ev.target.closest('.psprefresh');
   if (!b) return;
   PSP.rows = null; loadPunchSpeed(); renderReport();
@@ -13016,9 +13047,11 @@ document.addEventListener('click', ev => {
 function punchSpeedTable() {
   if (PSP.loading && !PSP.rows) return '<div class="empty">Loading punch timings…</div>';
   if (!PSP.rows) return `<div class="empty">Couldn't load the punch timings (${esc(PSP.err || 'no reply')}). <button class="psprefresh">Try again</button></div>`;
-  const f = PSP.f, cut = Date.now() - f.days * 86400000;
-  const all = PSP.rows.filter(r => new Date(r.at).getTime() >= cut && (!f.clock || r.clock === f.clock));
-  const people = [...new Set(all.map(r => r.who).filter(Boolean))].sort();
+  const f = PSP.f;
+  const dayOf = iso => denverDay(iso);
+  const all = PSP.rows.filter(r => (!f.from || dayOf(r.at) >= f.from) && (!f.to || dayOf(r.at) <= f.to) && (!f.clock || r.clock === f.clock));
+  // every team member, like the day clock's filter — not only people with timings yet
+  const people = [...new Set([...unvoided(S.payRows || []).map(r => techName(r.tech)), ...PSP.rows.map(r => r.who)].filter(Boolean))].sort();
   const rows = all.filter(r => !f.who || r.who === f.who);
   // percentile with interpolation: the typical of 2.1 s and 48.3 s is 25.2 s, not 48.3 s
   const q = (a, p) => { if (!a.length) return null; const b = a.slice().sort((x, y) => x - y); const pos = p * (b.length - 1), lo = Math.floor(pos), hi = Math.ceil(pos); return b[lo] + (b[hi] - b[lo]) * (pos - lo); };
@@ -13061,12 +13094,14 @@ function punchSpeedTable() {
   const act = r => ({dayin: 'day in', dayout: 'day out', clockin: 'piano in', clockout: 'piano out'}[r.action] || r.action);
   const opt = (v, cur, label) => `<option value="${esc(String(v))}"${String(v) === String(cur) ? ' selected' : ''}>${esc(label)}</option>`;
   return `<div class="actbar" style="flex-wrap:wrap;gap:8px">
-      <select class="pspf" data-f="days" aria-label="Period">${[1, 7, 14, 30, 60].map(d => opt(d, f.days, d === 1 ? 'Last 24 hours' : 'Last ' + d + ' days')).join('')}</select>
+      <select class="pspf" data-f="who" aria-label="Team member">${opt('', f.who, 'All team members')}${people.map(p => opt(p, f.who, p)).join('')}</select>
+      <label class="rfd">from <input type="date" class="pspf" data-f="from" value="${esc(f.from)}"></label>
+      <label class="rfd">to <input type="date" class="pspf" data-f="to" value="${esc(f.to)}"></label>
       <select class="pspf" data-f="clock" aria-label="Clock">${opt('', f.clock, 'Day + piano clock')}${opt('day', f.clock, 'Day clock only')}${opt('piano', f.clock, 'Piano clock only')}</select>
-      <select class="pspf" data-f="who" aria-label="Person">${opt('', f.who, 'Everyone')}${people.map(p => opt(p, f.who, p)).join('')}</select>
+      ${f.who || f.from || f.to || f.clock ? '<button class="pspclear">✕ clear filters</button>' : ''}
       <button class="psprefresh">↻ Refresh</button>
     </div>
-    ${!rows.length ? '<div class="empty">No punches logged in this period yet — timing started 11/11.</div>' : `
+    ${!rows.length ? `<div class="empty">${f.who ? esc(f.who) + ' has no punch timings' : 'No punch timings'}${f.from || f.to ? ' in these dates' : ''} yet. Live timing started 11/11; earlier punches arrive as each phone opens the app.</div>` : `
     ${tiles}
     <h4 style="margin:6px 0">By person <span class="lite" style="font-weight:400">— slowest first</span></h4>
     <div style="overflow-x:auto"><table><tr><th>WHO</th><th>PUNCHES</th><th>TYPICAL</th><th>SLOW END</th><th>WORST</th><th>OVER ${SLOW} S</th><th>PROBLEMS</th></tr>
@@ -13080,7 +13115,7 @@ function punchSpeedTable() {
     <div style="overflow-x:auto"><table><tr><th>WHEN</th><th>WHO</th><th>PUNCH</th><th>TOOK</th><th>GOOGLE'S PART</th><th>TRIES</th><th>HOW IT ENDED</th><th>DEVICE</th></tr>
     ${slowest.map(r => `<tr><td style="white-space:nowrap">${esc(when(r.at))}</td><td>${esc(r.who)}</td><td>${esc(act(r))}</td><td style="${tone(r.secs)}">${sec(r.secs)}</td><td>${sec(r.googleSecs)}</td><td>${r.tries || ''}</td><td>${esc(r.outcome || '')}</td><td>${esc(r.device || '')}${r.net ? ' · ' + esc(r.net) : ''}</td></tr>`).join('')}
     </table></div>
-    <p class="lite" style="font-size:12px;margin-top:10px">Took = from the tap until the app showed the result. Google's part = time the Google bridge spent on it (blank when its reply never arrived). Typical and slow end count only punches that went through.</p>`}`;
+    <p class="lite" style="font-size:12px;margin-top:10px">Took = from the tap until the app showed the result. Google's part = time the Google bridge spent on it (blank when its reply never arrived). Typical and slow end count only punches that went through. Punches marked "from phone history" are from before 11/11 — each phone kept its last 12 punch times; failed punches and tries weren't saved then.</p>`}`;
 }
 /* 🎼 Player Rebuild Queue (Mark 11/10): the shop queue narrowed to player
  * pianos being rebuilt — the Player Rebuild track (trackCanon also reads the
