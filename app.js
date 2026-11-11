@@ -8823,6 +8823,8 @@ async function setPhase(p, phase, pop, extra) {
         body: JSON.stringify({key: 'pianoman', op: 'withdraw', serial: p.serial, by: clockName() || 'delivery'})}).then(() => loadQcQueue()).catch(() => {});
       msg.className = 'phmsg ok';
       msg.textContent = p.phase ? `✓ Saved — ${p.phase}` : '✓ Phase cleared';
+      // Restringing needs the plate (Mark 11/11): the bridge set Waiting on Curtis Harper instead
+      if (j.plateHold) msg.textContent += ` (asked for Restringing — the plate is ${/^at curtis/i.test(j.plateHold) ? 'still at Curtis Harper' : 'still BEFORE refinishing'})`;
       // (Rule B retired 11/10, 111026hales81: Waiting on Curtis Harper no longer moves the plate)
       // 🏠 Out on Rental (Mark 11/10): the bridge moved the spot to "Rented — was at …" → rented zone
       if (j.spotSet) {
@@ -11935,6 +11937,12 @@ function watchQueuedPhase(qid, p, phase, was, sel, edit, msg) {
     try { j = await (await fetchT(RELAY_URL + '?key=pianoman&qid=' + encodeURIComponent(qid), {cache: 'no-store'}, 15000)).json(); } catch (e) {}
     if (j && j.status === 'done') {
       if (j.stale) { say('err', `✗ Not applied — the phase was changed again after this was saved. Refreshing…`); revertPhase(p, was, sel, edit); setTimeout(pianologLiveRefresh, 1200); }
+      // Restringing needs the plate (Mark 11/11): the bridge saved Waiting on Curtis Harper instead
+      else if (j.phase && j.phase !== phase) {
+        p.phase = j.phase; if (edit) edit.phase = j.phase;
+        say('ok', `✓ Saved — ${j.phase}` + (j.plateHold ? ` (asked for Restringing — the plate is ${/^at curtis/i.test(j.plateHold) ? 'still at Curtis Harper' : 'still BEFORE refinishing'})` : ''));
+        renderMap();
+      }
       return;
     }
     if (j && j.status === 'failed') {

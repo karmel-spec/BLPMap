@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-11-11.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-11-11.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -1113,7 +1113,8 @@ function doPost(e) {
       var ph = setPhase_(req);
       if (ph.noop || ph.stale) return json_(ph);   // queued re-send that changes nothing
       if (ph.ok) logAct_(who, 'Phase change', ph.summary || req.serial,
-        (ph.previous || '(none)') + ' → ' + (ph.phase || '(none)'));
+        (ph.previous || '(none)') + ' → ' + (ph.phase || '(none)')
+        + (ph.plateHold ? ' (asked for Restringing — plate still ' + ph.plateHold + ')' : ''));
       if (ph.ok && ph.movedToSold) logAct_(who, 'Moved to SOLD section', ph.summary || req.serial,
         'delivered — row relocated below the SOLD divider, off the map');
       if (ph.ok && ph.autoCompleted) logAct_(who, 'Phases auto-completed',
@@ -3449,6 +3450,30 @@ function setPhase_(req) {
   if (phase && PHASE_VALUES.indexOf(phase) < 0) return {error: 'unknown phase: ' + phase};
   var col = phaseCol_(sh);
   var prev = String(sh.getRange(found.row, col).getValue() || '');
+  // Restringing needs the plate (Mark 11/11): ANY move into Restringing first
+  // checks the card's PLATE STATUS — still in BEFORE storage or out At Curtis
+  // Harper means the plate isn't back, so the piano goes to Waiting on Curtis
+  // Harper instead (waiting note "… — was <phase>", so rule D can put it
+  // back). AFTER / Back in piano / In piano / blank → Restringing as asked
+  // (some restrings never take the plate out). Not from a sale phase, and not
+  // when the plate itself set Restringing (rule C, _fromPlate).
+  var plateHold = '';
+  if (phase === 'Restringing' && !req._fromPlate
+      && !/^(for sale|sale pending|sold|delivered|post sale qc)$/i.test(prev.trim())) {
+    try {
+      var hdrP = sh.getRange(2, 1, 1, sh.getLastColumn()).getValues()[0], pcolP = -1;
+      for (var cp = 0; cp < hdrP.length; cp++) if (String(hdrP[cp] || '').trim().toUpperCase() === 'PLATE STATUS') { pcolP = cp + 1; break; }
+      var plNow = pcolP > 0 ? String(sh.getRange(found.row, pcolP).getValue() || '').trim() : '';
+      if (/^plate storage\s*\W*\s*before/i.test(plNow) || /^at curtis/i.test(plNow)) {
+        plateHold = plNow;
+        phase = 'Waiting on Curtis Harper';
+        if (prev.trim() !== 'Waiting on Curtis Harper') {
+          req.note = (/^at curtis/i.test(plNow) ? 'Plate at Curtis Harper' : 'Plate not refinished yet (BEFORE storage)')
+            + (prev.trim() && prev.trim() !== 'Restringing' ? ' \u2014 was ' + prev.trim() : '');   // never "was Restringing" — rule D would undo the hold
+        } else req.note = null;   // already waiting — keep its note
+      }
+    } catch (ePH) { /* plate unreadable — save Restringing as asked */ }
+  }
   // a queued re-send (Walter 10/7): the relay worker kept replaying phase
   // changes every 5 min for hours (Lester 185231 "1st Tuning → 1st Tuning"
   // since 7:28) because the bridge answered slower than its budget. Already
@@ -3580,7 +3605,7 @@ function setPhase_(req) {
     } catch (e) { /* automation is a convenience — never fail the phase write */ }
   }
   return {ok: true, plateSet: plateSet, spotSet: spotSet, row: movedTo || found.row, summary: found.summary,
-          previous: prev, phase: phase, note: note, checkBack: cb,
+          previous: prev, phase: phase, note: note, checkBack: cb, plateHold: plateHold,
           movedToSold: !!movedTo, done: autoDone, autoCompleted: !!autoDone};
 }
 
