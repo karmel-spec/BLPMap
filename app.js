@@ -7194,7 +7194,7 @@ function popHTML(p) {
       <span class="platehwmsg phmsg"></span></div>` : ''}
     ${p.serial && (p.plateTemp || '').trim() ? `<div class="row rowflex"><span>⚙️ Plate temp spot</span>
       <b style="font-size:12.5px">${esc(p.plateTemp)}</b></div>` : ''}
-    ${p.serial ? `<div class="row rowflex"><span>🪑 Bench</span><span class="bnright"><span class="bnthumb"></span><b class="benchloc">${esc(p.benchLoc || '—')}</b></span></div>
+    ${p.serial ? `<div class="row rowflex"><span>🪑 Bench</span><span class="bnright"><span class="bnthumb"></span><b class="benchloc">${benchLabel(p)}</b></span></div>
     <div class="movebox benchbox">
         <input class="bnin" placeholder="bench location — spot #, shelf…" maxlength="40"
           value="${esc(p.benchLoc || '')}">
@@ -8365,7 +8365,7 @@ function wirePop(p) {
         p.benchLoc = val;
         msg.textContent = '✓ saved';
         setTimeout(() => { if (msg.isConnected && msg.textContent === '✓ saved') msg.textContent = ''; }, 1600);
-        const bl = pop.querySelector('.benchloc'); if (bl) bl.textContent = val || '—';
+        const bl = pop.querySelector('.benchloc'); if (bl) bl.innerHTML = benchLabel(p);
       } catch (e) { msg.textContent = '✗ ' + e.message; }
     };
     bnin.onclick = ev => ev.stopPropagation();
@@ -8934,6 +8934,24 @@ function cabTokens(p) {
 }
 // Back in piano ⇒ the bridge frees the plate's rack slat + temp spot (Walter
 // 9/28); mirror that locally so the rack and Plate Queue repaint at once
+/* 🪑 Bench row (Mark 11/11): "—" read as "no bench" — 1888 Decker Bros 20349
+ * has "Yes, a black stool" in the Piano Log's bench field but no storage spot.
+ * The row now says what the Piano Log knows: the spot when there is one (plus
+ * the description), "<answer> · spot not recorded yet", or "No bench". */
+function benchLabel(p) {
+  const loc = String((p && p.benchLoc) || '').trim();
+  const ans = String((p && p.bench) || '').trim();
+  const no = /^no\b/i.test(ans);
+  // long answers (notes about upholstery etc.) → first line, ~40 characters; full text on hover
+  const line1 = ans.split(/\n/)[0].trim();
+  const short = line1.length > 40 ? line1.slice(0, 38).trim() + '…' : line1;
+  const txt = t => `<span title="${esc(ans)}">${esc(t)}</span>`;
+  const desc = ans && !no && !/^y(es)?[.!\s]*$/i.test(ans) ? short : '';
+  if (loc) return esc(loc) + (desc ? ` <span class="lite" style="font-weight:400">· ${txt(desc)}</span>` : '');
+  if (no) return 'No bench';
+  if (ans) return txt(short) + ' <span class="lite" style="font-weight:400">· spot not recorded yet</span>';
+  return '—';
+}
 function plateBackHome(p, status) {
   // At Curtis Harper frees the slat too (Walter 10/13) — the plate has left storage
   if (status !== 'Back in piano' && status !== 'In piano' && status !== 'At Curtis Harper') return;
