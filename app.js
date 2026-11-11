@@ -4838,7 +4838,7 @@ function impNoteGate(p, ph) {
 }
 const DAY_FIRST_MSG = () => tr('Clock in for the DAY first — 👤 My Dashboard → 💵 Payroll Clock → ▶ Clock in for the day. Piano time only counts inside a paid day.',
   'Primero marca la entrada del DÍA — 👤 Mi Panel → 💵 Reloj de Nómina → ▶ Marcar entrada del día. El tiempo en piano solo cuenta dentro de un día pagado.');
-async function punch(action, p, phase, source, endAt, ackNote) {
+async function punchCore(action, p, phase, source, endAt, ackNote) {
   const tPunch = Date.now();
   const {pin, ok} = writeAuth();
   if (!ok) return {error: 'Sign in first — hours are logged under your name.'};
@@ -4874,6 +4874,7 @@ async function punch(action, p, phase, source, endAt, ackNote) {
     for (let a = 0; a < 3; a++) {
       const left = punchDeadline - Date.now();
       if (left < 3000) break;
+      PUNCH_TRY.n++;
       const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
         headers: {'content-type': 'text/plain;charset=utf-8'}, body: JSON.stringify(body)}, left);
       j = await r.json();
@@ -6151,6 +6152,44 @@ const slowText = dir => dir === 'in'
 function punchSlow(el, dir) {
   return setTimeout(() => { if (el && el.isConnected) el.textContent = slowText(dir); }, PUNCH_SLOW_MS);
 }
+/* ⏱ Punch timing log (Mark 11/11): every day / piano punch reports how long
+ * it took on this device, Google's part, the tries and how it ended to the
+ * sales app's punch-timing (→ "Punch Timing" tab), after the punch is done —
+ * fire and forget, never through the bridge, never delays the tech. */
+const PUNCH_TRY = {n: 0};
+function punchOutcome(j) {
+  if (!j) return 'failed: no reply';
+  if (j.ok) return j.verified ? 'ok (reply lost, confirmed from the sheet)' : j.already ? 'already clocked in' : 'ok';
+  if (j.error === 'geofence') return 'refused: ' + (j.awayMiles != null ? j.awayMiles + ' mi from store' : 'location');
+  return 'failed: ' + String(j.error || 'unknown').slice(0, 110);
+}
+function punchLog(clock, action, t0, j, source) {
+  try {
+    const device = (window.innerWidth <= 760 || /iphone|android.*mobile|ipad/i.test(navigator.userAgent)) ? 'phone' : 'computer';
+    const net = (navigator.connection && navigator.connection.effectiveType) || '';
+    const app = ((document.querySelector('script[src*="app.js?v="]') || {}).src || '').replace(/.*v=/, '');
+    fetch('https://blpsalesapp.netlify.app/.netlify/functions/punch-timing', {method: 'POST', keepalive: true,
+      headers: {'content-type': 'text/plain;charset=utf-8'},
+      body: JSON.stringify({key: 'pianoman', who: clockName() || '', clock, action, ms: Date.now() - t0,
+        googleMs: j && j.ms != null ? j.ms : null, tries: PUNCH_TRY.n, outcome: punchOutcome(j),
+        device, net, source: source || '', app, at: new Date(t0).toISOString()})}).catch(() => {});
+  } catch (e) { /* timing is best-effort */ }
+}
+async function dayPunch(action) {
+  const t0 = Date.now(); PUNCH_TRY.n = 0;
+  let j;
+  try { j = await dayPunchCore(action); return j; }
+  finally { punchLog('day', action, t0, j, 'dash'); }
+}
+async function punch(action, p, phase, source, endAt, ackNote) {
+  // a day clock-out can close the piano clock from inside dayPunch: keep the
+  // day punch's try count intact around this nested one
+  const outer = PUNCH_TRY.n;
+  const t0 = Date.now(); PUNCH_TRY.n = 0;
+  let j;
+  try { j = await punchCore(action, p, phase, source, endAt, ackNote); return j; }
+  finally { punchLog('piano', action, t0, j, source || 'card'); PUNCH_TRY.n = outer; }
+}
 /* Did a day punch land although the phone got no reply? (Alex 11/10,
  * 111026martin06: Google recorded his clock-in in the first second, the reply
  * never reached the phone, and the app sat out a 30 s timeout — 48 s in all.)
@@ -6169,7 +6208,7 @@ async function dayPunchLanded(action, since) {
   const closed = mine.find(x => x.end && new Date(x.end) >= since - 120000);
   return closed && !mine.some(x => !x.end) ? {ok: true, closed: true, verified: true} : null;
 }
-async function dayPunch(action) {
+async function dayPunchCore(action) {
   const tDay = Date.now();
   const {pin, ok} = writeAuth();
   if (!ok) return {error: 'Sign in first — payroll hours are logged under your name.'};
@@ -6187,6 +6226,7 @@ async function dayPunch(action) {
     const t0 = Date.now(), left = dayDeadline - t0;
     if (left < 12000) break;   // an attempt plus its payroll check must fit inside the minute
     try {
+      PUNCH_TRY.n++;
       const r = await fetchT(BRIDGE_URL, {method: 'POST', redirect: 'follow',
         headers: {'content-type': 'text/plain;charset=utf-8'}, body}, Math.min(a === 0 ? 10000 : 25000, left - 7000));   // first try 10 s (was 30): a lost reply is checked for sooner
       const jj = await r.json();
