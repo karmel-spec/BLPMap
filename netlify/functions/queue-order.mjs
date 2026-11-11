@@ -15,7 +15,7 @@ const QUEUES = ['keytop', 'refin', 'plates', 'tuning'];   // tuning: the 🎵 Tu
 // mirrors OWNER_EMAILS / ADMIN_EMAILS / TIMELOG_ADMIN_EMAILS (managers) in app.js
 const EDITORS = new Set([
   'brigham@brighamlarsonpianos.com', 'karmel@brighamlarsonpianos.com', 'brighamlarson@gmail.com',
-  'melissa@brighamlarsonpianos.com', 'alisa@brighamlarsonpianos.com', 'susie@brighamlarsonpianos.com',
+  'melissa@brighamlarsonpianos.com', 'alisa@brighamlarsonpianos.com',   // Susie removed (Mark 11/11)
   'walter@brighamlarsonpianos.com',
   'markhales.blp@gmail.com', 'matthewwessman.blp@gmail.com', 'jacobmower.blp@gmail.com',
   ...String(process.env.QUEUE_EDITORS || '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean),

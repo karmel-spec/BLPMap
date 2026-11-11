@@ -10348,7 +10348,6 @@ const ADMINS = [
   {name: 'Brigham', email: 'brigham@brighamlarsonpianos.com'},
   {name: 'Karmel', email: 'karmel@brighamlarsonpianos.com'},
   {name: 'Alisa', email: 'alisa@brighamlarsonpianos.com'},
-  {name: 'Susie', email: 'susie@brighamlarsonpianos.com'},
   {name: 'Walter', email: 'walter@brighamlarsonpianos.com'},
 ];
 const SERVICE_TECHS = [
@@ -11462,7 +11461,7 @@ function authFields() {
  * the bridge re-verifies the Google token on every gated write) ---------- */
 const OWNER_EMAILS = ['brigham@brighamlarsonpianos.com', 'karmel@brighamlarsonpianos.com'];
 const ADMIN_EMAILS = OWNER_EMAILS.concat(['melissa@brighamlarsonpianos.com',
-  'alisa@brighamlarsonpianos.com', 'susie@brighamlarsonpianos.com', 'walter@brighamlarsonpianos.com']);
+  'alisa@brighamlarsonpianos.com', 'walter@brighamlarsonpianos.com']);   // Susie removed (Mark 11/11)
 const PAYROLL_ADMIN_EMAILS = OWNER_EMAILS.concat(['melissa@brighamlarsonpianos.com']);
 const TIMELOG_ADMIN_EMAILS = OWNER_EMAILS.concat(
   ['markhales.blp@gmail.com', 'matthewwessman.blp@gmail.com', 'jacobmower.blp@gmail.com']);
