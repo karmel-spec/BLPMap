@@ -5087,9 +5087,71 @@ async function clFetch(serial, phase, force) {
     const skips = new Map((j.checks || []).filter(c => c.skipped).map(c => [c.step, c.note || '']));
     const notes = new Map((j.checks || []).filter(c => !c.skipped && (c.note || '').trim()).map(c => [c.step, c.note]));
     CL.cache[k] = {at: Date.now(), items: j.items || [], done, skips, notes, request: j.request || null, offline: !!j.checksUnavailable};
+    // the database answered and this phone still holds unsent ticks → send them now
+    if (!j.checksUnavailable && Object.keys(clqRead()).length) setTimeout(clqFlush, 300);
   } catch (e) { CL.cache[k] = CL.cache[k] || {at: 0, items: [], done: new Set(), skips: new Map(), notes: new Map(), request: null, failed: true}; }
+  clqApply(CL.cache[k], serial, phase);
   return CL.cache[k];
 }
+/* 📥 Checklist outbox (Mark 11/11, 111126hales84): ticks, skips and step notes
+ * live in Supabase, which kept going down (11/6–11/11) — a tick made then looked
+ * checked and was gone the next time the checklist opened. Now every change is
+ * kept on THIS phone (localStorage clOutbox, one entry per piano+phase+step, the
+ * newest wins) until phase-qc answers ok:true, then dropped. Unsent entries are
+ * laid over what the server returns, so the checklist and its pill show them,
+ * and they are re-sent every minute, on app open / return to the screen, and as
+ * soon as a checklist read finds the database answering. Entries older than
+ * 14 days are dropped unsent. */
+const CLQ_KEY = 'clOutbox';
+function clqRead() { try { return JSON.parse(lsGet(CLQ_KEY) || '{}') || {}; } catch (e) { return {}; } }
+function clqWrite(o) { try { if (Object.keys(o).length) lsSet(CLQ_KEY, JSON.stringify(o)); else lsDel(CLQ_KEY); } catch (e) {} }
+function clqWaiting(serial, phase) {
+  return Object.values(clqRead()).filter(e => !serial || (e.serial === serial && e.phase === phase)).length;
+}
+function clqApply(st, serial, phase) {
+  if (!st) return;
+  const mine = Object.values(clqRead()).filter(e => e.serial === serial && e.phase === phase);
+  st.queued = mine.length;
+  for (const e of mine) {
+    if (!st.done || !st.skips || !st.notes) break;
+    if (e.done && !e.skipped) { st.skips.delete(e.step); st.done.add(e.step); if (e.note) st.notes.set(e.step, e.note); else st.notes.delete(e.step); }
+    else if (e.done && e.skipped) { st.done.delete(e.step); st.skips.set(e.step, e.note || ''); }
+    else { st.done.delete(e.step); st.skips.delete(e.step); st.notes.delete(e.step); }
+  }
+}
+async function clSend(e) {
+  const r = await fetchT(PHASEQC_URL, {method: 'POST', headers: {'content-type': 'application/json'},
+    body: JSON.stringify({key: 'pianoman', op: 'check', serial: e.serial, phase: e.phase, step: e.step, done: e.done,
+      skipped: !!e.skipped, note: e.note || '', by: e.by || ''})}, 12000);
+  const j = await r.json().catch(() => ({}));
+  return !!(r.ok && j && j.ok);
+}
+function clqDrop(k, at) { const o = clqRead(); if (o[k] && o[k].at === at) { delete o[k]; clqWrite(o); } }
+let clqBusy = false, clqTimer = null;
+function clqLater() { clearTimeout(clqTimer); clqTimer = setTimeout(clqFlush, 60000); }
+async function clqFlush() {
+  if (clqBusy) return;
+  const o = clqRead();
+  const cut = Date.now() - 14 * 86400000;
+  for (const k of Object.keys(o)) if (!(o[k].at > cut)) delete o[k];
+  clqWrite(o);
+  const keys = Object.keys(o).sort((a, b) => o[a].at - o[b].at);   // oldest first, as they were made
+  if (!keys.length) return;
+  clqBusy = true;
+  let sent = 0;
+  try {
+    for (const k of keys) {
+      let ok = false;
+      try { ok = await clSend(o[k]); } catch (e) {}
+      if (!ok) break;   // still down — stop and try again in a minute
+      clqDrop(k, o[k].at); sent++;
+    }
+  } finally { clqBusy = false; }
+  if (Object.keys(clqRead()).length) clqLater();
+  if (sent) { CL.cache = {}; try { updateClPill(); } catch (e) {} }   // re-read fresh next time
+}
+setTimeout(clqFlush, 4000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) setTimeout(clqFlush, 1500); });
 /* 📖 tap-to-learn glossary (Brigham 9/3): terms from the Glossary sheet tab
  * become links inside the TRAINING text; tapping pops the definition and,
  * when the sheet has an image URL, a picture (like the escutcheon). */
@@ -5135,10 +5197,16 @@ function clVariantItems(items, p, kind) {
   return items.filter(it => it.kind === kind && (it.variant === 'all' || it.variant === want));
 }
 async function clToggle(serial, phase, stepIdx, done, skipped, note) {
-  fetch(PHASEQC_URL, {method: 'POST', headers: {'content-type': 'application/json'},
-    body: JSON.stringify({key: 'pianoman', op: 'check', serial, phase, step: stepIdx, done,
-      skipped: !!skipped, note: note || '', by: clockName()})})
-    .catch(() => {});
+  // kept on this phone first; dropped only when the checklist database confirms (see clOutbox)
+  const k = serial + '|' + phase + '|' + stepIdx;
+  const e = {serial, phase, step: stepIdx, done: !!done, skipped: !!skipped, note: note || '', by: clockName(), at: Date.now()};
+  const o = clqRead(); o[k] = e; clqWrite(o);
+  const st = CL.cache[serial + '|' + phase]; if (st) st.queued = clqWaiting(serial, phase);
+  let ok = false;
+  try { ok = await clSend(e); } catch (er) {}
+  if (ok) clqDrop(k, e.at); else clqLater();
+  if (st) st.queued = clqWaiting(serial, phase);
+  return ok;
 }
 // floating pill while clocked into a checklist phase
 async function updateClPill() {
@@ -5166,7 +5234,7 @@ async function updateClPill() {
   }
   pill.hidden = false;
   pill.textContent = st.failed && !work.length ? `📋 ${active} checklist · couldn\u2019t load \u2014 tap to retry`
-    : st.offline ? `📋 ${active} checklist · ${work.length} steps (ticks offline)`
+    : st.offline ? `📋 ${active} checklist · ${doneN}/${work.length} (saved on this phone)`
     : `📋 ${active} checklist · ${doneN}/${work.length}`;
   pill.onclick = () => openWorkChecklist(o.serial, active);
   placeClPill();
@@ -5341,7 +5409,8 @@ async function openWorkChecklist(serial, phase) {
       ov.innerHTML = `<div class="dsheet" style="max-height:82vh;overflow:auto"><button class="dsx">✕</button>
         <h3>📋 ${esc(phase)} — ${esc(p.summary || '#' + serial)}</h3>
         <div class="dssub">${doneN}/${work.length} steps · shared with the whole team · from the Restoration Handbook</div>
-        ${st.offline ? `<div class="phmsg err" style="margin:4px 0">\u26a0 Check-offs can\u2019t be read or saved right now (the checklist database is down) \u2014 the steps are all here to follow, but ticks won\u2019t stick until it\u2019s back.</div>` : ''}
+        ${st.offline ? `<div class="phmsg err" style="margin:4px 0">\u26a0 The checklist database is down \u2014 your ticks, skips and notes are saved on this phone and sync by themselves when it\u2019s back. Ticks made on other devices won\u2019t show until then.</div>`
+          : clqWaiting(serial, phase) ? `<div class="phmsg" style="margin:4px 0;color:#8a6d1f">\u23f3 ${clqWaiting(serial, phase)} change${clqWaiting(serial, phase) === 1 ? '' : 's'} saved on this phone, waiting to sync</div>` : ''}
         <div style="height:8px;background:#efece6;border-radius:4px;overflow:hidden;margin:6px 0 10px">
           <div style="height:100%;width:${work.length ? doneN / work.length * 100 : 0}%;background:linear-gradient(90deg,#c9a227,#2f7d4f)"></div></div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 10px">
