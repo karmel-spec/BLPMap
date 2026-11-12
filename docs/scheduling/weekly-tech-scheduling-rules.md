@@ -87,8 +87,16 @@ two slots a day — FIRST 8:00 (Fridays 8:45, after shop tidying) and SECOND 9:3
   its chip tuning before beginning DHRT — no waiting days after restringing (rows 8 and
   24 superseded). Make it the first block of that tech's DHRT, typed tune, titled
   "<make> <serial> - Chip Tuning"; if no one has the DHRT yet, ask who takes it.
-- Pre-booked tunings stay as they are. Shopwork 1st/2nd and Store Map request tunings
-  overflow to next week; Tuning Queue pianos never carry over.
+- Pre-booked tunings stay as they are — except a showroom tuning booked into a 9:30
+  before 11/12: when a shopwork piano is ready for its 1st/2nd Tuning that week, the
+  shopwork piano takes the 9:30 and the showroom tuning moves to the next free 8:00
+  (row 115). Shopwork 1st/2nd and Store Map request tunings overflow to next week;
+  Tuning Queue pianos never carry over.
+- **Brigham's priority list outranks everything**, the Thu/Fri DHRT hold included.
+- **Delivery tunings (Mark 11/12, option A; row 116):** a pre-delivery tuning takes
+  Korban's 8:00 (Fri 8:45) on the day it's needed; a showroom tuning already there
+  moves to the next free 8:00. Only when that 8:00 holds another delivery tuning or a
+  Brigham priority does the delivery take the 9:30 (Fri 10:15), held slots included.
 
 Data sources: Store Map /api/data (phases, tracks, queuePos, tuningQueue), Piano Log
 CURRENT SHOPWORK sections, latest Friday reports (report sheet year tab),
