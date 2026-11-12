@@ -67,18 +67,28 @@ was deleted, so the Planner now owns it — use that exact title). Do NOT write 
 block's note: Approve fills the event from the live buffing list. Only a rule-10
 `DEADLINE:` line may go in the note.
 
-**Korban's tuning slots (Walter 2026-10-14, also on the Scheduling Rules tab):**
-without a manager list, pre-booked tunings on the 03-In Store Tuning calendar stay exactly as they are.
-Open slots are filled in this order: (1) chip tunings, (2) tunings a piano's
-card phase calls for (1st / 2nd tuning), (3) the **Tuning Queue** —
-`tuningQueue` in Store Map /api/data: pianos marked "Needs tuning" on the
-Showroom Tuning Check that nobody has booked, already in order (⚡ ASAP first,
-then walk order), each with its spot and service note. The queue REPLACES
-picking for-sale floor pianos yourself. **Queue pianos never carry over** to
-the following week — the next walk re-marks them. Only chip tunings,
-card-phase tunings and Store Map request tunings overflow (overflow rule). If /api/data answers with `tuningQueuePending`
-instead of `tuningQueue`, the tuning calendar was still loading — fetch again
-after 30 seconds; never fill Korban's slots from a missing queue.
+**Korban's tuning slots (Mark 2026-11-12, replaces Walter 10/14; Scheduling Rules row 95):**
+two slots a day — FIRST 8:00 (Fridays 8:45, after shop tidying) and SECOND 9:30
+(Fridays 10:15).
+- **FIRST = showroom tunings.** Matthew's walkthrough tunings come in as Store Map
+  requests and book this slot themselves (bridge `korbanSlot_`); after them the
+  **Tuning Queue** — `tuningQueue` in Store Map /api/data (⚡ ASAP first, then walk
+  order). If /api/data answers with `tuningQueuePending`, fetch again after 30 s;
+  never fill slots from a missing queue.
+- **SECOND = only a shopwork piano's 1st Tuning or 2nd Tuning** (card phase). If none
+  is due that day, leave it empty — never a showroom piano.
+- **Thursday 9:30 and Friday 10:15 are HELD** for pianos that finish DHRT that week
+  (their 1st Tuning): no plan block there, no showroom piano. At **Wednesday 6:00 PM**
+  the bridge (`fillHeldTunings_`, from the daily 6 PM trigger) fills a held slot still
+  open by moving up the next showroom Store Map request booked later (not delivery /
+  concert tunings, not shopwork pianos), else the Tuning Queue; anything left is open
+  to showroom requests.
+- **Chip tunings are not Korban's** (row 102): the technician doing a piano's DHRT does
+  its chip tuning before beginning DHRT — no waiting days after restringing (rows 8 and
+  24 superseded). Make it the first block of that tech's DHRT, typed tune, titled
+  "<make> <serial> - Chip Tuning"; if no one has the DHRT yet, ask who takes it.
+- Pre-booked tunings stay as they are. Shopwork 1st/2nd and Store Map request tunings
+  overflow to next week; Tuning Queue pianos never carry over.
 
 Data sources: Store Map /api/data (phases, tracks, queuePos, tuningQueue), Piano Log
 CURRENT SHOPWORK sections, latest Friday reports (report sheet year tab),
@@ -343,7 +353,8 @@ calendarList — probe by ID, don't trust list calls. Lupita =
 (Vickery is the mover). Hunter Rawlings' calendar is
 hunterrawlings.blp@gmail.com ("16-Hunter Rawlings", readable as of 11/4). Brigham's added rules
 (2026-08-09, in Scheduling Rules tab): chip tuning 2-5 days after
-restringing completion; chip tunings before showroom tunings (loose);
+restringing completion [SUPERSEDED 11/12: the DHRT tech does it before
+beginning DHRT, no wait]; chip tunings before showroom tunings (loose);
 parts dependencies get deadline appointments on Korban's calendar (he
 needs explicit direction + close follow-up); QC finishes the day BEFORE a
 known delivery with the delivery date noted so the tech paces.
