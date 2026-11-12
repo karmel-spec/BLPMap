@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-11-11.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-11-12.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -682,7 +682,10 @@ function scheduleTuning_(req) {
       }
     } catch (eX) { /* calendar read hiccup — book as before */ }
   }
-  var slot = techId === TUNING_CAL ? korbanSlot_(searchCal, tz) : openGap_(searchCal, tz, techName);
+  // Korban: showroom pianos → his 8:00 (Fri 8:45) slot; shopwork → 9:30 (Fri 10:15),
+  // Thu/Fri 9:30 only for a 1st Tuning (DHRT finished) until Wed 6 PM (Mark 11/12)
+  var kOpt = {shopwork: !!req.shopwork, phase: String(req.phase || '')};
+  var slot = techId === TUNING_CAL ? korbanSlot_(searchCal, tz, kOpt) : openGap_(searchCal, tz, techName);
   if (!slot) return {error: 'no open slot found on ' + techName + "'s calendar in the next 6 weeks"};
   var desc = 'Requested via BLP Store Map ('
     + Utilities.formatDate(new Date(), tz, 'MMM d, h:mm a') + ')'
@@ -706,6 +709,7 @@ function scheduleTuning_(req) {
     try { CacheService.getScriptCache().remove('tunings3'); } catch (ig) {}
   }
   return {ok: true, scheduled: true, dryrun: !!req.dryrun, tech: techName,
+          slotKind: techId === TUNING_CAL ? (kOpt.shopwork ? 'shopwork' : 'showroom') : '',
           date: Utilities.formatDate(slot.start, tz, 'EEE, MMM d'),
           iso: Utilities.formatDate(slot.start, tz, 'yyyy-MM-dd'),
           hhmm: Utilities.formatDate(slot.start, tz, 'HH:mm'),
@@ -743,23 +747,51 @@ function deleteTuning_(req) {
   return {ok: true, dryrun: !!req.dryrun, removed: removed};
 }
 
-// Korban's fixed tuning slots: weekdays 8am + 10am, skipping conflicts
-// and any day carrying a "NO KORBAN" event
-function korbanSlot_(cal, tz) {
+/* Korban's two tuning slots (Mark 11/12/2026):
+ *   FIRST  (8:00; Fridays 8:45) = showroom — Store Map requests for showroom pianos
+ *   SECOND (9:30; Fridays 10:15) = a SHOPWORK piano's 1st or 2nd tuning
+ * Thursday and Friday SECOND slots are held for pianos that finish DHRT that
+ * week (phase 1st Tuning); after Wednesday 6:00 PM they're released to showroom
+ * tunings (heldReleased_ / fillHeldTunings_). Chip tunings belong to the DHRT
+ * technician, never Korban's slots. Fridays start later for shop tidying 8:15. */
+var TUNING_SLOTS_FRI = [8.75, 10.25];
+function korbanSlotTimes_(dow) { return dow === 5 ? TUNING_SLOTS_FRI : TUNING_SLOTS; }
+function slotStart_(y, h) {
+  var hh = Math.floor(h), mm = Math.round((h % 1) * 60);
+  return new Date(y + 'T' + ('0' + hh).slice(-2) + ':' + ('0' + mm).slice(-2) + ':00');
+}
+// has Wednesday 6:00 PM of the week holding y (a Thu/Fri date) passed?
+function heldReleased_(y, tz, now) {
+  var d = new Date(y + 'T12:00:00');
+  var dow = Number(Utilities.formatDate(d, tz, 'u'));
+  var wy = Utilities.formatDate(new Date(d.getTime() - (dow - 3) * 86400000), tz, 'yyyy-MM-dd');
+  return (now || new Date()) >= new Date(wy + 'T18:00:00');
+}
+// which slot indexes a request may take that day
+function korbanSlotIdx_(opt, y, dow, tz, now) {
+  var held = dow >= 4 && !heldReleased_(y, tz, now);
+  if (!opt || !opt.shopwork) return held ? [0] : (dow >= 4 ? [0, 1] : [0]);
+  if (held && !/^1st tuning$/i.test(String(opt.phase || '').trim())) return [];
+  return [1];
+}
+// Korban's fixed tuning slots, skipping conflicts and any day carrying a
+// "NO KORBAN" event; opt {shopwork, phase} picks the slot (rules above)
+function korbanSlot_(cal, tz, opt) {
   for (var d = 1; d <= 42; d++) {
     var day = new Date(Date.now() + d * 86400000);
     var dow = Number(Utilities.formatDate(day, tz, 'u'));
     if (dow > 5) continue;
     var y = Utilities.formatDate(day, tz, 'yyyy-MM-dd');
+    var idx = korbanSlotIdx_(opt, y, dow, tz);
+    if (!idx.length) continue;
     var dayEvents = cal.getEvents(new Date(y + 'T00:00:00'), new Date(y + 'T23:59:59'));
     var blocked = dayEvents.some(function (ev) {
       return /NO KORBAN/i.test(ev.getTitle() || '');
     });
     if (blocked) continue;
-    for (var s = 0; s < TUNING_SLOTS.length; s++) {
-      var hh = Math.floor(TUNING_SLOTS[s]);
-      var mm = TUNING_SLOTS[s] % 1 ? '30' : '00';
-      var start = new Date(y + 'T' + ('0' + hh).slice(-2) + ':' + mm + ':00');
+    var times = korbanSlotTimes_(dow);
+    for (var si = 0; si < idx.length; si++) {
+      var start = slotStart_(y, times[idx[si]]);
       var end = new Date(start.getTime() + TUNING_MINUTES * 60000);
       var clash = dayEvents.some(function (ev) {
         return !ev.isAllDayEvent() && ev.getStartTime() < end && ev.getEndTime() > start;
@@ -768,6 +800,119 @@ function korbanSlot_(cal, tz) {
     }
   }
   return null;
+}
+
+/* Wednesday 6 PM (Mark 11/12): this week's Thursday 9:30 and Friday 10:15 were
+ * held for pianos finishing DHRT. Any still open now go to showroom tunings:
+ * first the next showroom tunings already booked from Store Map requests
+ * (Matthew's walkthrough) on a later date move up, earliest first; then the
+ * Tuning Queue (Showroom Tuning Check "Needs tuning", unbooked). Anything left
+ * stays open, and a Store Map showroom request can take it from now on. Runs from lateClockNudge on
+ * Wednesdays; action 'fillheldtunings' {dryrun, force} runs it by hand. */
+function fillHeldTunings_(req) {
+  req = req || {};
+  var tz = 'America/Denver', now = new Date();
+  var dow = Number(Utilities.formatDate(now, tz, 'u'));
+  if (!req.force && !(dow === 3 && Number(Utilities.formatDate(now, tz, 'H')) >= 18))
+    return {ok: true, skipped: 'only Wednesday after 6 PM (force:true to run anyway)'};
+  var master = calById_(MASTER_TUNING_CAL);
+  var kcal = calById_(TUNING_CAL) || master;
+  if (!master) return {error: 'the master tuning calendar is not reachable'};
+  var slots = [];
+  [4, 5].forEach(function (td) {
+    var y = Utilities.formatDate(new Date(now.getTime() + ((td - dow + 7) % 7) * 86400000), tz, 'yyyy-MM-dd');
+    var evs = kcal.getEvents(new Date(y + 'T00:00:00'), new Date(y + 'T23:59:59'));
+    var start = slotStart_(y, korbanSlotTimes_(td)[1]);
+    var end = new Date(start.getTime() + TUNING_MINUTES * 60000);
+    var s = {date: y, time: Utilities.formatDate(start, tz, 'h:mm a'), start: start, end: end};
+    if (evs.some(function (ev) { return /NO KORBAN/i.test(ev.getTitle() || ''); })) s.skipped = 'NO KORBAN that day';
+    else {
+      var hit = evs.filter(function (ev) { return !ev.isAllDayEvent() && ev.getStartTime() < end && ev.getEndTime() > start; })[0];
+      if (hit) s.taken = hit.getTitle();
+    }
+    slots.push(s);
+  });
+  var open = slots.filter(function (s) { return !s.skipped && !s.taken; });
+  var booked = [], moved = [], queueLen = null, qErr = '';
+  if (open.length) {
+    // the data feed: piano sections (showroom vs shopwork) + the Tuning Queue
+    var dj = null;
+    for (var tries = 0; tries < 2 && !dj; tries++) {
+      try {
+        var resp = UrlFetchApp.fetch('https://blpstoremap.netlify.app/api/data?scope=active&fresh=1', {muteHttpExceptions: true});
+        var dd = JSON.parse(resp.getContentText());
+        if (dd.tuningQueuePending && tries === 0) { Utilities.sleep(30000); continue; }
+        dj = dd;
+      } catch (eQ) { qErr = String(eQ).slice(0, 120); if (tries === 0) Utilities.sleep(5000); }
+    }
+    var secBy = {};
+    ((dj && dj.pianos) || []).forEach(function (p) { if (p.serial) secBy[String(p.serial).trim().toUpperCase()] = String(p.section || ''); });
+    // (1) Matthew's walkthrough requests: the next showroom tunings already booked
+    // through Store Map requests on a LATER date move up into the open slot,
+    // earliest first. Delivery / concert tunings keep their timing; shopwork
+    // pianos and anything not from a Store Map request are left alone.
+    var later = [];
+    if (dj && dj.pianos) {
+      try {
+        later = master.getEvents(open[0].start, new Date(now.getTime() + 42 * 86400000)).filter(function (ev) {
+          var t = ev.getTitle() || '', d = ev.getDescription() || '';
+          var m = /#\s*([A-Za-z0-9-]+)\s*—\s*Korban/i.exec(t);
+          if (!/^Tuning:/.test(t) || !m || !/Requested via BLP Store Map/i.test(d)) return false;
+          if (/deliver|concert|recital|moving|pick ?up/i.test(t + ' ' + d)) return false;
+          var sec = secBy[m[1].toUpperCase()];
+          return sec != null && !/SHOPWORK/i.test(sec);
+        }).sort(function (a, b) { return a.getStartTime() - b.getStartTime(); });
+      } catch (eL) { qErr = qErr || ('calendar read: ' + String(eL).slice(0, 100)); }
+    }
+    var rest = [];
+    for (var i = 0; i < open.length; i++) {
+      var s2 = open[i];
+      var mv = null;
+      while (later.length && !mv) { var c0 = later.shift(); if (c0.getStartTime() > s2.start) mv = c0; }
+      if (!mv) { rest.push(s2); continue; }
+      var was = Utilities.formatDate(mv.getStartTime(), tz, 'EEE, MMM d') + ' ' + Utilities.formatDate(mv.getStartTime(), tz, 'h:mm a');
+      if (!req.dryrun) {
+        mv.setTime(s2.start, s2.end);
+        try { mv.setDescription((mv.getDescription() || '') + '\n\nMoved up from ' + was + ' by the Wednesday 6 PM rule — no piano finished DHRT for this held slot (Mark 11/12).'); } catch (eS) {}
+      }
+      moved.push({date: s2.date, time: s2.time, title: mv.getTitle(), was: was});
+    }
+    // (2) still open: the Tuning Queue (Showroom Tuning Check "Needs tuning", unbooked)
+    var queue = (dj && dj.tuningQueue) ? dj.tuningQueue.slice() : [];
+    queueLen = dj && dj.tuningQueue ? dj.tuningQueue.length : null;
+    for (var k = 0; k < rest.length && queue.length; k++) {
+      var q = null;
+      while (queue.length && !q) {
+        var c = queue.shift();
+        try {   // still unbooked? (the feed is up to a minute old)
+          var xP = {serial: String(c.serial), make: String(c.piano || '').replace(/^\s*(circa\s+)?\d{4}s?\s+/i, '').split(/\s+/)[0]};
+          var ex = master.getEvents(now, new Date(now.getTime() + 42 * 86400000), {search: String(c.serial)});
+          var dup = ex.some(function (ev) { var t = ev.getTitle(); return /tun(e|ing)/i.test(t) && tuningTitleIsFor_(t, xP); });
+          if (!dup) q = c;
+        } catch (eD) { q = c; }
+      }
+      if (!q) break;
+      var s3 = rest[k];
+      var title = 'Tuning: ' + (q.piano || 'piano') + ' #' + q.serial + ' — Korban Greenhalgh';
+      var desc = 'Booked by the Wednesday 6 PM rule: no piano finished DHRT for this held slot, so it went to the next showroom tuning on the Tuning Queue (Mark 11/12)'
+        + '\nAssigned to: Korban Greenhalgh'
+        + (q.asap ? '\n⚡ Marked ASAP on the Showroom Tuning Check' : '')
+        + (q.note ? '\n\nShowroom Tuning Check note:\n' + q.note : '')
+        + '\n\nPiano Log: https://pianologapp.netlify.app/#piano=' + encodeURIComponent(q.serial);
+      if (!req.dryrun) {
+        master.createEvent(title, s3.start, s3.end, {description: desc, location: String(q.spot || ''), guests: TUNING_CAL, sendInvites: true});
+      }
+      booked.push({date: s3.date, time: s3.time, serial: q.serial, piano: q.piano, spot: q.spot || ''});
+    }
+    if ((booked.length || moved.length) && !req.dryrun) {
+      try { CacheService.getScriptCache().remove('tunings3'); } catch (ig) {}
+      moved.forEach(function (m2) { logAct_('Store Map (Wednesday 6 PM tuning rule)', 'Tuning moved up', m2.title.replace(/^Tuning:\s*/, '').replace(/\s*—.*$/, ''), m2.was + ' → ' + m2.date + ' ' + m2.time + ' (held DHRT slot released)'); });
+      booked.forEach(function (b) { logAct_('Store Map (Wednesday 6 PM tuning rule)', 'Tuning scheduled', b.piano || b.serial, b.date + ' ' + b.time + ' — held DHRT slot released to the Tuning Queue'); });
+    }
+  }
+  return {ok: true, dryrun: !!req.dryrun, queueLength: queueLen, queueError: qErr || undefined,
+    slots: slots.map(function (s) { return {date: s.date, time: s.time, taken: s.taken || '', skipped: s.skipped || ''}; }),
+    moved: moved, booked: booked, leftOpen: open.length - booked.length - moved.length};
 }
 
 // any other technician: first open gap (minutes long, default 90) in
@@ -1103,6 +1248,7 @@ function doPost(e) {
       }
       return json_(dt);
     }
+    if (req.action === 'fillheldtunings') return json_(fillHeldTunings_(req));
     if (req.action === 'tune') {
       var t = scheduleTuning_(req);
       if (t.scheduled && !t.already) logAct_(who, 'Tuning scheduled', t.summary || req.serial,
@@ -10851,6 +10997,18 @@ function lateClockNudge(e) {
   var dow = Number(Utilities.formatDate(now, 'America/Denver', 'u'));
   if (dow > 6 && !dry) return;                       // Sundays stay quiet
   var hour = Number(Utilities.formatDate(now, 'America/Denver', 'H'));
+  // Wednesday 6 PM: release Korban's held Thu/Fri DHRT tuning slots (Mark 11/12) —
+  // rides this daily 6 PM trigger, once per Wednesday
+  if (!dry && dow === 3 && hour >= 18) {
+    try {
+      var hp = PropertiesService.getScriptProperties(), hk = Utilities.formatDate(now, 'America/Denver', 'yyyy-MM-dd');
+      if (hp.getProperty('heldTuningsRun') !== hk) {
+        hp.setProperty('heldTuningsRun', hk);
+        var fh = fillHeldTunings_({});
+        Logger.log('fillHeldTunings_: ' + JSON.stringify(fh));
+      }
+    } catch (eH) { Logger.log('fillHeldTunings_ failed: ' + eH); }
+  }
   // Movers work past 6 (Mark 9/16). The 6pm pass still skips the late crew,
   // but if one of them is on the clock it books a ONE-SHOT evening pass
   // tonight just for them, so they get a reminder instead of being silently

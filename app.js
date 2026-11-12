@@ -10967,7 +10967,10 @@ async function submitTune(p, ov) {
     const r = await bridgeFetch(BRIDGE_URL, {
       method: 'POST', redirect: 'follow',
       headers: {'content-type': 'text/plain;charset=utf-8'},
+      // Korban's slot follows the piano (Mark 11/12): showroom → his 8:00 (Fri 8:45),
+      // shopwork (custom or spec) → 9:30 (Fri 10:15); Thu/Fri 9:30 is held for 1st Tunings
       body: JSON.stringify({pin, serial: p.serial, action: 'tune', techId, techName,
+        shopwork: /SHOPWORK/i.test(p.section || ''), phase: effectivePhase(p),
         repairs: ov.querySelector('.tmrepairs').value.trim(),
         notes: ov.querySelector('.tmnotes').value.trim(),
         row: p.row, ...authFields()}),
@@ -10982,7 +10985,9 @@ async function submitTune(p, ov) {
     msg.textContent = j.already
       ? `Already on the calendar with ${j.tech || techName}: ${j.date} at ${j.time} — nothing new was booked. Cancel that one first if it needs to change.`
       : `✓ Scheduled with ${j.tech || techName}: ${j.date} at ${j.time} — `
-      + `on their calendar and the master tuning calendar.`;
+      + `on their calendar and the master tuning calendar.`
+      + (j.slotKind === 'showroom' ? ' (Showroom pianos take Korban\'s 8:00 slot — 8:45 on Fridays.)'
+        : j.slotKind === 'shopwork' ? ' (Shopwork tunings take Korban\'s 9:30 slot — 10:15 on Fridays.)' : '');
     // reflect immediately: piano turns blue, card gains its scheduled row
     S.data.tunings = S.data.tunings || {upcoming: [], past: []};
     S.data.tunings.upcoming.push([j.iso || localDay(), j.hhmm || j.time,
