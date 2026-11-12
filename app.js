@@ -12834,13 +12834,42 @@ function cfGuess(p, f) {
     if (/\bbrass\b/i.test(txt)) return 'Brass';
     return '';
   }
+  return keyGuess(p);
+}
+// Keys suggestion (Mark 11/12): only words ABOUT THE KEYS count. 189150's contract line
+// "Color: Satin ivory/cream" (the case colour) was suggested as "Ivory - clean & leave as
+// is" — colour / finish wording is stripped first, and ivory / off-white / cream / acrylic
+// must sit within a few words of keys / keytops / ivories. Nothing clear → no suggestion.
+const KEY_W = String.raw`(?:keys?|key\s*tops?|keytops?|keyboard|naturals|ivories)`;
+const keyNear = (w, n = 3) => new RegExp(String.raw`\b(?:${w})\b(?:\W+[\w'-]+){0,${n}}?\W+${KEY_W}\b|\b${KEY_W}\b(?:\W+[\w'-]+){0,${n}}?\W+(?:${w})\b`, 'i');
+function keyText(p) {
+  return [p.plan, p.planNotes, p.scopeNotes, p.keyService, p.importantNote, p.pianoNotes]
+    .filter(Boolean).join(' \n ')
+    // "Color: Satin ivory/cream · …", "Finish: …", "Refinish: …" — a colour, never the keys
+    .replace(/\b(?:colou?rs?|finish(?:es)?|refinish(?:ing)?|paint|stain|lacquer|sheen|exterior|cabinet|case|bench|hardware)\s*:[^·|\n]*/gi, ' \n ')
+    // "ivory finish", "satin ivory/cream lacquer", "painted off-white" …
+    .replace(/\b(?:satin|gloss(?:y)?|polished|matte?|painted|paint|refinish(?:ed)?\s+(?:in|to))?\s*(?:ivory|cream|off[- ]?white|antique[- ]white|white)(?:\s*\/\s*[a-z-]+)?\s+(?:finish|paint|lacquer|colou?r|case|cabinet|exterior|stain|sheen)\b/gi, ' ')
+    .replace(/\b(?:painted|refinish(?:ed)?\s+(?:in|to)|colou?r(?:ed)?\s+(?:in\s+)?)\s*(?:ivory|cream|off[- ]?white|antique[- ]white|white)(?:\s*\/\s*[a-z-]+)?/gi, ' ');
+}
+function keyGuess(p) {
+  const txt = keyText(p);
+  if (!txt.trim()) return '';
   // Melissa 10/13 (101326terry91): lighter jobs leave the keys alone
   if (/\bno\s+key\s*(?:top)?\s*(?:service|work)\b|\b(?:don'?t|do not|not)\s+(?:touch|do|service)\s+(?:the\s+)?keys?\b|\b(?:leave|keep)\s+(?:the\s+)?keys?\s+(?:as[- ]is|alone)\b/i.test(txt)) return 'No key service';
-  if (/off[- ]?white|antique[- ]white|cream(?:y)?\s+(?:acrylic|keytops?)/i.test(txt)) return 'Off-white Acrylic';
-  if (/\b(replace|repair|fix|patch)\w*\s+(?:the\s+|any\s+)?(?:damaged|broken|chipped|cracked|missing)\s+(?:ivor|keys?|keytops?)/i.test(txt)
-      && /\bivor(?:y|ies)\b/i.test(txt)) return 'Ivory - replace damaged keys';
-  if (/\bivor(?:y|ies)\b/i.test(txt) && !/\b(remove|strip|replace)\w*\s+(?:the\s+)?ivor/i.test(txt)) return 'Ivory - clean & leave as is';
-  if (/\bacrylic\b/i.test(txt)) return 'White Acrylic';
+  // the old KEY SERVICE cell ("Ivory") is about the keys by definition (289994)
+  const ivoryKeys = /\bivories\b/i.test(txt) || keyNear('ivory').test(txt) || /\bivor/i.test(p.keyService || '');
+  if (keyNear(String.raw`off[- ]?white|antique[- ]white|cream(?:y)?`).test(txt)
+      || /\b(?:off[- ]?white|antique[- ]white|cream(?:y)?)\s+acrylic\b/i.test(txt)) return 'Off-white Acrylic';
+  // "Replace ivory with acrylic" (4329)
+  if (/\b(?:replac|swap|chang|switch)\w*\s+(?:the\s+)?ivor(?:y|ies)\s+(?:(?:keys?|keytops?)\s+)?(?:with|to|for)\s+(?:new\s+)?(?:white\s+)?acrylic/i.test(txt)) return 'White Acrylic';
+  // "replace chipped ones" (22947), "replacing 4 ivory keys" (39753)
+  if (ivoryKeys && (/\b(?:replac|repair|fix|patch)\w*\s+(?:the\s+|any\s+)?(?:damaged|broken|chipped|cracked|missing)\b/i.test(txt)
+      || /\b(?:replac|repair)\w*\s+(?:\d+|a\s+few|few|some|several)\s+(?:of\s+the\s+)?(?:ivory\s+)?(?:keys?|keytops?|ivories)\b/i.test(txt)))
+    return 'Ivory - replace damaged keys';
+  // "REPLACE ALL KEYS WITH IVORY" (1803HPCHICK) is new ivory — no option fits, so no suggestion
+  if (ivoryKeys && !/\b(?:remove|strip|replac)\w*\s+(?:the\s+)?ivor|\b(?:replac|recover)\w*\s+(?:all\s+)?(?:the\s+)?(?:keys?|keytops?)\s+with\s+(?:new\s+)?ivor/i.test(txt))
+    return 'Ivory - clean & leave as is';
+  if (keyNear('acrylic').test(txt)) return 'White Acrylic';
   return '';
 }
 function cfSuggest(p, f) {
