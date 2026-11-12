@@ -10970,7 +10970,9 @@ async function submitTune(p, ov) {
       // Korban's slot follows the piano (Mark 11/12): showroom → his 8:00 (Fri 8:45),
       // shopwork (custom or spec) → 9:30 (Fri 10:15); Thu/Fri 9:30 is held for 1st Tunings
       body: JSON.stringify({pin, serial: p.serial, action: 'tune', techId, techName,
-        shopwork: /SHOPWORK/i.test(p.section || ''), phase: effectivePhase(p),
+        // a sale phase is showroom whatever the section (spec pianos For Sale — Mark 11/12)
+        shopwork: /SHOPWORK/i.test(p.section || '') && !/^(for sale|sale pending|sold|delivered|post sale qc)$/i.test(effectivePhase(p) || ''),
+        phase: effectivePhase(p),
         repairs: ov.querySelector('.tmrepairs').value.trim(),
         notes: ov.querySelector('.tmnotes').value.trim(),
         row: p.row, ...authFields()}),

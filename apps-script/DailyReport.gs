@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-11-12.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-11-12.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -684,7 +684,10 @@ function scheduleTuning_(req) {
   }
   // Korban: showroom pianos → his 8:00 (Fri 8:45) slot; shopwork → 9:30 (Fri 10:15),
   // Thu/Fri 9:30 only for a 1st Tuning (DHRT finished) until Wed 6 PM (Mark 11/12)
-  var kOpt = {shopwork: !!req.shopwork, phase: String(req.phase || '')};
+  // a piano in a sale phase is a showroom piano whatever its section (spec pianos
+  // For Sale in CURRENT SHOPWORK (SPEC) — Baldwin 37230, M&H 19407; Mark 11/12)
+  var SALE_PH = /^(for sale|sale pending|sold|delivered|post sale qc)$/i;
+  var kOpt = {shopwork: !!req.shopwork && !SALE_PH.test(String(req.phase || '').trim()), phase: String(req.phase || '')};
   var slot = techId === TUNING_CAL ? korbanSlot_(searchCal, tz, kOpt) : openGap_(searchCal, tz, techName);
   if (!slot) return {error: 'no open slot found on ' + techName + "'s calendar in the next 6 weeks"};
   var desc = 'Requested via BLP Store Map ('
@@ -846,7 +849,9 @@ function fillHeldTunings_(req) {
       } catch (eQ) { qErr = String(eQ).slice(0, 120); if (tries === 0) Utilities.sleep(5000); }
     }
     var secBy = {};
-    ((dj && dj.pianos) || []).forEach(function (p) { if (p.serial) secBy[String(p.serial).trim().toUpperCase()] = String(p.section || ''); });
+    // showroom = not in a shopwork section, or in a sale phase (For Sale spec pianos)
+    ((dj && dj.pianos) || []).forEach(function (p) { if (p.serial) secBy[String(p.serial).trim().toUpperCase()] =
+      /^(for sale|sale pending|sold|delivered|post sale qc)$/i.test(String(p.phase || '').trim()) ? 'SALE' : String(p.section || ''); });
     // (1) Matthew's walkthrough requests: the next showroom tunings already booked
     // through Store Map requests on a LATER date move up into the open slot,
     // earliest first. Delivery / concert tunings keep their timing; shopwork
