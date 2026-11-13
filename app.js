@@ -1370,6 +1370,12 @@ function applyPending() {
       if ((p.track || '') === edit.track) delete edit.track;
       else { p.track = edit.track; stillPending = true; }
     }
+    // 🧾 Scope of Work note (Mark 11/13, Emerson 67052): a just-cleared note came
+    // back from the 3-minute-stale feed and was saved again, twice
+    if ('scopeNotes' in edit) {
+      if (String(p.scopeNotes || '').trim() === String(edit.scopeNotes || '').trim()) delete edit.scopeNotes;
+      else { p.scopeNotes = edit.scopeNotes; stillPending = true; }
+    }
     if ('taskCells' in edit) {   // 🏷 Decals / 🎼 Bass strings (Mark 11/9: a refresh hid the pick, so it got tapped 4–6 times)
       p.tasks = p.tasks || {};
       for (const [k, v] of Object.entries(edit.taskCells || {})) {
@@ -8424,6 +8430,7 @@ function wirePop(p) {
           const j = await r.json();
           if (!j.ok) throw new Error(j.error || 'failed');
           scLast = val; p.scopeNotes = val;
+          { const se = pendingEdits.get(p.row) || {}; se.scopeNotes = val; pendingEdits.set(p.row, se); }
           if (sm) { sm.className = 'scopemsg phmsg ok'; sm.textContent = '✓ saved + copied to Notes'; setTimeout(() => { sm.textContent = ''; }, 2200); }
         } catch (e) { if (sm) { sm.className = 'scopemsg phmsg err'; sm.textContent = '✗ ' + e.message; } }
       };
