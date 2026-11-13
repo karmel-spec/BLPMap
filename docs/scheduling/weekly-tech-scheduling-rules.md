@@ -112,6 +112,16 @@ two slots a day — FIRST 8:00 (Fridays 8:45, after shop tidying) and SECOND 9:3
   delivery, by the slot rule below) and the QC after it the same day — the tuning ends
   before the QC starts. Exceptions stay: storage returns, moved-only pianos, outside-shop
   trips, QRS-only pianos (30-min QC). A delivery with no serial → ask for the serial.
+- **Rulings from the 11/13 rule review (Mark) — all on the Scheduling Rules tab:**
+  tune then QC, always (the short-QC-first sequence is retired, row 30); deliveries are
+  matched by serial only — a client-name match is a reason to ask (rows 3, 47); pre-booked
+  tunings are never deleted, moved only by the rules (row 90); restringing is allowed with
+  the plate AFTER, Back in piano or In piano, never BEFORE or At Curtis Harper (row 89);
+  different phases on one piano overlap with no note, except no DHRT while the piano is in
+  the refinishing shop (rows 108, 119); personal appointments go through Time Off, no
+  placeholder blocks (row 63); Korban's Friday buffing is 11:45–3:00 (row 85); only the
+  technicians a note names change, except a delivery's tune/QC and field appointments
+  that follow the tech's calendar (row 109).
 - **Bumped tunings (Mark 11/13; row 31 rewritten):** a tuning bumped by a manager's
   priority list, a shopwork 1st/2nd tuning, a delivery tuning or a queue jump goes to an
   OPEN slot THIS week first — an open 8:00, then an empty 9:30 (row 100: never leave a slot
@@ -121,7 +131,7 @@ two slots a day — FIRST 8:00 (Fridays 8:45, after shop tidying) and SECOND 9:3
   (`[CAL: Delivery Tuesday 11/17]`) — never the client's name, no other schedule wording;
   a check-up QC may add the prior QC date.
 - **Plates:** a piano whose plate is "Plate storage — BEFORE" must not be scheduled for
-  RESTRINGING (rows 97 / 101, reworded 11/13) — other phases are scheduled as usual.
+  RESTRINGING (row 89; rows 97 / 101 now point to it) — other phases are scheduled as usual.
 - **Delivery tunings (Mark 11/12, option A; row 117):** a pre-delivery tuning takes
   Korban's 8:00 (Fri 8:45) on the day it's needed; a showroom tuning already there
   moves to the next free 8:00. Only when that 8:00 holds another delivery tuning or a
@@ -314,7 +324,7 @@ Brigham's rules so far (2026-07-27):
 
 Shift hours (Brigham, 2026-07-27): standard is **8:00–4:00** (NOT 4:30),
 with occasional one-offs (e.g. Jake dentist appt week of 7/27). Exceptions:
-**McKinly works until 6:00**; **Lupita 7:00–5:00 Tue/Wed/Fri only**;
+**McKinly works until 6:00**; **Lupita Mon–Thu 7:00–12:30** (Mark 11/13; her weekly report overrides);
 **Avery Mon–Fri 8:00–noon**. Live source of truth: the **"Team Schedule"
 tab on the report sheet** (11RoeVRETag5rZYX6_tEH-rf6x8JL0JeZU0P5AT0WI-I),
 editable in Shop Manager → Schedules (team-schedule.mts bridge) — read that
