@@ -737,6 +737,9 @@ td a{color:#9e2020}
 .clockchip{display:flex;align-items:center;gap:7px;background:#1c1c1e;border:1px solid #2f7d4f;border-radius:999px;
   color:#fff;padding:6px 13px;font:700 12.5px 'Assistant',sans-serif;cursor:pointer;flex-shrink:0}
 .clockchip i{width:8px;height:8px;border-radius:50%;background:#4ade80;animation:ccblink 2s infinite}
+/* display:flex above beat the hidden attribute, so the header timer stayed up — still
+   counting — after clocking out of a piano while the dock went away (Mark 11/10, 111026hales78) */
+.clockchip[hidden]{display:none}
 .clockchip .ccser{color:#a8b8ac;font-weight:600}
 @keyframes ccblink{0%,100%{opacity:1}50%{opacity:.35}}
 #mydock{position:fixed;left:10px;right:10px;bottom:10px;z-index:60;background:#0d0d0d;color:#fff;border-radius:14px;

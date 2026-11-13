@@ -6080,7 +6080,9 @@ function renderClockChip() {
     };
   }
   const o = CLOCK.open;
+  const wasHidden = chip.hidden;
   chip.hidden = !o;
+  if (wasHidden !== chip.hidden && window.applyHeaderLayout) setTimeout(window.applyHeaderLayout, 0);   // header room changed
   if (o) chip.innerHTML = `<i></i><span class="cctime" data-start="${esc(o.start)}">${clockElapsed(o.start)}</span>
     <span class="ccser">${esc(o.serial)}</span>`;
 }
