@@ -88,7 +88,8 @@ two slots a day — FIRST 8:00 (Fridays 8:45, after shop tidying) and SECOND 9:3
   NOT make a showroom piano shopwork and doesn't by itself call for a tuning; a tuning
   requested for it is a showroom tuning (first slot). The delivery rule still holds: a
   piano that delivers gets its tune-then-QC before load-out (delivery tunings below). If no shopwork tuning is due that
-  day, leave the second slot empty — never a showroom piano.
+  day, the second slot stays empty — unless a bumped pre-booked tuning needs a slot this
+  week (bumped tunings, below).
 - **Thursday 9:30 and Friday 10:15 are HELD** for pianos that finish DHRT that week
   (their 1st Tuning): no plan block there, no showroom piano. At **Wednesday 6:00 PM**
   the bridge (`fillHeldTunings_`, from the daily 6 PM trigger) fills a held slot still
@@ -111,6 +112,16 @@ two slots a day — FIRST 8:00 (Fridays 8:45, after shop tidying) and SECOND 9:3
   delivery, by the slot rule below) and the QC after it the same day — the tuning ends
   before the QC starts. Exceptions stay: storage returns, moved-only pianos, outside-shop
   trips, QRS-only pianos (30-min QC). A delivery with no serial → ask for the serial.
+- **Bumped tunings (Mark 11/13; row 31 rewritten):** a tuning bumped by a manager's
+  priority list, a shopwork 1st/2nd tuning, a delivery tuning or a queue jump goes to an
+  OPEN slot THIS week first — an open 8:00, then an empty 9:30 (row 100: never leave a slot
+  empty while a pre-booked piano is unplaced) — and to next week only when this week is
+  full. The Thursday/Friday holds still wait for the Wednesday 6 PM fill.
+- **Delivery blocks' calendar note (Mark 11/13):** exactly "Delivery <weekday> <M/D>"
+  (`[CAL: Delivery Tuesday 11/17]`) — never the client's name, no other schedule wording;
+  a check-up QC may add the prior QC date.
+- **Plates:** a piano whose plate is "Plate storage — BEFORE" must not be scheduled for
+  RESTRINGING (rows 97 / 101, reworded 11/13) — other phases are scheduled as usual.
 - **Delivery tunings (Mark 11/12, option A; row 117):** a pre-delivery tuning takes
   Korban's 8:00 (Fri 8:45) on the day it's needed; a showroom tuning already there
   moves to the next free 8:00. Only when that 8:00 holds another delivery tuning or a
