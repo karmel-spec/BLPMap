@@ -4332,6 +4332,11 @@ $('#pop').addEventListener('mouseleave', scheduleHide);
 const REQUEST_APPS = ['Admin Training', 'Agent App', 'BLP Website', 'Client Portal', 'CRM',
   'Marketing', 'Movers', 'Piano Log', 'Piano Technology Library', 'Price Tag Maker',
   'Sales App', 'Shop App', 'Store Map', 'Tuning Academy', 'US Sales Map', 'Other'];
+// app names saved by a browser-translated request form (Doris 11/5) → the real app
+const REQUEST_APP_ALIAS = {'mapa de la tienda': 'Store Map', 'mapa de tienda': 'Store Map',
+  'aplicación de ventas': 'Sales App', 'app de ventas': 'Sales App', 'aplicación de la tienda': 'Shop App',
+  'aplicación del taller': 'Shop App', 'app del taller': 'Shop App', 'otro': 'Other'};
+const reqApp = r => { const a = String((r && r.app) || '').trim(); return REQUEST_APP_ALIAS[a.toLowerCase()] || a || 'Store Map'; };
 function openSuggestBox() {
   const old = document.querySelector('.sgbox');
   if (old) { old.remove(); return; }
@@ -4356,9 +4361,12 @@ function openSuggestBox() {
         <button class="sgdev" data-d="computer">💻 Computer</button>
       </div>
       <div class="sgselrow">
-        <label class="sgsellbl">App <select class="sgsel sgapp" title="which BLP app is this about?">
+        <label class="sgsellbl">App <select class="sgsel sgapp" translate="no" title="which BLP app is this about?">
           ${REQUEST_APPS
-            .map(a => `<option ${a === 'Store Map' ? 'selected' : ''}>${a}</option>`).join('')}</select></label>
+            // value= (Mark 11/11, 111126hales83): a browser translating the page to
+            // Spanish changed the option TEXT, and the text was what got saved —
+            // Doris's 11/5 requests came in as "Mapa de la tienda"
+            .map(a => `<option value="${a}" ${a === 'Store Map' ? 'selected' : ''}>${a}</option>`).join('')}</select></label>
         <label class="sgsellbl">Train an agent <select class="sgsel sgagent" title="optional — suggest training for one of the AI agents">
           <option value="">— none —</option>
           ${['Arnold', 'Chris', 'Clarence', 'Ivory', 'Lindsay', 'Marcus', 'Melody'].map(a => `<option ${a === 'Chris' ? 'selected' : ''}>${a}</option>`).join('')}</select></label>
@@ -19176,7 +19184,7 @@ function admRequestsHTML() {
   const stOk = r => f.st === 'open' ? isOpen(r) : f.st === 'all' ? true : r.status === f.st;
   const q = f.q.trim().toLowerCase();
   const match = r => stOk(r) && (!f.who || r.who === f.who) && (!f.type || (r.type || 'edit') === f.type)
-    && (!f.app || (r.app || 'Store Map') === f.app)
+    && (!f.app || reqApp(r) === f.app)
     && (!q || `${r.who} ${r.type || 'edit'} ${r.id} ${r.text} ${r.context || ''} ${r.status} ${r.app || ''}`.toLowerCase().includes(q));
   const hits = ADMDASH.req.filter(match);
   // 📖 handbook suggestions (Karmel 9/8) sit in their own section — Brigham
@@ -19185,7 +19193,7 @@ function admRequestsHTML() {
   const open = hits.filter(r => !isHb(r));
   const whos = [...new Set(ADMDASH.req.map(r => r.who).filter(Boolean))].sort((a, b) => a.localeCompare(b));
   const types = [...new Set(ADMDASH.req.map(r => r.type || 'edit'))].sort();
-  const apps = [...new Set(ADMDASH.req.map(r => r.app || 'Store Map'))].sort((a, b) => a.localeCompare(b));
+  const apps = [...new Set(ADMDASH.req.map(reqApp))].sort((a, b) => a.localeCompare(b));
   const filtered = f.st !== 'open' || f.who || f.type || f.app || q;
   const STATES = [['open', 'Open (Requested + In progress)'], ['Live', 'Live — shipped'], ['Tested', 'Tested — confirmed by requester'], ['Declined', 'Declined'], ['Duplicate', 'Duplicate — same ask already filed']]
     .concat(['Resolved', 'Archived'].filter(s => ADMDASH.req.some(r => r.status === s)).map(s => [s, s + ' (legacy)']))
@@ -19219,7 +19227,7 @@ function admRequestsHTML() {
   const row = r => `<div class="admreq${isHb(r) ? ' admreqhb' : ''}">
       <div class="admreqtop"><input type="checkbox" class="reqselbox" data-k="${esc(reqKey(r))}" ${sel.has(reqKey(r)) ? 'checked' : ''} title="select for a bulk status change"><b>${esc(r.who)}</b>
         <span class="chip ${r.type === 'bug' ? 'c-due' : r.type === 'idea' ? 'c-from' : isHb(r) ? 'c-hb' : 'c-piano'}">${esc(r.type || 'edit')}</span>
-        ${r.app && r.app !== 'Store Map' ? `<span class="chip c-app">${esc(r.app)}</span>` : ''}
+        ${reqApp(r) !== 'Store Map' ? `<span class="chip c-app">${esc(reqApp(r))}</span>` : ''}
         <small>${esc(String(r.date).slice(0, 10))} · ${esc(r.id)}</small>
         <select class="reqst" data-id="${esc(r.id)}" data-row="${r.row || ''}">
           ${REQ_STATES.map(st => `<option ${r.status === st ? 'selected' : ''}>${st}</option>`).join('')}
