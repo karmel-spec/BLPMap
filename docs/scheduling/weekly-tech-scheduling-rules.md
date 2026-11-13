@@ -99,6 +99,12 @@ two slots a day — FIRST 8:00 (Fridays 8:45, after shop tidying) and SECOND 9:3
   (row 116). Shopwork 1st/2nd and Store Map request tunings overflow to next week;
   Tuning Queue pianos never carry over.
 - **Brigham's priority list outranks everything**, the Thu/Fri DHRT hold included.
+- **Deliveries are self-serve (Mark 11/13):** never ask whether a delivery needs a tuning.
+  Every customer delivery on the moving calendar with a serial and no tuning already booked
+  for that serial gets BOTH, unasked: Korban's pre-delivery tuning (the workday before the
+  delivery, by the slot rule below) and the QC after it the same day — the tuning ends
+  before the QC starts. Exceptions stay: storage returns, moved-only pianos, outside-shop
+  trips, QRS-only pianos (30-min QC). A delivery with no serial → ask for the serial.
 - **Delivery tunings (Mark 11/12, option A; row 117):** a pre-delivery tuning takes
   Korban's 8:00 (Fri 8:45) on the day it's needed; a showroom tuning already there
   moves to the next free 8:00. Only when that 8:00 holds another delivery tuning or a
