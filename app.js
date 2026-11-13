@@ -1827,6 +1827,12 @@ function tryDeepLink() {
   if (!p) return;
   deepLinkDone = ser;
   lsDel('blpDL');
+  // the link has done its job — take #piano= out of the address bar so a refresh
+  // doesn't open that piano again (Mark 11/13: the map kept opening on Schafer HIJG0085)
+  try {
+    const h = (location.hash || '').replace(/[#&?]?piano=[^&]*/, '').replace(/^#&/, '#');
+    history.replaceState(null, '', location.pathname + location.search + (h && h !== '#' ? h : ''));
+  } catch (e) { /* old browser — harmless */ }
   S.scanArrived = p.serial;   // spotlight the Work Clock on this card
   setTimeout(() => focusPiano(p), 250);
 }
@@ -2030,10 +2036,16 @@ function wireKpis(scope) {
 }
 
 function gotoFloor(fi) {
+  // a floor tap is a fresh look at that floor (Mark 11/13, 111326hales85): the whole
+  // floor fitted on screen, no piano still selected — it used to keep the zoom and
+  // the open card from the last search / move, landing in one corner of the floor
   S.floor = fi;
   if (S.view !== 'map') switchView('map');
-  renderTabs(); renderMap();
-  $('#mapscroll').scrollTop = 0;
+  S.zoomHome = true;
+  S.focusRow = null;
+  const pop = $('#pop'); if (pop && !pop.hidden) { pop.hidden = true; popPinned = false; }
+  renderTabs(); renderMap(); sizePlan();
+  const sc = $('#mapscroll'); sc.scrollTop = 0; sc.scrollLeft = 0;
 }
 
 // zoom the map onto a piano, highlight it, and open its card
