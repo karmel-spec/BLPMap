@@ -20978,6 +20978,7 @@ async function renderBuffing(force) {
       <b class="bufn">${p.priority || '·'}</b>
       <div class="buft"><div class="bufl">${esc(p.pianoText)}</div>
         <div class="bufs">${[p.phase, p.curtisNote ? 'Curtis: ' + p.curtisNote : '', p.serial ? '' : 'not matched to a piano card'].filter(Boolean).map(esc).join(' · ')}</div>
+        ${p.offSheet ? `<div class="bufs" style="color:#9a5b13">no longer on Curtis's sheet${p.lastOnCurtis ? ' (last seen ' + esc(p.lastOnCurtis) + ')' : ''} — stays here until screws are marked done</div>` : ''}
         ${BUF.err[k] ? `<div class="bufs buferr">✗ ${esc(BUF.err[k])}</div>` : ''}</div>
       ${p.done ? `<span class="bufok">✓ ${who(p.done)} <button class="bufundo" data-k="${k}" ${busy ? 'disabled' : ''}>undo</button></span>`
                : `<button class="bufgo" data-k="${k}" data-op="screws" ${busy ? 'disabled' : ''}>${busy ? '…' : 'Screws done'}</button>`}</div>`;
@@ -21038,9 +21039,12 @@ async function renderBuffing(force) {
     const op = isPlate ? 'screws' : undo ? item.doneOp || ({'Prepped for shipping': 'prepped', 'Buffed': 'buffed'}[item.done] || 'done') : b.dataset.op;
     const body = {op, on: !undo, serial: item.serial, mapRow: item.mapRow};
     if (isPlate) {
-      body.curtisRow = item.curtisRow; body.pianoText = item.pianoText;
-      if (undo && (item.curtisRow in BUF.prevHw)) body.prevHw = BUF.prevHw[item.curtisRow];
-      if (!undo) BUF.prevHw[item.curtisRow] = item.plateHw || '';
+      // a plate off Curtis's sheet has no row to tick (Mark 11/13)
+      const pk = item.curtisRow || item.key || item.serial;
+      if (item.offSheet) body.offSheet = true; else body.curtisRow = item.curtisRow;
+      body.pianoText = item.pianoText;
+      if (undo && (pk in BUF.prevHw)) body.prevHw = BUF.prevHw[pk];
+      if (!undo) BUF.prevHw[pk] = item.plateHw || '';
     }
     const ok = await post(k, body);
     if (ok && !isPlate && !undo && op === 'done') {
