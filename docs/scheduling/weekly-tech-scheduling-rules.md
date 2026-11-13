@@ -80,7 +80,8 @@ two slots a day — FIRST 8:00 (Fridays 8:45, after shop tidying) and SECOND 9:3
   section — BLP-owned and consignment pianos after refurb or rebuild work too (Mark
   11/13, Baldwin 167698). A Store Map service request, a QC or a showroom repair does
   NOT make a showroom piano shopwork and doesn't by itself call for a tuning; a tuning
-  requested for it is a showroom tuning (first slot). If no shopwork tuning is due that
+  requested for it is a showroom tuning (first slot). The delivery rule still holds: a
+  piano that delivers gets its tune-then-QC before load-out (delivery tunings below). If no shopwork tuning is due that
   day, leave the second slot empty — never a showroom piano.
 - **Thursday 9:30 and Friday 10:15 are HELD** for pianos that finish DHRT that week
   (their 1st Tuning): no plan block there, no showroom piano. At **Wednesday 6:00 PM**
