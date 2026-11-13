@@ -20978,7 +20978,7 @@ async function renderBuffing(force) {
       <b class="bufn">${p.top ? '⭐' : p.priority || '·'}</b>
       <div class="buft"><div class="bufl">${esc(p.pianoText)}</div>
         <div class="bufs">${[p.phase, p.curtisNote ? 'Curtis: ' + p.curtisNote : '', p.serial ? '' : 'not matched to a piano card'].filter(Boolean).map(esc).join(' · ')}</div>
-        ${p.top && p.addedBy ? `<div class="bufs" style="color:#9e2020;font-weight:700">⭐ top priority — added by ${esc(String(p.addedBy).split(' ')[0])}; stays here until screws are marked done</div>`
+        ${p.top && p.addedBy ? `<div class="bufs" style="color:#9e2020;font-weight:700">⭐ Top priority: plate is back and piano is ready to begin restringing.</div>`
           : p.offSheet ? `<div class="bufs" style="color:#9a5b13">no longer on Curtis's sheet${p.lastOnCurtis ? ' (last seen ' + esc(p.lastOnCurtis) + ')' : ''} — stays here until screws are marked done</div>` : ''}
         ${BUF.err[k] ? `<div class="bufs buferr">✗ ${esc(BUF.err[k])}</div>` : ''}</div>
       ${p.done ? `<span class="bufok">✓ ${who(p.done)} <button class="bufundo" data-k="${k}" ${busy ? 'disabled' : ''}>undo</button></span>`
