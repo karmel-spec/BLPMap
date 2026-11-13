@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-11-12.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-11-13.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -687,7 +687,10 @@ function scheduleTuning_(req) {
   // a piano in a sale phase is a showroom piano whatever its section (spec pianos
   // For Sale in CURRENT SHOPWORK (SPEC) — Baldwin 37230, M&H 19407; Mark 11/12)
   var SALE_PH = /^(for sale|sale pending|sold|delivered|post sale qc)$/i;
-  var kOpt = {shopwork: !!req.shopwork && !SALE_PH.test(String(req.phase || '').trim()), phase: String(req.phase || '')};
+  // a 1st / 2nd Tuning after shop work is shopwork whatever the section — BLP-owned and
+  // consignment pianos after a refurb (Mark 11/13, Baldwin 167698)
+  var kOpt = {shopwork: /^(1st|2nd) tuning$/i.test(String(req.phase || '').trim())
+    || (!!req.shopwork && !SALE_PH.test(String(req.phase || '').trim())), phase: String(req.phase || '')};
   var slot = techId === TUNING_CAL ? korbanSlot_(searchCal, tz, kOpt) : openGap_(searchCal, tz, techName);
   if (!slot) return {error: 'no open slot found on ' + techName + "'s calendar in the next 6 weeks"};
   var desc = 'Requested via BLP Store Map ('

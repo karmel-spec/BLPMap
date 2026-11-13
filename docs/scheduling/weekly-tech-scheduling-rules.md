@@ -75,8 +75,10 @@ two slots a day — FIRST 8:00 (Fridays 8:45, after shop tidying) and SECOND 9:3
   **Tuning Queue** — `tuningQueue` in Store Map /api/data (⚡ ASAP first, then walk
   order). If /api/data answers with `tuningQueuePending`, fetch again after 30 s;
   never fill slots from a missing queue.
-- **SECOND = only a shopwork piano's 1st Tuning or 2nd Tuning** (card phase). If none
-  is due that day, leave it empty — never a showroom piano.
+- **SECOND = only a shopwork piano's 1st Tuning or 2nd Tuning** (card phase). A 1st/2nd
+  Tuning that follows shop work counts whatever the piano's section — BLP-owned and
+  consignment pianos after refurb or rebuild work too (Mark 11/13, Baldwin 167698). If
+  none is due that day, leave it empty — never a showroom piano.
 - **Thursday 9:30 and Friday 10:15 are HELD** for pianos that finish DHRT that week
   (their 1st Tuning): no plan block there, no showroom piano. At **Wednesday 6:00 PM**
   the bridge (`fillHeldTunings_`, from the daily 6 PM trigger) fills a held slot still
