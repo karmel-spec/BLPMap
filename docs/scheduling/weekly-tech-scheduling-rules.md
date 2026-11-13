@@ -67,6 +67,12 @@ was deleted, so the Planner now owns it — use that exact title). Do NOT write 
 block's note: Approve fills the event from the live buffing list. Only a rule-10
 `DEADLINE:` line may go in the note.
 
+**Alex works Saturdays (Mark 2026-11-13):** his days are Monday, Tuesday, Thursday,
+Friday and Saturday. His plan lane has a 6th day (`days[5]` = Saturday) and Approve
+writes it to his calendar: Friday's shop work copied over, minus Friday-only blocks
+(Friday Shop Organization), around any field appointment on his own Saturday calendar.
+No one else gets a Saturday unless their hours say so.
+
 **Korban's tuning slots (Mark 2026-11-12, replaces Walter 10/14; Scheduling Rules row 95):**
 two slots a day — FIRST 8:00 (Fridays 8:45, after shop tidying) and SECOND 9:30
 (Fridays 10:15).

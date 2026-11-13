@@ -1742,6 +1742,7 @@ button:disabled{opacity:.55;cursor:progress}
 #schedBody .proptech h5{background:#f7f5f0;padding:7px 11px;font-size:13px;display:flex;gap:10px;align-items:baseline}
 #schedBody .proptech h5 small{color:var(--mut);font-weight:400}
 #schedBody .propgrid{display:grid;grid-template-columns:repeat(5,1fr);gap:1px;background:var(--line-soft)}
+#schedBody .propgrid.sat{grid-template-columns:repeat(6,1fr)}   /* a Saturday worker (Alex — Mark 11/13) */
 #schedBody .propday{background:#fff;padding:6px 7px;min-height:60px}
 #schedBody .propday .dh{font-size:9.5px;letter-spacing:1px;color:var(--mut2);text-transform:uppercase;margin-bottom:4px}
 #schedBody .propblock{border-left:3px solid #9aa3ac;background:#fafbfc;border-radius:0 5px 5px 0;padding:4px 6px;margin-bottom:4px}
@@ -1774,7 +1775,7 @@ button:disabled{opacity:.55;cursor:progress}
 #schedBody .applyout.err{background:#fbeaea;border-color:#e5c9c9;color:#9e2020}
 #schedBody .applyout .abtn[disabled]{background:#b9b2a4;cursor:default}
 #schedBody .applybtn.ghost{background:none;border:1px solid var(--line);color:inherit;margin-left:6px}
-@media(max-width:900px){#schedBody .propgrid{grid-template-columns:1fr}}
+@media(max-width:900px){#schedBody .propgrid,#schedBody .propgrid.sat{grid-template-columns:1fr}}
 #schedBody /* planner notes-to-Claude column + adjust bar */
   .ptflex{display:flex;gap:0;align-items:stretch}
 #schedBody .ptmain{flex:1;min-width:0}

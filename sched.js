@@ -749,7 +749,7 @@ async function loadProposal(box){
       ${(plan.techs||[]).map(tc=>`<div class="proptech">
         <h5>${esc(tc.name)} <small>${esc(tc.hours||"")}</small><small style="margin-left:auto">${esc(tc.who||"")}</small></h5>
         <div class="ptflex"><div class="ptmain">
-        <div class="propgrid">${PROP_DAYS.map((dn,di)=>{
+        <div class="propgrid${(tc.days&&tc.days[5]&&tc.days[5].length)?" sat":""}">${PROP_DAYS.concat((tc.days&&tc.days[5]&&tc.days[5].length)?["Saturday"]:[]).map((dn,di)=>{
           const blocks=(tc.days&&tc.days[di])||[];
           return `<div class="propday"><div class="dh">${dn}</div>${blocks.map(b=>
             `<div class="propblock" style="border-left-color:${colors[b[2]]||"#9aa3ac"}">
