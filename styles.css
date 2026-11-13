@@ -65,7 +65,7 @@ body{background:#f7f8f9;color:#121212;display:flex;flex-direction:column;overflo
 .slot.accent{fill:rgba(158,32,32,.14);stroke:#b05050}
 .slot.hit{cursor:pointer}
 .slot.dim{opacity:.25}
-.slot.hl{stroke:#9e2020;stroke-width:2;fill:#fdf3f3}
+.slot.hl{stroke:#00a7b5;stroke-width:2;fill:#e6f8fa}
 .snum{fill:#8d9aa7;font-family:'SF Mono',Menlo,monospace;font-weight:500;pointer-events:none;
   paint-order:stroke;stroke:#eef1f3;stroke-width:5px;stroke-linejoin:round}
 .zonebox{fill:#fff;stroke:#c9d1d8}
@@ -127,7 +127,7 @@ body{background:#f7f8f9;color:#121212;display:flex;flex-direction:column;overflo
 .holdsub{fill:#8a929a;font-size:18px;font-style:italic}
 .holdcell{fill:#fff;stroke:#d9c3b6;stroke-width:1.2;cursor:pointer}
 .holdcell:hover{stroke:#9e2020;stroke-width:2}
-.holdcell.hl{stroke:#9e2020;stroke-width:2.5;fill:#fdf3f3}
+.holdcell.hl{stroke:#00a7b5;stroke-width:2.5;fill:#e6f8fa}
 .holdcell.dim{opacity:.3}
 .holdname{fill:#2b2f33;font-size:15px;font-weight:700;pointer-events:none}
 .holdloc{fill:#9e2020;font-size:13px;font-weight:600;pointer-events:none}
@@ -140,7 +140,13 @@ body{background:#f7f8f9;color:#121212;display:flex;flex-direction:column;overflo
 .mvmsg.err{color:#c03636;font-weight:700}
 .pricetag{fill:#2e7d4f;font-weight:800;paint-order:stroke;stroke:#fff;stroke-width:2.4px;stroke-linejoin:round;pointer-events:none}
 .pricecard{color:#2e7d4f}
-.piano.hl .pbody{fill:#9e2020}
+/* search / move "you are here" marker (Mark 11/11, 111126hales82): a teal ring
+   and glow around the piano, which keeps its own status color — the old red
+   fill read as "scheduled to be moved" (.piano.move) */
+.piano.hl .pbody{stroke:#00a7b5;stroke-width:3.2px;paint-order:stroke}
+.piano.hl{filter:drop-shadow(0 0 4px rgba(0,167,181,.95)) drop-shadow(0 0 9px rgba(0,167,181,.6));animation:hlpulse 1.6s ease-in-out infinite}
+@keyframes hlpulse{50%{filter:drop-shadow(0 0 2px rgba(0,167,181,.7)) drop-shadow(0 0 4px rgba(0,167,181,.35))}}
+@media (prefers-reduced-motion:reduce){.piano.hl{animation:none}}
 
 /* concurrent tasks on the piano card */
 .taskbox{border-top:1px solid #eef1f4;margin-top:6px;padding-top:6px}

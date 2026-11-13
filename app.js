@@ -2034,6 +2034,7 @@ function gotoFloor(fi) {
 function focusPiano(p) {
   if (S.view !== 'map') switchView('map');
   S.focusRow = p.row;
+  S.focusAt = Date.now();
   const placed = p.isSlot && S.slotFloor.has(p.location.toLowerCase());
   const inBin = areaBinFor(p);   // parked in a named work-area zone
   const tmpm = /^temp spot @([12])f/i.exec((p.location || '').trim());
@@ -4313,6 +4314,13 @@ function renderMap() {
 
 /* ---------- hover / tap card ---------- */
 let hideTimer = null, popPinned = false;
+// the focused piano's card closing (✕, tap away, Esc) ends the highlight
+try {
+  new MutationObserver(() => {
+    const pop = document.getElementById('pop');
+    if (pop && pop.hidden && !popPinned && S.focusRow != null && S.lastPopRow === S.focusRow) clearFocus();
+  }).observe(document.getElementById('pop'), {attributes: true, attributeFilter: ['hidden']});
+} catch (e) { /* no #pop yet — the highlight just stays until the next search */ }
 function scheduleHide() {
   if (popPinned) return;
   // long enough to cross the gap to the card itself before it vanishes
@@ -12184,7 +12192,17 @@ async function queuePiano(p, newPos, pop) {
   }
 }
 const CARD_SECS = ['admin', 'clock', 'loc', 'scope', 'shop', 'tune', 'media', 'pw', 'tags', 'notes', 'act', 'log'];
+/* The search / move highlight is a "you are here" marker, not a status (Mark
+ * 11/11, 111126hales82): it clears when that piano's card closes (✕ or tapping
+ * away) or another piano's card is tapped open. The grace period covers a
+ * focus that closes the previous card on its way in. */
+function clearFocus() {
+  if (S.focusRow == null || Date.now() - (S.focusAt || 0) < 800) return;
+  S.focusRow = null;
+  if (S.view === 'map') renderMap();
+}
 function openPop(row, el, pinned) {
+  if (pinned && S.focusRow != null && row !== S.focusRow) clearFocus();
   // every card opens compact (Brigham 9/4): switching pianos resets the
   // section toggles; re-renders of the SAME card keep what you opened.
   // Per-device opt-out (Mark 9/10, request 091026hales39): ☰ menu →
