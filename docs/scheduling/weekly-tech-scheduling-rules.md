@@ -129,7 +129,7 @@ two slots a day — FIRST 8:00 (Fridays 8:45, after shop tidying) and SECOND 9:3
   that follow the tech's calendar (ONLY THE TECHNICIANS A NOTE NAMES CHANGE).
 - **Bumped tunings (Mark 11/13; BUMPED TUNINGS on the tab):** a tuning bumped by a manager's
   priority list, a shopwork 1st/2nd tuning, a delivery tuning or a queue jump goes to an
-  OPEN slot THIS week first — an open 8:00, then an empty 9:30 (the manager's-priority-list rule: never leave a slot
+  OPEN slot THIS week first — an open 8:00, then an empty 9:30 (the MANAGER'S TUNING PRIORITY LIST rule: never leave a slot
   empty while a pre-booked piano is unplaced) — and to next week only when this week is
   full. The Thursday/Friday holds still wait for the Wednesday 6 PM fill.
 - **Delivery blocks' calendar note (Mark 11/13):** exactly "Delivery <weekday> <M/D>"
@@ -278,7 +278,7 @@ Brigham's rules so far (2026-07-27):
   automatic "Deadline: shoot to finish by …" line on a tech's calendar. A
   deadline goes on the calendar only when a manager's note asks for it.
   (Korban's hardware-ready DEADLINE inside his Hardware Buffing Queue block,
-  the 'Korban parts deadline' rule, is separate and stays.)
+  the KORBAN PARTS DEADLINE rule, is separate and stays.)
 - **Calendar block notes (Mark 2026-10-26, standing rule):** a block's note is
   `[CAL: what the technician sees] what the managers see`. Approve puts ONLY the
   `[CAL: …]` segment on the technician's event; everything after it stays in the
