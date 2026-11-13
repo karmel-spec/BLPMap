@@ -17141,11 +17141,13 @@ function teamClockFmt(iso) {
 }
 // Brigham's board membership edits (8/27) — hides and group overrides sit on
 // top of the roster's Position column, matched on the full name
+// Karmel 11/12 (111226larson32): Lisa Litton, Brig, Brigham and Karmel off the clock board
 const BOARD_HIDE = ['ben larson', 'karmel larson', 'brielle larson',
-  'susie marinez', 'susie martinez', 'louis larson', 'loius larson', 'abby larson'];
-const BOARD_GROUP = {'josh larson': 'Movers', 'lisa litton': 'Admin'};
+  'susie marinez', 'susie martinez', 'louis larson', 'loius larson', 'abby larson',
+  'brigham larson', 'brig larson', 'lisa litton'];
+const BOARD_GROUP = {'josh larson': 'Movers'};
 // on the board even though they're not on the roster's Current Team tab
-const BOARD_SEED = [{full: 'Lisa Litton', pos: 'Administrative', group: 'Admin'}];
+const BOARD_SEED = [];
 function teamBoardHTML() {
   const rows = (TEAM.roster && TEAM.roster['Current Team']) || [];
   const cat = pos => /intern/i.test(pos) ? 'Interns' : /refinish/i.test(pos) ? 'Refinishers'
