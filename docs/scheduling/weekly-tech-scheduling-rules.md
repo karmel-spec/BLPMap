@@ -42,7 +42,7 @@ schedule work, QC or a tuning for it, and never treat it as a for-sale floor pia
 For Sale — list it in the draft's changes as "rental check-in needed"; don't invent work for
 it beyond what its card says.
 
-**Standing meetings (Mark 2026-11-04, rewritten 2026-11-10 — Scheduling Rules row 104):**
+**Standing meetings (Mark 2026-11-04, rewritten 2026-11-10 — on the Scheduling Rules tab):**
 **Manager Meeting** (Tuesdays 10:30–11:30: Brigham, Karmel, Mark, Jacob, Matthew) is a
 recurring Google Calendar event. **Tuning Training is NOT recurring anymore** — Mark adds it
 to the calendar by hand when it happens — but **every Thursday 10:30–11:30 stays open for
@@ -53,13 +53,13 @@ Brigham and Karmel have no tech calendar, so plan blocks never reached them). Tr
 hours as taken on each attendee's calendar and schedule their other work around them, like a
 pre-booked tuning.
 
-**Korban's monthly HVAC filter check (Mark 2026-11-04, Scheduling Rules row 113):**
+**Korban's monthly HVAC filter check (Mark 2026-11-04, on the Scheduling Rules tab):**
 on the **first Wednesday of every month**, a **"BLDG: HVAC filter check"** block
 2:30-3:00 (exact title); that day his Hardware Buffing Queue ends at 2:30. If he is
 out that Wednesday, put it on his next shop day that week, same time. No calendar
 note. The Planner owns it (no recurring Google event) — first one Wed 12/2/2026.
 
-**Korban's Hardware Buffing Queue (Mark 2026-10-19, Scheduling Rules row 90):** one
+**Korban's Hardware Buffing Queue (Mark 2026-10-19, on the Scheduling Rules tab):** one
 block per day, 11:00-15:00 — **Monday 11:00-14:30**, followed by a **"Vacuum
 maintenance: clean filters, empty buckets" block 14:30-15:00 every Monday** that the
 plan schedules itself (Mark 2026-11-02: the standing recurring event on his calendar
@@ -67,13 +67,19 @@ was deleted, so the Planner now owns it — use that exact title). Do NOT write 
 block's note: Approve fills the event from the live buffing list. Only a rule-10
 `DEADLINE:` line may go in the note.
 
+**Scheduling Rules tab — refer to rules by NAME, never by row number (Mark 2026-11-13):**
+the tab was cleaned up on 11/13 (19 duplicate / superseded rows deleted, 101 rules left) and
+rows renumber whenever one is deleted. Rules on the tab now cite each other by name
+("see BUMPED TUNINGS"). A copy of the tab from before the cleanup is in
+`docs/scheduling/scheduling-rules-backup-2026-11-13.json`.
+
 **Alex works Saturdays (Mark 2026-11-13):** his days are Monday, Tuesday, Thursday,
 Friday and Saturday. His plan lane has a 6th day (`days[5]` = Saturday) and Approve
 writes it to his calendar: Friday's shop work copied over, minus Friday-only blocks
 (Friday Shop Organization), around any field appointment on his own Saturday calendar.
 No one else gets a Saturday unless their hours say so.
 
-**Korban's tuning slots (Mark 2026-11-12, replaces Walter 10/14; Scheduling Rules row 95):**
+**Korban's tuning slots (Mark 2026-11-12, replaces Walter 10/14; KORBAN'S TUNING SLOTS on the Scheduling Rules tab):**
 two slots a day — FIRST 8:00 (Fridays 8:45, after shop tidying) and SECOND 9:30
 (Fridays 10:15).
 - **FIRST = showroom tunings.** Matthew's walkthrough tunings come in as Store Map
@@ -96,14 +102,13 @@ two slots a day — FIRST 8:00 (Fridays 8:45, after shop tidying) and SECOND 9:3
   open by moving up the next showroom Store Map request booked later (not delivery /
   concert tunings, not shopwork pianos), else the Tuning Queue; anything left is open
   to showroom requests.
-- **Chip tunings are not Korban's** (row 102): the technician doing a piano's DHRT does
-  its chip tuning before beginning DHRT — no waiting days after restringing (rows 8 and
-  24 superseded). Make it the first block of that tech's DHRT, typed tune, titled
+- **Chip tunings are not Korban's** (CHIP TUNINGS rule): the technician doing a piano's DHRT does
+  its chip tuning before beginning DHRT — no waiting days after restringing (the old waiting-days rules are deleted). Make it the first block of that tech's DHRT, typed tune, titled
   "<make> <serial> - Chip Tuning"; if no one has the DHRT yet, ask who takes it.
 - Pre-booked tunings stay as they are — except a showroom tuning booked into a 9:30
   before 11/12: when a shopwork piano is ready for its 1st/2nd Tuning that week, the
   shopwork piano takes the 9:30 and the showroom tuning moves to the next free 8:00
-  (row 116). Shopwork 1st/2nd and Store Map request tunings overflow to next week;
+  (KORBAN'S 9:30 vs EARLIER SHOWROOM BOOKINGS). Shopwork 1st/2nd and Store Map request tunings overflow to next week;
   Tuning Queue pianos never carry over.
 - **Brigham's priority list outranks everything**, the Thu/Fri DHRT hold included.
 - **Deliveries are self-serve (Mark 11/13):** never ask whether a delivery needs a tuning.
@@ -113,26 +118,26 @@ two slots a day — FIRST 8:00 (Fridays 8:45, after shop tidying) and SECOND 9:3
   before the QC starts. Exceptions stay: storage returns, moved-only pianos, outside-shop
   trips, QRS-only pianos (30-min QC). A delivery with no serial → ask for the serial.
 - **Rulings from the 11/13 rule review (Mark) — all on the Scheduling Rules tab:**
-  tune then QC, always (the short-QC-first sequence is retired, row 30); deliveries are
-  matched by serial only — a client-name match is a reason to ask (rows 3, 47); pre-booked
-  tunings are never deleted, moved only by the rules (row 90); restringing is allowed with
-  the plate AFTER, Back in piano or In piano, never BEFORE or At Curtis Harper (row 89);
+  tune then QC, always (the short-QC-first sequence is retired); deliveries are
+  matched by serial only — a client-name match is a reason to ask (SERIAL-ONLY MATCHING); pre-booked
+  tunings are never deleted, moved only by the rules; restringing is allowed with
+  the plate AFTER, Back in piano or In piano, never BEFORE or At Curtis Harper (PLATE READY FOR RESTRINGING);
   different phases on one piano overlap with no note, except no DHRT while the piano is in
-  the refinishing shop (rows 108, 119); personal appointments go through Time Off, no
-  placeholder blocks (row 63); Korban's Friday buffing is 11:45–3:00 (row 85); only the
+  the refinishing shop (ONE TECHNICIAN PER PHASE); personal appointments go through Time Off, no
+  placeholder blocks; Korban's Friday buffing is 11:45–3:00; only the
   technicians a note names change, except a delivery's tune/QC and field appointments
-  that follow the tech's calendar (row 109).
-- **Bumped tunings (Mark 11/13; row 31 rewritten):** a tuning bumped by a manager's
+  that follow the tech's calendar (ONLY THE TECHNICIANS A NOTE NAMES CHANGE).
+- **Bumped tunings (Mark 11/13; BUMPED TUNINGS on the tab):** a tuning bumped by a manager's
   priority list, a shopwork 1st/2nd tuning, a delivery tuning or a queue jump goes to an
-  OPEN slot THIS week first — an open 8:00, then an empty 9:30 (row 100: never leave a slot
+  OPEN slot THIS week first — an open 8:00, then an empty 9:30 (the manager's-priority-list rule: never leave a slot
   empty while a pre-booked piano is unplaced) — and to next week only when this week is
   full. The Thursday/Friday holds still wait for the Wednesday 6 PM fill.
 - **Delivery blocks' calendar note (Mark 11/13):** exactly "Delivery <weekday> <M/D>"
   (`[CAL: Delivery Tuesday 11/17]`) — never the client's name, no other schedule wording;
   a check-up QC may add the prior QC date.
 - **Plates:** a piano whose plate is "Plate storage — BEFORE" must not be scheduled for
-  RESTRINGING (row 89; rows 97 / 101 now point to it) — other phases are scheduled as usual.
-- **Delivery tunings (Mark 11/12, option A; row 117):** a pre-delivery tuning takes
+  RESTRINGING (PLATE READY FOR RESTRINGING) — other phases are scheduled as usual.
+- **Delivery tunings (Mark 11/12, option A; DELIVERY TUNINGS IN KORBAN'S SLOTS):** a pre-delivery tuning takes
   Korban's 8:00 (Fri 8:45) on the day it's needed; a showroom tuning already there
   moves to the next free 8:00. Only when that 8:00 holds another delivery tuning or a
   Brigham priority does the delivery take the 9:30 (Fri 10:15), held slots included.
@@ -273,7 +278,7 @@ Brigham's rules so far (2026-07-27):
   automatic "Deadline: shoot to finish by …" line on a tech's calendar. A
   deadline goes on the calendar only when a manager's note asks for it.
   (Korban's hardware-ready DEADLINE inside his Hardware Buffing Queue block,
-  rule 10, is separate and stays.)
+  the 'Korban parts deadline' rule, is separate and stays.)
 - **Calendar block notes (Mark 2026-10-26, standing rule):** a block's note is
   `[CAL: what the technician sees] what the managers see`. Approve puts ONLY the
   `[CAL: …]` segment on the technician's event; everything after it stays in the
