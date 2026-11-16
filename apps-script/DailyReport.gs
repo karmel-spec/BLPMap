@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-11-16.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-11-16.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -1282,7 +1282,7 @@ function doPost(e) {
         try {
           var ofs = ownerFacts_(pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID)), ph.row);
           var prevPh = String(ph.previous || '');
-          var ou = ownerUpdate_('phase_changed', {serial: String(req.serial || ''), summary: ofs.summary || ph.summary, owner: ofs.owner,
+          var ou = ownerUpdate_('phase_changed', {serial: String(req.serial || ''), summary: ofs.summary || ph.summary, owner: ofs.owner, clientReports: ofs.clientReports,
             prev: prevPh, phase: String(ph.phase || ''), miniQcPassed: !!req.miniQcPassed, manager: String(req.qcManager || ''),
             note: String(req.qcNote || ''), by: who, photos: prevPh ? phasePhotos_(String(req.serial || ''), prevPh) : []});
           ph.ownerUpdate = ou;
@@ -1978,7 +1978,7 @@ function doPost(e) {
         // owner update (10/28): the FIRST shop tag = the piano has arrived and has its map space
         try {
           var tfs = ownerFacts_(pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID)), tp.row);
-          var tou = ownerUpdate_('arrived', {serial: String(req.serial || ''), summary: tfs.summary || tp.summary, owner: tfs.owner, location: tfs.location,
+          var tou = ownerUpdate_('arrived', {serial: String(req.serial || ''), summary: tfs.summary || tp.summary, owner: tfs.owner, clientReports: tfs.clientReports, location: tfs.location,
             status: tfs.status, adminSteps: tfs.adminSteps, tagSnapshot: tfs.tagSnapshot || String(req.snapshot || ''), entered: tfs.entered, by: who});
           tp.ownerUpdate = tou;
           if (/^queued/.test(tou)) logAct_(who, 'Owner update drafted', tp.summary || req.serial, 'arrived (' + tou + ')');
@@ -2048,7 +2048,7 @@ function doPost(e) {
           var vf = findPiano_(vsh, req.serial, req.row);
           if (!vf.error) {
             var vfs = ownerFacts_(vsh, vf.row);
-            var vou = ownerUpdate_('video', {serial: String(req.serial || ''), summary: vfs.summary || vf.summary, owner: vfs.owner, kind: vk,
+            var vou = ownerUpdate_('video', {serial: String(req.serial || ''), summary: vfs.summary || vf.summary, owner: vfs.owner, clientReports: vfs.clientReports, kind: vk,
               fileId: String(req.fileId || ''), name: vd.name, mb: vd.mb, link: vd.link, note: String(req.note || ''), by: who});
             vd.ownerUpdate = vou;
             if (/^queued/.test(vou)) logAct_(who, 'Owner update drafted', vfs.summary || req.serial, vk + ' video (' + vou + ')');
