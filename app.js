@@ -1354,7 +1354,8 @@ function applyPending() {
       else { p.phase = edit.phase; stillPending = true; }
     }
     if ('location' in edit) {
-      if ((p.location || '') === edit.location) delete edit.location;
+      // a missing spot (a queued move's answer, Mark 11/16) is never re-applied over the real one
+      if (edit.location == null || (p.location || '') === edit.location) delete edit.location;
       else { p.location = edit.location; p.isSlot = SLOT_RE.test(edit.location); stillPending = true; }
     }
     for (const f of ['bphoto', 'bvideo', 'aphoto', 'avideo']) {
@@ -10247,8 +10248,14 @@ async function submitAssign(slotId, ov) {
   }
 }
 function finishAssign(j, serial, slotId, ov, msg) {
+  // queued (bridge slow): the relay's "saved, lands shortly" answer carries no
+  // location — use the spot that was picked, never copy a missing one onto the
+  // piano (Mark 11/16: two moves showed the piano at "undefined")
+  const queued = !j.moved;
+  if (queued || !j.location) j.location = slotId;
   const p = S.data.pianos.find(x => x.row === j.row)
     || S.data.pianos.find(x => (x.serial || '').toLowerCase() === serial.toLowerCase());
+  const prevLoc = p ? (p.location || '') : '';
   if (p) {
     p.location = j.location; p.isSlot = SLOT_RE.test(j.location);
     const edit = pendingEdits.get(p.row) || {};
@@ -10257,9 +10264,12 @@ function finishAssign(j, serial, slotId, ov, msg) {
   applyBumps(j.bumped);
   index(); renderAll();
   msg.className = 'tmmsg ok';
-  msg.textContent = `✓ ${j.summary || 'Piano'} moved from ${j.previous || '—'} to spot ${j.location}`
-    + (j.bumped && j.bumped.length ? ` — bumped ${j.bumped.map(b => b.summary || 'a piano').join(', ')} to the attic` : '');
-  setTimeout(() => { ov.hidden = true; if (p) focusPiano(p); }, 2000);
+  msg.textContent = queued
+    ? `⏳ Saved — the bridge is slow right now; the move to spot ${slotId} usually lands within 30 s. No need to retry.`
+    : `✓ ${j.summary || 'Piano'} moved from ${j.previous || '—'} to spot ${j.location}`
+      + (j.bumped && j.bumped.length ? ` — bumped ${j.bumped.map(b => b.summary || 'a piano').join(', ')} to the attic` : '');
+  if (queued && j.qid && p) watchQueuedMove(j.qid, p, slotId, prevLoc, null);
+  setTimeout(() => { ov.hidden = true; if (p) focusPiano(p); }, queued ? 3500 : 2000);
 }
 
 function openAddModal(slotId, prefillSerial) {
@@ -10369,6 +10379,7 @@ async function submitAdd(slotId, ov) {
           });
           const j2 = await r2.json();
           if (!j2.moved && !j2.queued) throw new Error(j2.error || 'move failed');   // queued = saved, lands in minutes (bridge slow)
+          if (!j2.moved || !j2.location) j2.location = slotId;   // queued answer has no location (Mark 11/16 "undefined")
           const p = S.data.pianos.find(x => x.row === j.row)
             || S.data.pianos.find(x => (x.serial || '').toLowerCase() === serial.toLowerCase());
           if (p) {
@@ -10378,7 +10389,8 @@ async function submitAdd(slotId, ov) {
           }
           index(); renderAll();
           msg.className = 'tmmsg ok';
-          msg.textContent = `✓ Moved from ${j2.previous || '—'} to spot ${j2.location}.`;
+          msg.textContent = j2.moved ? `✓ Moved from ${j2.previous || '—'} to spot ${j2.location}.`
+            : `⏳ Saved — the move to spot ${slotId} usually lands within 30 s. No need to retry.`;
           setTimeout(() => { ov.hidden = true; }, 1800);
         } catch (e2) {
           msg.className = 'tmmsg err'; msg.textContent = '✗ ' + e2.message;
@@ -12094,7 +12106,7 @@ async function movePiano(p, dest, pop, confirmed) {
       // queued (Mark 9/28, 160095 "update failed" three times): the relay
       // saved the move durably because the bridge was slow — it lands within
       // minutes. Say so instead of failing, and don't invite a retry.
-      if (!j.moved) j.location = dest;
+      if (!j.moved || !j.location) j.location = dest;
       msg.className = 'mvmsg ok';
       msg.textContent = j.moved
         ? `✓ Moved from ${j.previous || '—'} to ${j.location}` + (known ? '' : ' (not a numbered map spot — it will show in reports)')
