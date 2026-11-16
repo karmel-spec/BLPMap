@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-11-13.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-11-16.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -6462,6 +6462,25 @@ function addRequest_(req) {
     shot, 'Requested', '', '', app]);
   return {ok: true, id: id, screenshot: shot, app: app};
 }
+// '' when this status change is allowed, otherwise the reason (shown to the user)
+function handbookStatusBlock_(row, req) {
+  if (String(row[3] || '').trim().toLowerCase() !== 'handbook') return '';
+  var to = String(req.status), cur = String(row[7] || 'Requested');
+  if (to === cur) return '';
+  var gEm = String((req._g && req._g.email) || '').toLowerCase();
+  if (OWNER_EMAILS.indexOf(gEm) >= 0) return '';
+  if (to === 'In progress' || to === 'Declined') {
+    return 'Only Brigham or Karmel can approve or decline a handbook suggestion (signed in with their own Google account).';
+  }
+  var APPROVED = ['In progress', 'Live', 'Tested', 'Resolved'];
+  if ((to === 'Live' || to === 'Tested' || to === 'Resolved') && APPROVED.indexOf(cur) < 0) {
+    return 'This handbook suggestion has not been approved yet. Brigham or Karmel must set it to In progress before it can go Live.';
+  }
+  if ((cur === 'In progress' || cur === 'Declined') && APPROVED.indexOf(to) < 0) {
+    return 'Only Brigham or Karmel can undo an approval or a decline on a handbook suggestion.';
+  }
+  return '';
+}
 function setRequestStatus_(req) {
   // Duplicate (Brigham 9/11: lots of re-sent requests) + Declined (the Store Map offered it but this list rejected it)
   var STATUSES = ['Requested', 'In progress', 'Texted for info', 'Live', 'Tested', 'Resolved', 'Archived', 'Declined', 'Duplicate'];
@@ -6486,8 +6505,15 @@ function setRequestStatus_(req) {
     var i = order[oi];
     if (String(vals[i][0]) === String(req.id)) {
       var wasLive = String(vals[i][7] || '') === 'Live';
+      // 📖 handbook suggestions (Mark 11/16): only Brigham or Karmel — by a
+      // VERIFIED Google sign-in, never a PIN — approve (In progress) or
+      // decline, or undo either. Live / Tested / Resolved only once approved.
+      // Housekeeping (Texted for info, Duplicate, Archived) stays open to admins.
+      var hbBlock = handbookStatusBlock_(vals[i], req);
+      if (hbBlock) return {error: hbBlock};
+      var stBy = String((req._g && req._g.name) || '') || clockTech_(req) || '';
       sh.getRange(i + 1, 8, 1, 3).setValues([[String(req.status),
-        clockTech_(req) || '', new Date().toISOString()]]);
+        stBy, new Date().toISOString()]]);
       var rWho = String(vals[i][2]), rText = String(vals[i][4]);
       var rApp = appOfRequest_(vals[i][10], vals[i][5]);
       // Walter 9/9: flipping a request to Live from the Store Map now texts

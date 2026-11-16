@@ -4380,7 +4380,7 @@ function openSuggestBox() {
         <button class="sgt" data-t="idea">💡 Idea</button>
         <button class="sgt" data-t="handbook" title="suggest a change to the Restoration Handbook — Brigham reviews it before anything is edited">📖 Handbook</button>
       </div>
-      <div class="lite sghbnote" style="font-size:11.5px;margin:-4px 0 8px" hidden>📖 Suggestions for the <b>Restoration Handbook</b> go to a separate list that Brigham reviews and approves before the handbook changes. Name the section and say what it should say instead.</div>
+      <div class="lite sghbnote" style="font-size:11.5px;margin:-4px 0 8px" hidden>📖 Suggestions for the <b>Restoration Handbook</b> go to a separate list that Brigham or Karmel review and approve before the handbook changes. Name the section and say what it should say instead.</div>
       <div class="sgtypes sgdevrow" style="margin-top:4px">
         <span class="lite" style="font-size:11px;align-self:center;margin-right:2px">Where did this happen?</span>
         <button class="sgdev" data-d="phone">📱 Phone</button>
@@ -4535,7 +4535,7 @@ function openSuggestBox() {
       msg.textContent = '✓ Filed as ' + j.id + (shotFailed
         ? ' — but it went in WITHOUT the picture: ' + shotFailed + '.'
         : type === 'handbook'
-          ? ' — thank you! Brigham reviews handbook suggestions before anything changes; it moves to Live here once the handbook is updated.'
+          ? ' — thank you! Brigham or Karmel review handbook suggestions before anything changes; it moves to Live here once the handbook is updated.'
           : ' — thank you! You\u2019ll see it move to Live here when it ships.');
       ov.querySelector('.sgtext').value = ''; clearShot();
       loadMyRequests(ov);
@@ -19237,6 +19237,14 @@ const reqKey = r => r.row ? 'row:' + r.row : String(r.id);
 function admRequestsHTML() {
   if (!ADMDASH.req) { admFetchRequests(); return '<div class="empty">Loading app requests…</div>'; }
   const isHb = r => r.type === 'handbook';
+  // 📖 approval lock (Mark 11/16): only Brigham or Karmel approve (In progress)
+  // or decline a handbook suggestion, or undo either; Live / Tested only after
+  // approval. The bridge enforces it — this just greys out what would be refused.
+  const HB_OK = ['In progress', 'Live', 'Tested', 'Resolved'];
+  const hbLocked = (r, st) => isHb(r) && !isOwner() && st !== r.status
+    && (st === 'In progress' || st === 'Declined'
+      || (['Live', 'Tested', 'Resolved'].includes(st) && !HB_OK.includes(r.status))
+      || (['In progress', 'Declined'].includes(r.status) && !HB_OK.includes(st)));
   // Filters (Walter 9/9): "Open" is Requested + In progress only — a request
   // that went Live leaves the working list, but stays one filter or search
   // away (status, team member, type, free text) for later reference.
@@ -19293,7 +19301,7 @@ function admRequestsHTML() {
         ${reqApp(r) !== 'Store Map' ? `<span class="chip c-app">${esc(reqApp(r))}</span>` : ''}
         <small>${esc(String(r.date).slice(0, 10))} · ${esc(r.id)}</small>
         <select class="reqst" data-id="${esc(r.id)}" data-row="${r.row || ''}">
-          ${REQ_STATES.map(st => `<option ${r.status === st ? 'selected' : ''}>${st}</option>`).join('')}
+          ${REQ_STATES.map(st => `<option ${r.status === st ? 'selected' : ''}${hbLocked(r, st) ? ' disabled' : ''}>${st}</option>`).join('')}
         </select></div>
       <div class="admreqtext">${esc(r.text)}</div>
       <div class="admreqmeta">${r.context ? esc(r.context) + ' · ' : ''}${r.screenshot
@@ -19319,8 +19327,9 @@ function admRequestsHTML() {
   // Brigham's queue goes first — it is short and the 100+ app requests
   // below it would bury it
   return `${bar}${bulkBar}
-    <h4 class="tmsec">📖 Handbook suggestions — Brigham reviews before the handbook changes <span class="pc">${hbOpen.length}</span></h4>
-    <div class="lite" style="font-size:11.5px;margin:-4px 0 8px">Requested = awaiting Brigham · In progress = approved, edit under way · Live = handbook updated · Declined = not adopting</div>
+    <h4 class="tmsec">📖 Handbook suggestions — Brigham or Karmel approve before the handbook changes <span class="pc">${hbOpen.length}</span></h4>
+    <div class="lite" style="font-size:11.5px;margin:-4px 0 8px">Requested = awaiting Brigham or Karmel · In progress = approved, edit under way · Live = handbook updated · Declined = not adopting.
+      Only Brigham or Karmel can approve (In progress) or decline, and a suggestion goes Live only after it is approved.</div>
     ${hbOpen.map(row).join('') || `<div class="empty">${filtered ? 'No handbook suggestions match these filters.' : 'No handbook suggestions waiting.'}</div>`}
     <h4 class="tmsec" style="margin-top:22px">${esc(label)} <span class="pc">${open.length}</span></h4>${open.map(row).join('')
     || `<div class="empty">${filtered ? 'No requests match these filters.' : 'Nothing open. 🎉'}</div>`}`;
