@@ -8262,6 +8262,7 @@ function wirePop(p) {
       fin.dataset.kind = kind; fin.value = ''; fin.click();
     };
     box.onclick = e2 => e2.stopPropagation();
+    placeChooser(box, b);
     place(pop, S.popAnchor);   // card grew
   });
   // 🎥 before / after video: the camera input records, the plain input picks a saved clip
@@ -11261,6 +11262,25 @@ const VID_CHUNK = 8 * 1024 * 1024;
  * note ("found this 1912 ticket stub under the keys", "slow-mo of the
  * hammers") and the two ways in. The note rides along as the Drive file's
  * description and in the email to marketing. */
+/* Open the photo / video chooser right under the tile that was tapped (Mark 11/6,
+ * 110626hales73): it used to appear at the very bottom of the media section, below
+ * the Social tiles and the note — off-screen on a phone, so "Before photos" looked
+ * like it did nothing. The box joins the tile grid after the tapped tile's row,
+ * spans both columns, and scrolls into view. */
+function placeChooser(box, tile) {
+  try {
+    const grid = tile && tile.closest('.mediagrid');
+    if (grid) {
+      const tiles = [...grid.children].filter(el => el.classList.contains('tagbtn'));
+      const i = tiles.indexOf(tile);
+      const rowEnd = tiles[i % 2 === 0 ? Math.min(i + 1, tiles.length - 1) : i];
+      grid.insertBefore(box, rowEnd.nextSibling);
+      box.style.gridColumn = '1 / -1';
+      box.style.marginTop = '0';
+    }
+    setTimeout(() => box.scrollIntoView({block: 'nearest', behavior: 'smooth'}), 30);
+  } catch (e) { /* leave it where it was */ }
+}
 function socialNoteOf(pop) { const t = pop.querySelector('.socnote'); return t ? t.value.trim().slice(0, 400) : ''; }
 function openSocialChooser(p, pop, kind, opts) {
   const box = pop.querySelector('.phchoose');
@@ -11291,6 +11311,7 @@ function openSocialChooser(p, pop, kind, opts) {
     el.value = ''; el.click();
   });
   if (opts && opts.pick) { const pk = pop.querySelector('.vidpick'); if (pk) { pk.value = ''; pk.click(); } }
+  placeChooser(box, pop.querySelector(`.socbtn[data-kind="${kind}"]`));
   place(pop, S.popAnchor);   // card grew
 }
 async function uploadSocialPhotos(p, files, note, pop) {
