@@ -6773,6 +6773,11 @@ const isMarcelo = () => /^marcelo\b/i.test(clockName()) || /^marcelo/i.test(user
 const OUTSIDE_PEOPLE = ['alexmartin.blp@gmail.com', 'jakepulver.blp@gmail.com', 'matthewwessman.blp@gmail.com', 'markhales.blp@gmail.com', 'jacobmower.blp@gmail.com', 'korbangreenhalgh.blp@gmail.com'];
 // Building maintenance and Shop tidying moved in from their own dashboard boxes 10/20 (Mark)
 const OUTSIDE_KINDS = ['Repair', 'Keytops', 'Refinishing', 'Piano bench construction', 'Field work', 'Building maintenance', 'Shop tidying', 'Other'];
+// kinds that clock in with no description (Mark 11/6, 110626hales72: "Shop tidying shouldn't need a
+// description") — the job name is then the kind itself, so the Time Log row still reads "Shop tidying"
+const OUTSIDE_NO_DESC = ['Shop tidying'];
+const OUTSIDE_JOB_PH = 'what / for whom — e.g. Ferguson lyre, cracked on move';
+const outJobPh = kind => OUTSIDE_NO_DESC.includes(kind) ? 'optional — e.g. Friday cleaning' : OUTSIDE_JOB_PH;
 // everyone gets the card since 10/20 (Mark) — the people list above is history
 const outsideOk = () => true;
 const clockLabel = (clock, serial) => {
@@ -6863,7 +6868,6 @@ function clockFixModal(prefill) {
     <div class="rfbar"><select class="cf-clock">
       <option value="pay">My day clock (payroll)</option>
       <option value="piano">A piano work clock</option>
-      <option value="TIDY">Shop tidying</option>
       <option value="MGMT">Management</option>${isMarcelo() ? '<option value="KEYS">Miscellaneous keytops</option>' : ''}${outsideOk() ? '<option value="OUTSIDE">Outside project</option>' : ''}</select>
       <input type="text" class="cf-serial" placeholder="piano serial" style="display:none"></div>
     <div class="rfbar">
@@ -16497,7 +16501,7 @@ function renderDash() {
       if (last.day !== denverDay(new Date().toISOString())) last = {};   // yesterday's job doesn't carry over
       const fields = `<div class="outfields">
           <select class="outkind">${OUTSIDE_KINDS.map(k => `<option ${k === (last.kind || 'Repair') ? 'selected' : ''}>${k}</option>`).join('')}</select>
-          <input type="text" class="outjob" maxlength="80" placeholder="what / for whom — e.g. Ferguson lyre, cracked on move" value="${esc(last.job || '')}">
+          <input type="text" class="outjob" maxlength="80" placeholder="${esc(outJobPh(last.kind || 'Repair'))}" value="${esc(last.job || '')}">
         </div>`;
       return `<div class="dbench db-outside">
         <h4>🧰 Outside project</h4>
@@ -16611,13 +16615,19 @@ function renderDash() {
     else renderDash();
   };
   const oOn = body.querySelector('.outon'), oOff = body.querySelector('.outoff');
+  const oKind = body.querySelector('.outkind');
+  if (oKind) oKind.onchange = () => {   // the hint follows the kind, and a stale "say what it is" clears
+    const oj = body.querySelector('.outjob'); if (oj) oj.placeholder = outJobPh(oKind.value);
+    const om = body.querySelector('.outmsg'); if (om) { om.className = 'outmsg phmsg'; om.textContent = ''; }
+  };
   if (oOn) oOn.onclick = async () => {
     if (Date.now() - CLOCK.punchedAt < 2000) return;
     const kind = (body.querySelector('.outkind') || {}).value || 'Other';
-    const job = String((body.querySelector('.outjob') || {}).value || '').trim();
+    const typed = String((body.querySelector('.outjob') || {}).value || '').trim();
     const om = body.querySelector('.outmsg');
-    if (!job) { if (om) { om.className = 'outmsg phmsg err'; om.textContent = 'Say what the project is (what / for whom) so the hours can be found later.'; } return; }
-    try { lsSet('outsideJob', JSON.stringify({kind, job, day: denverDay(new Date().toISOString())})); } catch (e) {}
+    if (!typed && !OUTSIDE_NO_DESC.includes(kind)) { if (om) { om.className = 'outmsg phmsg err'; om.textContent = 'Say what the project is (what / for whom) so the hours can be found later.'; } return; }
+    const job = typed || kind;   // Shop tidying with nothing typed is logged as "Shop tidying"
+    try { lsSet('outsideJob', JSON.stringify({kind, job: typed, day: denverDay(new Date().toISOString())})); } catch (e) {}
     oOn.disabled = true; oOn.textContent = clockingText('in');
     const slow_oOn = punchSlow(oOn, 'in');
     const j = await punch('clockin', {serial: 'OUTSIDE', row: '', summary: job}, kind, 'dash'); clearTimeout(slow_oOn);
