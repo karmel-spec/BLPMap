@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-11-16.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-11-17.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -1773,6 +1773,8 @@ function doPost(e) {
       if (adj.ok) logAct_(who, 'Clock adjusted', adj.piano || adj.tech || '',
         (req.clock === 'pay' ? 'payroll' : 'piano') + (req.add ? ' session added' : ' row ' + req.row) +
         ' → ' + String(req.start || '').slice(0, 16) + ' – ' + String(req.end || '').slice(0, 16));
+      if (adj.ok && adj.pianoTrimmed && adj.pianoTrimmed.length) logAct_(who, 'Piano clock trimmed to day clock-out', adj.tech || '',
+        adj.pianoTrimmed.map(function (t) { return (t.piano || t.serial) + ' ' + t.phase + ' (was ' + t.was + ')'; }).join('; ').slice(0, 300));
       return json_(adj);
     }
     if (req.action === 'voidclock') {
@@ -6073,6 +6075,45 @@ function clockWas_(oldStart, oldEnd, start, end) {
   return ' (was ' + f(os) + '\u2013' + (oe ? f(oe) : 'open') + ')';
 }
 
+/* A day punch now ends at dayEnd: end this person's piano clocks that started
+ * inside that punch and run past its end (or are still open) at dayEnd — unless
+ * they clocked back in for the day before the piano clock's end (a split day),
+ * which is left alone. Each trimmed row's Closed By says so. Returns the rows. */
+function trimPianoToDayEnd_(paySh, payRow, tech, dayStart, dayEnd, by) {
+  var want = finishKey_(tech);
+  if (!want) return [];
+  var s0 = dayStart.getTime(), e0 = dayEnd.getTime();
+  // this person's other live day punches, to spot a later clock-in
+  var pLast = paySh.getLastRow(), pFrom = Math.max(2, pLast - 600);
+  var pv = paySh.getRange(pFrom, 1, pLast - pFrom + 1, 8).getValues();
+  var laterIns = [];
+  for (var i = 0; i < pv.length; i++) {
+    if (pFrom + i === payRow || pv[i][7] || finishKey_(pv[i][0]) !== want) continue;
+    var ps = new Date(pv[i][2]).getTime();
+    if (!isNaN(ps) && ps >= e0) laterIns.push(ps);
+  }
+  var tsh = timeLogSheet_();
+  var tLast = tsh.getLastRow(), tFrom = Math.max(2, tLast - 800);
+  var tv = tsh.getRange(tFrom, 1, tLast - tFrom + 1, 10).getValues();
+  var out = [];
+  for (var j = 0; j < tv.length; j++) {
+    var r = tv[j];
+    if (r[9] || finishKey_(r[0]) !== want) continue;
+    var ts = new Date(r[4]).getTime();
+    if (isNaN(ts) || ts < s0 - 60000 || ts >= e0) continue;
+    var te = r[5] ? new Date(r[5]).getTime() : Infinity;
+    if (!(te > e0 + 60000)) continue;
+    if (laterIns.some(function (x) { return x < te; })) continue;   // back on the day clock before this ended
+    var mins = Math.max(1, Math.round((e0 - ts) / 60000));
+    var was = r[5] ? Utilities.formatDate(new Date(te), 'America/Denver', 'h:mm a') : 'open';
+    var note = String(r[8] || '');
+    tsh.getRange(tFrom + j, 6, 1, 4).setValues([[dayEnd.toISOString(), mins, r[7],
+      (note ? note + ' · ' : '') + 'trimmed to the day clock-out (was ' + was + ') · ' + by]]);
+    out.push({row: tFrom + j, serial: String(r[1] || ''), piano: String(r[2] || ''), phase: String(r[3] || ''),
+              was: was, minutes: mins});
+  }
+  return out;
+}
 function adjustClock_(req) {
   return withClockLock_(function () {
     var g = req._g;
@@ -6128,7 +6169,12 @@ function adjustClock_(req) {
       rng.setValues([[cur[0], Utilities.formatDate(start, 'America/Denver', 'yyyy-MM-dd'),
         start.toISOString(), end ? end.toISOString() : '', mins, cur[5],
         (oldNote ? oldNote + ' · ' : '') + stamp + (req.confirm ? '' : clockWas_(cur[2], cur[3], start, end))]]);
-      return {ok: true, tech: String(cur[0] || '')};
+      // the piano clock follows a corrected day clock-out (Mark 11/17): only a
+      // person's own Clock Out ended their piano clock — a fixed or manager-set
+      // day end left it running (Avery 11/9: day out 12:07, piano to 8:42 PM)
+      var trimmed = [];
+      if (end) { try { trimmed = trimPianoToDayEnd_(sh, row, String(cur[0] || ''), start, end, stamp); } catch (eT) { /* best-effort */ } }
+      return {ok: true, tech: String(cur[0] || ''), pianoTrimmed: trimmed};
     }
     var tsh = timeLogSheet_();
     if (req.add) {
