@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-11-18.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-11-18.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -2832,20 +2832,50 @@ function handbookPatch_(req, who) {
   var base = 'https://docs.googleapis.com/v1/documents/' + HANDBOOK_DOC_ID;
   var doc = JSON.parse(UrlFetchApp.fetch(base, {headers: {Authorization: 'Bearer ' + tok}, muteHttpExceptions: true}).getContentText());
   if (!doc.body) return {error: 'could not read the doc: ' + JSON.stringify(doc).slice(0, 200)};
-  var content = doc.body.content, start = -1, endIndex = content[content.length - 1].endIndex;
-  for (var i = 0; i < content.length; i++) {
+  var content = doc.body.content, start = -1, mid = false, endIndex = content[content.length - 1].endIndex;
+  // The marker is found INSIDE a paragraph too (Mark 11/18): the 10/14 raw append
+  // glued "# 3b. …" onto the last paragraph — the "16. HELLERBASS SHEET EXAMPLE"
+  // heading AND its image. Deleting from that paragraph's start would have taken
+  // the heading and the image with it; the cut now starts at the marker text itself.
+  for (var i = 0; i < content.length && start < 0; i++) {
     var para = content[i].paragraph; if (!para) continue;
-    var text = (para.elements || []).map(function (e) { return e.textRun ? e.textRun.content : ''; }).join('');
-    if (text.replace(/^\s+/, '').indexOf(marker) === 0) { start = content[i].startIndex; break; }
+    var els = para.elements || [];
+    for (var k = 0; k < els.length; k++) {
+      var run = els[k].textRun; if (!run) continue;
+      var at0 = String(run.content || '').indexOf(marker);
+      if (at0 < 0) continue;
+      start = els[k].startIndex + at0;
+      // only whitespace before the marker in its paragraph → cut from the paragraph start, as before
+      var before = els.slice(0, k).some(function (e) { return !e.textRun || String(e.textRun.content || '').trim(); })
+        || String(run.content || '').slice(0, at0).trim();
+      if (before) mid = true; else start = content[i].startIndex;
+      break;
+    }
   }
+  // what the cut would remove — read back for the dry run
+  var gone = '';
+  if (start >= 0) {
+    content.forEach(function (c) {
+      ((c.paragraph && c.paragraph.elements) || []).forEach(function (e) {
+        if (!e.textRun || e.endIndex <= start) return;
+        var t = String(e.textRun.content || '');
+        gone += e.startIndex >= start ? t : t.slice(start - e.startIndex);
+      });
+    });
+  }
+  if (req.dryrun) return {ok: true, dryrun: true, found: start >= 0, start: start, midParagraph: mid, docEnd: endIndex,
+    deleteChars: gone.length, deleteStartsWith: gone.slice(0, 160), deleteEndsWith: gone.slice(-120), paragraphs: blocks.length};
   var reqs = [];
   // the doc must keep its final newline: delete up to endIndex-1
   if (start >= 0 && endIndex - 1 > start) reqs.push({deleteContentRange: {range: {startIndex: start, endIndex: endIndex - 1}}});
   var at = start >= 0 ? start : endIndex - 1;
-  // insert all text at once (newline-terminated paragraphs), then style each
-  var full = blocks.map(function (b) { return String(b.text || '').replace(/[\r\n]+/g, ' ') + '\n'; }).join('');
+  // insert all text at once (newline-terminated paragraphs), then style each.
+  // A cut inside a paragraph (or an append) first ends that paragraph, so the new
+  // text starts on its own line and what was there keeps its own style.
+  var lead = (mid || start < 0) ? '\n' : '';
+  var full = lead + blocks.map(function (b) { return String(b.text || '').replace(/[\r\n]+/g, ' ') + '\n'; }).join('');
   reqs.push({insertText: {location: {index: at}, text: full}});
-  var cursor = at;
+  var cursor = at + lead.length;
   blocks.forEach(function (b) {
     var len = String(b.text || '').replace(/[\r\n]+/g, ' ').length + 1;
     reqs.push({updateParagraphStyle: {range: {startIndex: cursor, endIndex: cursor + len},
@@ -2856,7 +2886,7 @@ function handbookPatch_(req, who) {
     headers: {Authorization: 'Bearer ' + tok}, payload: JSON.stringify({requests: reqs})});
   if (res.getResponseCode() !== 200) return {error: 'batchUpdate ' + res.getResponseCode() + ': ' + res.getContentText().slice(0, 300)};
   logAct_(who, 'Handbook patched', 'Restoration Handbook', (start >= 0 ? 'replaced from "' + marker.slice(0, 40) + '"' : 'appended') + ' — ' + blocks.length + ' paragraphs');
-  return {ok: true, deletedFrom: start, inserted: full.length, paragraphs: blocks.length, requests: reqs.length};
+  return {ok: true, deletedFrom: start, midParagraph: mid, deletedChars: gone.length, inserted: full.length, paragraphs: blocks.length, requests: reqs.length};
 }
 function videoFolderFor_(sh, row, serial, kind, noMark) {
   // before/after live in the BEFORE/AFTER VIDEO media columns; progress videos
