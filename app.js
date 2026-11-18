@@ -695,10 +695,10 @@ function tasksBox(p) {
         ${PLATE_STAGES.map(v =>
           `<option ${p.plateStatus === v ? 'selected' : ''}>${esc(v)}</option>`).join('')}
       </select></div><div class="platemsg phmsg"></div>
-    ${refurbOnlyTrack(p) ? `<div class="row phrow platehwrow" title="Refurbish track: the refurbish technician buffs the plate screws as part of the refurb phases — nothing to track here.">Plate screws
-      <select disabled><option>Refurb — N/A</option></select></div>
-    <div class="row phrow vishwrow" title="Refurbish track: the refurbish technician buffs the visible hardware as part of the refurb phases — nothing to track here.">Visible hardware
-      <select disabled><option>Refurb — N/A</option></select></div>` : `<div class="row phrow platehwrow" title="plate bolts & screws — buffed by Korban (Hardware Queue). A CAP mini-QC pass puts them in the queue; his “Screws done” sets Buffed.">Plate screws
+    ${refurbOnlyTrack(p) ? `<div class="row phrow platehwrow" title="Refurbish track: the screws stay in the piano and the refurbish technician polishes them in place. Marked done automatically when the Action Problems and Hammer Prep mini-QC passes.">Plate screws
+      <select disabled><option>${plateHwNow(p) === 'Buffed' ? 'Refurb — polished in place ✓' : 'Refurb — N/A'}</option></select></div>
+    <div class="row phrow vishwrow" title="Refurbish track: the refurbish technician takes off and buffs the pedals and pedal rods. Marked done automatically when the Action Problems and Hammer Prep mini-QC passes.">Visible hardware
+      <select disabled><option>${(p.visibleHwStatus || '').trim() === 'Done' ? 'Refurb — done by the tech ✓' : 'Refurb — N/A'}</option></select></div>` : `<div class="row phrow platehwrow" title="plate bolts & screws — buffed by Korban (Hardware Queue). A CAP mini-QC pass puts them in the queue; his “Screws done” sets Buffed.">Plate screws
       <select class="platehwsel">
         <option value="" ${!plateHwNow(p) ? 'selected' : ''}>— not tracked —</option>
         ${PLATE_HW_STAGES.map(v =>
