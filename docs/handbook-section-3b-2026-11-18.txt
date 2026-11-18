@@ -1,0 +1,103 @@
+3b. Refurbish — Four-Phase Pathway (uprights and grands)
+
+Uprights: added Oct 14, 2026 from Jacob Mower's request 092226mower21. Grands and the full cleaning list: added Nov 18, 2026; plan approved by Brigham Nov 17, 2026.
+The Upright and Grand Refurbish section above stays as the full reference. Upright and grand refurbishes both run as four phases, each with its own checklist in the Store Map card. A Mini-QC follows Phase 2 before Phase 3 starts.
+
+Phase 1 — Cabinetry Cleaning and Prep
+UPRIGHTS — all 15 steps of Cleaning and Prep.
+1. Take before pics. Take pics throughout.
+2. Remove and store cabinetry
+3. Remove lid and check for pin block separation (upright)
+4. Remove action and leave on table in a cradle
+5. Clean as much as you can without removing screws, be careful around the tuning pins not to get any oil based cleaners into the pinblock, don’t get any liquid cleaning products on the bass strings.
+6. Clean Strings with Scotch Brite
+7. Clean Capo Bar or agraffes with Brite Boy
+8. Clean and polish pedals with Brite Boy
+9. Vacuum Keybed
+10. Temporarily remove keys
+11. Check if bushings need to be replaced
+12. Vacuum trapwork
+13. Lubricate trapwork
+14. Clean keys with windex or TSP
+15. If not being refinished, clean the back with TSP (upright)
+GRANDS — Grand Cleaning - Refurb level (Section 10), plus the general cleaning steps Section 10 leaves out.
+1. Take before pics. Take pics throughout.
+2. Start a labeled box for small parts.
+3. Remove all cabinetry and lid.
+4. Remove action, take it outside, blow it out well with compressed air.
+5. Scotch-Brite the tuning pins, if necessary.
+6. Scotch-Brite the strings, if necessary.
+7. Use an old paint brush with the vacuum on as much of the plate, soundboard, strings, tuning pins, and action cavity as you can reach.
+8. Vacuum under the soundboard: tops of the large support beams, above the rear leg, trapwork, etc.
+9. Clean the soundboard: Option 1 (soda blast) or Option 2 (squeegees), as described in Section 10.
+10. If there are agraffes, polish the tops with brite-boy polish.
+11. Clean the plate with TSP. Be conservative around the tuning pins.
+12. Use Q-tips and a little plastic cup of cleaner to detail the plate and bridges in hard-to-reach areas.
+13. Clean damper heads.
+14. Clean and polish pedals with Brite Boy
+15. Lubricate trapwork
+16. Vacuum Keybed
+17. Temporarily remove keys
+18. Check if bushings need to be replaced
+19. Clean keys with windex or TSP
+
+Phase 2 — Action Problems and Hammer Prep
+Uprights and grands. Action Prep steps 1–5 (Check pinning is step 5). A Mini-QC of this phase follows before the next phase starts.
+1. Fix any glaring action problems
+2. Square and space hammers roughly
+3. Tighten all action screws
+4. Reshape Hammers
+5. Check pinning
+Mini-QC — Action Problems and Hammer Prep
+- Action: Glaring action problems found and fixed — nothing left that would stop the action working
+- Hammers: Hammers roughly squared and spaced to the strings
+- Screws: Every action screw tight (flanges, rails, brackets)
+- Hammers: Hammers reshaped — clean strike point, no grooves, even shape across the set
+- Pinning: Pinning checked — centers swing freely with no wobble; tight or loose pins repinned
+
+Phase 3 — Action Lubrication and Alignment
+Uprights and grands. Step 1 is for uprights only: a grand's action is blown out in Phase 1.
+1. Blow out action outside (uprights only)
+2. Lubricate action
+3. Clean/sand/polish (depending on the material and condition) the visual surface of the hammer rest rail
+4. Bolster hammer butts/knuckles if needed
+5. Travel hammers
+6. Put action back in piano
+7. Align hammers to strings. Finalize squaring and spacing.
+
+Phase 4 — Regulation
+UPRIGHTS — the eight steps of Section 7, Upright Regulation, from leveling keys through damper spoon regulation.
+1. Square, space and level keys
+2. Choosing rest rail height
+3. Regulate all lost motion by adjusting capstans
+4. Regulate let off
+5. Align backchecks
+6. Regulate Dip
+7. Damper lift regulation
+8. Damper spoon regulation
+GRANDS — Section 9, Grand Regulation, in three groups. The repairs and lubrication, hammer travel and hammer-to-string alignment that Section 9 lists first are already done in Phases 2 and 3.
+Pre-regulation
+1. Bedding
+2. Whippen alignment (cushion to capstan and jack/rep lever to knuckle).
+3. Key leveling
+4. Before you start a full regulation, ensure plenty of dip, drop, and spring strength
+Section ends — white keys only
+5. Set your dip according to dip block: 10mm or 0.394".
+6. Set let off according to let off gauge.
+7. Set jack position and rep lever height.
+8. Set drop according to let off.
+9. Set hammer height according to 0.020"-0.030" aftertouch.
+10. Re-check rep lever and jack position.
+11. Finalizing Aftertouch: re-check aftertouch, refine aftertouch by adjusting hammer height, not by adjusting dip or let off.
+12. Set spring strength and checking.
+Full regulation — after the section ends are done
+13. Even out each section end with its pair (compromise, but slightly favor the higher one).
+14. ROUGH hammer line according to section ends - quick pass!
+15. Jack position and rep lever height.
+16. Let off with jig.
+17. Drop.
+18. Spring strength.
+19. Checking.
+20. Re-check jack position and rep lever height.
+21. Refine hammer line with the help of fallboard & key slip.
+22. Dip: don't use dip block, but set your dip according to 0.020"-0.030" aftertouch. Use a gauge or punchings.
