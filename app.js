@@ -695,7 +695,10 @@ function tasksBox(p) {
         ${PLATE_STAGES.map(v =>
           `<option ${p.plateStatus === v ? 'selected' : ''}>${esc(v)}</option>`).join('')}
       </select></div><div class="platemsg phmsg"></div>
-    <div class="row phrow platehwrow" title="plate bolts & screws — buffed by Korban (Hardware Queue). A CAP mini-QC pass puts them in the queue; his “Screws done” sets Buffed.">Plate screws
+    ${refurbOnlyTrack(p) ? `<div class="row phrow platehwrow" title="Refurbish track: the refurbish technician buffs the plate screws as part of the refurb phases — nothing to track here.">Plate screws
+      <select disabled><option>Refurb — N/A</option></select></div>
+    <div class="row phrow vishwrow" title="Refurbish track: the refurbish technician buffs the visible hardware as part of the refurb phases — nothing to track here.">Visible hardware
+      <select disabled><option>Refurb — N/A</option></select></div>` : `<div class="row phrow platehwrow" title="plate bolts & screws — buffed by Korban (Hardware Queue). A CAP mini-QC pass puts them in the queue; his “Screws done” sets Buffed.">Plate screws
       <select class="platehwsel">
         <option value="" ${!plateHwNow(p) ? 'selected' : ''}>— not tracked —</option>
         ${PLATE_HW_STAGES.map(v =>
@@ -706,7 +709,7 @@ function tasksBox(p) {
         <option value="" ${!(p.visibleHwStatus || '').trim() ? 'selected' : ''}>— not tracked —</option>
         ${VISIBLE_HW_STAGES.map(v =>
           `<option value="${esc(v)}" ${(p.visibleHwStatus || '').trim() === v ? 'selected' : ''}>${esc(v)}</option>`).join('')}
-      </select></div><div class="vishwmsg phmsg"></div>
+      </select></div><div class="vishwmsg phmsg"></div>`}
     <div class="row phrow keystatrow">Keytops
       <select class="keystatsel">
         <option value="" ${!kt.state ? 'selected' : ''}>— not tracked —</option>
@@ -9158,7 +9161,9 @@ async function toggleTrack(p, track, pop, miscNote) {
     p.track = j.track; edit.track = j.track;
     msg.className = 'trkmsg phmsg ok';
     msg.textContent = j.track ? `✓ Track: ${j.track}` : '✓ Tracks cleared';
-    if (track === 'Misc') openPop(p.row, S.popAnchor, true);   // summary line appears/disappears
+    // redraw when the summary line appears/disappears (Misc) or when the piano becomes / stops being
+    // refurb-only — the Plate screws + Visible hardware rows switch to "Refurb — N/A" (Mark 11/18)
+    if (track === 'Misc' || refurbOnlyTrack(p) !== refurbOnlyTrack({track: was})) openPop(p.row, S.popAnchor, true);
   } catch (e) {
     p.track = was;
     delete edit.track; if (!Object.keys(edit).length) pendingEdits.delete(p.row);
@@ -12945,6 +12950,16 @@ function plateHwStageLabel(v) {
 const VISIBLE_HW_STAGES = ['In piano', 'In hardware queue', 'Out for plating', 'Done'];
 // 🎨 finish choices (Melissa 9/16, request 091626terry44) — mirrors CARD_FIELDS in the bridge
 // keytops: two ivory choices (Melissa 9/25, 092526terry62) — what Marcelo does differs
+// a REFURB piano for hardware purposes (Mark 11/18): Refurbish is on the track and
+// nothing but Refurbish / Player Rebuild is. The refurbish technician buffs that
+// piano's plate screws and visible hardware inside the refurb phases, so the card's
+// two hardware rows read "Refurb — N/A" and Korban's queue leaves it out.
+// Refurbish + Refinish / Rebuild is a rebuild and keeps the normal rows.
+function refurbOnlyTrack(p) {
+  const t = String((p && p.track) || '').split(',').map(x => x.trim()).filter(Boolean)
+    .map(x => /^(old\s*)?player(\s*rebuild)?$/i.test(x) ? 'Player Rebuild' : x);
+  return t.some(x => /^refurbish$/i.test(x)) && t.every(x => /^(refurbish|player rebuild)$/i.test(x));
+}
 // no replating when every track token is Refurbish or Player Rebuild (Mark 11/6)
 function noReplating(p) {
   const t = String((p && p.track) || '').split(',').map(x => x.trim()).filter(Boolean)
@@ -13229,7 +13244,7 @@ const TQ_DEFS = [
   // 🪞 plate bolts / screws / hardware buffing — Korban's in-house queue,
   // driven by the card's Plate screws status (request 091126greenhalgh06)
   {key: 'platehw', icon: '🪞', title: 'PLATE SCREWS BUFFING — KORBAN',
-   need: p => plateHwNow(p) === 'In buffing queue',
+   need: p => plateHwNow(p) === 'In buffing queue' && !refurbOnlyTrack(p),
    note: p => [p.plateFinish ? '🎨 ' + p.plateFinish : '', plateHwStageLabel(p.plateHwStatus)].filter(Boolean).join(' · ')},
   {key: 'decals', icon: '🏷', title: 'DECALS TO ORDER',
    need: p => !taskAutoDone(p, 'decals') && ['needed', 'noted'].includes(taskStatus(taskVal(p, 'decals'))),
@@ -21120,7 +21135,7 @@ async function renderBuffing(force) {
     <div class="buflist">${d.hardware.map(hwRow).join('') || '<div class="bufrow"><div class="buft"><div class="bufs">Nothing waiting 🎉</div></div></div>'}</div>
     <p class="pd">"Already done" takes a piano off the list without recording new work — for hardware that was
       finished or shipped before this list existed. Pianos already in QC &amp; Assembly or later aren't listed.
-      Refurbish-only pianos are listed while they are in their refurb phases: their hardware is buffed here, never sent for electroplating.</p>`;
+      Refurbish-only pianos aren't listed: the refurbish technician buffs that piano's hardware as part of the refurb phases.</p>`;
   el.querySelector('.bufreload').onclick = () => renderBuffing(true);
   const post = async (k, body) => {
     BUF.busy.add(k); delete BUF.err[k]; renderBuffing();
