@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-11-18.7';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-11-18.8';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -1513,6 +1513,27 @@ function doPost(e) {
     if (req.action === 'briefdoc') {
       try { return json_(briefDocOnly_(Number(req.day) || 0)); }   // day: 0=today, 3=Monday from Friday
       catch (e2) { return json_({error: String(e2).slice(0, 300)}); }
+    }
+    if (req.action === 'qcremove') {
+      // remove ONE mistaken QC Log row (Mark 11/18: Knabe 42129, 11/12 — "Needs fixes"
+      // was picked moving it from 1st Tuning to Refinishing; no tuning was inspected).
+      // Exact match on serial + phase + result + Denver date, only when exactly one row
+      // matches; dryrun shows it. The removed row is copied into the ACTIVITY LOG.
+      if (String(req.pin || '').toLowerCase() !== 'pianoman' && req.pin !== TEAM_PIN) return json_({error: 'unauthorized'});
+      var qsh = qcLogSheet_(), qlast = qsh.getLastRow();
+      var qv = qlast >= 2 ? qsh.getRange(2, 1, qlast - 1, 6).getValues() : [];
+      var qhits = [];
+      for (var qi = 0; qi < qv.length; qi++) {
+        var qd = qv[qi][0] ? Utilities.formatDate(new Date(qv[qi][0]), 'America/Denver', 'yyyy-MM-dd') : '';
+        if (String(qv[qi][1]).trim() === String(req.serial || '').trim() && String(qv[qi][2]).trim() === String(req.phase || '').trim()
+            && String(qv[qi][3]).trim() === String(req.result || '').trim() && qd === String(req.date || '')) qhits.push({row: qi + 2, v: qv[qi]});
+      }
+      if (qhits.length !== 1) return json_({error: 'expected exactly one matching row, found ' + qhits.length, rows: qhits.map(function (h) { return h.row; })});
+      var qrow = qhits[0], qdesc = [String(qrow.v[0]), qrow.v[1], qrow.v[2], qrow.v[3], qrow.v[4], qrow.v[5]].join(' | ');
+      if (req.dryrun) return json_({ok: true, dryrun: true, row: qrow.row, would_remove: qdesc});
+      qsh.deleteRow(qrow.row);
+      logAct_(who, 'QC Log row removed', String(req.serial), qdesc.slice(0, 300) + (req.why ? ' — ' + String(req.why).slice(0, 120) : ''));
+      return json_({ok: true, removed: qdesc, row: qrow.row});
     }
     if (req.action === 'miniqc') {
       var mq = miniQc_(req, who);
