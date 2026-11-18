@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-11-18.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-11-18.4';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -453,7 +453,7 @@ function doGet(e) {
   if (e && e.parameter && e.parameter.fn === 'pianonudge') {
     var pnk = String(e.parameter.key || '');
     if (pnk !== TEAM_PIN && pnk.toLowerCase() !== 'pianoman') return json_({error: 'unauthorized'});
-    try { return json_(pianoNudge_({date: e.parameter.date || '', dry: e.parameter.dry === '1'})); }
+    try { return json_(pianoNudge_({date: e.parameter.date || '', dry: e.parameter.dry === '1', headsupPreview: e.parameter.headsup === '1' && e.parameter.dry === '1', midPreview: e.parameter.mid === '1' && e.parameter.dry === '1'})); }
     catch (errPn) { return json_({error: String(errPn)}); }
   }
   if (e && e.parameter && e.parameter.fn === 'shopbriefpreview') {
@@ -11165,7 +11165,34 @@ function pianoNudge_(opt) {
   var props = PropertiesService.getScriptProperties();
   var sentKey = 'pnudge_' + day, sent = {};
   try { sent = JSON.parse(props.getProperty(sentKey) || '{}'); } catch (eS) { sent = {}; }
-  var now = Date.now(), out = {texted: [], wouldText: [], fine: [], notChecked: []};
+  var now = Date.now(), out = {texted: [], wouldText: [], fine: [], notChecked: [], textedMid: [], wouldTextMid: [], headsUp: []};
+  var dirty = false;
+  /* MANAGER HEADS-UP (Mark 11/18): at 3:45 PM the manager gets ONE text naming
+   * everyone who was reminded since the last heads-up and has now been reminded
+   * 2+ times in the last 7 days — the same day as the repeat reminder, so it
+   * can be sorted out the next morning (Cameron was reminded three times in a
+   * week and nobody knew). Counts both kinds of reminder; a reminder that goes
+   * out after 3:45 is in the next day's text. App Settings: piano_nudge_headsup
+   * = off pauses it, piano_nudge_headsup_to names who gets it (default Mark
+   * Hales), piano_nudge_headsup_time sets the time (default 15:45). */
+  var huOn = !/^(off|no|false|0|pause)/i.test(String(appSetting_('piano_nudge_headsup', 'on') || 'on'));
+  var huTo = String(appSetting_('piano_nudge_headsup_to', 'Mark Hales') || 'Mark Hales').trim() || 'Mark Hales';
+  var huAt = /^(\d{1,2}):(\d{2})$/.exec(String(appSetting_('piano_nudge_headsup_time', '15:45') || '15:45').trim()) || ['', '15', '45'];
+  var huMinute = Number(huAt[1]) * 60 + Number(huAt[2]);
+  var remindersByPerson = function () {   // {key: [{at, name}]} for the last 7 days incl. today
+    var by = {};
+    for (var back = 6; back >= 0; back--) {
+      var dKey = Utilities.formatDate(new Date(new Date(day + 'T12:00:00').getTime() - back * 86400000), tz, 'yyyy-MM-dd');
+      var marks = sent;
+      if (back) { try { marks = JSON.parse(props.getProperty('pnudge_' + dKey) || '{}'); } catch (eM) { marks = {}; } }
+      Object.keys(marks).forEach(function (mk) {
+        var bar = mk.indexOf('|');
+        if (bar <= 0 || mk.indexOf('hu|') === 0 || !marks[mk]) return;
+        (by[mk.slice(0, bar)] = by[mk.slice(0, bar)] || []).push(String(marks[mk]));
+      });
+    }
+    return by;
+  };
   punches.forEach(function (pu) {
     var k = key(pu.tech), first = String(pu.tech).trim().split(/\s+/)[0];
     var at = Utilities.formatDate(new Date(pu.start), tz, 'h:mm a');
@@ -11194,18 +11221,88 @@ function pianoNudge_(opt) {
       '⏰ Clock in — recordatorio: Hola ' + first + ', marcaste tu entrada del día a las ' + at + ', pero todavía no estás registrado en un piano. Abre el Store Map y regístrate en el piano en que trabajas (o MGMT / un proyecto externo): ' + APP_URL
         + '\nSi necesitas enviar una corrección del reloj de piano, haz clic aquí: ' + APP_URL + '/#fixclock=piano');
     notifyTeam_([pu.tech], msg);
-    sent[sk] = new Date().toISOString();
+    sent[sk] = new Date().toISOString(); dirty = true;
     out.texted.push(row);
     logAct_('Store Map (piano clock reminder)', 'Reminder texted', pu.tech, 'day clock in ' + at + ', no piano clock after an hour');
   });
-  if (out.texted.length) { try { props.setProperty(sentKey, JSON.stringify(sent)); } catch (eW) {} }
+  /* MID-DAY CHECK (Mark 11/18): the reminder above looks once, an hour after
+   * the day clock-in. Someone who stops their piano clock later and never starts
+   * another (Jacob 10/22: off the Baldwin at 1:26, on the day clock till 4:12)
+   * was never checked again. Live runs only: anyone still on the day clock whose
+   * last work clock ended a full hour ago (piano_nudge_midday_minutes, default
+   * 60) gets one text per gap — not again until they have clocked into something
+   * and stopped again — at most piano_nudge_midday_max (default 2) a day.
+   * MGMT / Outside sessions count as being on a clock. piano_nudge_midday = off
+   * pauses just this check. */
+  var midSetting = String(appSetting_('piano_nudge_midday', 'on') || 'on');
+  var midOn = !/^(off|no|false|0|pause)/i.test(midSetting);
+  var midMin = Math.max(30, Number(appSetting_('piano_nudge_midday_minutes', '60')) || 60);
+  var midMax = Math.max(1, Number(appSetting_('piano_nudge_midday_max', '2')) || 2);
+  if (live && (midOn || (dry && opt.midPreview))) punches.forEach(function (pu) {   // midPreview: a dry look even while it is switched off
+    if (pu.end) return;                                   // off the day clock (lunch, gone home)
+    var k = key(pu.tech), first = String(pu.tech).trim().split(/\s+/)[0];
+    if (!users[k] || movers[first.toLowerCase()] || admins[first.toLowerCase()] || exempt[k]) return;
+    var mine = (sessions[k] || []).filter(function (se) {
+      return se.start >= pu.start - 15 * 60000 || se.end === null || se.end > pu.start; });
+    if (!mine.length) return;                             // no clock at all yet — the first-hour reminder's case
+    if (mine.some(function (se) { return se.end === null; })) return;   // on a clock right now
+    var lastEnd = Math.max.apply(null, mine.map(function (se) { return se.end; }));
+    if (now - lastEnd < midMin * 60000) return;
+    var gk = k + '|mid|' + lastEnd;
+    if (sent[gk]) return;                                 // this gap already got its text
+    var stopped = Utilities.formatDate(new Date(lastEnd), tz, 'h:mm a');
+    var mrow = {tech: pu.tech, stoppedAt: stopped, lang: teamLang_(pu.tech)};
+    var midToday = Object.keys(sent).filter(function (x) { return x.indexOf(k + '|mid|') === 0; }).length;
+    if (midToday >= midMax) { mrow.why = 'already had ' + midMax + ' mid-day reminders today'; out.notChecked.push(mrow); return; }
+    if (dry) { out.wouldTextMid.push(mrow); return; }
+    var mmsg = t_(mrow.lang,
+      '\u23f0 Clock in reminder: Hi ' + first + ', your piano clock stopped at ' + stopped + ' but you\u2019re still clocked in for the day. Open the Store Map and clock in to what you\u2019re working on (a piano, MGMT, or an Outside project): ' + APP_URL
+        + '\nIf you need to submit a piano clock correction, click here: ' + APP_URL + '/#fixclock=piano',
+      '\u23f0 Clock in \u2014 recordatorio: Hola ' + first + ', tu reloj de piano se detuvo a las ' + stopped + ' pero sigues con la entrada del d\u00eda marcada. Abre el Store Map y reg\u00edstrate en lo que est\u00e1s trabajando (un piano, MGMT o un proyecto externo): ' + APP_URL
+        + '\nSi necesitas enviar una correcci\u00f3n del reloj de piano, haz clic aqu\u00ed: ' + APP_URL + '/#fixclock=piano');
+    notifyTeam_([pu.tech], mmsg);
+    sent[gk] = new Date().toISOString(); dirty = true;
+    out.textedMid.push(mrow);
+    logAct_('Store Map (piano clock reminder)', 'Reminder texted', pu.tech, 'piano clock stopped at ' + stopped + ', still on the day clock an hour later');
+  });
+  // the 3:45 PM heads-up — once a day, on the first live run at or after that time
+  if (live && (huOn || (dry && opt.headsupPreview))) {
+    var nowMin = Number(Utilities.formatDate(new Date(now), tz, 'H')) * 60 + Number(Utilities.formatDate(new Date(now), tz, 'm'));
+    var lastHu = String(props.getProperty('pnudge_lasthu') || '');
+    if ((nowMin >= huMinute && !sent['hu|sent']) || opt.headsupPreview) {
+      var byP = remindersByPerson(), names = {}, lines = [];
+      punches.forEach(function (pu) { names[key(pu.tech)] = String(pu.tech).trim().split(/\s+/)[0]; });
+      Object.keys(byP).forEach(function (pk) {
+        var times = byP[pk].sort();
+        if (pk === key(huTo) || times.length < 2) return;
+        if (!(times[times.length - 1] > lastHu)) return;          // nothing new since the last heads-up
+        var list = times.slice(-4).map(function (t) { var d = new Date(t);
+          return Utilities.formatDate(d, tz, 'EEE M/d') + ' at ' + Utilities.formatDate(d, tz, 'h:mm a'); }).join(', ');
+        var nm = names[pk] || (String(pk).split(/\s+/)[0].charAt(0).toUpperCase() + String(pk).split(/\s+/)[0].slice(1));
+        lines.push({who: nm, count: times.length, text: nm + ' has been reminded to clock in to a piano '
+          + times.length + ' times in the last 7 days (' + list + ').'});
+      });
+      lines.sort(function (x, y) { return y.count - x.count; });
+      out.headsUp = lines.map(function (l) { return {who: l.who, count: l.count, to: huTo, would: !!dry}; });
+      if (!dry && nowMin >= huMinute && !sent['hu|sent']) {
+        if (lines.length) {
+          notifyTeam_([huTo], '\u23f0 Heads-up: ' + lines.map(function (l) { return l.text; }).join('\n'));
+          logAct_('Store Map (piano clock reminder)', 'Manager heads-up texted', huTo, lines.map(function (l) { return l.who + ' \u00d7' + l.count; }).join(', '));
+        }
+        sent['hu|sent'] = new Date().toISOString(); dirty = true;
+        try { props.setProperty('pnudge_lasthu', new Date().toISOString()); } catch (eL) {}
+      }
+    }
+  }
+  if (dirty) { try { props.setProperty(sentKey, JSON.stringify(sent)); } catch (eW) {} }
   // tidy: drop reminder keys older than a week
   try {
     var cut = Utilities.formatDate(new Date(Date.now() - 7 * 86400000), tz, 'yyyy-MM-dd');
     Object.keys(props.getProperties()).forEach(function (pk) { if (/^pnudge_\d{4}-\d{2}-\d{2}$/.test(pk) && pk.slice(7) < cut) props.deleteProperty(pk); });
   } catch (eT) {}
   return {ok: true, day: day, dry: dry, sending: sendOn, setting: nudgeSetting,
-    spanishTeam: String(appSetting_('spanish_team', SPANISH_TEAM_DEFAULT) || ''), spanishFromSettings: appSetting_('spanish_team', '') !== '', texted: out.texted, wouldText: out.wouldText, fine: out.fine, notChecked: out.notChecked};
+    spanishTeam: String(appSetting_('spanish_team', SPANISH_TEAM_DEFAULT) || ''), spanishFromSettings: appSetting_('spanish_team', '') !== '', texted: out.texted, wouldText: out.wouldText, fine: out.fine, notChecked: out.notChecked,
+    midday: midSetting, middayMinutes: midMin, textedMid: out.textedMid, wouldTextMid: out.wouldTextMid, headsUp: out.headsUp};
 }
 
 function lateClockNudge(e) {
