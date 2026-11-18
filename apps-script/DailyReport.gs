@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-11-18.5';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-11-18.6';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -11179,6 +11179,11 @@ function pianoNudge_(opt) {
   var huTo = String(appSetting_('piano_nudge_headsup_to', 'Mark Hales') || 'Mark Hales').trim() || 'Mark Hales';
   var huAt = /^(\d{1,2}):(\d{2})$/.exec(String(appSetting_('piano_nudge_headsup_time', '15:45') || '15:45').trim()) || ['', '15', '45'];
   var huMinute = Number(huAt[1]) * 60 + Number(huAt[2]);
+  var notYetMsg = function (first, at, lang) { return t_(lang,
+      '⏰ Clock in reminder: Hi ' + first + ', you clocked in for the day at ' + at + ', but you’re not clocked in to a piano yet. Open the Store Map and clock in to the piano you’re working on (or MGMT / an Outside project): ' + APP_URL
+        + '\nIf you need to submit a piano clock correction, click here: ' + APP_URL + '/#fixclock=piano',
+      '⏰ Clock in — recordatorio: Hola ' + first + ', marcaste tu entrada del día a las ' + at + ', pero todavía no estás registrado en un piano. Abre el Store Map y regístrate en el piano en que trabajas (o MGMT / un proyecto externo): ' + APP_URL
+        + '\nSi necesitas enviar una corrección del reloj de piano, haz clic aquí: ' + APP_URL + '/#fixclock=piano'); };
   punches.forEach(function (pu) {
     var k = key(pu.tech), first = String(pu.tech).trim().split(/\s+/)[0];
     var at = Utilities.formatDate(new Date(pu.start), tz, 'h:mm a');
@@ -11201,11 +11206,7 @@ function pianoNudge_(opt) {
     if (sent[sk]) { row.why = 'already reminded'; out.notChecked.push(row); return; }
     var lang = row.lang;
     if (dry) { out.wouldText.push(row); return; }
-    var msg = t_(lang,
-      '⏰ Clock in reminder: Hi ' + first + ', you clocked in for the day at ' + at + ', but you’re not clocked in to a piano yet. Open the Store Map and clock in to the piano you’re working on (or MGMT / an Outside project): ' + APP_URL
-        + '\nIf you need to submit a piano clock correction, click here: ' + APP_URL + '/#fixclock=piano',
-      '⏰ Clock in — recordatorio: Hola ' + first + ', marcaste tu entrada del día a las ' + at + ', pero todavía no estás registrado en un piano. Abre el Store Map y regístrate en el piano en que trabajas (o MGMT / un proyecto externo): ' + APP_URL
-        + '\nSi necesitas enviar una corrección del reloj de piano, haz clic aquí: ' + APP_URL + '/#fixclock=piano');
+    var msg = notYetMsg(first, at, lang);
     notifyTeam_([pu.tech], msg);
     sent[sk] = new Date().toISOString(); dirty = true;
     out.texted.push(row);
@@ -11224,13 +11225,32 @@ function pianoNudge_(opt) {
   var midOn = !/^(off|no|false|0|pause)/i.test(midSetting);
   var midMin = Math.max(30, Number(appSetting_('piano_nudge_midday_minutes', '60')) || 60);
   var midMax = Math.max(1, Number(appSetting_('piano_nudge_midday_max', '2')) || 2);
+  var neverAt = /^(\d{1,2}):(\d{2})$/.exec(String(appSetting_('piano_nudge_never_time', '13:00') || '13:00').trim()) || ['', '13', '00'];
+  var neverMinute = Number(neverAt[1]) * 60 + Number(neverAt[2]);
   if (live && (midOn || (dry && opt.midPreview))) punches.forEach(function (pu) {   // midPreview: a dry look even while it is switched off
     if (pu.end) return;                                   // off the day clock (lunch, gone home)
     var k = key(pu.tech), first = String(pu.tech).trim().split(/\s+/)[0];
     if (!users[k] || movers[first.toLowerCase()] || admins[first.toLowerCase()] || exempt[k]) return;
     var mine = (sessions[k] || []).filter(function (se) {
       return se.start >= pu.start - 15 * 60000 || se.end === null || se.end > pu.start; });
-    if (!mine.length) return;                             // no clock at all yet — the first-hour reminder's case
+    if (!mine.length) {
+      // never on a work clock today (Mark 11/18: Cameron 11/17, reminded at 9:00 and
+      // on the day clock till 4:03 with no piano clock): still nothing by 1:00 PM
+      // (piano_nudge_never_time) and at least two hours into the day → the same
+      // "not clocked in to a piano yet" text again, once. Counts toward the cap
+      // and toward the manager's same-day heads-up.
+      var nvKey = k + '|mid|never';
+      var nowMinMid = Number(Utilities.formatDate(new Date(now), tz, 'H')) * 60 + Number(Utilities.formatDate(new Date(now), tz, 'm'));
+      if (nowMinMid < neverMinute || now - pu.start < 2 * HOUR || sent[nvKey]) return;
+      var atIn = Utilities.formatDate(new Date(pu.start), tz, 'h:mm a');
+      var nrow = {tech: pu.tech, dayIn: atIn, lang: teamLang_(pu.tech), never: true};
+      if (dry) { out.wouldTextMid.push(nrow); return; }
+      notifyTeam_([pu.tech], notYetMsg(first, atIn, nrow.lang));
+      sent[nvKey] = new Date().toISOString(); dirty = true;
+      out.textedMid.push(nrow);
+      logAct_('Store Map (piano clock reminder)', 'Reminder texted', pu.tech, 'day clock in ' + atIn + ', still no piano clock by ' + neverAt[1] + ':' + neverAt[2]);
+      return;
+    }
     if (mine.some(function (se) { return se.end === null; })) return;   // on a clock right now
     var lastEnd = Math.max.apply(null, mine.map(function (se) { return se.end; }));
     if (now - lastEnd < midMin * 60000) return;
