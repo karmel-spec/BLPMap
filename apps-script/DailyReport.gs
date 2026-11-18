@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-11-17.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-11-18.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -1889,8 +1889,10 @@ function doPost(e) {
       var tb = timeOffSheet_(), tbLast = tb.getLastRow(), tbOut = [];
       var tbToday = Utilities.formatDate(new Date(), 'America/Denver', 'yyyy-MM-dd');
       var tbD = function (x) { return (x instanceof Date) ? Utilities.formatDate(x, 'America/Denver', 'yyyy-MM-dd') : String(x || ''); };
+      var tbShown = tbLast >= 2 ? tb.getRange(2, 5, tbLast - 1, 1).getDisplayValues() : [];
       if (tbLast >= 2) tb.getRange(2, 1, tbLast - 1, 7).getValues().forEach(function (v, i) {
         if (!v[1] || !/^approved/i.test(String(v[6] || ''))) return;
+        v[4] = (tbShown[i] && tbShown[i][0]) || v[4];   // Times as typed (Mark 11/18)
         var s0 = tbD(v[2]), e0 = tbD(v[3]) || s0;
         if (!/^\d{4}-\d{2}-\d{2}$/.test(s0) || e0 < tbToday) return;
         var by = (/approved by (\S+)/i.exec(String(v[6])) || [])[1] || 'a manager';
@@ -11563,7 +11565,9 @@ function timeOffAdd_(req, who) {
       }
     }
   } catch (eD) { /* dedupe is best-effort */ }
-  tsh.appendRow([new Date().toISOString(), tech, start, end, times, note, 'requested']);
+  tsh.appendRow([new Date().toISOString(), tech, start, end, '', note, 'requested']);
+  // Times stays text: written into a plain-text cell, so "8-10" never becomes Aug 10 (Mark 11/18)
+  if (times) { try { tsh.getRange(tsh.getLastRow(), 5).setNumberFormat('@').setValue(times); } catch (eTm) {} }
   var span = start === end ? start : start + ' → ' + end;
   var msg = 'Time off request — ' + tech + ': ' + span
     + (times ? ' (' + times + ')' : '') + (note ? ' — ' + note : '');
@@ -11620,6 +11624,7 @@ function timeOffStatus_(req, who) {
   if (row < 2 || row > sh.getLastRow()) return {error: 'no such request'};
   var v = sh.getRange(row, 1, 1, 7).getValues()[0];
   if (!v[1]) return {error: 'no such request'};
+  v[4] = sh.getRange(row, 5).getDisplayValue() || v[4];   // Times as typed — "8-10", never Sheets' Aug 10 (Mark 11/18)
   var d = function (x) { return (x instanceof Date)
     ? Utilities.formatDate(x, 'America/Denver', 'yyyy-MM-dd') : String(x || ''); };
   var tech = String(v[1]), span = d(v[2]) + (d(v[3]) && d(v[3]) !== d(v[2]) ? ' → ' + d(v[3]) : '');
@@ -11775,6 +11780,10 @@ function timeOffRows_(viewer) {
   var last = sh.getLastRow();
   if (last >= 2) {
     var vals = sh.getRange(2, 1, last - 1, 7).getValues();
+    // Times as SHOWN (Mark 11/18): Sheets turns a typed "8-10" into the date
+    // Aug 10, and String() of that Date put "time off Mon Aug 10 2026 00:00:00
+    // GMT-0600…" on Hunter's clock-board tile — the displayed text is what was typed
+    var timesShown = sh.getRange(2, 5, last - 1, 1).getDisplayValues();
     var d = function (x) { return (x instanceof Date)
       ? Utilities.formatDate(x, 'America/Denver', 'yyyy-MM-dd') : String(x || ''); };
     for (var i = 0; i < vals.length; i++) {
@@ -11783,7 +11792,7 @@ function timeOffRows_(viewer) {
       var note = String(v[5] || '');
       if (gate && !timeOffNoteOk_(viewer, String(v[1]))) note = '';
       out.push({row: i + 2, at: String(v[0] || ''), who: String(v[1]), start: d(v[2]), end: d(v[3]),
-                times: String(v[4] || ''), note: note, status: String(v[6] || 'requested')});
+                times: String((timesShown[i] && timesShown[i][0]) || v[4] || ''), note: note, status: String(v[6] || 'requested')});
     }
   }
   out.reverse();
