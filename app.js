@@ -695,12 +695,18 @@ function tasksBox(p) {
         ${PLATE_STAGES.map(v =>
           `<option ${p.plateStatus === v ? 'selected' : ''}>${esc(v)}</option>`).join('')}
       </select></div><div class="platemsg phmsg"></div>
-    <div class="row phrow platehwrow" title="plate bolts, screws & hardware buffing (Korban's queue)">Plate hardware
+    <div class="row phrow platehwrow" title="plate bolts & screws — buffed by Korban (Hardware Queue). A CAP mini-QC pass puts them in the queue; his “Screws done” sets Buffed.">Plate screws
       <select class="platehwsel">
-        <option value="" ${!(p.plateHwStatus || '').trim() ? 'selected' : ''}>— not tracked —</option>
+        <option value="" ${!plateHwNow(p) ? 'selected' : ''}>— not tracked —</option>
         ${PLATE_HW_STAGES.map(v =>
-          `<option value="${esc(v)}" ${p.plateHwStatus === v ? 'selected' : ''}>${esc(plateHwStageLabel(v))}</option>`).join('')}
+          `<option value="${esc(v)}" ${plateHwNow(p) === v ? 'selected' : ''}>${esc(plateHwStageLabel(v))}</option>`).join('')}
       </select></div><div class="platehwmsg phmsg"></div>
+    <div class="row phrow vishwrow" title="pedals, hinges & cabinet hardware (Hardware Queue). A CAP mini-QC pass puts it in the queue; Korban’s taps move it on.">Visible hardware
+      <select class="vishwsel">
+        <option value="" ${!(p.visibleHwStatus || '').trim() ? 'selected' : ''}>— not tracked —</option>
+        ${VISIBLE_HW_STAGES.map(v =>
+          `<option value="${esc(v)}" ${(p.visibleHwStatus || '').trim() === v ? 'selected' : ''}>${esc(v)}</option>`).join('')}
+      </select></div><div class="vishwmsg phmsg"></div>
     <div class="row phrow keystatrow">Keytops
       <select class="keystatsel">
         <option value="" ${!kt.state ? 'selected' : ''}>— not tracked —</option>
@@ -7301,7 +7307,7 @@ function popHTML(p) {
           `<span class="cabchip" title="${esc(cabPretty(t))}">${esc(t)}<i class="cabdel" data-t="${esc(t)}">✕</i></span>`).join('')}
           <button class="cabadd">＋ shelf</button>
         </span></div><div class="cabmsg phmsg"></div>` : ''}
-    ${p.serial ? `<div class="row rowflex"><span>🔩 Plate hardware</span>
+    ${p.serial ? `<div class="row rowflex"><span>🔩 Plate screws</span>
       <input class="platehwin" maxlength="60" placeholder="bin / shelf / with plate…" value="${esc(p.plateHw || '')}" style="max-width:170px">
       <span class="platehwmsg phmsg"></span></div>` : ''}
     ${p.serial && (p.plateTemp || '').trim() ? `<div class="row rowflex"><span>⚙️ Plate temp spot</span>
@@ -7590,6 +7596,26 @@ function wirePop(p) {
       setTimeout(() => { if (msg.isConnected) msg.textContent = ''; }, 1800);
     } catch (e) { msg.textContent = '✗ ' + e.message; }
     phwsel.disabled = false;
+  };
+  const vhwsel = pop.querySelector('.vishwsel');
+  if (vhwsel) vhwsel.onchange = async () => {
+    const msg = pop.querySelector('.vishwmsg');
+    const {pin, ok} = writeAuth();
+    if (!ok) { msg.textContent = 'Sign in first.'; return; }
+    vhwsel.disabled = true; msg.textContent = 'Saving…';
+    try {
+      const r = await bridgeFetch(BRIDGE_URL, {method: 'POST', redirect: 'follow',
+        headers: {'content-type': 'text/plain;charset=utf-8'},
+        body: JSON.stringify({pin, action: 'setplatehw', serial: p.serial, row: p.row,
+          visibleHwStatus: vhwsel.value, ...authFields()})});
+      const j = await r.json();
+      if (j.error) throw new Error(j.error);
+      if (!j.ok && !j.queued) throw new Error('the bridge did not confirm the save — try again');
+      p.visibleHwStatus = vhwsel.value;
+      msg.textContent = '✓ saved';
+      setTimeout(() => { if (msg.isConnected) msg.textContent = ''; }, 1800);
+    } catch (e) { msg.textContent = '✗ ' + e.message; }
+    vhwsel.disabled = false;
   };
   // keytop status dropdown (+ queue position when "In Key Queue")
   const ksel = pop.querySelector('.keystatsel');
@@ -12901,12 +12927,22 @@ const PLATE_STAGES = ['In piano', 'Plate storage — BEFORE',
                       'At Curtis Harper', 'Plate storage — AFTER', 'Back in piano'];
 // plate bolts / screws / hardware buffing (Korban 9/11, request 091126greenhalgh06) —
 // mirrors the bridge's PLATE_HW_STATUSES; stored in PLATE HARDWARE STATUS
-const PLATE_HW_STAGES = ['Needs buffing', 'In buffing queue', 'Buffing', 'Buffed', 'Installed'];
+// "Plate screws" on the card since 11/18 (Mark), three choices; the five older
+// ones are folded in for display the same way the bridge folds them on a save.
+const PLATE_HW_STAGES = ['In piano', 'In buffing queue', 'Buffed'];
+const PLATE_HW_OLD = {'Needs buffing': 'In buffing queue', 'Buffing': 'In buffing queue', 'Installed': 'Buffed', 'In hardware queue': 'In buffing queue'};
+const plateHwNow = p => { const v = String((p && p.plateHwStatus) || '').trim(); return PLATE_HW_OLD[v] || v; };
 // Display only. The stored status stays "In buffing queue" so the Piano Log
 // column and the bridge's PLATE_HW_STATUSES keep matching.
 function plateHwStageLabel(v) {
+  v = PLATE_HW_OLD[v] || v;
   return v === 'In buffing queue' ? 'In hardware queue' : (v || '');
 }
+// 🔧 Visible hardware — pedals, hinges, cabinet hardware (Mark 11/18). Set by a
+// CAP mini-QC pass (In hardware queue) and by Korban's taps on the Hardware
+// Queue (Prepped for Shipping → Out for plating, Buffed / Already done → Done);
+// stored in VISIBLE HARDWARE STATUS, mirrors the bridge's VISIBLE_HW_STATUSES.
+const VISIBLE_HW_STAGES = ['In piano', 'In hardware queue', 'Out for plating', 'Done'];
 // 🎨 finish choices (Melissa 9/16, request 091626terry44) — mirrors CARD_FIELDS in the bridge
 // keytops: two ivory choices (Melissa 9/25, 092526terry62) — what Marcelo does differs
 // no replating when every track token is Refurbish or Player Rebuild (Mark 11/6)
@@ -13191,9 +13227,9 @@ const TQ_DEFS = [
    need: p => ['needed', 'noted'].includes(taskStatus(taskVal(p, 'plating'))),
    note: p => taskVal(p, 'plating')},
   // 🪞 plate bolts / screws / hardware buffing — Korban's in-house queue,
-  // driven by the card's Plate hardware status (request 091126greenhalgh06)
-  {key: 'platehw', icon: '🪞', title: 'PLATE HARDWARE BUFFING — KORBAN',
-   need: p => ['Needs buffing', 'In buffing queue', 'Buffing'].includes((p.plateHwStatus || '').trim()),
+  // driven by the card's Plate screws status (request 091126greenhalgh06)
+  {key: 'platehw', icon: '🪞', title: 'PLATE SCREWS BUFFING — KORBAN',
+   need: p => plateHwNow(p) === 'In buffing queue',
    note: p => [p.plateFinish ? '🎨 ' + p.plateFinish : '', plateHwStageLabel(p.plateHwStatus)].filter(Boolean).join(' · ')},
   {key: 'decals', icon: '🏷', title: 'DECALS TO ORDER',
    need: p => !taskAutoDone(p, 'decals') && ['needed', 'noted'].includes(taskStatus(taskVal(p, 'decals'))),
@@ -15248,11 +15284,11 @@ const REPORT_DEFS = () => [
    html: qcQueueTable},
   {id: 'taskqueues', sec: 'shop', icon: '🎯', title: 'TASK QUEUES', count: (() => {
      try { return taskQueueLists().reduce((s, q) => s + q.list.length, 0); } catch (e) { return null; } })(),
-   desc: 'Eight ordered to-do queues — key service, plates to Curtis Harper, refinishing on deck, plating + buffing, plate hardware buffing (Korban), decals, bass strings, and the showroom tuning queue for Korban (most-overdue first, from the tuning calendars). Each shows who’s NEXT and everyone behind them. Click any row to jump to the piano.',
+   desc: 'Eight ordered to-do queues — key service, plates to Curtis Harper, refinishing on deck, plating + buffing, plate screws buffing (Korban), decals, bass strings, and the showroom tuning queue for Korban (most-overdue first, from the tuning calendars). Each shows who’s NEXT and everyone behind them. Click any row to jump to the piano.',
    html: taskQueuesTable},
   {id: 'buffing', sec: 'shop', icon: '✨', title: 'HARDWARE QUEUE', count: (() => {
      try { return BUF.data ? BUF.data.plates.filter(p => !p.done).length + BUF.data.hardware.filter(h => !h.done).length : null; } catch (e) { return null; } })(),
-   desc: 'Korban\u2019s hardware queue. Plate screws come from Curtis\u2019s sheet in his priority order; a piano\u2019s visible hardware joins the list when it moves past CAP and stays through QC & Assembly until it is marked, furthest along first. Anyone can mark a row done, and every tap can be undone the same day. Korban gets the top of both lists by text at 11 AM every Monday.',
+   desc: 'Korban\u2019s hardware queue. Plate screws come from Curtis\u2019s sheet in his priority order, then any piano whose card says Plate screws \u201cIn hardware queue\u201d (set when its CAP mini-QC passes); a piano\u2019s visible hardware joins the list when it moves past CAP and stays through QC & Assembly until it is marked, furthest along first. Anyone can mark a row done, and every tap can be undone the same day. Korban gets the top of both lists by text at 11 AM every Monday.',
    html: () => '<div id="buffingBody"><div class="empty">Building the list…</div></div>'},
   {id: 'stalled', sec: 'shop', icon: '🐢', title: 'SITTING TOO LONG', count: (() => {
      try { return stalledPianos().length; } catch (e) { return null; } })(),
@@ -21053,6 +21089,7 @@ async function renderBuffing(force) {
       <div class="buft"><div class="bufl">${esc(p.pianoText)}</div>
         <div class="bufs">${[p.phase, p.curtisNote ? 'Curtis: ' + p.curtisNote : '', p.serial ? '' : 'not matched to a piano card'].filter(Boolean).map(esc).join(' · ')}</div>
         ${p.top && p.addedBy ? `<div class="bufs" style="color:#9e2020;font-weight:700">⭐ Top priority: plate is back and piano is ready to begin restringing.</div>`
+          : p.fromCard ? `<div class="bufs" style="color:#5d666c">in the hardware queue on its card — not on Curtis's sheet yet</div>`
           : p.offSheet ? `<div class="bufs" style="color:#9a5b13">no longer on Curtis's sheet${p.lastOnCurtis ? ' (last seen ' + esc(p.lastOnCurtis) + ')' : ''} — stays here until screws are marked done</div>` : ''}
         ${BUF.err[k] ? `<div class="bufs buferr">✗ ${esc(BUF.err[k])}</div>` : ''}</div>
       ${p.done ? `<span class="bufok">✓ ${who(p.done)} <button class="bufundo" data-k="${k}" ${busy ? 'disabled' : ''}>undo</button></span>`

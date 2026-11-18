@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-11-18.6';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-11-18.7';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -1949,15 +1949,28 @@ function doPost(e) {
     if (req.action === 'setbench') {
       return json_(setBench_(req, who));
     }
+    if (req.action === 'platehwmigrate') {   // one-time, 11/18 — key-gated like the other admin fixes
+      if (String(req.pin || '').toLowerCase() !== 'pianoman' && req.pin !== TEAM_PIN) return json_({error: 'unauthorized'});
+      var phm = plateHwMigrate_(!!req.dryrun);
+      if (phm.ok && !req.dryrun && phm.changed) logAct_(who, 'Plate screws statuses converted', phm.changed + ' pianos', JSON.stringify(phm.counts).slice(0, 200));
+      return json_(phm);
+    }
     if (req.action === 'setplatehw') {
       // one action, two card fields (Walter 10/16): the STATUS dropdown sends
       // plateHwStatus, the hardware LOCATION box sends value. Two functions
       // were both named setPlateHw_, so the later (status) one silently won
       // and every location save went to the status column.
+      // Visible hardware (pedals, hinges, cabinet hardware) has its own status since 11/18 (Mark)
+      if (req.visibleHwStatus != null) {
+        var vhw = setHwStatus_(req, 'VISIBLE HARDWARE STATUS', VISIBLE_HW_STATUSES, req.visibleHwStatus, VISIBLE_HW_MIGRATE);
+        if (vhw.ok && !vhw.skipped) logAct_(who, 'Visible hardware', vhw.summary || req.serial, vhw.status || '(cleared)');
+        if (vhw.ok) vhw.visibleHwStatus = vhw.status;
+        return json_(vhw);
+      }
       if (req.plateHwStatus != null) {
-        // 🪞 plate hardware buffing status (Korban 9/11, request 091126greenhalgh06)
+        // 🪞 plate SCREWS buffing status (Korban 9/11, request 091126greenhalgh06; "Plate screws" since 11/18)
         var phw = setPlateHw_(req);
-        if (phw.ok) logAct_(who, 'Plate hardware', phw.summary || req.serial, phw.plateHwStatus || '(cleared)');
+        if (phw.ok && !phw.skipped) logAct_(who, 'Plate screws', phw.summary || req.serial, phw.plateHwStatus || '(cleared)');
         return json_(phw);
       }
       return json_(setPlateHwLoc_(req, who));
@@ -7476,7 +7489,7 @@ function smTaskDoneByStatus_(p, id, rows) {
     return {done: /after|back in piano/i.test(String(p.plateStatus || '')), why: shown('Plate', p.plateStatus)};
   if (id === 'plate bolts/screws buffing')
     return {done: /^(buffed|installed)$/i.test(String(p.plateHwStatus || '').trim()) || stamp('plate screws (buffing list)'),
-      why: shown('Plate hardware', p.plateHwStatus)};
+      why: shown('Plate screws', p.plateHwStatus)};
   if (id.indexOf('electroplating') >= 0)
     // past QC & Assembly the piano has left Korban's Hardware Queue (PRSB..QC &
     // Assembly since Mark 11/6 — 189150 reached QC with its hardware unbuffed).
@@ -9696,7 +9709,7 @@ function shopManagerHtml_(R) {
 
   if (R.blocked.length) {
     sec('⛔', 'Blocked — concurrent work not finished', R.blocked.length,
-      'These pianos are at or past the phase where the task below was due. Set it on the card under ⚙ Shop Progress (Plate, Plate hardware, Keytops, Decals) or on Korban\u2019s Hardware Queue to clear it.');
+      'These pianos are at or past the phase where the task below was due. Set it on the card under ⚙ Shop Progress (Plate, Plate screws, Keytops, Decals) or on Korban\u2019s Hardware Queue to clear it.');
     topUl(R.blocked.map(function (b) {
       return ref(b.p) + '<br>' + pill('IN ' + (b.p.phase || '—'), '#fdf3ec', '#8a6a00')
         + ' <span style="font-size:12px;color:#9e2020">outstanding: ' + b.tasks.join(', ') + '</span>';
@@ -12551,7 +12564,15 @@ function setBenchNote_(req, who) {
   logAct_(who, 'Bench tag note', found.summary || req.serial, val || '(cleared)');
   return {ok: true, row: found.row, summary: found.summary, benchNote: val};
 }
-var PLATE_HW_STATUSES = ['', 'Needs buffing', 'In buffing queue', 'Buffing', 'Buffed', 'Installed'];
+/* PLATE SCREWS + VISIBLE HARDWARE (Mark 11/18). The card's "Plate hardware"
+ * row is "Plate screws" now, with three choices; "In buffing queue" stays the
+ * STORED value and shows as "In hardware queue". The five older choices are
+ * folded in on the way in, so a stale page still saves something valid.
+ * Visible hardware (pedals, hinges, cabinet hardware) has its own column. */
+var PLATE_HW_STATUSES = ['', 'In piano', 'In buffing queue', 'Buffed'];
+var PLATE_HW_MIGRATE = {'Needs buffing': 'In buffing queue', 'Buffing': 'In buffing queue', 'Installed': 'Buffed', 'In hardware queue': 'In buffing queue'};
+var VISIBLE_HW_STATUSES = ['', 'In piano', 'In hardware queue', 'Out for plating', 'Done'];
+var VISIBLE_HW_MIGRATE = {'In buffing queue': 'In hardware queue', 'Buffed': 'Done'};
 // 🎨 finish choices on the card (Melissa 9/16, request 091626terry44): the
 // color the plating shop should do (Korban orders by it) and the keytop
 // material Marcelo should fit. Header-created Piano Log columns.
@@ -12591,8 +12612,18 @@ function setCardField_(req) {
 // Plate bolts / screws / hardware buffing — a concurrent task on the card,
 // tracked in a header-created PLATE HARDWARE STATUS column (Korban 9/11).
 function setPlateHw_(req) {
-  var val = String(req.plateHwStatus == null ? '' : req.plateHwStatus).trim();
-  if (PLATE_HW_STATUSES.indexOf(val) < 0) return {error: 'bad plate hardware status: ' + val};
+  var r = setHwStatus_(req, 'PLATE HARDWARE STATUS', PLATE_HW_STATUSES, req.plateHwStatus, PLATE_HW_MIGRATE);
+  if (r.ok) r.plateHwStatus = r.status;
+  return r;
+}
+/* One writer for both hardware status columns (header-created). `unless`
+ * (optional list) leaves the cell alone when it already holds one of those
+ * values — the CAP mini-QC pass sets "in queue" but never pulls a piano back
+ * from Buffed / Out for plating / Done. */
+function setHwStatus_(req, header, allowed, raw, migrate) {
+  var val = String(raw == null ? '' : raw).trim();
+  if (migrate && migrate[val]) val = migrate[val];
+  if (allowed.indexOf(val) < 0) return {error: 'bad ' + header.toLowerCase() + ': ' + val};
   var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
   var found = findPiano_(sh, req.serial, req.row);
   if (found.error) return found;
@@ -12600,11 +12631,36 @@ function setPlateHw_(req) {
   var hdr = sh.getRange(2, 1, 1, last).getValues()[0];
   var col = -1;
   for (var c = 0; c < hdr.length; c++) {
-    if (String(hdr[c] || '').trim().toUpperCase() === 'PLATE HARDWARE STATUS') { col = c + 1; break; }
+    if (String(hdr[c] || '').trim().toUpperCase() === header) { col = c + 1; break; }
   }
-  if (col < 0) { sh.getRange(2, last + 1).setValue('PLATE HARDWARE STATUS'); col = last + 1; }
+  if (col < 0) { sh.getRange(2, last + 1).setValue(header); col = last + 1; }
+  var cur = String(sh.getRange(found.row, col).getValue() || '').trim();
+  if (migrate && migrate[cur]) cur = migrate[cur];
+  var unless = Array.isArray(req.unless) ? req.unless.map(function (x) { return String(x); }) : [];
+  if (unless.indexOf(cur) >= 0) return {ok: true, skipped: true, row: found.row, summary: found.summary, status: cur};
   sh.getRange(found.row, col).setValue(val);
-  return {ok: true, row: found.row, summary: found.summary, plateHwStatus: val};
+  return {ok: true, row: found.row, summary: found.summary, status: val, previous: cur};
+}
+/* ONE-TIME (Mark 11/18): fold the retired Plate hardware choices into the three
+ * Plate screws ones — Needs buffing / Buffing → In buffing queue, Installed →
+ * Buffed — in every row of the PLATE HARDWARE STATUS column. dryrun lists only. */
+function plateHwMigrate_(dry) {
+  var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+  var hdr = sh.getRange(2, 1, 1, sh.getLastColumn()).getValues()[0], col = -1;
+  for (var c = 0; c < hdr.length; c++) if (String(hdr[c] || '').trim().toUpperCase() === 'PLATE HARDWARE STATUS') { col = c + 1; break; }
+  if (col < 0) return {error: 'no PLATE HARDWARE STATUS column'};
+  var last = sh.getLastRow();
+  var rng = sh.getRange(3, col, last - 2, 1), vals = rng.getValues(), serials = sh.getRange(3, 3, last - 2, 1).getValues();
+  var changes = [], counts = {};
+  for (var i = 0; i < vals.length; i++) {
+    var cur = String(vals[i][0] || '').trim(), to = PLATE_HW_MIGRATE[cur];
+    if (!to || cur === 'In hardware queue') continue;
+    counts[cur + ' \u2192 ' + to] = (counts[cur + ' \u2192 ' + to] || 0) + 1;
+    changes.push({row: i + 3, serial: String(serials[i][0] || ''), from: cur, to: to});
+    vals[i][0] = to;
+  }
+  if (!dry && changes.length) rng.setValues(vals);
+  return {ok: true, dryrun: !!dry, changed: changes.length, counts: counts, changes: changes.slice(0, 80)};
 }
 function setPlateStatus_(req) {
   var val = String(req.plateStatus == null ? '' : req.plateStatus).trim();
