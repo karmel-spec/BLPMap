@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-11-18.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-11-18.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -3256,7 +3256,7 @@ var PHASE_VALUES = ['New Arrival - Admin', 'Assessment', 'CAP',
   // the app's normTrackPhase canonicalizes the Sequence-sheet wording to
   // these (082726hales17: "unknown phase" saving Key Servicing)
   'Key Service', 'Refurb Checklist', 'Repair Work', 'Add-ons',
-  // upright refurbish phases (Jacob 9/22, 092226mower21) — the app expands 'Refurb Checklist' into these for uprights
+  // refurbish phases (Jacob 9/22, 092226mower21) — the app expands 'Refurb Checklist' into these (grands too since 11/18)
   'Cabinetry Cleaning and Prep', 'Action Problems and Hammer Prep', 'Action Lubrication and Alignment', 'Regulation'];
 
 // July 2026 phase rework: how the old phase names translate to the new
@@ -7209,7 +7209,7 @@ function pmPhaseSeq_(p, defs) {
   var ai = seq.indexOf('PRSB - Downbearing');
   if (ai >= 0 && seq.indexOf('PRSB - Notching and Pins') < 0) seq.splice(ai + 1, 0, 'PRSB - Notching and Pins');
   var ri = seq.indexOf('Refurb Checklist');
-  if (ri >= 0 && p.type !== 'grand') Array.prototype.splice.apply(seq, [ri, 1].concat(PM_REFURB_UPRIGHT));
+  if (ri >= 0) Array.prototype.splice.apply(seq, [ri, 1].concat(PM_REFURB_UPRIGHT));   // grands too since 11/18 (Mark; Brigham approved 11/17)
   return seq;
 }
 function pmEffectivePhase_(p) { if (p.phase) return p.phase; return (p.isNew && !p.coming) ? 'New Arrival - Admin' : ''; }

@@ -634,11 +634,13 @@ function pianoPhases(p) {
   if (ai >= 0 && !seq.includes('PRSB - Notching and Pins')) {
     seq.splice(ai + 1, 0, 'PRSB - Notching and Pins');
   }
-  // Upright refurbishes run the refurb checklist as FOUR phases (Jacob 9/22,
-  // request 092226mower21): the Sequence sheet keeps one "refurb checklist"
-  // column; the app expands it for uprights. Grands keep the single phase.
+  // Refurbishes run the refurb checklist as FOUR phases (Jacob 9/22, request
+  // 092226mower21 — uprights): the Sequence sheet keeps one "refurb checklist"
+  // column and the app expands it. Grands too since 11/18 (Mark; plan approved
+  // by Brigham 11/17) — same four phases, their own cleaning + regulation steps
+  // on the Phase Checklists tab (variant grand).
   const ri = seq.indexOf('Refurb Checklist');
-  if (ri >= 0 && p.type !== 'grand') seq.splice(ri, 1, ...REFURB_UPRIGHT_PHASES);
+  if (ri >= 0) seq.splice(ri, 1, ...REFURB_UPRIGHT_PHASES);
   return seq;
 }
 const REFURB_UPRIGHT_PHASES = ['Cabinetry Cleaning and Prep', 'Action Problems and Hammer Prep',
