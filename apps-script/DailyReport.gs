@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-11-18.4';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-11-18.5';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -11167,32 +11167,18 @@ function pianoNudge_(opt) {
   try { sent = JSON.parse(props.getProperty(sentKey) || '{}'); } catch (eS) { sent = {}; }
   var now = Date.now(), out = {texted: [], wouldText: [], fine: [], notChecked: [], textedMid: [], wouldTextMid: [], headsUp: []};
   var dirty = false;
-  /* MANAGER HEADS-UP (Mark 11/18): at 3:45 PM the manager gets ONE text naming
-   * everyone who was reminded since the last heads-up and has now been reminded
-   * 2+ times in the last 7 days — the same day as the repeat reminder, so it
-   * can be sorted out the next morning (Cameron was reminded three times in a
-   * week and nobody knew). Counts both kinds of reminder; a reminder that goes
-   * out after 3:45 is in the next day's text. App Settings: piano_nudge_headsup
-   * = off pauses it, piano_nudge_headsup_to names who gets it (default Mark
-   * Hales), piano_nudge_headsup_time sets the time (default 15:45). */
+  /* MANAGER HEADS-UP (Mark 11/18): when someone gets TWO OR MORE reminder texts
+   * on the same day, the manager is told that day at 3:45 PM — one text naming
+   * each of them with the times — so it can be sorted out the next morning
+   * (Cameron was reminded three times in a week and nobody knew). Both kinds of
+   * reminder count. A second reminder that goes out after 3:45 sends the
+   * heads-up for that person right then. App Settings: piano_nudge_headsup = off
+   * pauses it, piano_nudge_headsup_to names who gets it (default Mark Hales),
+   * piano_nudge_headsup_time sets the time (default 15:45). */
   var huOn = !/^(off|no|false|0|pause)/i.test(String(appSetting_('piano_nudge_headsup', 'on') || 'on'));
   var huTo = String(appSetting_('piano_nudge_headsup_to', 'Mark Hales') || 'Mark Hales').trim() || 'Mark Hales';
   var huAt = /^(\d{1,2}):(\d{2})$/.exec(String(appSetting_('piano_nudge_headsup_time', '15:45') || '15:45').trim()) || ['', '15', '45'];
   var huMinute = Number(huAt[1]) * 60 + Number(huAt[2]);
-  var remindersByPerson = function () {   // {key: [{at, name}]} for the last 7 days incl. today
-    var by = {};
-    for (var back = 6; back >= 0; back--) {
-      var dKey = Utilities.formatDate(new Date(new Date(day + 'T12:00:00').getTime() - back * 86400000), tz, 'yyyy-MM-dd');
-      var marks = sent;
-      if (back) { try { marks = JSON.parse(props.getProperty('pnudge_' + dKey) || '{}'); } catch (eM) { marks = {}; } }
-      Object.keys(marks).forEach(function (mk) {
-        var bar = mk.indexOf('|');
-        if (bar <= 0 || mk.indexOf('hu|') === 0 || !marks[mk]) return;
-        (by[mk.slice(0, bar)] = by[mk.slice(0, bar)] || []).push(String(marks[mk]));
-      });
-    }
-    return by;
-  };
   punches.forEach(function (pu) {
     var k = key(pu.tech), first = String(pu.tech).trim().split(/\s+/)[0];
     var at = Utilities.formatDate(new Date(pu.start), tz, 'h:mm a');
@@ -11265,32 +11251,31 @@ function pianoNudge_(opt) {
     out.textedMid.push(mrow);
     logAct_('Store Map (piano clock reminder)', 'Reminder texted', pu.tech, 'piano clock stopped at ' + stopped + ', still on the day clock an hour later');
   });
-  // the 3:45 PM heads-up — once a day, on the first live run at or after that time
+  // the 3:45 PM heads-up: everyone with 2+ reminders TODAY who has not been reported yet today
   if (live && (huOn || (dry && opt.headsupPreview))) {
     var nowMin = Number(Utilities.formatDate(new Date(now), tz, 'H')) * 60 + Number(Utilities.formatDate(new Date(now), tz, 'm'));
-    var lastHu = String(props.getProperty('pnudge_lasthu') || '');
-    if ((nowMin >= huMinute && !sent['hu|sent']) || opt.headsupPreview) {
-      var byP = remindersByPerson(), names = {}, lines = [];
+    if (nowMin >= huMinute || (dry && opt.headsupPreview)) {
+      var todayBy = {}, names = {}, lines = [];
       punches.forEach(function (pu) { names[key(pu.tech)] = String(pu.tech).trim().split(/\s+/)[0]; });
-      Object.keys(byP).forEach(function (pk) {
-        var times = byP[pk].sort();
-        if (pk === key(huTo) || times.length < 2) return;
-        if (!(times[times.length - 1] > lastHu)) return;          // nothing new since the last heads-up
-        var list = times.slice(-4).map(function (t) { var d = new Date(t);
-          return Utilities.formatDate(d, tz, 'EEE M/d') + ' at ' + Utilities.formatDate(d, tz, 'h:mm a'); }).join(', ');
+      Object.keys(sent).forEach(function (mk) {
+        var bar = mk.indexOf('|');
+        if (bar <= 0 || mk.indexOf('hu|') === 0 || !sent[mk]) return;
+        (todayBy[mk.slice(0, bar)] = todayBy[mk.slice(0, bar)] || []).push(String(sent[mk]));
+      });
+      Object.keys(todayBy).forEach(function (pk) {
+        var times = todayBy[pk].sort();
+        if (pk === key(huTo) || times.length < 2 || sent['hu|' + pk] === String(times.length)) return;   // not the manager; not already reported at this count
         var nm = names[pk] || (String(pk).split(/\s+/)[0].charAt(0).toUpperCase() + String(pk).split(/\s+/)[0].slice(1));
-        lines.push({who: nm, count: times.length, text: nm + ' has been reminded to clock in to a piano '
-          + times.length + ' times in the last 7 days (' + list + ').'});
+        var list = times.map(function (t) { return Utilities.formatDate(new Date(t), tz, 'h:mm a'); }).join(', ');
+        lines.push({key: pk, who: nm, count: times.length, text: nm + ' was reminded to clock in to a piano ' + times.length + ' times today (' + list + ').'});
       });
       lines.sort(function (x, y) { return y.count - x.count; });
       out.headsUp = lines.map(function (l) { return {who: l.who, count: l.count, to: huTo, would: !!dry}; });
-      if (!dry && nowMin >= huMinute && !sent['hu|sent']) {
-        if (lines.length) {
-          notifyTeam_([huTo], '\u23f0 Heads-up: ' + lines.map(function (l) { return l.text; }).join('\n'));
-          logAct_('Store Map (piano clock reminder)', 'Manager heads-up texted', huTo, lines.map(function (l) { return l.who + ' \u00d7' + l.count; }).join(', '));
-        }
-        sent['hu|sent'] = new Date().toISOString(); dirty = true;
-        try { props.setProperty('pnudge_lasthu', new Date().toISOString()); } catch (eL) {}
+      if (!dry && lines.length) {
+        notifyTeam_([huTo], '\u23f0 Heads-up: ' + lines.map(function (l) { return l.text; }).join('\n'));
+        lines.forEach(function (l) { sent['hu|' + l.key] = String(l.count); });
+        dirty = true;
+        logAct_('Store Map (piano clock reminder)', 'Manager heads-up texted', huTo, lines.map(function (l) { return l.who + ' \u00d7' + l.count; }).join(', '));
       }
     }
   }
