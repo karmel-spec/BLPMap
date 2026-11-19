@@ -17368,7 +17368,7 @@ function teamBoardHTML() {
   const stale = [];
   const loadingNote = (!payIn || !TEAM.clock)
     ? '<div class="teamload">⏳ Loading live clock-ins… statuses fill in as each feed answers.</div>' : '';
-  if (TEAM.clockStale === 'map' && TEAM.clock && payIn) stale.push('the piano clock feed did not load — showing the map\u2019s copy from ' + teamClockFmt(new Date(CLOCK.allAt).toISOString()));
+  if (TEAM.clockStale === 'map' && TEAM.clock && payIn) stale.push('the piano clock feed did not load — showing the map\u2019s copy' + (CLOCK.allAt ? ' from ' + teamClockFmt(new Date(CLOCK.allAt).toISOString()) : ''));   // no time yet when the map's own clock read hasn't answered either — an Invalid Date here stopped the whole Shop Board from drawing (11/19)
   if (TEAM.clockStale === 'none') stale.push('the piano clock feed did not load — piano lines may be blank');
   if (TEAM.payStale) stale.push('the day clock feed did not load');
   const banner = stale.length
@@ -17437,7 +17437,24 @@ function renderTeam() {
     b.classList.toggle('on', b.dataset.tt === TEAM.tab);
     if (!b.dataset.wired) { b.dataset.wired = '1'; b.onclick = () => { TEAM.tab = b.dataset.tt; renderTeam(); }; }
   });
-  if (TEAM.tab === 'shopteam') { el.innerHTML = shopFrameHTML('team'); return; }
+  if (TEAM.tab === 'shopteam') {
+    // The framed Shop Manager page scrolls this dashboard down by itself as it
+    // loads, sliding the tab row up under the header — it looked like being
+    // stuck on the Team page (Mark 11/19). Hold the scroll position while the
+    // frame loads, until the person scrolls or taps themselves. (The tab row
+    // is also sticky now, so it stays in reach either way.)
+    const sc = $('#view-team'), keep = sc ? sc.scrollTop : 0;
+    el.innerHTML = shopFrameHTML('team');
+    if (sc) {
+      let own = false;
+      const mine = () => { own = true; };
+      const hold = () => { if (!own && TEAM.tab === 'shopteam' && sc.scrollTop !== keep) sc.scrollTop = keep; };
+      ['wheel', 'touchstart', 'pointerdown', 'keydown'].forEach(ev => sc.addEventListener(ev, mine, {passive: true, once: true}));
+      sc.addEventListener('scroll', hold, {passive: true});
+      setTimeout(() => sc.removeEventListener('scroll', hold), 15000);
+    }
+    return;
+  }
   if (!TEAM.roster) {
     if (!TEAM.loading) teamFetchAll();
     // paint the cached roster/schedule instantly while the live data loads

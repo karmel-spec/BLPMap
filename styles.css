@@ -1323,6 +1323,8 @@ button.cfxapply:hover{border-color:#9e2020;color:#9e2020}
 .teamtabs button{border:1.5px solid #c9ced4;background:#fff;border-radius:9px;padding:8px 14px;
   font-size:12.5px;font-weight:700;color:#4a5259;cursor:pointer}
 .teamtabs button.on{border-color:#9e2020;color:#9e2020;box-shadow:inset 0 0 0 1px #9e2020}
+/* the Team Dashboard's tab row stays in reach however far the page scrolls (Mark 11/19) */
+#teamTabs{position:sticky;top:0;z-index:5;background:#fff;padding:6px 0}
 .tmsec{margin:16px 0 8px;font-size:13px;letter-spacing:.5px;color:#9e2020}
 .tmgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(215px,1fr));gap:10px}
 .tmtile{border:1px solid #dfe3e8;border-radius:10px;background:#fff;padding:10px 12px;font-size:11.5px;
