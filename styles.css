@@ -1345,6 +1345,7 @@ button.cfxapply:hover{border-color:#9e2020;color:#9e2020}
 .dsgbtn b{display:block;font-size:14px}
 .dsgbtn small{display:block;color:#4a5259;font-size:12px;margin-top:2px}
 .dsgbtn:disabled{opacity:.55;cursor:default}
+.dsgbtn.dsgalt{background:#f5f6f8;border-color:#c9ced4}
 .dsgwait{text-align:left;color:#7a828a;font-size:12.5px;padding:8px 2px}
 .dsgmsg{margin-top:6px;text-align:left}
 .dsgno{width:100%;margin-top:10px;background:#fff;color:#4a5259;border:1.5px solid #c9ced4;border-radius:10px;padding:11px 0;font-size:13px;font-weight:700;cursor:pointer}

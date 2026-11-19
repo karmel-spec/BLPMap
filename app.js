@@ -20179,6 +20179,9 @@ function loadTranslator() {
  *   · a booked field appointment (street address / GZ/SC/QB) → the Outside
  *     project clock as Field work, described from the block
  *   · chores, meetings, notes, all-day and cancelled blocks are left out
+ * Also (Mark 11/19): a Management button for anyone who has clocked management
+ * time in the last three weeks, and on Fridays a Shop tidying button for
+ * everyone who uses the work clock.
  * No buttons → no pop-up (movers, admin). The calendar read starts with the
  * tap on "Clock in for the day", so the day punch never waits on it; the
  * last-piano button comes from the fast Time Log feed. */
@@ -20298,13 +20301,24 @@ function daySugLast(tl, calOpts) {
   }
   return null;
 }
+/* the non-piano extras: Management for the people who use management time,
+ * Shop tidying for everyone on the work clock on Fridays */
+function daySugExtras(tl) {
+  const recent = (tl || []).filter(r => Date.now() - new Date(r.start).getTime() < 21 * 86400000);
+  const out = [];
+  if (isTimelogAdmin() && recent.some(r => String(r.serial || '').toUpperCase() === 'MGMT')) out.push({kind: 'mgmt'});
+  const dow = new Date().toLocaleDateString('en-US', {weekday: 'short', timeZone: 'America/Denver'});
+  if (dow === 'Fri' && recent.length) out.push({kind: 'tidy'});
+  return out;
+}
 async function daySugShow(prep) {
   if (!prep || CLOCK.open) return;
   const tl = await prep.tl;
   let calOpts = null;                      // null = the calendar has not answered yet
   const calDone = prep.cal.then(evs => { calOpts = daySugFromCal(evs, tl); });
   // nothing to offer from the Time Log? then wait (briefly) for the calendar before deciding to show at all
-  const hasLast = !!daySugLast(tl, []);
+  const extras = daySugExtras(tl);
+  const hasLast = !!daySugLast(tl, []) || extras.length > 0;
   await Promise.race([calDone, new Promise(r => setTimeout(r, hasLast ? 0 : 6000))]);
   if (CLOCK.open || clockName() !== prep.name) return;
   if (!hasLast && !(calOpts && calOpts.length)) return;
@@ -20313,19 +20327,24 @@ async function daySugShow(prep) {
   ov.className = 'tagview daysug';
   document.body.appendChild(ov);
   let opts = [], drawnAt = 0;
-  const btn = (o, i) => o.kind === 'field'
+  const btn = (o, i) => o.kind === 'mgmt'
+    ? `<button class="dsgbtn dsgalt" data-i="${i}"><b>🧑‍💼 ${tr('Management time', 'Tiempo de gerencia')}</b><small>${tr('meetings, planning, scheduling', 'reuniones, planeación, horarios')}</small></button>`
+    : o.kind === 'tidy'
+    ? `<button class="dsgbtn dsgalt" data-i="${i}"><b>🧹 ${tr('Shop tidying', 'Limpieza del taller')}</b><small>${tr('Friday shop organization', 'organización del viernes')}</small></button>`
+    : o.kind === 'field'
     ? `<button class="dsgbtn" data-i="${i}"><b>🚗 ${esc(o.job)}</b><small>${esc(o.when)} · ${tr('Outside project — Field work', 'Proyecto externo — Trabajo de campo')}</small></button>`
     : `<button class="dsgbtn" data-i="${i}"><b>${esc(daySugName(o.p))} · #${esc(o.p.serial)}</b>
         <small>${o.phase ? esc(o.phase) : esc(o.want || '') + (o.want ? ' — ' : '') + tr('pick the work on its card ›', 'elige el trabajo en su tarjeta ›')}${o.when ? ' · ' + esc(o.when) : ''}</small></button>`;
   const draw = () => {
     const cal = calOpts || [], last = daySugLast(tl, cal);
-    opts = cal.concat(last ? [last] : []);
+    opts = cal.concat(last ? [last] : [], extras);
     ov.innerHTML = `<div class="tvbox dsgbox">
       <div class="ccfmicon">▶</div>
       <h3>${tr('Clocked in for the day — clock into your work?', 'Entrada del día registrada — ¿marcar tu trabajo?')}</h3>
       ${calOpts === null ? `<div class="dsghd">📅 ${tr('On your calendar today', 'En tu calendario hoy')}</div><div class="dsgwait">${tr('checking your calendar…', 'revisando tu calendario…')}</div>`
         : cal.length ? `<div class="dsghd">📅 ${tr('On your calendar today', 'En tu calendario hoy')}</div>${cal.map(btn).join('')}` : ''}
       ${last ? `<div class="dsghd">⏱ ${tr('Last worked on', 'Último trabajo')}</div>${btn(last, cal.length)}` : ''}
+      ${extras.length ? `<div class="dsghd">${tr('Or', 'O')}</div>${extras.map((o, k) => btn(o, cal.length + (last ? 1 : 0) + k)).join('')}` : ''}
       <div class="dsgmsg phmsg"></div>
       <button class="dsgno">${tr('Something else / not now', 'Otra cosa / ahora no')}</button></div>`;
     ov.querySelector('.dsgno').onclick = ev => { ev.stopPropagation(); ov.remove(); };
@@ -20369,18 +20388,23 @@ async function daySugGo(o, ov, b) {
     if (/key\s*(service|top|work)|^keys?\b/i.test(o.phase)) { try { keytopBeforeGate(p); } catch (e) {} }
     return;
   }
-  // booked field appointment → the Outside project clock, kind Field work
+  // booked field appointment → the Outside project clock, kind Field work;
+  // Shop tidying → the same clock, kind Shop tidying; Management → the MGMT clock
+  const job = o.kind === 'tidy' ? 'Shop tidying' : o.job;
   ov.dataset.busy = '1';
   ov.querySelectorAll('button').forEach(x => { x.disabled = true; });
   say(clockingText('in'));
-  const j = await punch('clockin', {serial: 'OUTSIDE', row: '', summary: o.job}, 'Field work', 'dayin');
+  const j = o.kind === 'mgmt' ? await punch('clockin', {serial: 'MGMT', row: ''}, 'Management', 'dayin')
+    : await punch('clockin', {serial: 'OUTSIDE', row: '', summary: job}, o.kind === 'tidy' ? 'Shop tidying' : 'Field work', 'dayin');
   if (!j || j.error) {
     delete ov.dataset.busy;
     ov.querySelectorAll('button').forEach(x => { x.disabled = false; });
     return say('✗ ' + ((j && j.error) || tr('no reply — try again', 'sin respuesta — intenta otra vez')), true);
   }
-  try { lsSet('outsideJob', JSON.stringify({kind: 'Field work', job: o.job, day: denverDay(new Date().toISOString())})); } catch (e) {}
-  if (CLOCK.open) CLOCK.open.piano = o.job;
+  if (o.kind !== 'mgmt') {
+    try { lsSet('outsideJob', JSON.stringify({kind: o.kind === 'tidy' ? 'Shop tidying' : 'Field work', job: o.kind === 'tidy' ? '' : job, day: denverDay(new Date().toISOString())})); } catch (e) {}
+    if (CLOCK.open) CLOCK.open.piano = job;
+  }
   try { renderDock(); } catch (e) {}
   ov.remove();
   if (S.view === 'dash') renderDash();
