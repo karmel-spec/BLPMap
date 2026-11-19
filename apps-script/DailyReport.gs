@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-11-18.8';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-11-19.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -7605,18 +7605,6 @@ function smTrackKeys_(p, defs) {
   });
   return keys;
 }
-function smGoTo_(phase, type, defs) {
-  if (!defs || !defs.specialties) return '';
-  var area = SM_PHASE_AREA[phase];
-  if (phase === 'DHRT') area = (type === 'grand') ? 'DHRT for grands' : 'DHRT for uprights';
-  if (!area) return '';
-  var folks = (defs.specialties.people || []).filter(function (x) {
-    return x.role !== 'intern' && (x.skills[area] || 0) >= 2;
-  }).sort(function (a, b) { return (b.skills[area] || 0) - (a.skills[area] || 0); }).slice(0, 3);
-  return folks.map(function (x) {
-    return x.name + ((x.skills[area] === 3) ? ' ★' : '');
-  }).join(', ');
-}
 
 /* ---- stale phases: Friday reports say a phase is finished but the map
    still shows the piano IN that phase. Matches on word STEMS because the
@@ -9208,7 +9196,7 @@ function buildShopManagerReport_(dayOffset) {
       if (pianos[i].summary === a.piano || pianos[i].serial === a.piano) { p = pianos[i]; break; }
     }
     return {who: a.who, piano: a.piano, detail: a.detail,
-            goTo: p ? smGoTo_(p.phase, p.type, defs) : '', spot: p ? smSpot_(p) : ''};
+            spot: p ? smSpot_(p) : ''};   // the GO-TO specialist tag came off (Mark 11/19)
   });
 
   R.blocked = smBlockedByTasks_(pianos, defs);
@@ -9723,8 +9711,7 @@ function shopManagerHtml_(R) {
     sec('▶', 'Phase advances — is the next tech lined up?', R.advances.length);
     topUl(R.advances.map(function (a) {
       return '<b>' + withSer(a.piano) + '</b>' + (a.spot ? ' <span style="color:#8a847b">· map #' + a.spot + '</span>' : '')
-        + '<br><span style="font-size:12px;color:#6f6a63">' + a.detail + ' — moved by ' + a.who + '</span>'
-        + (a.goTo ? '<br>' + pill('GO-TO: ' + a.goTo, '#eef4ff', '#2b5fa8') : '');
+        + '<br><span style="font-size:12px;color:#6f6a63">' + a.detail + ' — moved by ' + a.who + '</span>';
     }));
   }
 
