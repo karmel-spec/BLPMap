@@ -1318,17 +1318,9 @@ function gotoLine(p, effPh) {
     const when = new Date(last.start).toLocaleDateString('en-US', {weekday: 'short', month: 'short', day: 'numeric'});
     return `<div class="gotoline"><b>Working it: ${esc(first)}</b> · last ${esc(when)}${last.phase ? ' · ' + esc(last.phase.slice(0, 26)) : ''}</div>`;
   }
-  // 3 · nobody yet — fall back to the specialist go-to list
-  if (!TRACKDEFS || !effPh) return '';
-  let area = PHASE_TO_AREA[effPh];
-  if (effPh === 'DHRT') area = p.type === 'grand' ? 'DHRT for grands' : 'DHRT for uprights';
-  if (!area) return '';
-  const folks = (TRACKDEFS.specialties.people || [])
-    .filter(x => x.role !== 'intern' && (x.skills[area] || 0) >= 2)
-    .sort((a, b) => (b.skills[area] || 0) - (a.skills[area] || 0)).slice(0, 4);
-  if (!folks.length) return '';
-  return `<div class="gotoline" title="tech specialties (★ = go-to expert)">Go-to: ${
-    folks.map(x => esc(x.name) + ((x.skills[area] === 3) ? ' ★' : '')).join(', ')}</div>`;
+  // 3 · nobody yet — nothing. The "Go-to:" specialist suggestion that used to
+  // fill this spot was removed (Mark 11/19).
+  return '';
 }
 
 
