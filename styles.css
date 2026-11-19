@@ -1336,6 +1336,18 @@ button.cfxapply:hover{border-color:#9e2020;color:#9e2020}
 .ccfmbtns{display:flex;gap:10px;margin-top:13px}
 .ccfmyes{flex:1;background:#2e7d4f;color:#fff;border:0;border-radius:10px;padding:12px 0;font-size:14px;font-weight:800;cursor:pointer}
 .ccfmno{flex:.6;background:#fff;color:#4a5259;border:1.5px solid #c9ced4;border-radius:10px;padding:12px 0;font-size:13px;font-weight:700;cursor:pointer}
+/* ▶ day clock-in → "clock into your work?" pop-up (Mark 11/19) — sits under the ❗ note / confirm pop-ups */
+.daysug{z-index:330}
+.daysug .dsgbox{box-sizing:border-box;width:360px;max-width:calc(100vw - 40px);max-height:88vh;overflow-y:auto;text-align:center;padding:18px 16px}
+.dsgbox h3{margin:6px 0 4px;font-size:16px}
+.dsghd{text-align:left;font-size:11.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:#6a727a;margin:12px 2px 2px}
+.dsgbtn{display:block;width:100%;text-align:left;background:#f2f9f4;border:1.5px solid #7fc48f;border-radius:10px;padding:10px 12px;margin:6px 0;font:inherit;cursor:pointer;color:#1d2226}
+.dsgbtn b{display:block;font-size:14px}
+.dsgbtn small{display:block;color:#4a5259;font-size:12px;margin-top:2px}
+.dsgbtn:disabled{opacity:.55;cursor:default}
+.dsgwait{text-align:left;color:#7a828a;font-size:12.5px;padding:8px 2px}
+.dsgmsg{margin-top:6px;text-align:left}
+.dsgno{width:100%;margin-top:10px;background:#fff;color:#4a5259;border:1.5px solid #c9ced4;border-radius:10px;padding:11px 0;font-size:13px;font-weight:700;cursor:pointer}
 
 /* ❗ IMPORTANT note banner in the sticky card header */
 .impnote{background:#9e2020;color:#fff;border-radius:8px;padding:8px 11px;margin:7px 0 2px;

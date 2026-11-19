@@ -16755,6 +16755,7 @@ function renderDash() {
     const dir = dirPeek;
     pb.textContent = clockingText(dir);
     const slow = punchSlow(pb, dir);
+    const sug = dir === 'in' ? daySugPrep() : null;   // calendar + last piano load while the punch is in flight (Mark 11/19)
     const j = await dayPunch(dir === 'in' ? 'dayin' : 'dayout');
     clearTimeout(slow);
     if (j && j.error === 'geofence') {
@@ -16782,6 +16783,7 @@ function renderDash() {
       pb.textContent = dir === 'in' ? '▶ Clock in for the day' : '■ Clock out for the day';
     } else if (j && j.ok) {
       renderDash();
+      if (dir === 'in') daySugShow(sug);
       const pm2 = body.querySelector('.paymsg');
       if (pm2 && j.verified) { pm2.className = 'paymsg ok'; pm2.textContent = '✓ punch confirmed on the payroll sheet'; }
     } else {   // no ok, no error — never leave the tech guessing
@@ -20168,6 +20170,222 @@ function loadTranslator() {
   if (btn) btn.onclick = () => { list.hidden = !list.hidden; };
 })();
 
+/* ---------- ▶ Day clock-in → "clock into what?" (Mark 11/19) ----------
+ * Right after a day clock-in lands, offer one-tap piano clock-ins: first what
+ * is on the tech's own calendar for the rest of today, then the last piano
+ * they were actually clocked into (Garrett had finished what his calendar
+ * said and moved on to his next project). Nothing is picked for them.
+ *   · a block that names a piano → that piano + the block's work
+ *   · a booked field appointment (street address / GZ/SC/QB) → the Outside
+ *     project clock as Field work, described from the block
+ *   · chores, meetings, notes, all-day and cancelled blocks are left out
+ * No buttons → no pop-up (movers, admin). The calendar read starts with the
+ * tap on "Clock in for the day", so the day punch never waits on it; the
+ * last-piano button comes from the fast Time Log feed. */
+const DAYSUG = {cal: null, tl: null};
+const DAYSUG_NOT_PIANO = ['OUTSIDE', 'MGMT', 'KEYS', 'MAINT', 'TIDY'];
+function daySugPrep() {
+  const name = clockName();
+  if (!name) return null;
+  const now = Date.now();
+  const c = DAYSUG.cal;
+  const cal = c && c.name === name && now - c.at < 600000 ? Promise.resolve(c.events)
+    : fetchT(BRIDGE_URL + '?fn=calevents&key=pianoman&cal=' + encodeURIComponent(name)
+        + '&from=' + encodeURIComponent(new Date(now - 60000).toISOString())
+        + '&to=' + encodeURIComponent(new Date(now + 18 * 3600000).toISOString()), {redirect: 'follow'}, 15000)
+      .then(r => r.json()).then(j => {
+        const evs = j && j.ok && Array.isArray(j.events) ? j.events : [];
+        DAYSUG.cal = {name, at: Date.now(), events: evs};
+        return evs;
+      }).catch(() => []);
+  const fresh = MYCLOCK.tl && MYCLOCK.forName === name && now - MYCLOCK.at < 300000 && MYCLOCK.at > 0;
+  const tl = fresh ? Promise.resolve(MYCLOCK.tl)
+    : fetchT('https://blpsalesapp.netlify.app/.netlify/functions/clock-history?key=pianoman&days=21', {}, 8000)
+      .then(r => r.json()).then(j => ((j && j.tl) || []).filter(r => myClockMatch(r.tech, name) && !r.voided))
+      .catch(() => MYCLOCK.forName === name ? (MYCLOCK.tl || []) : []);
+  return {name, cal, tl};
+}
+function daySugPiano(serial) {
+  const s = String(serial || '').trim().toLowerCase();
+  if (!s) return null;
+  const hits = ((S.data && S.data.pianos) || []).filter(p => String(p.serial || '').trim().toLowerCase() === s);
+  return hits.find(p => p.active) || hits[0] || null;
+}
+const daySugName = p => String(p.summary || [p.make, p.model].filter(Boolean).join(' ') || '').slice(0, 34);
+/* the block's wording → one of this piano's clock choices; else the phase the
+ * tech last clocked on this piano; else null (the tech picks on the card) */
+function daySugPhase(p, want, tl) {
+  const opts = ['Admin / Misc', 'Moving', 'Buffing', 'Rework'].concat(inShopwork(p) ? [] : ['Showroom Tuning'],
+    pianoPhases(p) || PHASES, PHASE_STATES);
+  const norm = x => String(x || '').toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, ' ').trim()
+    .split(' ').map(w => w.length > 4 ? w.replace(/(ing|es|e|s)$/, '') : w).join(' ');
+  const w = String(want || '').trim();
+  if (w) {
+    const hit = opts.find(o => o.toLowerCase() === w.toLowerCase()) || opts.find(o => norm(o) === norm(w));
+    if (hit) return hit;
+    if (/^(showroom )?tuning$/i.test(w) && !inShopwork(p)) return 'Showroom Tuning';
+  }
+  const mine = (tl || []).filter(r => String(r.serial || '').toLowerCase() === String(p.serial).toLowerCase()
+    && r.phase && !/^training/i.test(r.phase)).sort((a, b) => new Date(b.start) - new Date(a.start))[0];
+  return mine ? mine.phase : null;
+}
+function daySugFieldJob(ev) {
+  const t = String(ev.title || '');
+  const parts = t.replace(/\*[^*]*\*/g, ' ').replace(/GZ\/SC\/QB/ig, ' ').replace(/\([^)]*\)/g, ' ')
+    .replace(/\S+@\S+/g, ' ').replace(/\+?\d[\d ().-]{7,}\d/g, ' ')
+    .split(':').map(x => x.replace(/\s+/g, ' ').replace(/^[\s,–-]+|[\s,–-]+$/g, '')).filter(Boolean);
+  const tuning = /GZ\/SC\/QB|tuning/i.test(t) || /PIANO TUNING/i.test(String(ev.description || ''));
+  return ((tuning ? 'Field tuning: ' : 'Field appointment: ') + parts.join(': ')).slice(0, 80);
+}
+/* calendar events → the buttons, in calendar order */
+function daySugFromCal(events, tl) {
+  const now = Date.now(), today = denverDay(new Date().toISOString());
+  const out = [], seen = {};
+  const evs = (events || []).filter(e => e && !e.allDay && e.title && new Date(e.end).getTime() > now
+    && denverDay(e.start) === today && !/cancel/i.test(e.title))
+    .sort((a, b) => new Date(a.start) - new Date(b.start));
+  for (const e of evs) {
+    const t = String(e.title), loc = String(e.location || '');
+    const when = fmtT(e.start) + '–' + fmtT(e.end);
+    if (/GZ\/SC\/QB/i.test(t) || (loc.length > 10 && /\d/.test(loc) && /,|\bUT\b|\b\d{5}\b/.test(loc))) {
+      const job = daySugFieldJob(e);
+      if (!seen['F|' + job]) { seen['F|' + job] = 1; out.push({kind: 'field', job, when}); }
+      continue;
+    }
+    const hashed = Array.from(t.matchAll(/#\s*([A-Za-z0-9-]+)/g)).map(m => m[1]);
+    const cut = t.lastIndexOf(' - ');
+    const head = cut > 0 ? t.slice(0, cut) : t;
+    const toks = hashed.length ? hashed : (head.match(/[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*/g) || []);
+    const pianos = [];
+    for (const tok of toks) {
+      if (tok.length < 3 || !/\d/.test(tok)) continue;
+      const p = daySugPiano(tok);
+      if (!p || pianos.includes(p)) continue;
+      const mk = String(p.make || '').trim().split(/\s+/)[0].toLowerCase();
+      const sure = hashed.length || (mk && t.toLowerCase().includes(mk)) || tok.replace(/\D/g, '').length >= 5;
+      if (sure) pianos.push(p);
+    }
+    if (!pianos.length) continue;
+    const want = /^\s*tuning\s*:/i.test(t) ? 'Showroom Tuning'
+      : cut > 0 ? t.slice(cut + 3).replace(/\([^)]*\)/g, ' ').replace(/\s+/g, ' ').trim()
+      : /^\s*QC\b/i.test(t) ? 'QC' : '';
+    for (const p of pianos) {
+      const phase = daySugPhase(p, want, tl);
+      const k = p.serial + '|' + (phase || '');
+      if (seen[k]) continue;
+      seen[k] = 1;
+      out.push({kind: 'piano', p, phase, want, when});
+    }
+  }
+  return out.slice(0, 6);
+}
+/* the last piano this person was actually clocked into (not management,
+ * outside projects, keytops, maintenance or tidying) */
+function daySugLast(tl, calOpts) {
+  const rows = (tl || []).filter(r => r.serial && !DAYSUG_NOT_PIANO.includes(String(r.serial).toUpperCase())
+    && r.phase && !/^training/i.test(r.phase)
+    && Date.now() - new Date(r.start).getTime() < 21 * 86400000)
+    .sort((a, b) => new Date(b.start) - new Date(a.start));
+  for (const r of rows) {
+    const p = daySugPiano(r.serial);
+    if (!p) continue;
+    if ((calOpts || []).some(o => o.kind === 'piano' && o.p === p && o.phase === r.phase)) return null;
+    const d = denverDay(r.start), today = denverDay(new Date().toISOString());
+    const yest = denverDay(new Date(Date.now() - 86400000).toISOString());
+    const whenTxt = d === today ? tr('earlier today', 'hoy más temprano') : d === yest ? tr('yesterday', 'ayer')
+      : new Date(r.start).toLocaleDateString(es() ? 'es-MX' : 'en-US', {weekday: 'short', month: 'numeric', day: 'numeric', timeZone: 'America/Denver'});
+    return {kind: 'piano', p, phase: r.phase, when: whenTxt, last: true};
+  }
+  return null;
+}
+async function daySugShow(prep) {
+  if (!prep || CLOCK.open) return;
+  const tl = await prep.tl;
+  let calOpts = null;                      // null = the calendar has not answered yet
+  const calDone = prep.cal.then(evs => { calOpts = daySugFromCal(evs, tl); });
+  // nothing to offer from the Time Log? then wait (briefly) for the calendar before deciding to show at all
+  const hasLast = !!daySugLast(tl, []);
+  await Promise.race([calDone, new Promise(r => setTimeout(r, hasLast ? 0 : 6000))]);
+  if (CLOCK.open || clockName() !== prep.name) return;
+  if (!hasLast && !(calOpts && calOpts.length)) return;
+  document.querySelectorAll('.daysug').forEach(el => el.remove());
+  const ov = document.createElement('div');
+  ov.className = 'tagview daysug';
+  document.body.appendChild(ov);
+  let opts = [], drawnAt = 0;
+  const btn = (o, i) => o.kind === 'field'
+    ? `<button class="dsgbtn" data-i="${i}"><b>🚗 ${esc(o.job)}</b><small>${esc(o.when)} · ${tr('Outside project — Field work', 'Proyecto externo — Trabajo de campo')}</small></button>`
+    : `<button class="dsgbtn" data-i="${i}"><b>${esc(daySugName(o.p))} · #${esc(o.p.serial)}</b>
+        <small>${o.phase ? esc(o.phase) : esc(o.want || '') + (o.want ? ' — ' : '') + tr('pick the work on its card ›', 'elige el trabajo en su tarjeta ›')}${o.when ? ' · ' + esc(o.when) : ''}</small></button>`;
+  const draw = () => {
+    const cal = calOpts || [], last = daySugLast(tl, cal);
+    opts = cal.concat(last ? [last] : []);
+    ov.innerHTML = `<div class="tvbox dsgbox">
+      <div class="ccfmicon">▶</div>
+      <h3>${tr('Clocked in for the day — clock into your work?', 'Entrada del día registrada — ¿marcar tu trabajo?')}</h3>
+      ${calOpts === null ? `<div class="dsghd">📅 ${tr('On your calendar today', 'En tu calendario hoy')}</div><div class="dsgwait">${tr('checking your calendar…', 'revisando tu calendario…')}</div>`
+        : cal.length ? `<div class="dsghd">📅 ${tr('On your calendar today', 'En tu calendario hoy')}</div>${cal.map(btn).join('')}` : ''}
+      ${last ? `<div class="dsghd">⏱ ${tr('Last worked on', 'Último trabajo')}</div>${btn(last, cal.length)}` : ''}
+      <div class="dsgmsg phmsg"></div>
+      <button class="dsgno">${tr('Something else / not now', 'Otra cosa / ahora no')}</button></div>`;
+    ov.querySelector('.dsgno').onclick = ev => { ev.stopPropagation(); ov.remove(); };
+    // a calendar that answers late redraws the list — ignore taps for a moment so
+    // a finger already on its way down can't land on a button that just moved
+    ov.querySelectorAll('.dsgbtn').forEach(b => b.onclick = ev => { ev.stopPropagation();
+      if (Date.now() - drawnAt < 700) return;
+      daySugGo(opts[+b.dataset.i], ov, b); });
+  };
+  ov.onclick = ev => { ev.stopPropagation(); if (ev.target === ov) ov.remove(); };
+  draw();
+  if (calOpts === null) calDone.then(() => { if (document.body.contains(ov) && !ov.dataset.busy) { drawnAt = Date.now(); draw(); } });
+}
+async function daySugGo(o, ov, b) {
+  if (!o || ov.dataset.busy) return;
+  const msg = ov.querySelector('.dsgmsg');
+  const say = (t, err) => { msg.className = 'dsgmsg phmsg' + (err ? ' err' : ''); msg.textContent = t; };
+  if (o.kind === 'piano' && !o.phase) {            // the work isn't clear from the calendar — pick it on the card
+    ov.remove(); closeNav();
+    focusPiano(o.p); lsSet('sec_clock', 'open');
+    return;
+  }
+  if (o.kind === 'piano') {
+    const p = o.p;
+    if (preQueue(p) && !isAdminUser()) return say(tr('🚫 This piano is PRE-QUEUE — the deposit hasn’t been received, so no work can start yet. Ask a manager.', '🚫 Este piano está en PRE-COLA — no se ha recibido el depósito. Pregunta a un gerente.'), true);
+    if ((p.tempEntry || '').trim() && !(isAdminUser() || isTimelogAdmin())) return say(tr('🆕 This is a TEMP entry — an admin needs to approve it before work is clocked on it.', '🆕 Esta es una entrada TEMPORAL — un administrador debe aprobarla primero.'), true);
+    const ack = await impNoteGate(p, o.phase);
+    if (!ack.ok) return;
+    ov.dataset.busy = '1';
+    ov.querySelectorAll('button').forEach(x => { x.disabled = true; });
+    say(clockingText('in'));
+    const j = await punch('clockin', p, o.phase, 'dayin', undefined, ack.note);
+    if (!j || j.error) {
+      delete ov.dataset.busy;
+      ov.querySelectorAll('button').forEach(x => { x.disabled = false; });
+      return say('✗ ' + ((j && j.error) || tr('no reply — try again', 'sin respuesta — intenta otra vez')), true);
+    }
+    ov.remove();
+    if (S.view === 'dash') renderDash();
+    try { await maybeClockPhaseSync(p, o.phase); } catch (e) {}
+    if (/key\s*(service|top|work)|^keys?\b/i.test(o.phase)) { try { keytopBeforeGate(p); } catch (e) {} }
+    return;
+  }
+  // booked field appointment → the Outside project clock, kind Field work
+  ov.dataset.busy = '1';
+  ov.querySelectorAll('button').forEach(x => { x.disabled = true; });
+  say(clockingText('in'));
+  const j = await punch('clockin', {serial: 'OUTSIDE', row: '', summary: o.job}, 'Field work', 'dayin');
+  if (!j || j.error) {
+    delete ov.dataset.busy;
+    ov.querySelectorAll('button').forEach(x => { x.disabled = false; });
+    return say('✗ ' + ((j && j.error) || tr('no reply — try again', 'sin respuesta — intenta otra vez')), true);
+  }
+  try { lsSet('outsideJob', JSON.stringify({kind: 'Field work', job: o.job, day: denverDay(new Date().toISOString())})); } catch (e) {}
+  if (CLOCK.open) CLOCK.open.piano = o.job;
+  try { renderDock(); } catch (e) {}
+  ov.remove();
+  if (S.view === 'dash') renderDash();
+}
+
 /* Day clock in the ☰ drawer (Alex 10/31, 103126martin05): the ▶ Clock in /
  * ■ Clock out button without opening My Dashboard and waiting for it to load.
  * Same rules and same punch flow as the dashboard's button — sign-in with a
@@ -20199,6 +20417,7 @@ function renderDayClockNav() {
     box.dataset.busy = '1';
     pb.disabled = true; pb.textContent = clockingText(dir);
     const slow = punchSlow(pb, dir);
+    const sug = dir === 'in' ? daySugPrep() : null;   // calendar + last piano load while the punch is in flight (Mark 11/19)
     const j = await dayPunch(dir === 'in' ? 'dayin' : 'dayout');
     clearTimeout(slow);
     delete box.dataset.busy;
@@ -20218,6 +20437,7 @@ function renderDayClockNav() {
       const m4 = box.querySelector('.dcn-msg'); m4.className = 'dcn-msg ok';
       m4.textContent = (dir === 'in' ? tr('✓ clocked in ', '✓ entrada ') : tr('✓ clocked out ', '✓ salida ')) + new Date().toLocaleTimeString('en-US', {hour: 'numeric', minute: '2-digit'}) + (j.verified ? tr(' — confirmed on the payroll sheet', ' — confirmada en la hoja de nómina') : '');
       if (S.view === 'dash') renderDash();
+      if (dir === 'in') daySugShow(sug);
       return;
     }
     renderDayClockNav();
