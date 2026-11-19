@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-11-19.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-11-19.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -10361,7 +10361,8 @@ function briefSms_() {
 
   var SU = smStandup_([], R);
   var L = [];
-  L.push('BLP Standup 8AM - ' + Utilities.formatDate(now, 'America/Denver', 'EEE MMM d'));
+  // kept short (Mark 11/19): every 153 characters is another billed text segment
+  L.push('Standup ' + Utilities.formatDate(now, 'America/Denver', 'EEE M/d'));
   (SU.bdays || []).filter(function (b) { return b.off === 0; }).forEach(function (b) {
     L.push('BIRTHDAY: ' + b.name + (b.age ? ' turns ' + b.age : '') + ' - celebrate it!');
   });
@@ -10381,7 +10382,8 @@ function briefSms_() {
     var briefs = (briefLog_().briefs || []).filter(function (b) { return b.kind === 'shop'; });
     if (briefs.length) url = briefs[0].url;
   } catch (e) {}
-  if (url) L.push('Full brief: ' + url);
+  // the bare /d/<id> link opens the same doc — the /edit?usp=drivesdk tail is 18 billed characters
+  if (url) L.push('Brief: ' + String(url).replace(/\/edit(\?[^#]*)?$/, '').replace(/\?usp=drivesdk$/, ''));
   return {ok: true, text: L.join('\n'), url: url, lines: L.length};
 }
 
