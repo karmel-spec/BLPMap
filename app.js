@@ -20614,6 +20614,7 @@ boot();
  * survive browsers and devices and are searchable across every agent; the
  * device keeps a copy as an instant cache / offline fallback (Karmel 9/18). */
 (() => {
+  return; // Agent Console decommissioned (Brigham, 2026-11-18): no agent faces or chat.
   const ORIGIN = 'https://blpagents.netlify.app';
   const DEFAULT_AGENTS = ['chris'];
   const BY_USER = {
