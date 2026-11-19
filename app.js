@@ -6141,6 +6141,8 @@ function renderDock() {
       <button class="dockfold" title="minimize — shrink to just the timer">▾</button>
     </div>
     <div class="dockmenu" hidden>
+      <div class="docksug"></div>
+      <div class="dockpick" hidden></div>
       ${recents.map(x => `<div class="dockopt" data-row="${x.row}">📌 ${esc(String(x.summary || x.serial || '').slice(0, 34))} · #${esc(x.serial)}</div>`).join('')}
       <input class="dockfindin" placeholder="🔍 type a serial, name or spot…" autocomplete="off"
         style="width:100%;box-sizing:border-box;margin:6px 0 2px;padding:8px 10px;border:2px solid #c9a227;border-radius:8px;font:inherit;font-size:13px">
@@ -6148,11 +6150,15 @@ function renderDock() {
     </div>`;
   const menu = dock.querySelector('.dockmenu');
   dock.querySelector('.dockfold').onclick = () => { dockMin = true; renderDock(); };
+  const sw = dockSwitchSetup(dock, menu);
   dock.querySelector('.dockswitch').onclick = () => {
     menu.hidden = !menu.hidden;
+    if (menu.hidden) return;
+    sw.load();   // today's calendar, the previous piano, Management — one tap each (Mark 11/19)
     // typing happens RIGHT HERE in the menu, not up in the header search
-    // (Mark 8/25: keystrokes were landing in the top bar)
-    if (!menu.hidden) setTimeout(() => { const i = menu.querySelector('.dockfindin'); if (i) i.focus(); }, 50);
+    // (Mark 8/25: keystrokes were landing in the top bar). On a touch screen the
+    // keyboard would cover the one-tap buttons, so there the field waits for a tap.
+    if (!(window.matchMedia && matchMedia('(pointer: coarse)').matches)) setTimeout(() => { const i = menu.querySelector('.dockfindin'); if (i) i.focus(); }, 50);
   };
   const dfin = menu.querySelector('.dockfindin'), dres = menu.querySelector('.dockfindres');
   if (dfin) dfin.oninput = () => {
@@ -6161,11 +6167,7 @@ function renderDock() {
     const hits = S.data.pianos.filter(p => p.active && p.serial && matches(p, q)).slice(0, 6);
     dres.innerHTML = hits.map(x => `<div class="dockopt" data-row="${x.row}">🎹 ${esc(String(x.summary || '').slice(0, 32))} · #${esc(x.serial)}${x.location ? ' · ' + esc(String(x.location)) : ''}</div>`).join('')
       || '<div class="dockopt" style="cursor:default;color:#999">no match</div>';
-    dres.querySelectorAll('.dockopt[data-row]').forEach(el => el.onclick = () => {
-      menu.hidden = true;
-      const p = S.data.pianos.find(x => x.row === +el.dataset.row);
-      if (p) { focusPiano(p); lsSet('sec_clock', 'open'); }
-    });
+    dres.querySelectorAll('.dockopt[data-row]').forEach(el => el.onclick = () => sw.pickRow(el.dataset.row));
   };
   dock.querySelector('.dockout').onclick = async () => {
     const cur = CLOCK.open || {};
@@ -6180,11 +6182,7 @@ function renderDock() {
     clearTimeout(slowD);
     if (j.error) { alert(j.error); if (ob && ob.isConnected) { ob.disabled = false; ob.textContent = '■ Out'; } }
   };
-  menu.querySelectorAll('.dockopt[data-row]').forEach(el => el.onclick = () => {
-    menu.hidden = true;
-    const p = S.data.pianos.find(x => x.row === +el.dataset.row);
-    if (p) { focusPiano(p); lsSet('sec_clock', 'open'); }
-  });
+  menu.querySelectorAll('.dockopt[data-row]').forEach(el => el.onclick = () => sw.pickRow(el.dataset.row));
   placeClPill();   // the checklist pill follows the dock's height (Hunter 10/9)
 }
 // live tickers. (The 15-minute "still on it?" idle nudge was removed 9/15 —
@@ -20358,56 +20356,164 @@ async function daySugShow(prep) {
   draw();
   if (calOpts === null) calDone.then(() => { if (document.body.contains(ov) && !ov.dataset.busy) { drawnAt = Date.now(); draw(); } });
 }
+/* Clock into one suggestion (shared by the day clock-in pop-up and the dock's
+ * Switch box): the card's gates — pre-queue, temp entry, ❗ note — without the
+ * "Switch pianos?" confirmation, because the button itself names the piano and
+ * the work. say(text, isErr) reports, busy(on) locks the buttons.
+ * Resolves true once the clock-in is recorded. */
+async function daySugPunch(o, say, busy, source) {
+  const fail = j => { busy(false); say('✗ ' + ((j && j.error) || tr('no reply — try again', 'sin respuesta — intenta otra vez')), true); return false; };
+  if (o.kind === 'piano') {
+    const p = o.p;
+    if (preQueue(p) && !isAdminUser()) { say(tr('🚫 This piano is PRE-QUEUE — the deposit hasn’t been received, so no work can start yet. Ask a manager.', '🚫 Este piano está en PRE-COLA — no se ha recibido el depósito. Pregunta a un gerente.'), true); return false; }
+    if ((p.tempEntry || '').trim() && !(isAdminUser() || isTimelogAdmin())) { say(tr('🆕 This is a TEMP entry — an admin needs to approve it before work is clocked on it.', '🆕 Esta es una entrada TEMPORAL — un administrador debe aprobarla primero.'), true); return false; }
+    const ack = await impNoteGate(p, o.phase);
+    if (!ack.ok) return false;
+    busy(true); say(clockingText('in'));
+    const j = await punch('clockin', p, o.phase, source, undefined, ack.note);
+    return !j || j.error ? fail(j) : true;
+  }
+  // booked field appointment → the Outside project clock, kind Field work;
+  // Shop tidying → the same clock, kind Shop tidying; Management → the MGMT clock
+  const job = o.kind === 'tidy' ? 'Shop tidying' : o.job;
+  busy(true); say(clockingText('in'));
+  const j = o.kind === 'mgmt' ? await punch('clockin', {serial: 'MGMT', row: ''}, 'Management', source)
+    : await punch('clockin', {serial: 'OUTSIDE', row: '', summary: job}, o.kind === 'tidy' ? 'Shop tidying' : 'Field work', source);
+  if (!j || j.error) return fail(j);
+  if (o.kind !== 'mgmt') {
+    try { lsSet('outsideJob', JSON.stringify({kind: o.kind === 'tidy' ? 'Shop tidying' : 'Field work', job: o.kind === 'tidy' ? '' : job, day: denverDay(new Date().toISOString())})); } catch (e) {}
+    if (CLOCK.open) CLOCK.open.piano = job;
+    try { renderDock(); } catch (e) {}
+  }
+  return true;
+}
+/* what the card does after a clock-in: offer to bring the shop phase in line,
+ * and ask for the BEFORE photo on a first keys clock-in */
+async function daySugAfter(o) {
+  if (S.view === 'dash') renderDash();
+  if (o.kind !== 'piano') return;
+  try { await maybeClockPhaseSync(o.p, o.phase); } catch (e) {}
+  if (/key\s*(service|top|work)|^keys?\b/i.test(o.phase)) { try { keytopBeforeGate(o.p); } catch (e) {} }
+}
 async function daySugGo(o, ov, b) {
   if (!o || ov.dataset.busy) return;
   const msg = ov.querySelector('.dsgmsg');
   const say = (t, err) => { msg.className = 'dsgmsg phmsg' + (err ? ' err' : ''); msg.textContent = t; };
+  const busy = on => { if (on) ov.dataset.busy = '1'; else delete ov.dataset.busy; ov.querySelectorAll('button').forEach(x => { x.disabled = on; }); };
   if (o.kind === 'piano' && !o.phase) {            // the work isn't clear from the calendar — pick it on the card
     ov.remove(); closeNav();
     focusPiano(o.p); lsSet('sec_clock', 'open');
     return;
   }
-  if (o.kind === 'piano') {
-    const p = o.p;
-    if (preQueue(p) && !isAdminUser()) return say(tr('🚫 This piano is PRE-QUEUE — the deposit hasn’t been received, so no work can start yet. Ask a manager.', '🚫 Este piano está en PRE-COLA — no se ha recibido el depósito. Pregunta a un gerente.'), true);
-    if ((p.tempEntry || '').trim() && !(isAdminUser() || isTimelogAdmin())) return say(tr('🆕 This is a TEMP entry — an admin needs to approve it before work is clocked on it.', '🆕 Esta es una entrada TEMPORAL — un administrador debe aprobarla primero.'), true);
-    const ack = await impNoteGate(p, o.phase);
-    if (!ack.ok) return;
-    ov.dataset.busy = '1';
-    ov.querySelectorAll('button').forEach(x => { x.disabled = true; });
-    say(clockingText('in'));
-    const j = await punch('clockin', p, o.phase, 'dayin', undefined, ack.note);
-    if (!j || j.error) {
-      delete ov.dataset.busy;
-      ov.querySelectorAll('button').forEach(x => { x.disabled = false; });
-      return say('✗ ' + ((j && j.error) || tr('no reply — try again', 'sin respuesta — intenta otra vez')), true);
-    }
-    ov.remove();
-    if (S.view === 'dash') renderDash();
-    try { await maybeClockPhaseSync(p, o.phase); } catch (e) {}
-    if (/key\s*(service|top|work)|^keys?\b/i.test(o.phase)) { try { keytopBeforeGate(p); } catch (e) {} }
-    return;
-  }
-  // booked field appointment → the Outside project clock, kind Field work;
-  // Shop tidying → the same clock, kind Shop tidying; Management → the MGMT clock
-  const job = o.kind === 'tidy' ? 'Shop tidying' : o.job;
-  ov.dataset.busy = '1';
-  ov.querySelectorAll('button').forEach(x => { x.disabled = true; });
-  say(clockingText('in'));
-  const j = o.kind === 'mgmt' ? await punch('clockin', {serial: 'MGMT', row: ''}, 'Management', 'dayin')
-    : await punch('clockin', {serial: 'OUTSIDE', row: '', summary: job}, o.kind === 'tidy' ? 'Shop tidying' : 'Field work', 'dayin');
-  if (!j || j.error) {
-    delete ov.dataset.busy;
-    ov.querySelectorAll('button').forEach(x => { x.disabled = false; });
-    return say('✗ ' + ((j && j.error) || tr('no reply — try again', 'sin respuesta — intenta otra vez')), true);
-  }
-  if (o.kind !== 'mgmt') {
-    try { lsSet('outsideJob', JSON.stringify({kind: o.kind === 'tidy' ? 'Shop tidying' : 'Field work', job: o.kind === 'tidy' ? '' : job, day: denverDay(new Date().toISOString())})); } catch (e) {}
-    if (CLOCK.open) CLOCK.open.piano = job;
-  }
-  try { renderDock(); } catch (e) {}
+  if (!(await daySugPunch(o, say, busy, 'dayin'))) return;
   ov.remove();
-  if (S.view === 'dash') renderDash();
+  daySugAfter(o);
+}
+
+/* ---------- dock ▸ Switch box (Mark 11/19) ----------
+ * Switching no longer means a trip to the piano's card. The box opens with
+ * today's calendar, the previous piano and (for managers) Management as
+ * one-tap buttons; tapping a recent or searched piano opens it IN PLACE with
+ * the card's "What work?" choices (pre-set to the work this person last
+ * clocked on that piano), the 🎓 training box, and Switch here. */
+function dockPhaseOptions(p) {
+  const opts = (pianoPhases(p) || PHASES).concat(PHASE_STATES);
+  return `<option value="">${tr('— select the work —', '— elige el trabajo —')}</option>
+    <option value="__other__">✏️ Other — write it in…</option>
+    <option value="Admin / Misc">📋 Admin / Misc</option>
+    <option value="Moving">🚚 Moving</option>
+    <option value="Buffing">🪞 Buffing</option>
+    <option value="Rework">🔁 Rework — fixing earlier work</option>
+    ${inShopwork(p) ? '' : '<option value="Showroom Tuning">🎵 Showroom Tuning</option>'}
+    <option value="" disabled>— shop phases —</option>
+    ${opts.map(ph => `<option value="${esc(ph)}">${esc(ph)}</option>`).join('')}`;
+}
+function dockSwitchSetup(dock, menu) {
+  const sugBox = menu.querySelector('.docksug'), pick = menu.querySelector('.dockpick');
+  let tl = [], sugs = [];
+  const say = (el, t, err) => { if (el) { el.className = el.className.split(' ')[0] + ' phmsg' + (err ? ' err' : ''); el.textContent = t; } };
+  const busy = on => menu.querySelectorAll('button, select, input').forEach(x => { x.disabled = on; });
+  const openPick = (p, want) => {
+    menu.classList.add('picking');
+    // the work this person last clocked on this piano, if any (a training line is not carried over)
+    const mine = (tl || []).filter(r => String(r.serial || '').toLowerCase() === String(p.serial).toLowerCase()
+      && r.phase && !/^training/i.test(r.phase)).sort((a, b) => new Date(b.start) - new Date(a.start))[0];
+    const pre = want || (mine ? mine.phase : '');
+    pick.hidden = false;
+    pick.innerHTML = `<div class="dpk-top"><b>🎹 ${esc(String(p.summary || '').slice(0, 34))} · #${esc(p.serial)}</b>
+        <button class="dpk-back">‹ ${tr('back', 'atrás')}</button></div>
+      <select class="dpk-phase">${dockPhaseOptions(p)}</select>
+      <input class="dpk-other" placeholder="what are you doing on this piano?" maxlength="60" hidden>
+      <label class="dpk-trainrow"><input type="checkbox" class="dpk-train">
+        <span>🎓 Training clock-in <small>— trainer AND trainee both check this</small></span></label>
+      <input class="dpk-trainee" placeholder="training with whom? (name)" maxlength="40" autocomplete="off" hidden>
+      <button class="dpk-go off">▶ ${tr('Switch here', 'Cambiar aquí')}</button>
+      <div class="dpk-msg phmsg"></div>
+      <button class="dpk-card">${tr('open the card ›', 'abrir la tarjeta ›')}</button>`;
+    const sel = pick.querySelector('.dpk-phase'), oth = pick.querySelector('.dpk-other');
+    const trainBox = pick.querySelector('.dpk-train'), trn = pick.querySelector('.dpk-trainee');
+    const go = pick.querySelector('.dpk-go'), pmsg = pick.querySelector('.dpk-msg');
+    if (pre) {
+      if (Array.from(sel.options).some(op => op.value === pre && !op.disabled)) sel.value = pre;
+      else { sel.value = '__other__'; oth.value = pre.slice(0, 60); }
+    }
+    const chosen = () => {
+      const base = sel.value === '__other__' ? (oth.value || '').trim() : sel.value;
+      if (!base) return '';
+      if (trainBox.checked) { const w = trn.value.trim(); return 'Training: ' + base + (w ? ' — w/ ' + w : ''); }
+      return base;
+    };
+    const refresh = () => { oth.hidden = sel.value !== '__other__'; trn.hidden = !trainBox.checked; go.classList.toggle('off', !chosen()); };
+    sel.onchange = () => { refresh(); if (sel.value === '__other__') oth.focus(); };
+    trainBox.onchange = refresh; oth.oninput = refresh;
+    refresh();
+    pick.querySelector('.dpk-back').onclick = () => { pick.hidden = true; pick.innerHTML = ''; menu.classList.remove('picking'); };
+    pick.querySelector('.dpk-card').onclick = () => { menu.hidden = true; focusPiano(p); lsSet('sec_clock', 'open'); };
+    go.onclick = async () => {
+      const ph = chosen();
+      if (!ph) {
+        say(pmsg, sel.value === '__other__' ? tr('Write in a word or two for what you’re doing on this piano.', 'Escribe una o dos palabras sobre lo que haces en este piano.')
+          : tr('Pick the work first — or choose “Other” and write it in.', 'Elige primero el trabajo — o escoge “Other” y escríbelo.'), true);
+        return;
+      }
+      const o = {kind: 'piano', p, phase: ph};
+      if (await daySugPunch(o, (t, err) => say(pmsg, t, err), busy, 'switch')) daySugAfter(o);
+    };
+  };
+  const drawSugs = calOpts => {
+    const cur = CLOCK.open || {};
+    const same = o => o.kind === 'piano' && String(o.p.serial) === String(cur.serial) && o.phase === cur.phase;
+    const cal = (calOpts || []).filter(o => !same(o));
+    const last = daySugLast((tl || []).filter(r => String(r.serial) !== String(cur.serial)), cal);
+    const extras = daySugExtras(tl).filter(o => !(o.kind === 'mgmt' && cur.serial === 'MGMT')
+      && !(o.kind === 'tidy' && cur.serial === 'OUTSIDE' && /tidy/i.test(cur.phase || '')));
+    sugs = cal.concat(last ? [last] : [], extras);
+    const b = (o, i) => `<button class="docksugbtn" data-i="${i}"><b>${o.kind === 'mgmt' ? '🧑‍💼 ' + tr('Management time', 'Tiempo de gerencia')
+        : o.kind === 'tidy' ? '🧹 ' + tr('Shop tidying', 'Limpieza del taller')
+        : o.kind === 'field' ? '🚗 ' + esc(o.job)
+        : esc(daySugName(o.p)) + ' · #' + esc(o.p.serial)}</b><small>${o.kind === 'piano'
+        ? (o.phase ? esc(o.phase) : esc(o.want || '') + (o.want ? ' — ' : '') + tr('pick the work ›', 'elige el trabajo ›')) + (o.when ? ' · ' + esc(o.when) : '') + (o.last ? ' · ' + tr('last worked on', 'último trabajo') : '')
+        : o.kind === 'field' ? esc(o.when) : ''}</small></button>`;
+    sugBox.innerHTML = (calOpts === null ? `<div class="docksughd">📅 ${tr('checking your calendar…', 'revisando tu calendario…')}</div>` : '')
+      + (sugs.length ? `<div class="docksughd">${tr('One tap', 'Un toque')}</div>` + sugs.map(b).join('') + '<div class="docksugmsg phmsg"></div>' : '');
+    const drawn = Date.now();
+    sugBox.querySelectorAll('.docksugbtn').forEach(el => el.onclick = async () => {
+      if (Date.now() - drawn < 700 && calOpts !== null) return;   // the list just moved under the finger
+      const o = sugs[+el.dataset.i];
+      if (!o) return;
+      if (o.kind === 'piano' && !o.phase) return openPick(o.p, '');
+      if (await daySugPunch(o, (t, err) => say(sugBox.querySelector('.docksugmsg'), t, err), busy, 'switch')) daySugAfter(o);
+    });
+  };
+  const load = () => {
+    const prep = daySugPrep();
+    if (!prep) return;
+    let calOpts = null;
+    prep.tl.then(rows => { tl = rows || []; if (!menu.hidden && !menu.classList.contains('picking')) drawSugs(calOpts); });
+    Promise.all([prep.cal, prep.tl]).then(([evs]) => { calOpts = daySugFromCal(evs, tl); if (menu.isConnected && !menu.hidden) drawSugs(calOpts); });
+  };
+  const pickRow = row => { const p = S.data.pianos.find(x => x.row === +row); if (p) openPick(p, ''); };
+  return {load, pickRow};
 }
 
 /* Day clock in the ☰ drawer (Alex 10/31, 103126martin05): the ▶ Clock in /

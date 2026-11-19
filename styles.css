@@ -755,6 +755,27 @@ td a{color:#9e2020}
 .dockmenu{margin-top:9px;border-top:1px solid #262628;padding-top:6px}
 .dockopt{padding:8px 6px;font-size:13px;border-radius:7px;cursor:pointer}
 .dockopt:hover{background:#1d1d1f}
+/* Switch box: one-tap buttons + the in-place piano/work picker (Mark 11/19) */
+.dockmenu{max-height:68vh;overflow-y:auto}
+.dockmenu.picking>.docksug,.dockmenu.picking>.dockopt,.dockmenu.picking>.dockfindin,.dockmenu.picking>.dockfindres{display:none}
+.docksughd{font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#a8a8aa;margin:4px 4px 2px}
+.docksugbtn{display:block;width:100%;text-align:left;background:#16261c;border:1px solid #2f7d4f;border-radius:9px;padding:8px 10px;margin:5px 0;color:#fff;font:inherit;cursor:pointer}
+.docksugbtn b{display:block;font-size:13px}
+.docksugbtn small{display:block;font-size:11.5px;color:#b9c4bd;margin-top:1px}
+.docksugbtn:disabled{opacity:.5;cursor:default}
+.docksug .phmsg,.dockpick .phmsg{color:#d7d7d9;font-size:12px;margin:4px 2px}
+.docksug .phmsg.err,.dockpick .phmsg.err{color:#ff9d9d}
+.dockpick{padding:4px 2px 2px}
+.dpk-top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:7px}
+.dpk-top b{font-size:13.5px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dpk-back,.dpk-card{background:none;border:0;color:#a8c8ff;font:700 12.5px 'Assistant',sans-serif;cursor:pointer;padding:4px 2px;flex:none}
+.dpk-phase,.dpk-other,.dpk-trainee{width:100%;box-sizing:border-box;margin:3px 0;padding:9px 10px;border:2px solid #c9a227;border-radius:8px;font:inherit;font-size:13.5px;background:#fff;color:#1d2226}
+.dpk-trainrow{display:flex;gap:8px;align-items:center;margin:7px 2px;font-size:12.5px;cursor:pointer}
+.dpk-trainrow input{width:17px;height:17px;flex:none}
+.dpk-trainrow small{color:#a8a8aa}
+.dpk-go{width:100%;margin-top:6px;background:#2e7d4f;color:#fff;border:0;border-radius:10px;padding:11px 0;font:800 14px 'Assistant',sans-serif;cursor:pointer}
+.dpk-go.off{background:#3a3a3c;color:#a8a8aa}
+.dpk-go:disabled{opacity:.6}
 .docknudge{background:#3a2b12;border:1px solid #6b4c1c;border-radius:9px;padding:8px 11px;font-size:12.5px;margin-bottom:9px;
   display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .docknudge button{border:0;border-radius:7px;padding:6px 11px;font:700 12px 'Assistant',sans-serif;cursor:pointer}
