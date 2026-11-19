@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-11-19.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-11-19.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -10463,7 +10463,7 @@ function setupShopManagerBriefing() {
  * never Sunday. Both use EMAIL plus a TEXT carrying the doc link. Shop brief
  * texts managers + owners; admin brief texts Melissa + owners (info@ is a
  * mailbox — email only). Replaces the evening send (Brigham 8/28). */
-var SHOP_TEXT_NAMES = ['Mark'];       // shop brief link: Mark only (Brigham 10/21)
+var SHOP_TEXT_NAMES = [];             // shop brief link text OFF (Mark 11/19): his 7:50 standup text already carries the link; the brief email is unchanged
 var ADMIN_TEXT_NAMES = ['Karmel'];    // admin brief link: Karmel only (Brigham 10/21)
 function morningBriefs() {
   var mb0 = Date.now();
