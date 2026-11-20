@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-11-19.4';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-11-20.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -1844,6 +1844,11 @@ function doPost(e) {
             + (r.offDays ? ' (skipped ' + r.offDays.map(function (o) { return o.day; }).join(', ') + ' — off on calendar)' : '');
         }).join(', '));
       return json_(aps);
+    }
+    // correct the date on one ACTIVITY LOG line (Mark 11/20: Meister 128210's
+    // DHRT → Refinishing was recorded the day he changed the card, weeks late)
+    if (req.action === 'actlogdate') {
+      return json_(actLogDate_(req, who));
     }
     if (req.action === 'schedrule') {
       var srl = addSchedRule_(req, who);
@@ -8781,6 +8786,30 @@ function schedRulesSheet_() {
     sh.setFrozenRows(1);
   }
   return sh;
+}
+/* Change the date on ONE Activity Log line (Mark 11/20). Owners and shop
+ * managers only (Google sign-in). The line must still read exactly what the
+ * caller saw (action, piano, start of details), so a shifted sheet can never
+ * re-date a different line. The correction itself is logged as a new line. */
+function actLogDate_(req, who) {
+  var g = req._g;
+  if (!timelogAdmin_(g)) return {error: 'Only owners and the shop managers can correct Activity Log dates (Google sign-in required).'};
+  var sh = SpreadsheetApp.openById(PIANO_LOG_ID).getSheetByName('ACTIVITY LOG');
+  var row = Number(req.row);
+  if (!sh || !(row >= 2) || row > sh.getLastRow()) return {error: 'bad log row'};
+  var v = sh.getRange(row, 1, 1, 5).getValues()[0];
+  if (String(v[2]) !== String(req.expectAction || '') || String(v[3]) !== String(req.expectPiano || '')
+      || String(v[4]).indexOf(String(req.expectDetail || '')) !== 0 || !String(req.expectDetail || '')) {
+    return {error: 'that log line changed — reload and try again', saw: [String(v[2]), String(v[3]), String(v[4]).slice(0, 60)]};
+  }
+  var when = new Date(String(req.when || ''));
+  if (isNaN(when.getTime())) return {error: 'bad date: ' + req.when};
+  var fmt = function (d) { return d instanceof Date ? Utilities.formatDate(d, 'America/Denver', 'M/d/yyyy h:mm a') : String(d); };
+  var was = v[0];
+  sh.getRange(row, 1).setValue(when);
+  logAct_((g && (g.name || g.email)) || who, 'Activity Log date corrected', String(v[3]),
+    String(v[2]) + ' ' + String(v[4]).slice(0, 60) + ': ' + fmt(was) + ' → ' + fmt(when) + (req.reason ? ' — ' + String(req.reason).slice(0, 160) : ''));
+  return {ok: true, row: row, was: fmt(was), now: fmt(when)};
 }
 function addSchedRule_(req, who) {
   var g = req._g;
