@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-11-20.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-11-20.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -461,6 +461,13 @@ function doGet(e) {
     if (pkey !== TEAM_PIN && pkey.toLowerCase() !== 'pianoman') return json_({error: 'unauthorized'});
     try { return HtmlService.createHtmlOutput(shopManagerHtml_(buildShopManagerReport_(0))).setTitle('Shop brief preview'); }
     catch (errP) { return json_({error: String(errP)}); }
+  }
+  // the admin morning brief, built now, nothing sent (Mark 11/20)
+  if (e && e.parameter && e.parameter.fn === 'adminbriefpreview') {
+    var apk = String(e.parameter.key || '');
+    if (apk !== TEAM_PIN && apk.toLowerCase() !== 'pianoman') return json_({error: 'unauthorized'});
+    try { return HtmlService.createHtmlOutput(adminBriefHtml_(buildShopManagerReport_(0))).setTitle('Admin brief preview'); }
+    catch (errA) { return json_({error: String(errA)}); }
   }
   if (e && e.parameter && e.parameter.fn === 'calevents') {
     var ckey = String(e.parameter.key || '');
@@ -9437,6 +9444,21 @@ function buildShopManagerReport_(dayOffset) {
     return smIsShopwork_(p) && i >= 10 && i <= 12
       && (p.aphoto === false || p.avideo === false);
   });
+  // admin brief photo list (Mark 11/20): every piano missing BEFORE or AFTER
+  // photos, by the same rule as the map's 📷 icon / Media Needed report
+  // (app.js mediaNeeds): not coming soon or in a storage section; before photos
+  // always; after photos from QC & Assembly on; an "x" cell (na) never counts
+  var qcIdx = PHASE_VALUES.indexOf('QC & Assembly');
+  R.photosNeeded = [];
+  pianos.forEach(function (p) {
+    var loc = String(p.location || '').trim().replace(/\s+/g, ' ').toLowerCase();
+    if (loc.indexOf('coming soon') === 0 || /storage/i.test(String(p.section || ''))) return;
+    var ph = p.phase || (p.isNew ? 'New Arrival - Admin' : '');
+    var late = qcIdx >= 0 && smPhaseIdx_(ph) >= qcIdx;
+    var needB = p.bphoto !== 'na' && !p.bphoto;
+    var needA = late && p.aphoto !== 'na' && !p.aphoto;
+    if (needB || needA) R.photosNeeded.push({p: p, before: needB, after: needA});
+  });
 
   // admin + payments
   // every queue piano without a payment plan (Brigham 8/26) — the ones past
@@ -10168,21 +10190,8 @@ function adminBriefHtml_(R) {
     }
   } catch (e) { /* fix list is best-effort in the brief */ }
 
-  // 💡 new app requests / ideas / bug reports filed from the apps' Suggest
-  // box since the last brief (Brigham 9/11) — so admins see what the team
-  // is asking for without opening the Requests tab
-  try {
-    R.newRequests = newRequests_(R.refDate);
-    if (R.newRequests.length) {
-      sec('💡', 'New app requests & ideas', R.newRequests.length,
-        'Filed from the 💡 Suggest box in the last day. Status changes on Store Map → Reports → 📨 App Requests (Live texts the requester).');
-      ul(R.newRequests.slice(0, 20).map(function (q) {
-        return q.icon + ' <b>' + esc_(q.who) + '</b> · ' + esc_(q.type) + ' — ' + esc_(String(q.text || '').slice(0, 220))
-          + ' <span style="color:#8a847b">(' + esc_(q.when) + (q.status && q.status !== 'Requested' ? ' · ' + esc_(q.status) : '') + ')</span>'
-          + (q.shot ? ' <a href="' + q.shot + '">📎</a>' : '');
-      }));
-    }
-  } catch (eQ) { /* best-effort */ }
+  // (💡 New app requests & ideas section removed — Mark 11/20; requests stay
+  // on Store Map → Reports → 📨 App Requests)
 
   if (R.noPlan.length || R.adminDrift.length) {
     sec('💰', 'Admin & payments', R.noPlan.length + R.adminDrift.length);
@@ -10199,14 +10208,13 @@ function adminBriefHtml_(R) {
     ul(a);
   }
 
-  if (R.mediaBefore.length || R.exitBlocked.length) {
-    sec('📷', 'Media', R.mediaBefore.length + R.exitBlocked.length);
-    var m = [];
-    if (R.exitBlocked.length) m.push('<b style="color:#9e2020">Exit blocked — at QC or later, after media missing:</b><br>'
-      + '<span style="font-size:12px">' + R.exitBlocked.slice(0, 10).map(function (p) {
-          return smName_(p) + ' (#' + smSpot_(p) + ')'; }).join('; ') + '</span>');
-    if (R.mediaBefore.length) m.push('<b>' + R.mediaBefore.length + '</b> shop-work pianos still need before photos/video');
-    ul(m);
+  // 📷 just the pianos that need before or after photos (Mark 11/20)
+  if (R.photosNeeded.length) {
+    sec('📷', 'Media needed', R.photosNeeded.length);
+    ul(R.photosNeeded.map(function (x) {
+      return ref(x.p) + ' <span style="font-size:12px;color:#9e2020">— '
+        + (x.before && x.after ? 'before + after photos' : x.before ? 'before photos' : 'after photos') + '</span>';
+    }));
   }
 
   if (R.noAddress.length) {
@@ -10247,8 +10255,8 @@ function adminBriefHtml_(R) {
   return H.join('');
 }
 function adminAlerts_(R) {
-  return R.noPlan.length + R.adminDrift.length + R.mediaBefore.length + R.exitBlocked.length
-    + R.noAddress.length + R.soldPending.length + R.missingArrivals.length + (R.newRequests || []).length;
+  return R.noPlan.length + R.adminDrift.length + (R.photosNeeded || []).length
+    + R.noAddress.length + R.soldPending.length + R.missingArrivals.length;
 }
 // Requests tab rows filed in the ~26 h before refDate (the brief runs ~6 AM,
 // so this is "since yesterday's brief"), newest first
