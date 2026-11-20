@@ -735,9 +735,10 @@ const concGaps = p => Object.keys(CONC_RULES).filter(r => concNeedsChoice(p, r))
 const concOff = (p, row) => concRule(p, row) === 'no' && !concValue(p, row);
 const concWhy = p => (trackParts(p.track).list.join(' + ') || 'this') + ' track';
 const concOffSel = p => `<select disabled title="not needed for the ${esc(concWhy(p))} — the rules are in the card's Concurrent tasks (Mark 11/20)"><option>Not needed — ${esc(concWhy(p))}</option></select>`;
-const concFlag = (p, row) => concNeedsChoice(p, row)
-  ? ` <span class="concneed" title="${concRule(p, row) === 'req' ? 'Required for this track' : 'Decide for this piano'} — pick a status (Not needed is a choice too)">${concRule(p, row) === 'req' ? 'needs a choice' : 'evaluate'}</span>`
-  : '';
+// no flag on the card (Mark 11/20: keep the card visually simple — the
+// dropdown's "— choose —" is enough); the open rows are listed on the
+// Concurrent Work report's "Missing a choice" instead
+const concFlag = () => '';
 const concBlank = (p, row) => concRule(p, row) === 'req' || concRule(p, row) === 'eval' ? '— choose —' : '— not tracked —';
 function tasksBox(p) {
   if (!p.serial) return '';
