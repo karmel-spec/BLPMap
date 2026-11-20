@@ -676,48 +676,103 @@ function pianoTaskDefs(p) {
 }
 // keytop status (Brigham 8/27): dropdown in the Concurrent section; the
 // "In Key Queue" choice carries a queue-position number ("In Key Queue #3")
-const KEYTOP_STATES = ['Evaluate', 'In Key Queue', 'In Progress', 'Done'];
+const KEYTOP_STATES = ['Evaluate', 'In Key Queue', 'In Progress', 'Done', 'Not needed'];   // Not needed: Mark 11/20
 function keytopParts(p) {
   const raw = String(p.keytopStatus || '').trim().replace(/^In Process$/i, 'In Progress');
-  const m = /^(Evaluate|In Key Queue|In Progress|Done)(?:\s*#?\s*(\d+))?$/i.exec(raw);
+  const m = /^(Evaluate|In Key Queue|In Progress|Done|Not needed)(?:\s*#?\s*(\d+))?$/i.exec(raw);
   if (!m) return {state: '', num: ''};
   return {state: KEYTOP_STATES.find(s => s.toLowerCase() === m[1].toLowerCase()),
           num: m[2] || ''};
 }
+/* ✅ which Concurrent-task rows each track needs (Mark 11/20).
+ * req = must have a choice · eval = decide piano by piano (shows "evaluate"
+ * until someone picks) · no = not needed for that track. A piano on several
+ * tracks takes the strictest. Player Rebuild counts as a refurb for hardware
+ * (Mark 11/18). No recognised track → the row works as it always did. A blank
+ * row on a track that doesn't need it shows "Not needed" and asks nothing;
+ * any status already saved is still shown. "Not needed" is also a choice on
+ * every row, for the exceptions. */
+const CONC_RULES = {
+  plate:  {rebuild: 'req'},
+  screws: {rebuild: 'req', hybrid: 'eval'},
+  vis:    {rebuild: 'req', refinish: 'req', hybrid: 'eval', repair: 'eval'},
+  keys:   {rebuild: 'req', hybrid: 'eval', refurbish: 'eval', player: 'eval', repair: 'eval'},
+  bass:   {rebuild: 'req', hybrid: 'eval'},
+};
+const CONC_AUTO_CAT = {plate: 'plating', screws: 'plating', vis: 'plating', keys: 'keys', bass: 'bass'};
+const CONC_LABEL = {plate: 'Plate', screws: 'Plate screws', vis: 'Visible hardware', keys: 'Keytops', bass: 'Bass strings'};
+const CONC_TRACK = {rebuild: 'rebuild', hybrid: 'hybrid', refurbish: 'refurbish', refurbishing: 'refurbish',
+  refinish: 'refinish', repair: 'repair', 'player rebuild': 'player', player: 'player', 'old player': 'player'};
+function concTracks(p) {
+  return [...new Set(trackParts(p.track).list.map(t => CONC_TRACK[String(t).toLowerCase().trim()]).filter(Boolean))];
+}
+function concRule(p, row) {
+  const ts = concTracks(p);
+  if (!ts.length) return '';
+  const RANK = {no: 0, eval: 1, req: 2};
+  return ts.map(t => CONC_RULES[row][t] || 'no').reduce((a, b) => RANK[b] > RANK[a] ? b : a, 'no');
+}
+function concValue(p, row) {
+  if (row === 'plate') return String(p.plateStatus || '').trim();
+  if (row === 'screws') return plateHwNow(p);
+  if (row === 'vis') return String(p.visibleHwStatus || '').trim();
+  if (row === 'keys') return String(p.keytopStatus || '').trim()
+    || ((p.keytopMaterial || '').trim() === 'No key service' ? 'Not needed' : '');
+  if (row === 'bass') return String((p.tasks || {}).bass || '').trim();
+  return '';
+}
+// a required / evaluate row still open on a piano in the shop pipeline
+function concNeedsChoice(p, row) {
+  const rule = concRule(p, row);
+  if (rule !== 'req' && rule !== 'eval') return false;
+  if (!p.active || !knownSerial(p.serial) || !(p.queuePos || p.phase) || offTaskQueues(p)) return false;   // Paused: off every task queue
+  if (/^(for sale|delivered|sold|sale pending|post sale qc)$/i.test(effectivePhase(p) || '')) return false;
+  if (taskAutoDone(p, CONC_AUTO_CAT[row])) return false;
+  const v = concValue(p, row);
+  return !v || (row === 'keys' && /^evaluate/i.test(v));
+}
+const concGaps = p => Object.keys(CONC_RULES).filter(r => concNeedsChoice(p, r)).map(r => CONC_LABEL[r]);
+const concOff = (p, row) => concRule(p, row) === 'no' && !concValue(p, row);
+const concWhy = p => (trackParts(p.track).list.join(' + ') || 'this') + ' track';
+const concOffSel = p => `<select disabled title="not needed for the ${esc(concWhy(p))} — the rules are in the card's Concurrent tasks (Mark 11/20)"><option>Not needed — ${esc(concWhy(p))}</option></select>`;
+const concFlag = (p, row) => concNeedsChoice(p, row)
+  ? ` <span class="concneed" title="${concRule(p, row) === 'req' ? 'Required for this track' : 'Decide for this piano'} — pick a status (Not needed is a choice too)">${concRule(p, row) === 'req' ? 'needs a choice' : 'evaluate'}</span>`
+  : '';
+const concBlank = (p, row) => concRule(p, row) === 'req' || concRule(p, row) === 'eval' ? '— choose —' : '— not tracked —';
 function tasksBox(p) {
   if (!p.serial) return '';
   const kt = keytopParts(p);
   return `<div class="taskbox"><div class="taskhead">Concurrent tasks
       <span class="taskmsg"></span></div>
-    <div class="row phrow platerow">Plate
-      <select class="platesel">
-        <option value="" ${!(p.plateStatus || '').trim() ? 'selected' : ''}>— not tracked —</option>
+    <div class="row phrow platerow">Plate${concFlag(p, 'plate')}
+      ${concOff(p, 'plate') ? concOffSel(p) : `<select class="platesel">
+        <option value="" ${!(p.plateStatus || '').trim() ? 'selected' : ''}>${concBlank(p, 'plate')}</option>
         ${PLATE_STAGES.map(v =>
           `<option ${p.plateStatus === v ? 'selected' : ''}>${esc(v)}</option>`).join('')}
-      </select></div><div class="platemsg phmsg"></div>
+      </select>`}</div><div class="platemsg phmsg"></div>
     ${refurbOnlyTrack(p) ? `<div class="row phrow platehwrow" title="Refurbish track: the screws stay in the piano and the refurbish technician polishes them in place. Marked done automatically when the Action Problems and Hammer Prep mini-QC passes.">Plate screws
       <select disabled><option>${plateHwNow(p) === 'Buffed' ? 'Refurb — polished in place ✓' : 'Refurb — N/A'}</option></select></div>
     <div class="row phrow vishwrow" title="Refurbish track: the refurbish technician takes off and buffs the pedals and pedal rods. Marked done automatically when the Action Problems and Hammer Prep mini-QC passes.">Visible hardware
-      <select disabled><option>${(p.visibleHwStatus || '').trim() === 'Done' ? 'Refurb — done by the tech ✓' : 'Refurb — N/A'}</option></select></div>` : `<div class="row phrow platehwrow" title="plate bolts & screws — buffed by Korban (Hardware Queue). A CAP mini-QC pass puts them in the queue; his “Screws done” sets Buffed.">Plate screws
-      <select class="platehwsel">
-        <option value="" ${!plateHwNow(p) ? 'selected' : ''}>— not tracked —</option>
+      <select disabled><option>${(p.visibleHwStatus || '').trim() === 'Done' ? 'Refurb — done by the tech ✓' : 'Refurb — N/A'}</option></select></div>` : `<div class="row phrow platehwrow" title="plate bolts & screws — buffed by Korban (Hardware Queue). A CAP mini-QC pass puts them in the queue; his “Screws done” sets Buffed.">Plate screws${concFlag(p, 'screws')}
+      ${concOff(p, 'screws') ? concOffSel(p) : `<select class="platehwsel">
+        <option value="" ${!plateHwNow(p) ? 'selected' : ''}>${concBlank(p, 'screws')}</option>
         ${PLATE_HW_STAGES.map(v =>
           `<option value="${esc(v)}" ${plateHwNow(p) === v ? 'selected' : ''}>${esc(plateHwStageLabel(v))}</option>`).join('')}
-      </select></div><div class="platehwmsg phmsg"></div>
-    <div class="row phrow vishwrow" title="pedals, hinges & cabinet hardware (Hardware Queue). A CAP mini-QC pass puts it in the queue; Korban’s taps move it on.">Visible hardware
-      <select class="vishwsel">
-        <option value="" ${!(p.visibleHwStatus || '').trim() ? 'selected' : ''}>— not tracked —</option>
+      </select>`}</div><div class="platehwmsg phmsg"></div>
+    <div class="row phrow vishwrow" title="pedals, hinges & cabinet hardware (Hardware Queue). A CAP mini-QC pass puts it in the queue; Korban’s taps move it on.">Visible hardware${concFlag(p, 'vis')}
+      ${concOff(p, 'vis') ? concOffSel(p) : `<select class="vishwsel">
+        <option value="" ${!(p.visibleHwStatus || '').trim() ? 'selected' : ''}>${concBlank(p, 'vis')}</option>
         ${VISIBLE_HW_STAGES.map(v =>
           `<option value="${esc(v)}" ${(p.visibleHwStatus || '').trim() === v ? 'selected' : ''}>${esc(v)}</option>`).join('')}
-      </select></div><div class="vishwmsg phmsg"></div>`}
-    <div class="row phrow keystatrow">Keytops
-      <select class="keystatsel">
-        <option value="" ${!kt.state ? 'selected' : ''}>— not tracked —</option>
+      </select>`}</div><div class="vishwmsg phmsg"></div>`}
+    <div class="row phrow keystatrow">Keytops${concFlag(p, 'keys')}
+      ${concOff(p, 'keys') ? concOffSel(p) : `<select class="keystatsel">
+        <option value="" ${!kt.state ? 'selected' : ''}>${concRule(p, 'keys') === 'eval' ? 'Evaluate — decide' : concBlank(p, 'keys')}</option>
         ${KEYTOP_STATES.map(v =>
           `<option value="${v}" ${kt.state === v ? 'selected' : ''}>${v === 'In Key Queue' ? 'In Key Queue #' : v}</option>`).join('')}
       </select>
       <input class="keyqnum" type="number" min="1" max="99" placeholder="#"
-        title="place in the key queue" value="${esc(kt.num)}" ${kt.state === 'In Key Queue' ? '' : 'hidden'}>
+        title="place in the key queue" value="${esc(kt.num)}" ${kt.state === 'In Key Queue' ? '' : 'hidden'}>`}
     </div>${(p.keytopMaterial || '').trim() ? `<div class="ktplan" title="set under 🧾 Scope of Work → Keys">↳ plan: ${esc(p.keytopMaterial)}</div>` : ''}<div class="keystatmsg phmsg"></div>
     ${orderChipsRow(p, 'bass', 'Bass strings')}
     ${decalsRow(p)}</div>`;
@@ -766,7 +821,8 @@ function decalsRow(p) {
     </div><div class="bassmsg bassmsg-decals phmsg"></div>`;
 }
 function orderChipsRow(p, key, label) {
-  const ms = taskCellMarks(p, key, ['Ordered', 'Received']);
+  if (key === 'bass' && concOff(p, 'bass')) return `<div class="row phrow bassrow">${label} ${concOffSel(p)}</div>`;
+  const ms = taskCellMarks(p, key, ['Ordered', 'Received', 'Not needed']);
   // set marks show date · who and open the editor (date + who are editable —
   // parts often arrive before anyone marks them, and the marker isn't always
   // the receiver — Brigham 8/28)
@@ -774,8 +830,11 @@ function orderChipsRow(p, key, label) {
     ? `<button class="bassbtn on" data-task="${key}" data-k="${k}" title="tap to edit the date or who">
         ${ico} ${k} ${esc(ms[k] === '✓' ? '' : ms[k])}${ms[k + 'By'] ? ' · ' + esc(ms[k + 'By']) : ''} ✎</button>`
     : `<button class="bassbtn" data-task="${key}" data-k="${k}">${ico} ${k}</button>`;
-  return `<div class="row phrow bassrow">${label}
-      <span class="bassbtns">${chip('Ordered', '📦')}${chip('Received', '📬')}</span>
+  // 🚫 Not needed (Mark 11/20): one tap, no date editor; tap again to clear
+  const nn = `<button class="bassbtn bassnn${ms['Not needed'] ? ' on' : ''}" data-task="${key}" data-k="Not needed"
+      title="${ms['Not needed'] ? 'tap to clear' : 'no new bass strings on this job'}">🚫 Not needed${ms['Not needed'] && ms['Not needed'] !== '✓' ? ' ' + esc(ms['Not needed']) : ''}</button>`;
+  return `<div class="row phrow bassrow">${label}${key === 'bass' ? concFlag(p, 'bass') : ''}
+      <span class="bassbtns">${chip('Ordered', '📦')}${chip('Received', '📬')}${nn}</span>
     </div><div class="bassmsg bassmsg-${key} phmsg"></div>`;
 }
 async function loadTasks(p, pop) {
@@ -7741,6 +7800,13 @@ function wirePop(p) {
     ev.stopPropagation(); popPinned = true;
     const key = b.dataset.task, k = b.dataset.k;
     const msg = pop.querySelector('.bassmsg-' + key);
+    if (k === 'Not needed') {
+      const m3 = taskCellMarks(p, key, ['Ordered', 'Received', 'Not needed']);
+      m3['Not needed'] = m3['Not needed'] ? '' : new Date().toLocaleDateString('en-US',
+        {month: 'numeric', day: 'numeric', year: '2-digit', timeZone: 'America/Denver'});
+      bassSave(key, taskCellValue(m3, ['Ordered', 'Received', 'Not needed']), msg);
+      return;
+    }
     const ms = taskCellMarks(p, key, ['Ordered', 'Received']);
     // M/D/YY ↔ ISO for the date input
     const toIso = s => { const m = /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/.exec(String(s || '').trim());
@@ -12919,12 +12985,12 @@ function activityTable(rows) {
  * PLATE STATUS column, set from the card's Shop Progress section. */
 // 'Removed' retired (Mark 11/9): a plate off the piano is in storage or at Curtis Harper
 const PLATE_STAGES = ['In piano', 'Plate storage — BEFORE',
-                      'At Curtis Harper', 'Plate storage — AFTER', 'Back in piano'];
+                      'At Curtis Harper', 'Plate storage — AFTER', 'Back in piano', 'Not needed'];   // Not needed: Mark 11/20
 // plate bolts / screws / hardware buffing (Korban 9/11, request 091126greenhalgh06) —
 // mirrors the bridge's PLATE_HW_STATUSES; stored in PLATE HARDWARE STATUS
 // "Plate screws" on the card since 11/18 (Mark), three choices; the five older
 // ones are folded in for display the same way the bridge folds them on a save.
-const PLATE_HW_STAGES = ['In piano', 'In buffing queue', 'Buffed'];
+const PLATE_HW_STAGES = ['In piano', 'In buffing queue', 'Buffed', 'Not needed'];   // Not needed: Mark 11/20
 const PLATE_HW_OLD = {'Needs buffing': 'In buffing queue', 'Buffing': 'In buffing queue', 'Installed': 'Buffed', 'In hardware queue': 'In buffing queue'};
 const plateHwNow = p => { const v = String((p && p.plateHwStatus) || '').trim(); return PLATE_HW_OLD[v] || v; };
 // Display only. The stored status stays "In buffing queue" so the Piano Log
@@ -12937,7 +13003,7 @@ function plateHwStageLabel(v) {
 // CAP mini-QC pass (In hardware queue) and by Korban's taps on the Hardware
 // Queue (Prepped for Shipping → Out for plating, Buffed / Already done → Done);
 // stored in VISIBLE HARDWARE STATUS, mirrors the bridge's VISIBLE_HW_STATUSES.
-const VISIBLE_HW_STAGES = ['In piano', 'In hardware queue', 'Out for plating', 'Done'];
+const VISIBLE_HW_STAGES = ['In piano', 'In hardware queue', 'Out for plating', 'Done', 'Not needed'];   // Not needed: Mark 11/20
 // 🎨 finish choices (Melissa 9/16, request 091626terry44) — mirrors CARD_FIELDS in the bridge
 // keytops: two ivory choices (Melissa 9/25, 092526terry62) — what Marcelo does differs
 // a REFURB piano for hardware purposes (Mark 11/18): Refurbish is on the track and
@@ -13085,6 +13151,7 @@ function plateBadge(v) {
   return `<span style="background:${c[0]};color:${c[1]};border-radius:999px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap">${esc(v)}</span>`;
 }
 const TASK_CATS = [
+  ['choices', '❓ Missing a choice (by track)'],   // Mark 11/20 — required / evaluate rows with nothing picked
   ['keys', '🎹 Keytops / key service'],
   ['plating', '✨ Plating'],
   ['bass', '🎼 Bass strings'],
@@ -13147,12 +13214,21 @@ function taskRows() {
     .filter(p => p.active && p.serial && (p.queuePos || p.phase)
       && (p.phase || '') !== 'For Sale')   // showroom pianos are past all of this
     .map(p => {
+      if (f.cat === 'choices') {   // only pianos with an open required / evaluate row
+        const gaps = concGaps(p);
+        return gaps.length ? {p, v: gaps.join(' · '), st: 'needed'} : null;
+      }
       const v = taskVal(p, f.cat);
+      // the track doesn't need it, or someone picked Not needed (Mark 11/20)
+      const crow = {keys: 'keys', bass: 'bass', plating: 'vis'}[f.cat];
+      if ((crow && concOff(p, crow)) || (f.cat === 'keys' && /^not needed/i.test(p.keytopStatus || '')))
+        return {p, v: v || '— not needed for the ' + concWhy(p), st: 'n/a'};
       const auto = taskAutoDone(p, f.cat);
       return {p, v: auto && !/receiv|done|complete|installed|finished|✓/i.test(v)
         ? (v ? v + ' · ' : '') + '✓ auto — phase confirms it' : v,
         st: auto ? 'done' : taskStatus(v)};
     })
+    .filter(Boolean)
     .filter(r => (!f.st || r.st === f.st)
       && (f.cat !== 'plating' || !f.pl
           || (f.pl === '__none__' ? !(r.p.plateStatus || '').trim() : r.p.plateStatus === f.pl))
@@ -13215,7 +13291,7 @@ const TQ_DEFS = [
    // the keytop selector is the authority: Done drops a piano off this
    // queue even when the old key-work note still reads like a request (8/28)
    // "No key service" keytop material (Melissa 10/13) takes it off too
-   need: p => !taskAutoDone(p, 'keys') && !/^Done/i.test(p.keytopStatus || '')
+   need: p => !taskAutoDone(p, 'keys') && !/^(Done|Not needed)/i.test(p.keytopStatus || '') && concRule(p, 'keys') !== 'no'
      && (p.keytopMaterial || '').trim() !== 'No key service'
      && ['needed', 'noted'].includes(taskStatus(taskVal(p, 'keys'))),
    note: p => [p.keytopMaterial ? '🎨 ' + p.keytopMaterial : '', p.keytopStatus, taskVal(p, 'keys')].filter(Boolean).join(' · '),
@@ -13240,7 +13316,7 @@ const TQ_DEFS = [
    need: p => !taskAutoDone(p, 'decals') && ['needed', 'noted'].includes(taskStatus(taskVal(p, 'decals'))),
    note: p => taskVal(p, 'decals')},
   {key: 'bass', icon: '🎼', title: 'BASS STRINGS TO ORDER',
-   need: p => !taskAutoDone(p, 'bass') && ['needed', 'noted'].includes(taskStatus(taskVal(p, 'bass'))),
+   need: p => !taskAutoDone(p, 'bass') && concRule(p, 'bass') !== 'no' && ['needed', 'noted'].includes(taskStatus(taskVal(p, 'bass'))),
    note: p => taskVal(p, 'bass')},
   /* tuning queue: showroom for-sale pianos ranked most-overdue first.
    * Its own pool (the shared one excludes For Sale). Order:

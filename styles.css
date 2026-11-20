@@ -2621,3 +2621,9 @@ table.tchktbl td.chk .tcasap input{width:15px;height:15px}
 .pg-th img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:6px;background:#eee;display:block}
 .pg-th.on{border-color:#2e7d4f;box-shadow:0 0 0 2px rgba(46,125,79,.25)}
 .pg-grid .rfbar{margin:0}
+
+/* ✅ Concurrent-task rules by track (Mark 11/20): an open required row and an
+   "evaluate" row get a small flag beside the label; Not needed bass is grey */
+.concneed{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;background:#fdecec;color:#a03030;
+  font:800 9.5px/1.5 Helvetica,Arial,sans-serif;letter-spacing:.4px;text-transform:uppercase;vertical-align:1px;white-space:nowrap}
+.bassbtn.bassnn.on{border-color:#9aa1a8;background:#f1f2f3;color:#5d666c}

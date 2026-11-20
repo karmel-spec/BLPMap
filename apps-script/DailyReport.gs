@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-11-20.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-11-20.4';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -7516,19 +7516,20 @@ function smTaskDoneByStatus_(p, id, rows) {
   };
   var shown = function (label, v) { v = String(v || '').trim(); return label + ' ' + (v ? '“' + v + '”' : 'not set'); };
   if (id === 'key service')
-    return {done: /^done\b/i.test(String(p.keytopStatus || '').trim())
+    return {done: /^(done|not needed)\b/i.test(String(p.keytopStatus || '').trim())
       || /^no key service$/i.test(String(p.keytopMaterial || '').trim()), why: shown('Keytops', p.keytopStatus)};
   if (id === 'plate refinishing')
-    return {done: /after|back in piano/i.test(String(p.plateStatus || '')), why: shown('Plate', p.plateStatus)};
+    return {done: /after|back in piano|not needed/i.test(String(p.plateStatus || '')), why: shown('Plate', p.plateStatus)};
   if (id === 'plate bolts/screws buffing')
-    return {done: /^(buffed|installed)$/i.test(String(p.plateHwStatus || '').trim()) || stamp('plate screws (buffing list)'),
+    return {done: /^(buffed|installed|not needed)$/i.test(String(p.plateHwStatus || '').trim()) || stamp('plate screws (buffing list)'),
       why: shown('Plate screws', p.plateHwStatus)};
   if (id.indexOf('electroplating') >= 0)
     // past QC & Assembly the piano has left Korban's Hardware Queue (PRSB..QC &
     // Assembly since Mark 11/6 — 189150 reached QC with its hardware unbuffed).
     // Refurb-only / player-only pianos get no replating at all (Mark 11/6);
     // Refurbish + Refinish (133299) still does.
-    return {done: smNoReplating_(p) || stamp('pedals/cabinetry hardware electroplating and polishing') || stamp('visible hardware (buffing list)')
+    return {done: smNoReplating_(p) || /^not needed$/i.test(String(p.visibleHwStatus || '').trim())
+      || stamp('pedals/cabinetry hardware electroplating and polishing') || stamp('visible hardware (buffing list)')
       || smPhaseIdx_(p.phase) > smPhaseIdx_('QC & Assembly'), why: 'not marked on the Hardware Queue'};
   if (id === 'order decal')
     return {done: /received|in stock|installed|not needed|completed/i.test(String((p.tasks || {}).decals || '')),
@@ -12100,7 +12101,7 @@ function shopRosterSet_(tech, status) {
  * plating view shows where each plate is. */
 // 'Removed' retired (Mark 11/9): off the piano = in storage or at Curtis Harper
 var PLATE_STATUSES = ['', 'In piano', 'Plate storage — BEFORE',
-                      'At Curtis Harper', 'Plate storage — AFTER', 'Back in piano'];
+                      'At Curtis Harper', 'Plate storage — AFTER', 'Back in piano', 'Not needed'];   // Not needed: Mark 11/20
 /* Color selections (Brigham 8/26): admin-entered refinish/plating color+sheen —
  * a first pick, then the FINAL after the client approves. Header-created cols. */
 function setColor_(req) {
@@ -12487,7 +12488,7 @@ function setPlateTemp_(req, who) {
 /* Keytop status (Brigham 8/27): Evaluate / In Key Queue #n / In Process /
  * Done — header-created KEYTOP STATUS col, shown in the card's Concurrent
  * section and the Concurrent Work report's keys category. */
-var KEYTOP_STATES = ['Evaluate', 'In Key Queue', 'In Progress', 'Done'];
+var KEYTOP_STATES = ['Evaluate', 'In Key Queue', 'In Progress', 'Done', 'Not needed'];   // Not needed: Mark 11/20
 function setKeyStatus_(req, who) {
   var val = String(req.value == null ? '' : req.value).trim().slice(0, 40);
   if (val && !KEYTOP_STATES.some(function (s) {
@@ -12620,9 +12621,9 @@ function setBenchNote_(req, who) {
  * STORED value and shows as "In hardware queue". The five older choices are
  * folded in on the way in, so a stale page still saves something valid.
  * Visible hardware (pedals, hinges, cabinet hardware) has its own column. */
-var PLATE_HW_STATUSES = ['', 'In piano', 'In buffing queue', 'Buffed'];
+var PLATE_HW_STATUSES = ['', 'In piano', 'In buffing queue', 'Buffed', 'Not needed'];   // Not needed: Mark 11/20
 var PLATE_HW_MIGRATE = {'Needs buffing': 'In buffing queue', 'Buffing': 'In buffing queue', 'Installed': 'Buffed', 'In hardware queue': 'In buffing queue'};
-var VISIBLE_HW_STATUSES = ['', 'In piano', 'In hardware queue', 'Out for plating', 'Done'];
+var VISIBLE_HW_STATUSES = ['', 'In piano', 'In hardware queue', 'Out for plating', 'Done', 'Not needed'];   // Not needed: Mark 11/20
 var VISIBLE_HW_MIGRATE = {'In buffing queue': 'In hardware queue', 'Buffed': 'Done'};
 // 🎨 finish choices on the card (Melissa 9/16, request 091626terry44): the
 // color the plating shop should do (Korban orders by it) and the keytop
