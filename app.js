@@ -7564,7 +7564,7 @@ function wirePop(p) {
     };
     box.onclick = ev => ev.stopPropagation();
     box.querySelector('.cfothersave').onclick = save;
-    inp.onkeydown = ev => { if (ev.key === 'Enter') { ev.preventDefault(); save(); } else if (ev.key === 'Escape') box.hidden = true; };
+    inp.onkeydown = ev => { if (ev.key === 'Enter') { ev.preventDefault(); save(); } else if (ev.key === 'Escape') { ev.preventDefault(); box.hidden = true; } };
     const clr = box.querySelector('.cfotherclear');
     if (clr) clr.onclick = () => saveCardField(f, '');
     box.querySelector('.cfothercancel').onclick = () => { box.hidden = true; };
@@ -15934,7 +15934,7 @@ function renderReport() {
     btn.onclick = ev => { ev.stopPropagation(); if (list) close(); else { open(); inp.focus(); } };
     inp.addEventListener('focus', () => { if (touchOnly) open(); });
     inp.addEventListener('input', () => { if (list || touchOnly) open(); });
-    inp.addEventListener('keydown', ev => { if (ev.key === 'Escape') close(); });
+    inp.addEventListener('keydown', ev => { if (ev.key === 'Escape') { ev.preventDefault(); close(); } });
     inp.addEventListener('blur', () => setTimeout(close, 300));
   });
   // 🔵 Time Clock section buttons: toggle in place, remember per browser
@@ -20097,8 +20097,56 @@ $('.logo').style.cursor = 'pointer';
     el.prepend(b);
   }
 });
+/* ⎋ Escape closes whatever is on top, one layer per press (Mark 11/20): a
+ * pop-up window or form → the dock's Switch menu → the piano card → the
+ * legend → the ☰ menu → a full-page view (back to the map). Fields that use
+ * Escape themselves (search suggestions, inline edits, the chat) handle it
+ * first and stop it here (preventDefault). Closing goes through each
+ * window's own ✕ so its cleanup runs. */
+const ESC_BASE_IDS = new Set(['authgate', 'kpis', 'mydock']);
+function escVisible(el) {
+  if (!el || el.hidden) return false;
+  const cs = getComputedStyle(el);
+  return cs.display !== 'none' && cs.visibility !== 'hidden';
+}
+function escCloseBtn(root) {
+  return [...root.querySelectorAll('.x, .dsx, .tvx, button, span')]
+    .find(b => escVisible(b) && (b.matches('.x, .dsx, .tvx') || b.textContent.trim() === '✕'));
+}
+function escOverlay() {
+  const kids = [...document.body.children].filter(el => {
+    if (/^(SCRIPT|STYLE|HEADER|LINK)$/.test(el.tagName) || ESC_BASE_IDS.has(el.id)) return false;
+    if (el.matches('.stage, .agf-stack, .agchat, .kpistrip')) return false;
+    if (!escVisible(el)) return false;
+    const pos = getComputedStyle(el).position;
+    return pos === 'fixed' || pos === 'absolute';
+  });
+  return kids[kids.length - 1] || null;   // the newest window is on top
+}
 addEventListener('keydown', e => {
-  if (e.key === 'Escape' && S.view !== 'map' && !document.querySelector('.tagview')) switchView('map');
+  if (e.key !== 'Escape' || e.defaultPrevented || e.isComposing) return;
+  const ov = escOverlay();
+  if (ov) {
+    e.preventDefault();
+    const b = escCloseBtn(ov);
+    if (b) { b.click(); return; }
+    ov.click();   // most windows close on a click outside their box
+    setTimeout(() => { if (ov.isConnected && escVisible(ov)) ov.remove(); }, 0);
+    return;
+  }
+  const menu = document.querySelector('#mydock .dockmenu');
+  if (menu && !menu.hidden) { e.preventDefault(); menu.hidden = true; menu.classList.remove('picking'); return; }
+  const pop = $('#pop');
+  if (pop && !pop.hidden) {
+    e.preventDefault();
+    const b = escCloseBtn(pop);
+    if (b) b.click(); else { pop.hidden = true; popPinned = false; }
+    return;
+  }
+  const lg = $('#legendPanel');
+  if (lg && !lg.hidden) { e.preventDefault(); lg.hidden = true; return; }
+  if ($('#side').classList.contains('open')) { e.preventDefault(); closeNav(); return; }
+  if (S.view !== 'map') { e.preventDefault(); switchView('map'); }
 });
 // Home/End inside any text field jump the caret to line start/end (with
 // shift-selection). On macOS Safari/installed app those keys scroll the
@@ -20961,7 +21009,7 @@ $('#search').addEventListener('keydown', e => {
   else if (e.key === 'Enter') {
     if (acIdx >= 0) { e.preventDefault(); pickSuggest(acIdx); }
     else if (acList.length === 1) { e.preventDefault(); pickSuggest(0); }
-  } else if (e.key === 'Escape') { $('#searchac').hidden = true; }
+  } else if (e.key === 'Escape' && !$('#searchac').hidden) { e.preventDefault(); $('#searchac').hidden = true; }
 });
 $('#search').addEventListener('focus', () => renderSuggest(S.search.trim().toLowerCase()));
 $('#search').addEventListener('blur', () => setTimeout(() => { $('#searchac').hidden = true; }, 120));
@@ -21155,7 +21203,7 @@ boot();
     addEventListener('pointermove', move);
     addEventListener('pointerup', up);
   });
-  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !box.hidden) closeChat(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !box.hidden && !e.defaultPrevented) { e.preventDefault(); closeChat(); } });
   ta.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); form.requestSubmit(); } });
   form.onsubmit = e => { e.preventDefault(); send(ta.value); };
 
