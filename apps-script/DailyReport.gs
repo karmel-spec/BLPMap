@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-11-23.4';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-11-23.5';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -730,6 +730,50 @@ function scheduleTuning_(req) {
           summary: found.summary, title: title};
 }
 
+/* Put a tuning at an exact time on the in-store tuning calendar (Mark 11/23 —
+ * Brigham's Hailun priority bumps pre-booked tunings to set slots). Owners and
+ * shop managers only. {serial, start, end (ISO), from?: yyyy-MM-dd}: an upcoming
+ * tuning event that names the serial (on `from` when given) is MOVED — title,
+ * guests and notes kept; with none, a new "Tuning: <summary> #<serial> — Korban
+ * Greenhalgh" event is made with Korban invited and the map spot as location.
+ * Refuses when another tuning already sits on that start time. */
+function placeTuning_(req, who) {
+  if (!timelogAdmin_(req._g)) return {error: 'Only owners and the shop managers can place tunings (Google sign-in required).'};
+  var tz = 'America/Denver';
+  var serial = String(req.serial || '').trim();
+  var s = new Date(String(req.start || '')), e = new Date(String(req.end || ''));
+  if (!serial || isNaN(s) || isNaN(e) || e <= s) return {error: 'serial, start and end required'};
+  var master = calById_(MASTER_TUNING_CAL);
+  if (!master) return {error: 'no access to the in-store tuning calendar'};
+  var clash = master.getEvents(s, new Date(s.getTime() + 60000)).filter(function (ev) {
+    return !ev.isAllDayEvent() && /tun(e|ing)/i.test(ev.getTitle()) && ev.getTitle().indexOf(serial) < 0
+      && Math.abs(ev.getStartTime() - s) < 60000;
+  });
+  if (clash.length) return {error: 'that slot already has ' + clash[0].getTitle()};
+  var from = String(req.from || '').trim();
+  var evs = master.getEvents(new Date(), new Date(Date.now() + 90 * 86400000), {search: serial}).filter(function (ev) {
+    return /tun(e|ing)/i.test(ev.getTitle()) && ev.getTitle().indexOf(serial) >= 0
+      && (!from || Utilities.formatDate(ev.getStartTime(), tz, 'yyyy-MM-dd') === from);
+  });
+  var when = Utilities.formatDate(s, tz, 'EEE M/d h:mm a');
+  if (evs.length) {
+    var ev = evs[0], was = Utilities.formatDate(ev.getStartTime(), tz, 'EEE M/d h:mm a');
+    ev.setTime(s, e);
+    try { CacheService.getScriptCache().remove('tunings3'); } catch (ig) {}
+    logAct_(who, 'Tuning moved', ev.getTitle(), was + ' → ' + when + (req.why ? ' — ' + String(req.why).slice(0, 120) : ''));
+    return {ok: true, moved: true, title: ev.getTitle(), was: was, now: when};
+  }
+  var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+  var found = findPiano_(sh, serial, req.row);
+  if (found.error) return found;
+  var title = 'Tuning: ' + (found.summary || 'piano') + ' #' + serial + ' — Korban Greenhalgh';
+  master.createEvent(title, s, e, {description: 'Placed by ' + String(who || '').replace(/\s*<.*$/, '') + ' via the Store Map'
+      + (req.why ? ' — ' + String(req.why).slice(0, 200) : ''),
+    location: String(found.location || ''), guests: TUNING_CAL, sendInvites: true});
+  try { CacheService.getScriptCache().remove('tunings3'); } catch (ig) {}
+  logAct_(who, 'Tuning placed', found.summary || serial, when + (req.why ? ' — ' + String(req.why).slice(0, 120) : ''));
+  return {ok: true, created: true, title: title, now: when, location: String(found.location || '')};
+}
 /* cancel upcoming tuning events for a serial across the tuning calendars
    (master, legacy master, Korban's own) — {serial, dryrun?, date?}
    date (yyyy-MM-dd, Denver) limits it to that day's event — to drop ONE of
@@ -1264,6 +1308,7 @@ function doPost(e) {
       return json_(dt);
     }
     if (req.action === 'fillheldtunings') return json_(fillHeldTunings_(req));
+    if (req.action === 'placetuning') return json_(placeTuning_(req, who));   // Mark 11/23
     if (req.action === 'tune') {
       var t = scheduleTuning_(req);
       if (t.scheduled && !t.already) logAct_(who, 'Tuning scheduled', t.summary || req.serial,
