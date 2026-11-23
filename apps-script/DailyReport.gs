@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-11-20.4';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-11-23.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -8423,10 +8423,14 @@ function applyScheduleLocked_(req) {
     }
     return [];
   }
+  // serials with letters (Kimball D96158, Kohler IJOCG0272, 1803HPCHICK) match
+  // whole first (Mark 11/23: Korban's D96158 tuning went out with no spot —
+  // the digits-only "96158" never matched); digits-only stays the fallback
   function spotFor_(title) {
-    var runs = String(title || '').match(/\d{3,}/g) || [];
+    var runs = String(title || '').match(/[A-Za-z]*\d{3,}[A-Za-z0-9]*/g) || [];
     for (var i = 0; i < runs.length; i++) {
-      if (spotBySerial[runs[i]]) return spotBySerial[runs[i]];
+      var hit = spotBySerial[runs[i]] || spotBySerial[runs[i].toUpperCase()] || spotBySerial[runs[i].replace(/\D/g, '')];
+      if (hit) return hit;
     }
     return '';
   }
