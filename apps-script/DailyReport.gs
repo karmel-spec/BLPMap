@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-11-23.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-11-23.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -8777,7 +8777,8 @@ function calOffMarker_(cal, day) {
       if (d.indexOf(APPLIED_TAG) >= 0) continue;
       if (NOT_OFF_RE.test(t)) continue;
       // "Dentist — out 1-3pm": a stated time range is a partial absence, not a day off
-      if (/\d{1,2}(?::\d{2})?\s*(?:am|pm)?\s*[-–—]\s*\d{1,2}/i.test(t)) continue;
+      // ("Mark out (Noon-4)" too — Mark 11/23: a noon start wasn't read as a range and his 8–12 was skipped)
+      if (/(?:\d{1,2}(?::\d{2})?\s*(?:am|pm)?|noon)\s*(?:[-–—]|to)\s*(?:\d{1,2}|noon)/i.test(t)) continue;
       // A TIMED event is only a day off if it covers the working day: an
       // all-day marker, or one that starts by mid-morning and runs 4+ hours.
       // "McKinly Off (Orchestra rehearsal)" 5–6 PM and "McKinly Off" 4:30 PM
@@ -11936,7 +11937,8 @@ function timeOffCalEvent_(tech, startYmd, endYmd, times, approver) {
   };
   var t = String(times || '').trim();
   // a clean clock range, and not a description of hours WORKED
-  var rng = t && !/\bwork/i.test(t) ? /^\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*(?:-|–|—|to)\s*(noon|\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*$/i.exec(t) : null;
+  // a range may START at noon too ("Noon-4", Mark 11/23 — it became an all-day "Mark out")
+  var rng = t && !/\bwork/i.test(t) ? /^\s*(noon|\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*(?:-|–|—|to)\s*(noon|\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*$/i.exec(t) : null;
   if (rng && startYmd === endYmd) {
     var hr = function (h, mm, ap, other) {
       if (String(h).toLowerCase() === 'noon') return {h: 12, m: 0};
