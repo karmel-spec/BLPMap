@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-11-23.5';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-11-23.6';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -745,6 +745,11 @@ function placeTuning_(req, who) {
   if (!serial || isNaN(s) || isNaN(e) || e <= s) return {error: 'serial, start and end required'};
   var master = calById_(MASTER_TUNING_CAL);
   if (!master) return {error: 'no access to the in-store tuning calendar'};
+  // already there (a retried or replayed request) — nothing to do
+  var here = master.getEvents(s, new Date(s.getTime() + 60000)).filter(function (ev) {
+    return /tun(e|ing)/i.test(ev.getTitle()) && ev.getTitle().indexOf(serial) >= 0 && Math.abs(ev.getStartTime() - s) < 60000;
+  });
+  if (here.length) return {ok: true, already: true, title: here[0].getTitle(), now: Utilities.formatDate(s, tz, 'EEE M/d h:mm a')};
   var clash = master.getEvents(s, new Date(s.getTime() + 60000)).filter(function (ev) {
     return !ev.isAllDayEvent() && /tun(e|ing)/i.test(ev.getTitle()) && ev.getTitle().indexOf(serial) < 0
       && Math.abs(ev.getStartTime() - s) < 60000;
