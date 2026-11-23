@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-11-23.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-11-23.4';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -8775,6 +8775,11 @@ function calOffMarker_(cal, day) {
       // "Applied…" blocks from an earlier proposal are work, never an off marker
       var d = ''; try { d = String(evs[i].getDescription() || ''); } catch (e1) {}
       if (d.indexOf(APPLIED_TAG) >= 0) continue;
+      // the "<Name> out" events approved time off puts on calendars (Mark 11/23):
+      // Approve reads the Time Off tab itself (no times = whole day, any times =
+      // partial), so the calendar copy never decides — "McKinly out (Get off at
+      // 4pm)" and "Mark out (Noon-4)" had wiped whole days
+      if (d.indexOf('Approved time off (') === 0) continue;
       if (NOT_OFF_RE.test(t)) continue;
       // "Dentist — out 1-3pm": a stated time range is a partial absence, not a day off
       // ("Mark out (Noon-4)" too — Mark 11/23: a noon start wasn't read as a range and his 8–12 was skipped)
@@ -12027,7 +12032,11 @@ function approvedTimeOff_(fromYmd, toYmd) {
     for (var n = 0; d <= end && n < 60; d.setDate(d.getDate() + 1), n++) {
       var ymd = Utilities.formatDate(d, 'America/Denver', 'yyyy-MM-dd');
       if (ymd < fromYmd || ymd > toYmd) continue;
-      (out[k] = out[k] || {})[ymd] = String(r.times || '').trim() || 'all day';
+      // "Whole day" / "all day" / "full day" typed in Times is still a whole day (Mark 11/23)
+      var tms = String(r.times || '').trim();
+      var whole = !tms || /^(whole|all|full)\s*day\b|^day\s*off$/i.test(tms);
+      var prevT = (out[k] || {})[ymd];
+      (out[k] = out[k] || {})[ymd] = (whole || prevT === 'all day') ? 'all day' : tms;
     }
   });
   return out;
