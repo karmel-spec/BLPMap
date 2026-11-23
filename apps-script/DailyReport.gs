@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-11-23.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-11-23.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -1284,7 +1284,16 @@ function doPost(e) {
         var told = exitPrepNotify_(req, ph);
         if (told) { ph.exitPrepTexted = told; logAct_(who, 'Exit Prep handoff texted', ph.summary || req.serial, told); }
       }
-      if (ph.ok && ph.row && String(ph.previous || '') !== String(ph.phase || '')) {
+      // No client email (Mark 11/23) when the change was made by the Planner's AI
+      // (bottleneck answers / Planner notes — 29908 was moved out of Refinishing
+      // on an answer about hardware and its owner got a "refinishing done" draft),
+      // or when the piano only went into a waiting / parking state: leaving a
+      // phase to wait on Curtis Harper, a customer or anyone else is not that
+      // phase being finished (211935 left Refinishing to wait on its plate).
+      var ouSkip = /\((bottleneck answers|planner notes)\)/i.test(String(who || '') + ' ' + String((req.user && req.user.name) || '')) ? 'skipped (made by the Planner AI)'
+        : /^(waiting on |paused$|in queue$)/i.test(String(ph.phase || '')) ? 'skipped (moved to a waiting state: ' + ph.phase + ')' : '';
+      if (ouSkip && ph.ok) ph.ownerUpdate = ouSkip;
+      if (ph.ok && ph.row && String(ph.previous || '') !== String(ph.phase || '') && !ouSkip) {
         // owner update (10/28): the portal decides whether this change gets an email
         try {
           var ofs = ownerFacts_(pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID)), ph.row);
