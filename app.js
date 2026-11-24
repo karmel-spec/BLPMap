@@ -15159,7 +15159,20 @@ const SC_STD = {'New Arrival - Admin': 3, 'Assessment': 3, 'CAP': 40,
   'PRSB - Downbearing': 32, 'PRSB - Notching and Pins': 8, 'Lacquer Soundboard': 12, 'Restringing': 40,
   'Chip Tuning': 2, 'DHRT': 48, 'Refinishing': 62, 'QC & Assembly': 17,
   '1st Tuning': 2, '2nd Tuning': 2, 'Key service': 22, 'Full key set': 22,
-  'Refurb checklist': 48, 'Exit Prep - Admin': 3};
+  'Exit Prep - Admin': 3};
+/* REFURBISH (Brigham via Mark 11/24): one standard for the whole refurb — all
+ * four phases (and the old single "Refurb Checklist" phase) together: 48 h,
+ * or 72 h when the piano is 50+ years old (the extra 24 h is a buffer for the
+ * extra work an older piano needs). A piano with no year in the Piano Log gets
+ * 48. Credited once the refurb is FINISHED — the piano has left the refurb
+ * phases — in the window of its last refurb clock session, against every
+ * refurb hour clocked on it. Only phase 2 has a mini-QC, so a QC pass can't be
+ * the trigger (the old 'Refurb checklist': 48 never matched a QC-passed phase). */
+const SC_REFURB = new Set([...REFURB_UPRIGHT_PHASES, 'Refurb Checklist'].map(x => x.toLowerCase()));
+function scRefurbStd(p) {
+  const y = parseInt((String((p && p.year) || '').match(/\b(1[6-9]\d\d|20\d\d)\b/) || [])[1], 10);
+  return y && new Date().getFullYear() - y >= 50 ? 72 : 48;
+}
 async function loadScoreLog() {
   try {
     const r = await fetch(BRIDGE_URL + '?fn=scorelog', {redirect: 'follow'});
@@ -15226,6 +15239,22 @@ function scorecardTable() {
     if (spent < 1) return;   // phase never clocked — no basis to score it
     earned += std; actual += spent; phasesDone++;
   });
+  // refurbs (Brigham 11/24): the whole job, credited when it's finished
+  const allTl = unvoided(S.tlRows);
+  const isRef = r => SC_REFURB.has(String(r.phase || '').trim().toLowerCase());
+  new Set(allTl.filter(r => r.serial && isRef(r)).map(r => r.serial)).forEach(sn => {
+    const p = S.data.pianos.find(x => String(x.serial) === String(sn));
+    const cur = String((p && p.phase) || '').trim();
+    if (p && (SC_REFURB.has(cur.toLowerCase())
+      || (PARK_PHASE_RE.test(cur) && SC_REFURB.has(lastWorkPhaseOf(p).toLowerCase())))) return;   // still in the refurb
+    if (p && !cur) return;   // no phase — can't tell it's done
+    const rows = allTl.filter(r => r.serial === sn && isRef(r));
+    const lastAt = rows.reduce((m, r) => { const t = new Date(r.end || r.start).getTime(); return t > m ? t : m; }, 0);
+    if (!lastAt || !inWin(new Date(lastAt).toISOString())) return;
+    const spent = mins(rows) / 60;
+    if (spent < 1) return;
+    earned += scRefurbStd(p); actual += spent; phasesDone++;
+  });
   const prodIdx = actual ? Math.round(100 * earned / actual) : null;
   const stalled = (() => { try { return stalledPianos().length; } catch (e) { return null; } })();
   /* Management 15% — fully app-governed, no human scoring (Brigham 9/1):
@@ -15286,7 +15315,7 @@ function scorecardTable() {
         <div style="position:absolute;top:-3px;bottom:-3px;width:2px;background:#2b2f33;left:${heroPos(105)}%"></div>
       </div>
       <div style="display:flex;justify-content:space-between;font-size:11px;color:#8a847b;margin-top:6px">
-        <span>earned ${earned ? earned.toFixed(0) + 'h std' : '—'}</span><span>actual ${actual ? actual.toFixed(0) + 'h clocked' : '—'} · ${phasesDone} QC-passed phases</span></div>
+        <span>earned ${earned ? earned.toFixed(0) + 'h std' : '—'}</span><span>actual ${actual ? actual.toFixed(0) + 'h clocked' : '—'} · ${phasesDone} QC-passed phases + finished refurbs</span></div>
     </div></div>`;
   const bonusAll = (prodBonus == null || qualBonus == null || mgmtBonus == null) ? null : prodBonus + qualBonus + mgmtBonus;
   const money = `<div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:14px">
