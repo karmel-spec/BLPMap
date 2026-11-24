@@ -7172,7 +7172,9 @@ function popHTML(p) {
   const payBar = (p.serial && inShopwork(p)) ? (() => {
     const pm = payMarksFor(p.payPlan), two = pm.length === 2;
     const next = pm.find(m => pct < m);
+    const held = progressHeldAt(p);
     return `<div class="row rowflex"><span>Shop progress</span><b>${pct}%</b></div>
+      ${held ? `<div class="pbarlbl" title="the % stays where ${esc(held)} left it while the piano is ${esc(effectivePhase(p))}">held at ${esc(held)} while ${esc(effectivePhase(p))}</div>` : ''}
       <div class="pbar"><i style="width:${pct}%"></i>${pm.filter(m => m < 100).map(m => `<s style="left:${m}%"></s>`).join('')}</div>
       <div class="pbarlbl">${next ? `next payment ${two ? '' : 'milestone '}at ${next}%${two ? ' (2-payment plan: 50% & 100%)' : ''}` : 'all payment milestones reached'}${+p.payMilestone ? ` · last emailed at ${esc(p.payMilestone)}%` : ''}</div>`;
   })() : '';
@@ -9036,6 +9038,10 @@ async function setPhase(p, phase, pop, extra) {
       renderMap();
       if (p.phase === 'For Sale') openPriceModal(p);
       if (j.note != null) p.waitNote = j.note;
+      if (j.lastWorkPhase) {   // survives the next data poll until the sheet sync carries it
+        p.logExtras = p.logExtras || {}; p.logExtras['LAST WORK PHASE'] = j.lastWorkPhase;
+        const lwe = pendingEdits.get(p.row) || {}; lwe.logExtras = {...(lwe.logExtras || {}), 'LAST WORK PHASE': j.lastWorkPhase}; pendingEdits.set(p.row, lwe);
+      }
       if (j.checkBack != null) p.checkBack = j.checkBack;
       // For Sale auto-ticks every shop phase (bridge-side) — take the new
       // list so the Done row and progress bar update without a refetch
@@ -9382,7 +9388,7 @@ function payMilestoneRows(all) {
     .map(p => {
       const list = (pianoPhases(p) || PHASES).filter(ph => ph !== 'Delivered');
       const dl = (p.phasesDone || '').split(',').map(t => t.trim()).filter(Boolean);
-      const effIdx = list.indexOf(effectivePhase(p));
+      const effIdx = progressIdx(p, list);
       let done = 0; list.forEach((ph, i) => { if (dl.includes(ph) || (effIdx >= 0 && i < effIdx)) done++; });
       const pct = shopProgressPct(p);
       const plan = p.payPlan.trim(), marks = payMarksFor(plan);
@@ -9550,11 +9556,30 @@ function wirePayTracker(body) {
 /* ---- Admin section: shop progress %, payment plan, admin steps, milestones ---- */
 // % of this piano's own track phases complete (explicit Done checks plus
 // everything ordered before the current phase); Delivered excluded
+// parked in Waiting on … / Paused / Player Piano Work / In Queue: the % holds at the
+// phase it left (LAST WORK PHASE, written by the bridge / sales app on the move —
+// Melissa 11/21, 112126terry20: it used to drop to 0% while the piano waited)
+const PARK_PHASE_RE = /^(waiting on |paused$|player piano work$|in queue$)/i;
+const lastWorkPhaseOf = p => String((p && (p.lastWorkPhase || (p.logExtras || {})['LAST WORK PHASE'])) || '').trim();
+function progressIdx(p, list) {
+  const eff = effectivePhase(p);
+  const i = list.indexOf(eff);
+  if (i >= 0 || !PARK_PHASE_RE.test(eff || '')) return i;
+  return list.indexOf(lastWorkPhaseOf(p));
+}
+// the phase the % is held at, or '' when the piano isn't parked
+function progressHeldAt(p) {
+  const list = (pianoPhases(p) || PHASES).filter(ph => ph !== 'Delivered');
+  const eff = effectivePhase(p);
+  if (list.includes(eff) || !PARK_PHASE_RE.test(eff || '')) return '';
+  const lw = lastWorkPhaseOf(p);
+  return list.includes(lw) ? lw : '';
+}
 function shopProgressPct(p) {
   const list = (pianoPhases(p) || PHASES).filter(ph => ph !== 'Delivered');
   if (!list.length || !p.serial) return 0;
   const dl = (p.phasesDone || '').split(',').map(t => t.trim()).filter(Boolean);
-  const effIdx = list.indexOf(effectivePhase(p));
+  const effIdx = progressIdx(p, list);
   let done = 0;
   list.forEach((ph, i) => { if (dl.includes(ph) || (effIdx >= 0 && i < effIdx)) done++; });
   return Math.min(100, Math.round(done / list.length * 100));

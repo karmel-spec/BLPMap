@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-11-23.6';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-11-24.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -1314,6 +1314,7 @@ function doPost(e) {
     }
     if (req.action === 'fillheldtunings') return json_(fillHeldTunings_(req));
     if (req.action === 'placetuning') return json_(placeTuning_(req, who));   // Mark 11/23
+    if (req.action === 'setlastwork') return json_(setLastWork_(req, who));   // 112126terry20
     if (req.action === 'tune') {
       var t = scheduleTuning_(req);
       if (t.scheduled && !t.already) logAct_(who, 'Tuning scheduled', t.summary || req.serial,
@@ -3846,6 +3847,34 @@ function exitPrepNotify_(req, ph) {
     return names.join(', ');
   } catch (eT) { return ''; }
 }
+/* the phase a piano is parked FROM (112126terry20): '' unless the move goes
+ * from a track phase into Waiting on … / Paused / Player Piano Work / In Queue */
+var LW_PARK_RE = /^(waiting on |paused$|player piano work$|in queue$)/i;
+var LW_NONWORK_RE = /^(waiting on |paused$|player piano work$|in queue$|for sale$|sale pending$|sold$|delivered$|post sale qc$|out on rental$|rental check-in$)/i;
+/* one cell: a parked piano's LAST WORK PHASE (112126terry20 back-fill) — owners
+ * and shop managers; only while the piano is parked, only a track phase */
+function setLastWork_(req, who) {
+  if (!timelogAdmin_(req._g)) return {error: 'Only owners and the shop managers can set this (Google sign-in required).'};
+  var val = String(req.value || '').trim();
+  if (!val || LW_NONWORK_RE.test(val)) return {error: 'not a track phase: ' + val};
+  var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+  var found = findPiano_(sh, req.serial, req.row);
+  if (found.error) return found;
+  var cur = String(sh.getRange(found.row, phaseCol_(sh)).getValue() || '').trim();
+  if (!LW_PARK_RE.test(cur)) return {error: found.summary + ' is in ' + (cur || 'no phase') + ', not parked — nothing to hold'};
+  var c = pianoCol_(sh, 'LAST WORK PHASE');
+  var was = String(sh.getRange(found.row, c).getValue() || '');
+  sh.getRange(found.row, c).setValue(val);
+  logAct_(who, 'Last work phase set', found.summary || req.serial, (was || '(blank)') + ' → ' + val + ' — progress held while ' + cur);
+  return {ok: true, row: found.row, summary: found.summary, phase: cur, lastWorkPhase: val, was: was};
+}
+function lastWorkPhaseOf_(p) {
+  return String((p && (p.lastWorkPhase || (p.logExtras || {})['LAST WORK PHASE'])) || '').trim();
+}
+function lastWorkFor_(prev, phase) {
+  prev = String(prev || '').trim(); phase = String(phase || '').trim();
+  return (LW_PARK_RE.test(phase) && prev && !LW_NONWORK_RE.test(prev)) ? prev : '';
+}
 function setPhase_(req) {
   var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
   var found = findPiano_(sh, req.serial, req.row);
@@ -3901,6 +3930,17 @@ function setPhase_(req) {
     }
   }
   sh.getRange(found.row, col).setValue(phase);
+  // LAST WORK PHASE (Melissa 11/21, 112126terry20): moving from a track phase
+  // into a waiting / parking state remembers the phase it left, so the progress
+  // bar and payment milestones hold their % while the piano waits (0% before)
+  var lastWork = lastWorkFor_(prev, phase);
+  if (lastWork) {
+    try {
+      var lwc = pianoCol_(sh, 'LAST WORK PHASE');
+      if (!(lwc > 0)) { lwc = sh.getLastColumn() + 1; sh.getRange(2, lwc).setValue('LAST WORK PHASE'); }
+      sh.getRange(found.row, lwc).setValue(lastWork);
+    } catch (eLw) { lastWork = ''; }
+  }
   // waiting note: why we're waiting — stored in a WAITING NOTE column,
   // written with Waiting phases and cleared when the piano moves on
   var last = sh.getLastColumn();
@@ -4013,7 +4053,7 @@ function setPhase_(req) {
   }
   return {ok: true, plateSet: plateSet, spotSet: spotSet, row: movedTo || found.row, summary: found.summary,
           previous: prev, phase: phase, note: note, checkBack: cb, plateHold: plateHold,
-          movedToSold: !!movedTo, done: autoDone, autoCompleted: !!autoDone};
+          movedToSold: !!movedTo, done: autoDone, autoCompleted: !!autoDone, lastWorkPhase: lastWork || ''};
 }
 
 /* 🧾 Below SOLD means Delivered (Walter 10/13): a row dragged below the SOLD
@@ -7353,6 +7393,9 @@ function pmProgressPct_(p, defs) {
   if (!list.length || !p.serial) return 0;
   var dl = String(p.phasesDone || '').split(',').map(function (t) { return t.trim(); }).filter(Boolean);
   var eff = list.indexOf(pmEffectivePhase_(p)), done = 0;
+  // parked (Waiting on … / Paused / Player Piano Work / In Queue): hold the % of the
+  // phase it left (LAST WORK PHASE, 112126terry20) instead of dropping to 0
+  if (eff < 0 && LW_PARK_RE.test(String(pmEffectivePhase_(p) || ''))) eff = list.indexOf(lastWorkPhaseOf_(p));
   list.forEach(function (ph, i) { if (dl.indexOf(ph) >= 0 || (eff >= 0 && i < eff)) done++; });
   return Math.min(100, Math.round(done / list.length * 100));
 }
@@ -7490,6 +7533,7 @@ function smProgress_(p) {
     .filter(String);
   var list = PHASE_VALUES.slice(0, 13);
   var cur = smPhaseIdx_(p.phase);
+  if ((cur < 0 || cur >= 13) && LW_PARK_RE.test(String(p.phase || ''))) cur = list.indexOf(lastWorkPhaseOf_(p));   // held while parked (112126terry20)
   var n = 0;
   for (var i = 0; i < list.length; i++) {
     if (done.indexOf(list[i]) >= 0 || (cur >= 0 && i < cur)) n++;
