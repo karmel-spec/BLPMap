@@ -20406,13 +20406,19 @@ function daySugFieldJob(ev) {
 function daySugFromCal(events, tl) {
   const now = Date.now(), today = denverDay(new Date().toISOString());
   const out = [], seen = {};
-  const evs = (events || []).filter(e => e && !e.allDay && e.title && new Date(e.end).getTime() > now
+  // a block whose time is already over still counts when that piano hasn't been
+  // clocked today (Korban 11/20, 112026greenhalgh07: in at 10:32, his 8:45 tuning
+  // wasn't offered — he tuned it right after); field appointments that are over don't
+  const clockedToday = new Set((tl || []).filter(r => r.serial && denverDay(r.start) === today).map(r => String(r.serial)));
+  const evs = (events || []).filter(e => e && !e.allDay && e.title
     && denverDay(e.start) === today && !/cancel/i.test(e.title))
     .sort((a, b) => new Date(a.start) - new Date(b.start));
   for (const e of evs) {
     const t = String(e.title), loc = String(e.location || '');
-    const when = fmtT(e.start) + '–' + fmtT(e.end);
+    const over = new Date(e.end).getTime() <= now;
+    const when = fmtT(e.start) + '–' + fmtT(e.end) + (over ? ' · ' + tr('earlier today', 'hoy más temprano') : '');
     if (/GZ\/SC\/QB/i.test(t) || (loc.length > 10 && /\d/.test(loc) && /,|\bUT\b|\b\d{5}\b/.test(loc))) {
+      if (over) continue;
       const job = daySugFieldJob(e);
       if (!seen['F|' + job]) { seen['F|' + job] = 1; out.push({kind: 'field', job, when}); }
       continue;
@@ -20435,6 +20441,7 @@ function daySugFromCal(events, tl) {
       : cut > 0 ? t.slice(cut + 3).replace(/\([^)]*\)/g, ' ').replace(/\s+/g, ' ').trim()
       : /^\s*QC\b/i.test(t) ? 'QC' : '';
     for (const p of pianos) {
+      if (over && clockedToday.has(String(p.serial))) continue;   // already done today
       const phase = daySugPhase(p, want, tl);
       const k = p.serial + '|' + (phase || '');
       if (seen[k]) continue;
