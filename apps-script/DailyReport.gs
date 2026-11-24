@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-11-24.1';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-11-24.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -730,6 +730,41 @@ function scheduleTuning_(req) {
           summary: found.summary, title: title};
 }
 
+/* A moved tuning's location follows the piano's map spot (Mark 11/24: the
+ * Yamaha U1A 4359798 kept "119" after its tuning moved to 12/7 — the map had
+ * it at 134, and 119 is the Hailun HU5P's spot). The spot is the Piano Log's
+ * column U, read once per run. Only a short spot label is replaced — never a
+ * long location like a customer address — and a piano that isn't in the
+ * store (Coming Soon, Rented, Sold) leaves the location alone. */
+var tuneSpots_ = null;
+function tuneSpotOf_(serial) {
+  var want = String(serial || '').trim().toLowerCase();
+  if (!want) return '';
+  if (!tuneSpots_) {
+    tuneSpots_ = {};
+    try {
+      var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
+      var v = sh.getRange(1, 2, sh.getLastRow(), 20).getValues();   // B (owner) … U (spot)
+      for (var i = 0; i < v.length; i++) {
+        var ser = String(v[i][1] || '').trim().toLowerCase();
+        if (String(v[i][0] || '').trim().toUpperCase() === 'SOLD' && !ser) break;
+        if (ser && !(ser in tuneSpots_)) tuneSpots_[ser] = String(v[i][19] || '').trim();
+      }
+    } catch (eS) {}
+  }
+  return tuneSpots_[want] || '';
+}
+function tuneLocSync_(ev, serial) {
+  try {
+    var spot = tuneSpotOf_(serial);
+    if (!spot || /^(coming soon|rented|sold)/i.test(spot)) return '';
+    var cur = String(ev.getLocation() || '').trim();
+    if (cur === spot || cur.length > 30) return '';
+    ev.setLocation(spot);
+    return (cur || '(none)') + ' → ' + spot;
+  } catch (eL) { return ''; }
+}
+
 /* Put a tuning at an exact time on the in-store tuning calendar (Mark 11/23 —
  * Brigham's Hailun priority bumps pre-booked tunings to set slots). Owners and
  * shop managers only. {serial, start, end (ISO), from?: yyyy-MM-dd}: an upcoming
@@ -749,7 +784,8 @@ function placeTuning_(req, who) {
   var here = master.getEvents(s, new Date(s.getTime() + 60000)).filter(function (ev) {
     return /tun(e|ing)/i.test(ev.getTitle()) && ev.getTitle().indexOf(serial) >= 0 && Math.abs(ev.getStartTime() - s) < 60000;
   });
-  if (here.length) return {ok: true, already: true, title: here[0].getTitle(), now: Utilities.formatDate(s, tz, 'EEE M/d h:mm a')};
+  if (here.length) return {ok: true, already: true, title: here[0].getTitle(), now: Utilities.formatDate(s, tz, 'EEE M/d h:mm a'),
+                           spotFixed: tuneLocSync_(here[0], serial)};
   var clash = master.getEvents(s, new Date(s.getTime() + 60000)).filter(function (ev) {
     return !ev.isAllDayEvent() && /tun(e|ing)/i.test(ev.getTitle()) && ev.getTitle().indexOf(serial) < 0
       && Math.abs(ev.getStartTime() - s) < 60000;
@@ -764,9 +800,10 @@ function placeTuning_(req, who) {
   if (evs.length) {
     var ev = evs[0], was = Utilities.formatDate(ev.getStartTime(), tz, 'EEE M/d h:mm a');
     ev.setTime(s, e);
+    var spotFixed = tuneLocSync_(ev, serial);
     try { CacheService.getScriptCache().remove('tunings3'); } catch (ig) {}
-    logAct_(who, 'Tuning moved', ev.getTitle(), was + ' → ' + when + (req.why ? ' — ' + String(req.why).slice(0, 120) : ''));
-    return {ok: true, moved: true, title: ev.getTitle(), was: was, now: when};
+    logAct_(who, 'Tuning moved', ev.getTitle(), was + ' → ' + when + (spotFixed ? ' · spot ' + spotFixed : '') + (req.why ? ' — ' + String(req.why).slice(0, 120) : ''));
+    return {ok: true, moved: true, title: ev.getTitle(), was: was, now: when, spotFixed: spotFixed};
   }
   var sh = pianoSheet_(SpreadsheetApp.openById(PIANO_LOG_ID));
   var found = findPiano_(sh, serial, req.row);
@@ -937,6 +974,8 @@ function fillHeldTunings_(req) {
       var was = Utilities.formatDate(mv.getStartTime(), tz, 'EEE, MMM d') + ' ' + Utilities.formatDate(mv.getStartTime(), tz, 'h:mm a');
       if (!req.dryrun) {
         mv.setTime(s2.start, s2.end);
+        var mvSer = /#\s*([A-Za-z0-9-]+)\s*—\s*Korban/i.exec(mv.getTitle() || '');
+        if (mvSer) tuneLocSync_(mv, mvSer[1]);
         try { mv.setDescription((mv.getDescription() || '') + '\n\nMoved up from ' + was + ' by the Wednesday 6 PM rule — no piano finished DHRT for this held slot (Mark 11/12).'); } catch (eS) {}
       }
       moved.push({date: s2.date, time: s2.time, title: mv.getTitle(), was: was});
@@ -4593,7 +4632,7 @@ function moveEvent_(req) {
   var newTitle = String(req.newTitle || '').trim();
   var after = Utilities.formatDate(ns, tz, 'EEE, MMM d h:mm a') + '–' + Utilities.formatDate(ne, tz, 'h:mm a') + ' "' + (newTitle || ev.getTitle()) + '"';
   if (!req.dryrun) {
-    if (nd !== date || nt !== time) ev.setTime(ns, ne);
+    if (nd !== date || nt !== time) { ev.setTime(ns, ne); if (/tun(e|ing)/i.test(ev.getTitle() || '')) tuneLocSync_(ev, serial); }
     if (newTitle) ev.setTitle(newTitle);
   }
   return {ok: true, dryrun: !!req.dryrun, before: before, after: after, guests: (function () { try { return ev.getGuestList().map(function (g) { return g.getEmail(); }); } catch (e) { return []; } })()};
@@ -8636,6 +8675,7 @@ function applyScheduleLocked_(req) {
         try {
           var from = hit.when;
           hit.ev.setTime(d1, d2);
+          tuneLocSync_(hit.ev, tk.serial);
           hit.start = d1; hit.end = d2; hit.when = Utilities.formatDate(d1, 'America/Denver', 'EEE h:mm a');
           movedTunes.push(tk.serial + ' — moved from ' + from + ' to ' + hit.when + ' to match the plan');
         } catch (eMv) { failed++; }
