@@ -14242,12 +14242,17 @@ function adjKnownNames() {
   let roster = (typeof TEAM !== 'undefined' && TEAM.roster) || null;
   if (!roster) { try { roster = (JSON.parse(lsGet('blpTeam1') || 'null') || {}).roster || null; } catch (e) {} }
   ((roster && roster['Current Team']) || []).slice(1).forEach(r => {
-    const full = (String(r[0] || '').trim() + ' ' + String(r[1] || '').trim()).trim().replace(/\s+/g, ' ');
+    let full = (String(r[0] || '').trim() + ' ' + String(r[1] || '').trim()).trim().replace(/\s+/g, ' ');
+    full = ROSTER_NAME_ALIAS[adjNameKey(full)] || full;   // a roster nickname → the name they clock in under
     const k = adjNameKey(full);
     if (full && k && !best[k]) best[k] = full;
   });
   return Object.values(best).sort((a, b) => a.localeCompare(b));
 }
+// roster nicknames for people who clock in under another name (Melissa 11/24,
+// 112326terry21: "Ezzy Lopp" on the roster and "Ezaray Lopp" on her punches both
+// showed in the missed-punch list). Key = the roster name squashed (adjNameKey).
+const ROSTER_NAME_ALIAS = {ezzylopp: 'Ezaray Lopp'};
 // the roster names reach the Time Clock even when the Team view was never
 // opened on this device (Melissa 10/28, 102826terry12: Joseph Larson, on the
 // roster but never clocked, wasn't in the name list) — one fetch, then the
