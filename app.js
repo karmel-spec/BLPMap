@@ -15241,14 +15241,18 @@ function scorecardTable() {
   });
   // refurbs (Brigham 11/24): the whole job, credited when it's finished
   const allTl = unvoided(S.tlRows);
-  const isRef = r => SC_REFURB.has(String(r.phase || '').trim().toLowerCase());
-  new Set(allTl.filter(r => r.serial && isRef(r)).map(r => r.serial)).forEach(sn => {
-    const p = S.data.pianos.find(x => String(x.serial) === String(sn));
+  // plain "Regulation" is also clocked on rebuilds (Bechstein 21174, 9/1) —
+  // it counts toward a refurb only on a piano whose track is a refurbish
+  const isRef = (r, p) => { const ph = String(r.phase || '').trim().toLowerCase();
+    return ph === 'regulation' ? !!p && /refurb/i.test(p.track || '') : SC_REFURB.has(ph); };
+  const pOf = sn => S.data.pianos.find(x => String(x.serial) === String(sn));
+  new Set(allTl.filter(r => r.serial && isRef(r, pOf(r.serial))).map(r => r.serial)).forEach(sn => {
+    const p = pOf(sn);
     const cur = String((p && p.phase) || '').trim();
     if (p && (SC_REFURB.has(cur.toLowerCase())
       || (PARK_PHASE_RE.test(cur) && SC_REFURB.has(lastWorkPhaseOf(p).toLowerCase())))) return;   // still in the refurb
     if (p && !cur) return;   // no phase — can't tell it's done
-    const rows = allTl.filter(r => r.serial === sn && isRef(r));
+    const rows = allTl.filter(r => r.serial === sn && isRef(r, p));
     const lastAt = rows.reduce((m, r) => { const t = new Date(r.end || r.start).getTime(); return t > m ? t : m; }, 0);
     if (!lastAt || !inWin(new Date(lastAt).toISOString())) return;
     const spent = mins(rows) / 60;
