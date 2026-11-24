@@ -16441,9 +16441,9 @@ async function loadMyClock(name, days) {
   });
   if (S.view === 'dash') renderDash();
 }
-// per-person approved weekly hours (Brigham 9/3): Lisa 28, Ezzy 20;
-// everyone else (Melissa included) is on the standard 40.
-const WEEK_CAP = {lisa: 28, ezzy: 20};   // fallback when the settings feed is unreachable
+// per-person approved weekly hours (Brigham 9/3): Ezzy 20 (Lisa's 28 removed —
+// she left, Mark 11/24); everyone else (Melissa included) is on the standard 40.
+const WEEK_CAP = {ezzy: 20};   // fallback when the settings feed is unreachable
 function myWeekCap(name) {
   const first = String(name || '').trim().split(/\s+/)[0].toLowerCase();
   const st = APPSET.data && APPSET.data.settings;
@@ -16979,7 +16979,7 @@ const TRAININGS = [
     title: 'BLP Admin Training',
     desc: 'Curriculum, practice log and scorecard for BLP admins — onboarding, foundations, and every admin duty by priority.',
     readLabel: 'open the training app',
-    adminOnly: true,   // Lisa, Melissa & the owners for now (Brigham 9/4)
+    adminOnly: true,   // Melissa & the owners (Brigham 9/4)
   },
   {
     doc: 'guide',
@@ -17646,8 +17646,7 @@ const TB_HEADSHOTS = {
   "thayne larson": "https://www.brighamlarsonpianos.com/cdn/shop/files/Thayne.Larson.BW_d6685ac0-6746-4c41-98b5-57b3e19bcfbb.jpg?v=1735947791&width=240",
   "melissa terry": "https://www.brighamlarsonpianos.com/cdn/shop/files/5U4A1257.jpg?v=1775246484&width=240",
   "ezzy lopp": "https://www.brighamlarsonpianos.com/cdn/shop/files/Ezaray.Lopp.BW_cc6b4562-389e-4c78-b1fe-3dcd2590bd86.jpg?v=1777569159&width=240",
-  "alisa miller": "https://www.brighamlarsonpianos.com/cdn/shop/files/Alisa.Merrill.BW_1.jpg?v=1735949942&width=240",
-  "lisa litton": "assets/headshots/lisa-litton.jpg?v=2"
+  "alisa miller": "https://www.brighamlarsonpianos.com/cdn/shop/files/Alisa.Merrill.BW_1.jpg?v=1735949942&width=240"
   };
 // one person, two spellings: the team roster says "Alisa Merrill", her
 // imported Trello cards say "Alisa Miller" — the board showed two Alisas,
@@ -17821,7 +17820,7 @@ async function tbFetch() {
  * same records (no copies): Brigham marking one Done moves it into that
  * person's DONE column, and their notes/answers show on both boards. */
 const TB_ASK_KEY = 'askbrigham', TB_ASK_LABEL = 'Ask Brigham';
-const TB_ASK_BOARDS = ['melissa terry', 'mark hales', 'alisa miller', 'lisa litton', 'matthew wessman', 'jacob mower'];   // admins + managers
+const TB_ASK_BOARDS = ['melissa terry', 'mark hales', 'alisa miller', 'matthew wessman', 'jacob mower'];   // admins + managers
 const TB_FIRST_ALIAS = {};   // (Alisa = Alisa Miller, a separate admin from Lisa Litton — corrected 9/11)
 const tbIsBrigham = n => tbNorm(n) === 'brigham larson';
 /* Generalized (Brigham 9/11, Lisa's "Questions for Melissa"): ANY column
@@ -20966,7 +20965,7 @@ if (appsTopBtn) {
     const m = $('#appsTopMenu');
     m.hidden = !m.hidden;
     if (!m.hidden) {
-      // 🎓 Admin Training is limited to Lisa, Melissa and the owners for now
+      // 🎓 Admin Training is limited to Melissa and the owners
       // (Brigham 9/4) — checked at open time so it follows account switches
       const at = $('#appsAdminTraining');
       if (at) at.hidden = !adminTrainingOk();
@@ -21224,7 +21223,6 @@ boot();
   const BY_USER = {
     brigham: ['clara', 'arnold', 'chris'], brighamlarson: ['clara', 'arnold', 'chris'],
     karmel: ['lindsay', 'melody', 'carla', 'chris', 'clara', 'arnold', 'ivory', 'marcus'],   // every agent (Karmel 9/18)
-    lisa: ['ivory', 'melody', 'arnold'],
     melissa: ['melody', 'chris', 'carla'], susie: ['lindsay', 'chris', 'melody'], alisa: ['marcus'],
   };
   const INFO = {

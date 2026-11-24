@@ -54,7 +54,7 @@ function secretsState_() {
   return BRIDGE_SECRET ? 'ok' : 'ok (BRIDGE_SECRET unset — optional)';
 }
 var BRIDGE_SECRET = secret_('BRIDGE_SECRET');
-var BRIDGE_REV = '2026-11-24.2';   // bump with every change — the ping reports it so a paste-deploy can be verified
+var BRIDGE_REV = '2026-11-24.3';   // bump with every change — the ping reports it so a paste-deploy can be verified
 var TEAM_PIN = secret_('TEAM_PIN');
 var PHOTOS_ROOT_ID = '1KB-L5dzcGSAC5Q2y40JQorkaxXfY3AiJ';  // per-piano photo folders live under here
 var PHOTO_LOG_TAB = 'PHOTO LOG';           // per-upload record (feeds client-update drafts)
@@ -3788,7 +3788,7 @@ function phaseCol_(sh) {
 /* Shop work is finished and the piano becomes admin's job. Nothing used to
  * be sent at all (Mark 9/16) — a phase change only wrote to the sheet. Texts
  * whoever the Settings page lists in `exit_prep_notify` (default Melissa;
- * add Lisa there any time, no code change) with what admin still has to
+ * add anyone there any time, no code change) with what admin still has to
  * finish. Fires only on the move INTO Exit Prep - Admin, once per piano per
  * 12 h, so a retried POST cannot text twice. */
 /* ===== OWNER UPDATES (Brigham 10/28) =====
